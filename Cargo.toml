@@ -1,0 +1,16 @@
+[package]
+name = "vpxtool"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.69"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+cfb = "0.7.3"
+clap = "4.2.7"
+colored = "2.0.0"
+ferris-says = "0.3.1"
+serde_json = "1.0.96"
+shellexpand = "3.1.0"
+
