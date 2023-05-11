@@ -1,27 +1,18 @@
 pub mod biff;
 pub mod gamedata;
+pub mod tableinfo;
 
+use cfb::CompoundFile;
 use clap::{arg, Arg, Command};
 use colored::Colorize;
-use nom::bytes::streaming::take;
-use nom::multi::many0;
-use nom::number::complete::le_f32;
-use serde_json::json;
 use std::fmt::Debug;
+use std::fs::File;
 use std::io::{self, Read};
 use std::path::Path;
 use std::process::exit;
 use std::str::{self, from_utf8};
 
-use nom::{
-    bytes::complete::{tag, take_while_m_n},
-    combinator::map_res,
-    number::complete::le_u32,
-    sequence::tuple,
-    IResult,
-};
-
-use biff::biff_to_utf8;
+use nom::IResult;
 
 fn main() {
     let matches = Command::new("vpxtool")
@@ -32,6 +23,18 @@ fn main() {
         .subcommand(
             Command::new("extract")
                 .about("Extracts a vpx file")
+                .arg(arg!(<VPXPATH> "The path to the vpx file").required(true))
+                .arg(
+                    Arg::new("FORCE")
+                        .short('f')
+                        .long("force")
+                        .num_args(0)
+                        .help("Do not ask for confirmation before overwriting existing files"),
+                ),
+        )
+        .subcommand(
+            Command::new("extractvbs")
+                .about("Extracts the vbs from a vpx file")
                 .arg(arg!(<VPXPATH> "The path to the vpx file").required(true))
                 .arg(
                     Arg::new("FORCE")
@@ -54,22 +57,25 @@ fn main() {
             let path = path.unwrap_or("");
             // TODO expand all instead of only tilde?
             let expanded_path = shellexpand::tilde(path);
-            println!("extracting {}", expanded_path);
+            println!("extracting from {}", expanded_path);
             let yes = sub_matches.get_flag("FORCE");
             extract(expanded_path.as_ref(), yes);
+        }
+        Some(("extractvbs", sub_matches)) => {
+            let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
+            let path = path.unwrap_or("");
+            // TODO expand all instead of only tilde?
+            let expanded_path = shellexpand::tilde(path);
+            println!("extracting from {}", expanded_path);
+            let yes = sub_matches.get_flag("FORCE");
+            extractvbs(expanded_path.as_ref(), yes);
         }
         _ => unreachable!(), // If all subcommands are defined above, anything else is unreachable!()
     }
 }
 
 fn extract(vpx_file_path: &str, yes: bool) {
-    // let (comp_path, inner_path) = expanded_path.split_once('/').unwrap();
     let mut comp = cfb::open(&vpx_file_path).unwrap();
-
-    // println!("{}", serde_json::to_string_pretty(&root).unwrap());
-
-    // TODO write the json to a file with the same name as the vpx file
-    // make root dir if missing
     let root_dir_path_str = vpx_file_path.replace(".vpx", "");
     let root_dir_path = Path::new(&root_dir_path_str);
 
@@ -95,32 +101,50 @@ fn extract(vpx_file_path: &str, yes: bool) {
     root_dir.create(root_dir_path).unwrap();
 
     extract_info(&mut comp, &json_path);
-
-    println!("Info file written to\n  {}", json_path.display());
-
-    extract_script(&mut comp);
-
-    println!("VBScript file written to\n  {}", vbs_path.display());
-
+    extract_script(&mut comp, vbs_path);
     extract_binaries(comp, root_dir_path);
-
-    println!("Binaries written to\n  {}", root_dir_path.display());
 
     // let mut file_version = String::new();
     // comp.open_stream("/GameStg/Version")
     //     .unwrap()
     //     .read_to_string(&mut file_version)
     //     .unwrap();
-    // println!("{}", file_version);
+    // println!("File version: {}", file_version);
 
     // let mut stream = comp.open_stream(inner_path).unwrap();
     // io::copy(&mut stream, &mut io::stdout()).unwrap();
 }
 
+fn extractvbs(vpx_file_path: &str, yes: bool) {
+    let vbs_path_str = vpx_file_path.replace(".vpx", ".vbs");
+    let vbs_path = Path::new(&vbs_path_str);
+
+    if vbs_path.exists() && !yes {
+        let warning = format!("File {} already exists", vbs_path.display()).truecolor(255, 125, 0);
+        println!("{}", warning);
+        println!("Do you want to continue exporting? (y/n)");
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input).unwrap();
+        if input.trim() != "y" {
+            println!("Aborting");
+            exit(1);
+        }
+    }
+
+    let mut comp = cfb::open(&vpx_file_path).unwrap();
+    extract_script(&mut comp, vbs_path);
+}
+
+fn extract_script(comp: &mut cfb::CompoundFile<std::fs::File>, vbs_path: &Path) {
+    let script = read_script(comp);
+    std::fs::write(vbs_path, script).unwrap();
+    println!("VBScript file written to\n  {}", vbs_path.display());
+}
+
 fn dump<T: Debug>(res: IResult<&[u8], T>) {
     match res {
         IResult::Ok((rest, value)) => {
-            println!("Done {:?} {:?}...", value, &rest[..8])
+            println!("Done {:?} {:?}...", value, rest)
         }
         IResult::Err(err) => {
             println!("Err {:?}", err)
@@ -128,7 +152,7 @@ fn dump<T: Debug>(res: IResult<&[u8], T>) {
     }
 }
 
-fn extract_script(comp: &mut cfb::CompoundFile<std::fs::File>) {
+fn read_script(comp: &mut cfb::CompoundFile<std::fs::File>) -> String {
     let mut game_data_vec = Vec::new();
     comp.open_stream("/GameStg/GameData")
         .unwrap()
@@ -138,26 +162,21 @@ fn extract_script(comp: &mut cfb::CompoundFile<std::fs::File>) {
     // let result = parseGameData(&game_data_vec[..]);
     // dump(result);
 
-    let result = gamedata::parse_all(&game_data_vec[..]);
-    dump(result);
+    let result = gamedata::read_all_records(&game_data_vec[..]);
 
-    let mut buffer = [0; 32];
+    //dump(result);
 
-    // read at most five bytes
-    let mut handle = game_data_vec[12..].take(32);
+    let data = result.unwrap().1;
+    let code = data.iter().find(|item| item.0.eq("CODE")).unwrap();
 
-    handle.read(&mut buffer);
-    println!("{:?}", buffer);
-    println!("{:?}", buffer.map(|b| b as char));
-
-    buffer.iter().for_each(|b| print!("{:02X} ", b));
-    println!();
+    from_utf8(code.1).unwrap().to_owned()
 }
 
-fn extract_info<P: AsRef<Path>>(comp: &mut cfb::CompoundFile<std::fs::File>, json_path: &P) {
+fn extract_info<P: AsRef<Path>>(comp: &mut CompoundFile<File>, json_path: &P) {
     let mut json_file = std::fs::File::create(json_path).unwrap();
-    let json_root = read_tableinfo(comp);
+    let json_root = tableinfo::read_tableinfo(comp);
     serde_json::to_writer_pretty(&mut json_file, &json_root).unwrap();
+    println!("Info file written to\n  {}", json_path.as_ref().display());
 }
 
 fn extract_binaries(mut comp: cfb::CompoundFile<std::fs::File>, root_dir_path: &Path) {
@@ -187,61 +206,7 @@ fn extract_binaries(mut comp: cfb::CompoundFile<std::fs::File>, root_dir_path: &
         std::fs::create_dir_all(parent).unwrap();
         let mut file = std::fs::File::create(file_path).unwrap();
         io::copy(&mut stream, &mut file).unwrap();
-    })
-}
+    });
 
-fn read_tableinfo(comp: &mut cfb::CompoundFile<std::fs::File>) -> serde_json::Value {
-    let table_info_path = "/TableInfo";
-    // println!("Reading table info at {}", table_info_path);
-    let stream_paths: Vec<String> = {
-        let walk = comp.walk_storage(table_info_path).unwrap();
-        let stream_paths = walk.flat_map(|entry| {
-            let path = entry.path();
-            let path = path.to_str().unwrap().to_string();
-            if entry.is_stream() {
-                return Some(path);
-            } else {
-                return None;
-            }
-        });
-        stream_paths.collect()
-    };
-
-    let keys_vals = stream_paths
-        .iter()
-        .map(|path| {
-            let mut stream = comp.open_stream(path).unwrap();
-            // read the stream to a string
-            let mut buffer = Vec::new();
-            stream.read_to_end(&mut buffer).unwrap();
-
-            let buffer = biff_to_utf8(buffer);
-
-            let s = match str::from_utf8(&buffer) {
-                Ok(v) => v,
-                Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
-            };
-            let key = path.replace(table_info_path, "").replacen("/", "", 1);
-
-            return (key, s.to_string());
-        })
-        .collect::<Vec<_>>();
-
-    // keys_vals.iter().for_each(|(path, value)| {
-    //     println!("{} -> {}", path, value);
-    // });
-
-    use serde_json::{Map, Value};
-
-    let mut table_info_map = Map::new();
-
-    // assuming keys_vals is a Vec<(String, String)>
-    for (key, val) in keys_vals {
-        table_info_map.insert(key.to_string(), Value::String(val));
-    }
-
-    let json_tableinfo = Value::Object(table_info_map);
-
-    let json_root = json!({ "TableInfo": json_tableinfo });
-    json_root
+    println!("Binaries written to\n  {}", root_dir_path.display());
 }
