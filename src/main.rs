@@ -1,4 +1,6 @@
+pub mod biff;
 pub mod gamedata;
+pub mod image;
 pub mod tableinfo;
 
 use cfb::CompoundFile;
@@ -10,7 +12,6 @@ use std::fs::File;
 use std::io::{self, Read};
 use std::path::Path;
 use std::process::exit;
-use std::str::{self, from_utf8};
 
 use nom::{number::complete::le_u32, IResult};
 
@@ -75,7 +76,6 @@ fn main() {
 }
 
 fn extract(vpx_file_path: &str, yes: bool) {
-    let mut comp = cfb::open(&vpx_file_path).unwrap();
     let root_dir_path_str = vpx_file_path.replace(".vpx", "");
     let root_dir_path = Path::new(&root_dir_path_str);
 
@@ -100,9 +100,14 @@ fn extract(vpx_file_path: &str, yes: bool) {
     }
     root_dir.create(root_dir_path).unwrap();
 
+    let mut comp = cfb::open(&vpx_file_path).unwrap();
+    let _version = read_version(&mut comp);
+    let records = read_gamedata(&mut comp);
+
     extract_info(&mut comp, &json_path);
-    extract_script(&mut comp, vbs_path);
-    extract_binaries(comp, root_dir_path);
+    extract_script(&records, vbs_path);
+    extract_binaries(&mut comp, root_dir_path);
+    extract_images(&mut comp, &records, root_dir_path);
 
     // let mut file_version = String::new();
     // comp.open_stream("/GameStg/Version")
@@ -132,12 +137,13 @@ fn extractvbs(vpx_file_path: &str, yes: bool) {
     }
 
     let mut comp = cfb::open(&vpx_file_path).unwrap();
-    extract_script(&mut comp, vbs_path);
+    let _version = read_version(&mut comp);
+    let records = read_gamedata(&mut comp);
+    extract_script(&records, vbs_path);
 }
 
-fn extract_script(comp: &mut cfb::CompoundFile<std::fs::File>, vbs_path: &Path) {
-    let version = read_version(comp);
-    let script = read_script(comp);
+fn extract_script(records: &Vec<Record>, vbs_path: &Path) {
+    let script = read_script(records);
     std::fs::write(vbs_path, script).unwrap();
     println!("VBScript file written to\n  {}", vbs_path.display());
 }
@@ -162,7 +168,7 @@ fn read_version(comp: &mut cfb::CompoundFile<std::fs::File>) -> u32 {
         .read_to_end(&mut file_version)
         .unwrap();
 
-    fn read_version (input: &[u8]) -> IResult<&[u8], u32> {
+    fn read_version(input: &[u8]) -> IResult<&[u8], u32> {
         le_u32(input)
     }
 
@@ -174,20 +180,7 @@ fn read_version(comp: &mut cfb::CompoundFile<std::fs::File>) -> u32 {
     version
 }
 
-
-
-fn read_script(comp: &mut cfb::CompoundFile<std::fs::File>) -> String {
-    let mut game_data_vec = Vec::new();
-    comp.open_stream("/GameStg/GameData")
-        .unwrap()
-        .read_to_end(&mut game_data_vec)
-        .unwrap();
-
-    // let result = parseGameData(&game_data_vec[..]);
-    // dump(result);
-
-    let (_, records) = gamedata::read_all_records(&game_data_vec[..]).unwrap();
-
+fn read_script(records: &Vec<Record>) -> String {
     //dump(result);
 
     let code = records
@@ -201,6 +194,20 @@ fn read_script(comp: &mut cfb::CompoundFile<std::fs::File>) -> String {
     code.to_owned()
 }
 
+fn read_gamedata(comp: &mut CompoundFile<File>) -> Vec<Record> {
+    let mut game_data_vec = Vec::new();
+    comp.open_stream("/GameStg/GameData")
+        .unwrap()
+        .read_to_end(&mut game_data_vec)
+        .unwrap();
+
+    // let result = parseGameData(&game_data_vec[..]);
+    // dump(result);
+
+    let (_, records) = gamedata::read_all_gamedata_records(&game_data_vec[..]).unwrap();
+    records
+}
+
 fn extract_info<P: AsRef<Path>>(comp: &mut CompoundFile<File>, json_path: &P) {
     let mut json_file = std::fs::File::create(json_path).unwrap();
     let json_root = tableinfo::read_tableinfo(comp);
@@ -208,7 +215,40 @@ fn extract_info<P: AsRef<Path>>(comp: &mut CompoundFile<File>, json_path: &P) {
     println!("Info file written to\n  {}", json_path.as_ref().display());
 }
 
-fn extract_binaries(mut comp: cfb::CompoundFile<std::fs::File>, root_dir_path: &Path) {
+fn extract_images(comp: &mut CompoundFile<File>, records: &Vec<Record>, root_dir_path: &Path) {
+    // let result = parseGameData(&game_data_vec[..]);
+    // dump(result);
+
+    let images_size = records
+        .iter()
+        .find_map(|r| match r {
+            Record::ImagesSize(size) => Some(size),
+            _ => None,
+        })
+        .unwrap()
+        .to_owned();
+
+    let images_path = root_dir_path.join("images");
+
+    println!(
+        "Writing {} images to\n  {}",
+        images_size,
+        images_path.display()
+    );
+
+    for index in 0..images_size {
+        let path = format!("GameStg/Image{}", index);
+        let mut input = Vec::new();
+        comp.open_stream(&path)
+            .unwrap()
+            .read_to_end(&mut input)
+            .unwrap();
+        let (_, img) = image::read(path.to_owned(), &input).unwrap();
+        dbg!(path, img);
+    }
+}
+
+fn extract_binaries(comp: &mut CompoundFile<std::fs::File>, root_dir_path: &Path) {
     // write all remaining entries
     let entries: Vec<String> = comp
         .walk()

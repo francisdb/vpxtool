@@ -5,10 +5,12 @@ use std::str::from_utf8;
 use nom::bytes::streaming::take;
 use nom::combinator::map;
 use nom::multi::many0;
-use nom::number::complete::le_f32;
 use nom::{number::complete::le_u32, IResult};
 
-use utf16string::WStr;
+use crate::biff::{
+    read_float_record, read_string_record, read_tag_record, read_u32_record,
+    read_wide_string_record, RECORD_TAG_LEN,
+};
 
 #[derive(Debug)]
 pub struct GameData {
@@ -17,11 +19,6 @@ pub struct GameData {
     rght: f32,
     botm: f32,
 }
-
-/**
- * All records have a tag, eg CODE or NAME
- */
-const RECORD_TAG_LEN: u32 = 4;
 
 #[derive(Debug)]
 pub enum Record {
@@ -37,12 +34,22 @@ pub enum Record {
     End,
 }
 
-fn read_record(input: &[u8]) -> IResult<&[u8], Record> {
+fn read_record<T>(
+    input: &[u8],
+    f: fn(String, u32, &[u8]) -> IResult<&[u8], T>,
+) -> IResult<&[u8], T> {
     let (input, len) = le_u32(input)?;
     let (input, name_bytes) = take(4u8)(input)?;
     let tag = from_utf8(name_bytes).unwrap();
-    //dbg!(tag, len);
-    match tag {
+    f(tag.to_string(), len, input)
+}
+
+fn read_gamedata_record(input: &[u8]) -> IResult<&[u8], Record> {
+    read_record(input, read_gamedata_record_value)
+}
+
+fn read_gamedata_record_value(tag: String, len: u32, input: &[u8]) -> IResult<&[u8], Record> {
+    match tag.as_str() {
         "LEFT" => {
             // let (rest, n) = read_u32_record(input)?;
             // Ok((rest, Record::PlayfieldLeft(n)))
@@ -94,45 +101,8 @@ fn read_record(input: &[u8]) -> IResult<&[u8], Record> {
     }
 }
 
-fn read_tag_record(len: u32) {
-    let n_rest = len - RECORD_TAG_LEN;
-    assert!(n_rest == 0, "a tag should have not have any data");
-}
-
-fn read_wide_string_record(input: &[u8], len: u32) -> IResult<&[u8], String> {
-    let (input, len) = le_u32(input)?;
-    let (input, data) = take(len)(input)?;
-    // hmm, this ? seems to be different for nom and utf16string
-    // see https://docs.rs/utf16string/latest/utf16string/
-    let string = WStr::from_utf16le(data).unwrap().to_utf8();
-    Ok((input, string))
-}
-
-fn read_string_record(input: &[u8]) -> IResult<&[u8], &str> {
-    let (input, len) = le_u32(input)?;
-    let (input, data) = take(len)(input)?;
-    let string = from_utf8(data).unwrap();
-    Ok((input, string))
-}
-
-pub fn read_all_records(input: &[u8]) -> IResult<&[u8], Vec<Record>> {
-    many0(read_record)(input)
-}
-
-fn read_u32_record(input: &[u8]) -> IResult<&[u8], u32> {
-    let (input, data) = le_u32(input)?;
-    Ok((input, data))
-}
-
-fn read_float_record(input: &[u8]) -> IResult<&[u8], (&str, f32)> {
-    let (input, n) = le_u32(input)?;
-    let n_rest = n - RECORD_TAG_LEN;
-    assert!(n_rest == 4, "A float record should be 4 bytes long");
-    let (input, name_bytes) = take(4u8)(input)?;
-    let (input, data) = le_f32(input)?;
-    //let string = String::from_utf8(chars.to_vec()).unwrap();
-    let name = from_utf8(name_bytes).unwrap();
-    Ok((input, (name, data)))
+pub fn read_all_gamedata_records(input: &[u8]) -> IResult<&[u8], Vec<Record>> {
+    many0(read_gamedata_record)(input)
 }
 
 fn read_game_data(input: &[u8]) -> IResult<&[u8], GameData> {
