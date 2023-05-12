@@ -244,7 +244,7 @@ fn extract_images(comp: &mut CompoundFile<File>, records: &Vec<Record>, root_dir
             .read_to_end(&mut input)
             .unwrap();
         let (_, img) = image::read(path.to_owned(), &input).unwrap();
-        dbg!(path, img);
+        dbg!(img);
     }
 }
 

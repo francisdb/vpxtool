@@ -37,12 +37,18 @@ pub fn read_u32_record(input: &[u8]) -> IResult<&[u8], u32> {
 pub fn read_float_record(input: &[u8]) -> IResult<&[u8], (&str, f32)> {
     let (input, n) = le_u32(input)?;
     let n_rest = n - RECORD_TAG_LEN;
-    assert!(n_rest == 4, "A float record should be 4 bytes long");
     let (input, name_bytes) = take(4u8)(input)?;
+    let name = from_utf8(name_bytes).unwrap();
+    let (input, data) = le_f32(input)?;
+    let (input, f) = read_float(input, n_rest)?;
+    Ok((input, (name, f)))
+}
+
+pub fn read_float(input: &[u8], n_rest: u32) -> IResult<&[u8], f32> {
+    assert!(n_rest == 4, "A float record should be 4 bytes long");
     let (input, data) = le_f32(input)?;
     //let string = String::from_utf8(chars.to_vec()).unwrap();
-    let name = from_utf8(name_bytes).unwrap();
-    Ok((input, (name, data)))
+    Ok((input, data))
 }
 
 pub fn read_tag_record(len: u32) {
@@ -50,7 +56,7 @@ pub fn read_tag_record(len: u32) {
     assert!(n_rest == 0, "a tag should have not have any data");
 }
 
-pub fn read_tag_record2(len: u32) {
+pub fn read_empty_tag(len: u32) {
     assert!(len == 0, "a tag should have not have any data");
 }
 
