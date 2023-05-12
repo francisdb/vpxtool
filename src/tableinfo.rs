@@ -1,15 +1,9 @@
-use crate::biff;
-
 use cfb::CompoundFile;
 use serde_json::json;
 use serde_json::{Map, Value};
 use std::fs::File;
-use std::str::from_utf8;
 use std::io::Read;
-
-use biff::biff_to_utf8;
-
-
+use utf16string::WStr;
 
 pub fn read_tableinfo(comp: &mut CompoundFile<File>) -> Value {
     let table_info_path = "/TableInfo";
@@ -36,12 +30,7 @@ pub fn read_tableinfo(comp: &mut CompoundFile<File>) -> Value {
             let mut buffer = Vec::new();
             stream.read_to_end(&mut buffer).unwrap();
 
-            let buffer = biff_to_utf8(buffer);
-
-            let s = match from_utf8(&buffer) {
-                Ok(v) => v,
-                Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
-            };
+            let s = WStr::from_utf16le(&buffer).unwrap().to_utf8();
             let key = path.replace(table_info_path, "").replacen("/", "", 1);
 
             return (key, s.to_string());

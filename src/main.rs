@@ -1,10 +1,10 @@
-pub mod biff;
 pub mod gamedata;
 pub mod tableinfo;
 
 use cfb::CompoundFile;
 use clap::{arg, Arg, Command};
 use colored::Colorize;
+use gamedata::Record;
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::{self, Read};
@@ -12,7 +12,7 @@ use std::path::Path;
 use std::process::exit;
 use std::str::{self, from_utf8};
 
-use nom::IResult;
+use nom::{number::complete::le_u32, IResult};
 
 fn main() {
     let matches = Command::new("vpxtool")
@@ -136,6 +136,7 @@ fn extractvbs(vpx_file_path: &str, yes: bool) {
 }
 
 fn extract_script(comp: &mut cfb::CompoundFile<std::fs::File>, vbs_path: &Path) {
+    let version = read_version(comp);
     let script = read_script(comp);
     std::fs::write(vbs_path, script).unwrap();
     println!("VBScript file written to\n  {}", vbs_path.display());
@@ -152,6 +153,29 @@ fn dump<T: Debug>(res: IResult<&[u8], T>) {
     }
 }
 
+// TODO: read version
+//  https://github.com/vbousquet/vpx_lightmapper/blob/331a8576bb7b86668a023b304e7dd04261487106/addons/vpx_lightmapper/vlm_import.py#L328
+fn read_version(comp: &mut cfb::CompoundFile<std::fs::File>) -> u32 {
+    let mut file_version = Vec::new();
+    comp.open_stream("/GameStg/Version")
+        .unwrap()
+        .read_to_end(&mut file_version)
+        .unwrap();
+
+    fn read_version (input: &[u8]) -> IResult<&[u8], u32> {
+        le_u32(input)
+    }
+
+    // use lut to read as u32
+    let (_, version) = read_version(&file_version[..]).unwrap();
+
+    // let version_float = (version as f32)/100f32;
+    println!("VPX file version: {}", version);
+    version
+}
+
+
+
 fn read_script(comp: &mut cfb::CompoundFile<std::fs::File>) -> String {
     let mut game_data_vec = Vec::new();
     comp.open_stream("/GameStg/GameData")
@@ -162,14 +186,19 @@ fn read_script(comp: &mut cfb::CompoundFile<std::fs::File>) -> String {
     // let result = parseGameData(&game_data_vec[..]);
     // dump(result);
 
-    let result = gamedata::read_all_records(&game_data_vec[..]);
+    let (_, records) = gamedata::read_all_records(&game_data_vec[..]).unwrap();
 
     //dump(result);
 
-    let data = result.unwrap().1;
-    let code = data.iter().find(|item| item.0.eq("CODE")).unwrap();
+    let code = records
+        .iter()
+        .find_map(|r| match r {
+            Record::Code { script } => Some(script),
+            _ => None,
+        })
+        .unwrap();
 
-    from_utf8(code.1).unwrap().to_owned()
+    code.to_owned()
 }
 
 fn extract_info<P: AsRef<Path>>(comp: &mut CompoundFile<File>, json_path: &P) {
