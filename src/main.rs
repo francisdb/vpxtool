@@ -7,6 +7,7 @@ use cfb::CompoundFile;
 use clap::{arg, Arg, Command};
 use colored::Colorize;
 use gamedata::Record;
+use serde_json::de;
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::{self, Read};
@@ -14,6 +15,8 @@ use std::path::Path;
 use std::process::exit;
 
 use nom::{number::complete::le_u32, IResult};
+
+use crate::image::ImageDataJpeg;
 
 fn main() {
     let matches = Command::new("vpxtool")
@@ -229,12 +232,16 @@ fn extract_images(comp: &mut CompoundFile<File>, records: &Vec<Record>, root_dir
         .to_owned();
 
     let images_path = root_dir_path.join("images");
+    std::fs::create_dir_all(&images_path).unwrap();
 
     println!(
         "Writing {} images to\n  {}",
         images_size,
         images_path.display()
     );
+
+    use std::fs;
+    use std::io::Write; // bring trait into scope
 
     for index in 0..images_size {
         let path = format!("GameStg/Image{}", index);
@@ -244,7 +251,20 @@ fn extract_images(comp: &mut CompoundFile<File>, records: &Vec<Record>, root_dir
             .read_to_end(&mut input)
             .unwrap();
         let (_, img) = image::read(path.to_owned(), &input).unwrap();
-        dbg!(img);
+        dbg!(&img);
+        match &img.jpeg {
+            Some(jpeg) => {
+                let ext = img.ext();
+                let mut jpeg_path = images_path.clone();
+                jpeg_path.push(format!("Image{}.{}.{}", index, img.name, ext));
+                dbg!(&jpeg_path);
+                let mut file = std::fs::File::create(jpeg_path).unwrap();
+                file.write_all(&jpeg.data).unwrap();
+            }
+            None => {
+                // nothing to do here
+            }
+        }
     }
 }
 

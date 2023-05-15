@@ -14,24 +14,21 @@ use crate::biff::{
 
 // #[derive(Debug)]
 pub struct ImageDataJpeg {
-    /**
-     * Original path of the image in the vpx file
-     */
-    fsPath: String,
+    path: String,
     name: String,
     /**
      * Lowercased name?
      */
     inme: String,
     alpha_test_value: f32,
-    data: Vec<u8>,
+    pub data: Vec<u8>,
 }
 
 impl fmt::Debug for ImageDataJpeg {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // avoid writing the data to the debug output
         f.debug_struct("ImageDataJpeg")
-            .field("fsPath", &self.fsPath)
+            .field("path", &self.path)
             .field("name", &self.name)
             .field("data", &self.data.len())
             .finish()
@@ -44,7 +41,7 @@ pub struct ImageData {
      * Original path of the image in the vpx file
      */
     fsPath: String,
-    name: String,
+    pub name: String,
     /**
      * Lowercased name?
      */
@@ -53,7 +50,17 @@ pub struct ImageData {
     width: u32,
     height: u32,
     alpha_test_value: f32,
-    jpeg: Option<ImageDataJpeg>,
+    pub jpeg: Option<ImageDataJpeg>,
+}
+
+impl ImageData {
+    pub(crate) fn ext(&self) -> String {
+        // TODO we might want to also check the jpeg fsPath
+        match self.path.split('.').last() {
+            Some(ext) => ext.to_string(),
+            None => "bin".to_string(),
+        }
+    }
 }
 
 pub fn read(fsPath: String, input: &[u8]) -> IResult<&[u8], ImageData> {
@@ -147,7 +154,7 @@ fn read_jpeg(input: &[u8]) -> IResult<&[u8], ImageDataJpeg> {
     // I do wonder why all the tags are duplicated here
     let mut input = input;
     let mut sizeOpt: Option<u32> = None;
-    let mut fsPath: String = "".to_string();
+    let mut path: String = "".to_string();
     let mut name: String = "".to_string();
     let mut data: &[u8] = &[];
     let mut alpha_test_value: f32 = 0.0;
@@ -178,7 +185,7 @@ fn read_jpeg(input: &[u8]) -> IResult<&[u8], ImageDataJpeg> {
             }
             "PATH" => {
                 let (i, string) = read_string_record(i)?;
-                fsPath = string.to_owned();
+                path = string.to_owned();
                 i
             }
             "ALTV" => {
@@ -211,7 +218,7 @@ fn read_jpeg(input: &[u8]) -> IResult<&[u8], ImageDataJpeg> {
     Ok((
         input,
         ImageDataJpeg {
-            fsPath,
+            path,
             name,
             inme,
             alpha_test_value,
