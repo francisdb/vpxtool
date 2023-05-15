@@ -56,8 +56,9 @@ pub fn read_tag_record(len: u32) {
     assert!(n_rest == 0, "a tag should have not have any data");
 }
 
-pub fn read_empty_tag(len: u32) {
+pub fn read_empty_tag(input: &[u8], len: u32) -> IResult<&[u8], ()> {
     assert!(len == 0, "a tag should have not have any data");
+    Ok((input, ()))
 }
 
 pub fn read_wide_string_record(input: &[u8], _len: u32) -> IResult<&[u8], String> {
@@ -67,4 +68,9 @@ pub fn read_wide_string_record(input: &[u8], _len: u32) -> IResult<&[u8], String
     // see https://docs.rs/utf16string/latest/utf16string/
     let string = WStr::from_utf16le(data).unwrap().to_utf8();
     Ok((input, string))
+}
+
+pub fn drop_record(input: &[u8], len: u32) -> IResult<&[u8], ()> {
+    let (input, _) = take(len)(input)?;
+    Ok((input, ()))
 }
