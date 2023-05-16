@@ -1,11 +1,8 @@
 use std::fmt;
-use std::str::from_utf8;
 
 use nom::bytes::complete::take;
-use nom::combinator::map;
-use nom::multi::many0;
-use nom::{number::complete::le_u32, IResult};
-use utf16string::WStr;
+
+use nom::IResult;
 
 use crate::biff::{
     drop_record, read_empty_tag, read_float, read_float_record, read_string_record,
@@ -35,12 +32,30 @@ impl fmt::Debug for ImageDataJpeg {
     }
 }
 
+/**
+ * An bitmap blob, typically used by textures.
+ */
+// #[derive(Debug)]
+pub struct ImageDataBits {
+    pub data: Vec<u8>,
+}
+
+impl fmt::Debug for ImageDataBits {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // avoid writing the data to the debug output
+        f.debug_struct("ImageDataJpeg")
+            .field("data", &self.data.len())
+            .finish()
+    }
+}
+
 #[derive(Debug)]
 pub struct ImageData {
     /**
      * Original path of the image in the vpx file
+     * we could probably just keep the index?
      */
-    fsPath: String,
+    fs_path: String,
     pub name: String,
     /**
      * Lowercased name?
@@ -50,7 +65,9 @@ pub struct ImageData {
     width: u32,
     height: u32,
     alpha_test_value: f32,
+    // TODO we can probably only have one of these so we can make an enum
     pub jpeg: Option<ImageDataJpeg>,
+    pub bits: Option<ImageDataBits>,
 }
 
 impl ImageData {
@@ -63,7 +80,7 @@ impl ImageData {
     }
 }
 
-pub fn read(fsPath: String, input: &[u8]) -> IResult<&[u8], ImageData> {
+pub fn read(fs_path: String, input: &[u8]) -> IResult<&[u8], ImageData> {
     let mut input = input;
     let mut name: String = "".to_string();
     let mut inme: String = "".to_string();
@@ -72,6 +89,7 @@ pub fn read(fsPath: String, input: &[u8]) -> IResult<&[u8], ImageData> {
     let mut path: String = "".to_string();
     let mut alpha_test_value: f32 = 0.0;
     let mut jpeg: Option<ImageDataJpeg> = None;
+    let mut bits: Option<ImageDataBits> = None;
     while !input.is_empty() {
         let (i, (tag, len)) = read_tag_start(input)?;
         input = match tag {
@@ -101,7 +119,6 @@ pub fn read(fsPath: String, input: &[u8]) -> IResult<&[u8], ImageData> {
                 i
             }
             "ALTV" => {
-                // not sure what this is?
                 let (i, f) = read_float(i, len)?;
                 alpha_test_value = f;
                 i
@@ -113,14 +130,13 @@ pub fn read(fsPath: String, input: &[u8]) -> IResult<&[u8], ImageData> {
                 i
             }
             "BITS" => {
-                // TODO how is this
-                dbg!(tag, len);
-                let data = i;
-                println!("got BITS, skipping remaining data: {} bytes", data.len());
-                &[]
+                // these have zero as length
+                let (i, b) = read_bits(i)?;
+                bits = Some(b);
+                i
             }
             "JPEG" => {
-                // these are zero length
+                // these have zero as length
                 let (i, j) = read_jpeg(i)?;
                 jpeg = Some(j);
                 i
@@ -137,7 +153,7 @@ pub fn read(fsPath: String, input: &[u8]) -> IResult<&[u8], ImageData> {
     Ok((
         rest,
         ImageData {
-            fsPath,
+            fs_path,
             name,
             inme,
             path,
@@ -145,30 +161,63 @@ pub fn read(fsPath: String, input: &[u8]) -> IResult<&[u8], ImageData> {
             height,
             alpha_test_value,
             jpeg,
+            bits,
         },
     ))
     // while input is not empty consume 4 bytes in a loop
 }
 
+fn read_bits(input: &[u8]) -> IResult<&[u8], ImageDataBits> {
+    let mut input = input;
+
+    // lzw encoded data but probably using some custom format
+    // using
+
+    //let (i, len) = read_u32_record(input)?;
+    //println!("len: {:?}", len);
+
+    // decode using lzw::Decoder
+    // let reader = lzw::MsbReader::new();
+    // let mut decoder = lzw::DecoderEarlyChange::new(reader, 8);
+    // let (n, decoded) = decoder.decode_bytes(input).unwrap();
+    // let mut data: Vec<u8> = vec![];
+    // while let Some(byte) = decoder.next() {
+    //     data.push(byte);
+    // }
+
+    //dbg!(decoded.len(), n);
+
+    println!("dropping remaining bytes for BITS: {:?}", input.len());
+    let mut data: &[u8] = &[];
+    input = &[];
+
+    Ok((
+        input,
+        ImageDataBits {
+            data: data.to_vec(),
+        },
+    ))
+}
+
 fn read_jpeg(input: &[u8]) -> IResult<&[u8], ImageDataJpeg> {
     // I do wonder why all the tags are duplicated here
     let mut input = input;
-    let mut sizeOpt: Option<u32> = None;
+    let mut size_opt: Option<u32> = None;
     let mut path: String = "".to_string();
     let mut name: String = "".to_string();
     let mut data: &[u8] = &[];
     let mut alpha_test_value: f32 = 0.0;
     let mut inme: String = "".to_string();
-    let mut endReached = false;
-    while !endReached {
+    let mut end_reached = false;
+    while !end_reached {
         let (i, (tag, len)) = read_tag_start(input)?;
         input = match tag {
             "SIZE" => {
                 let (i, num) = read_u32_record(i)?;
-                sizeOpt = Some(num);
+                size_opt = Some(num);
                 i
             }
-            "DATA" => match sizeOpt {
+            "DATA" => match size_opt {
                 Some(size) => {
                     let (i, d) = take(size)(i)?;
                     data = d;
@@ -189,7 +238,6 @@ fn read_jpeg(input: &[u8]) -> IResult<&[u8], ImageDataJpeg> {
                 i
             }
             "ALTV" => {
-                // not sure what this is?
                 let (i, f) = read_float(i, len)?;
                 alpha_test_value = f;
                 i
@@ -203,7 +251,7 @@ fn read_jpeg(input: &[u8]) -> IResult<&[u8], ImageDataJpeg> {
                 // ENDB is just a tag, it should have a remaining length of 0
                 // dbg!(tag, len);
                 let (i, _) = read_empty_tag(i, len)?;
-                endReached = true;
+                end_reached = true;
                 i
             }
             _ => {

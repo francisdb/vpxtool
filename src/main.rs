@@ -251,17 +251,17 @@ fn extract_images(comp: &mut CompoundFile<File>, records: &Vec<Record>, root_dir
             .read_to_end(&mut input)
             .unwrap();
         let (_, img) = image::read(path.to_owned(), &input).unwrap();
-        dbg!(&img);
         match &img.jpeg {
             Some(jpeg) => {
                 let ext = img.ext();
                 let mut jpeg_path = images_path.clone();
                 jpeg_path.push(format!("Image{}.{}.{}", index, img.name, ext));
-                dbg!(&jpeg_path);
+                //dbg!(&jpeg_path);
                 let mut file = std::fs::File::create(jpeg_path).unwrap();
                 file.write_all(&jpeg.data).unwrap();
             }
             None => {
+                println!("Image {} has no jpeg data", index)
                 // nothing to do here
             }
         }
