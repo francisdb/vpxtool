@@ -1,5 +1,7 @@
 name: Release
 on: [push]
+permissions:
+  contents: write
 jobs:
   release:
     name: Release - ${{ matrix.platform.os_name }}
@@ -84,5 +86,4 @@ jobs:
           with:
             draft: true
             files: "vpxtool*"
-            body_path: Changes.md
           if: startsWith( github.ref, 'refs/tags/v' )
