@@ -10,72 +10,46 @@ jobs:
           - os_name: Linux-x86_64
             os: ubuntu-20.04
             target: x86_64-unknown-linux-musl
-            bin: ubi
-            name: ubi-Linux-x86_64-musl.tar.gz
-            cross: false
+            bin: vpxtool
+            name: vpxtool-Linux-x86_64-musl.tar.gz
             cargo_command: cargo
 
           - os_name: Windows-aarch64
             os: windows-latest
             target: aarch64-pc-windows-msvc
-            bin: ubi.exe
-            name: ubi-Windows-aarch64.zip
-            cross: false
+            bin: vpxtool.exe
+            name: vpxtool-Windows-aarch64.zip
             cargo_command: cargo
 
           - os_name: Windows-x86_64
             os: windows-latest
             target: x86_64-pc-windows-msvc
-            bin: ubi.exe
-            name: ubi-Windows-x86_64.zip
-            cross: false
+            bin: vpxtool.exe
+            name: vpxtool-Windows-x86_64.zip
             cargo_command: cargo  
 
           - os_name: macOS-x86_64
             os: macOS-latest
             target: x86_64-apple-darwin
-            bin: ubi
-            name: ubi-Darwin-x86_64.tar.gz
-            cross: false
+            bin: vpxtool
+            name: vpxtool-Darwin-x86_64.tar.gz
             cargo_command: cargo
 
           - os_name: macOS-aarch64
             os: macOS-latest
             target: aarch64-apple-darwin
-            bin: ubi
-            name: ubi-Darwin-aarch64.tar.gz
-            cross: false
+            bin: vpxtool
+            name: vpxtool-Darwin-aarch64.tar.gz
             cargo_command: cargo
 
     runs-on: ${{ matrix.platform.os }}
     steps:
         - name: Checkout
           uses: actions/checkout@v3
-        - name: Install toolchain if not cross-compiling
+        - name: Install toolchain
           uses: dtolnay/rust-toolchain@stable
           with:
             targets: ${{ matrix.platform.target }}
-          if: ${{ !matrix.platform.cross }}
-        - name: Install musl-tools on Linux
-          run: sudo apt-get update --yes && sudo apt-get install --yes musl-tools
-          if: contains(matrix.platform.os, 'ubuntu') && !matrix.platform.cross
-        - name: Install cross if cross-compiling (*nix)
-          id: cross-nix
-          shell: bash
-          run: |
-            set -e
-            export TARGET="$HOME/bin"
-            mkdir -p "$TARGET"
-            ./bootstrap/bootstrap-ubi.sh
-            "$HOME/bin/ubi" --project cross-rs/cross --matching musl --in .          
-          if: matrix.platform.cross && !contains(matrix.platform.os, 'windows')
-        - name: Install cross if cross-compiling (Windows)
-          id: cross-windows
-          shell: powershell
-          run: |
-            .\bootstrap\bootstrap-ubi.ps1
-            .\ubi --project cross-rs/cross --in .          
-          if: matrix.platform.cross && contains(matrix.platform.os, 'windows')
         - name: Build binary (*nix)
           shell: bash
           run: |
@@ -89,12 +63,6 @@ jobs:
           run: |
                       & ${{ matrix.platform.cargo_command }} build --locked --release --target ${{ matrix.platform.target }}
           if: contains(matrix.platform.os, 'windows')
-        - name: Strip binary
-          shell: bash
-          run: |
-                      strip target/${{ matrix.platform.target }}/release/${{ matrix.platform.bin }}
-          # strip doesn't work with cross-arch binaries on Linux or Windows.
-          if: ${{ !(matrix.platform.cross || matrix.platform.target == 'aarch64-pc-windows-msvc') }}
         - name: Package as archive
           shell: bash
           run: |
@@ -108,13 +76,13 @@ jobs:
         - name: Publish release artifacts
           uses: actions/upload-artifact@v3
           with:
-            name: ubi-${{ matrix.platform.os_name }}
-            path: "ubi*"
+            name: vpxtool-${{ matrix.platform.os_name }}
+            path: "vpxtool*"
           if: github.ref == 'refs/tags/test-release'
         - name: Publish GitHub release
           uses: softprops/action-gh-release@v1
           with:
             draft: true
-            files: "ubi*"
+            files: "vpxtool*"
             body_path: Changes.md
           if: startsWith( github.ref, 'refs/tags/v' )
