@@ -18,9 +18,13 @@ use nom::{number::complete::le_u32, IResult};
 
 use crate::image::ImageDataJpeg;
 
+use git_version::git_version;
+
+const GIT_VERSION: &str = git_version!();
+
 fn main() {
     let matches = Command::new("vpxtool")
-        .version("0.1")
+        .version(GIT_VERSION)
         .author("Francis DB")
         .about("Extracts and assembles vpx files")
         .arg_required_else_help(true)
