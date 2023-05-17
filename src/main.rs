@@ -20,7 +20,8 @@ use crate::image::ImageDataJpeg;
 
 use git_version::git_version;
 
-const GIT_VERSION: &str = git_version!();
+// see https://github.com/fusion-engineering/rust-git-version/issues/21 for why the "--tags"
+const GIT_VERSION: &str = git_version!(args=["--tags"]);
 
 fn main() {
     let matches = Command::new("vpxtool")
