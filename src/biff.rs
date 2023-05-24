@@ -1,9 +1,7 @@
 use std::str::from_utf8;
 
 use nom::bytes::streaming::take;
-use nom::combinator::map;
-use nom::multi::many0;
-use nom::number::complete::le_f32;
+use nom::number::complete::{le_f32, le_u8, le_u16};
 use nom::{number::complete::le_u32, IResult};
 use utf16string::WStr;
 
@@ -29,9 +27,21 @@ pub fn read_string_record(input: &[u8]) -> IResult<&[u8], &str> {
     Ok((input, string))
 }
 
-pub fn read_u32_record(input: &[u8]) -> IResult<&[u8], u32> {
-    let (input, data) = le_u32(input)?;
-    Ok((input, data))
+pub fn read_bytes_record(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    let (input, len) = le_u32(input)?;
+    take(len)(input)
+}
+
+pub fn read_byte(input: &[u8]) -> IResult<&[u8], u8> {
+    le_u8(input)
+}
+
+pub fn read_u32(input: &[u8]) -> IResult<&[u8], u32> {
+    le_u32(input)
+}
+
+pub fn read_u16(input: &[u8]) -> IResult<&[u8], u16> {
+    le_u16(input)
 }
 
 pub fn read_float_record(input: &[u8]) -> IResult<&[u8], (&str, f32)> {

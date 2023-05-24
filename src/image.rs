@@ -5,8 +5,7 @@ use nom::bytes::complete::take;
 use nom::IResult;
 
 use crate::biff::{
-    drop_record, read_empty_tag, read_float, read_float_record, read_string_record,
-    read_tag_record, read_tag_start, read_u32_record, RECORD_TAG_LEN,
+    drop_record, read_empty_tag, read_float, read_string_record, read_tag_start, read_u32,
 };
 
 // #[derive(Debug)]
@@ -104,12 +103,12 @@ pub fn read(fs_path: String, input: &[u8]) -> IResult<&[u8], ImageData> {
                 i
             }
             "WDTH" => {
-                let (i, num) = read_u32_record(i)?;
+                let (i, num) = read_u32(i)?;
                 width = num;
                 i
             }
             "HGHT" => {
-                let (i, num) = read_u32_record(i)?;
+                let (i, num) = read_u32(i)?;
                 height = num;
                 i
             }
@@ -213,7 +212,7 @@ fn read_jpeg(input: &[u8]) -> IResult<&[u8], ImageDataJpeg> {
         let (i, (tag, len)) = read_tag_start(input)?;
         input = match tag {
             "SIZE" => {
-                let (i, num) = read_u32_record(i)?;
+                let (i, num) = read_u32(i)?;
                 size_opt = Some(num);
                 i
             }

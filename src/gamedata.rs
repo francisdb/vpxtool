@@ -8,7 +8,7 @@ use nom::multi::many0;
 use nom::{number::complete::le_u32, IResult};
 
 use crate::biff::{
-    read_float_record, read_string_record, read_tag_record, read_u32_record,
+    read_float_record, read_string_record, read_tag_record, read_u32,
     read_wide_string_record, RECORD_TAG_LEN,
 };
 
@@ -30,6 +30,7 @@ pub enum Record {
     Name(String),
     MaterialsSize(u32),
     ImagesSize(u32),
+    SoundsSize(u32),
     Unknonw { name: String, data: Vec<u8> },
     End,
 }
@@ -53,11 +54,11 @@ fn read_gamedata_record_value(tag: String, len: u32, input: &[u8]) -> IResult<&[
         "LEFT" => {
             // let (rest, n) = read_u32_record(input)?;
             // Ok((rest, Record::PlayfieldLeft(n)))
-            map(read_u32_record, Record::PlayfieldLeft)(input)
+            map(read_u32, Record::PlayfieldLeft)(input)
         }
-        "TOPX" => map(read_u32_record, Record::PlayfieldTopX)(input),
-        "RGHT" => map(read_u32_record, Record::PlayfieldRight)(input),
-        "BOTM" => map(read_u32_record, Record::PlayfieldBottom)(input),
+        "TOPX" => map(read_u32, Record::PlayfieldTopX)(input),
+        "RGHT" => map(read_u32, Record::PlayfieldRight)(input),
+        "BOTM" => map(read_u32, Record::PlayfieldBottom)(input),
         "NAME" => {
             let n_rest = len - RECORD_TAG_LEN;
             let (rest, string) = read_wide_string_record(input, n_rest)?;
@@ -73,12 +74,17 @@ fn read_gamedata_record_value(tag: String, len: u32, input: &[u8]) -> IResult<&[
             Ok((rest, rec))
         }
         "MASI" => {
-            let (rest, n) = read_u32_record(input)?;
+            let (rest, n) = read_u32(input)?;
             let rec = Record::MaterialsSize(n);
             Ok((rest, rec))
         }
+        "SSND" => {
+            let (rest, n) = read_u32(input)?;
+            let rec = Record::SoundsSize(n);
+            Ok((rest, rec))
+        }
         "SIMG" => {
-            let (rest, n) = read_u32_record(input)?;
+            let (rest, n) = read_u32(input)?;
             let rec = Record::ImagesSize(n);
             Ok((rest, rec))
         }

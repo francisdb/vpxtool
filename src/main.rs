@@ -1,13 +1,13 @@
 pub mod biff;
 pub mod gamedata;
 pub mod image;
+pub mod sound;
 pub mod tableinfo;
 
 use cfb::CompoundFile;
 use clap::{arg, Arg, Command};
 use colored::Colorize;
 use gamedata::Record;
-use serde_json::de;
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::{self, Read};
@@ -16,9 +16,11 @@ use std::process::exit;
 
 use nom::{number::complete::le_u32, IResult};
 
-use crate::image::ImageDataJpeg;
+use std::io::Write; // bring trait into scope
 
 use git_version::git_version;
+
+use crate::sound::write_wav;
 
 // see https://github.com/fusion-engineering/rust-git-version/issues/21 for why the ""
 const GIT_VERSION: &str = git_version!(args = ["--tags", "--always", "--dirty=-modified"]);
@@ -109,13 +111,14 @@ fn extract(vpx_file_path: &str, yes: bool) {
     root_dir.create(root_dir_path).unwrap();
 
     let mut comp = cfb::open(&vpx_file_path).unwrap();
-    let _version = read_version(&mut comp);
+    let version = read_version(&mut comp);
     let records = read_gamedata(&mut comp);
 
     extract_info(&mut comp, &json_path);
     extract_script(&records, vbs_path);
     extract_binaries(&mut comp, root_dir_path);
     extract_images(&mut comp, &records, root_dir_path);
+    extract_sounds(&mut comp, &records, root_dir_path, version);
 
     // let mut file_version = String::new();
     // comp.open_stream("/GameStg/Version")
@@ -233,7 +236,7 @@ fn extract_images(comp: &mut CompoundFile<File>, records: &Vec<Record>, root_dir
             Record::ImagesSize(size) => Some(size),
             _ => None,
         })
-        .unwrap()
+        .unwrap_or(&0)
         .to_owned();
 
     let images_path = root_dir_path.join("images");
@@ -244,9 +247,6 @@ fn extract_images(comp: &mut CompoundFile<File>, records: &Vec<Record>, root_dir
         images_size,
         images_path.display()
     );
-
-    use std::fs;
-    use std::io::Write; // bring trait into scope
 
     for index in 0..images_size {
         let path = format!("GameStg/Image{}", index);
@@ -270,6 +270,51 @@ fn extract_images(comp: &mut CompoundFile<File>, records: &Vec<Record>, root_dir
                 // nothing to do here
             }
         }
+    }
+}
+
+fn extract_sounds(
+    comp: &mut CompoundFile<File>,
+    records: &Vec<Record>,
+    root_dir_path: &Path,
+    fileVersion: u32,
+) {
+    // let result = parseGameData(&game_data_vec[..]);
+    // dump(result);
+
+    let sounds_size = records
+        .iter()
+        .find_map(|r| match r {
+            Record::SoundsSize(size) => Some(size),
+            _ => None,
+        })
+        .unwrap_or(&0)
+        .to_owned();
+
+    let sounds_path = root_dir_path.join("sounds");
+    std::fs::create_dir_all(&sounds_path).unwrap();
+
+    println!(
+        "Writing {} sounds to\n  {}",
+        sounds_size,
+        sounds_path.display()
+    );
+
+    for index in 0..sounds_size {
+        let path = format!("GameStg/Sound{}", index);
+        let mut input = Vec::new();
+        comp.open_stream(&path)
+            .unwrap()
+            .read_to_end(&mut input)
+            .unwrap();
+        let (_, sound) = sound::read(path.to_owned(), fileVersion, &input).unwrap();
+
+        let ext = sound.ext();
+        let mut sound_path = sounds_path.clone();
+        sound_path.push(format!("Sound{}.{}.{}", index, sound.name, ext));
+        //dbg!(&jpeg_path);
+        let mut file = std::fs::File::create(sound_path).unwrap();
+        file.write_all(&write_wav(&sound)).unwrap();
     }
 }
 
