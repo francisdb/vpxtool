@@ -39,11 +39,11 @@ This will create a folder `~/path/to/table` containing the contents of the `vpx`
 
 Other related projects that read assemble vpx files:
 
-https://github.com/vpinball/vpinball
-https://github.com/vpdb/vpx-js
-https://github.com/freezy/VisualPinball.Engine
-https://github.com/stojy/ClrVpin
-https://github.com/vbousquet/vpx_lightmapper
+* https://github.com/vpinball/vpinball
+* https://github.com/vpdb/vpx-js
+* https://github.com/freezy/VisualPinball.Engine
+* https://github.com/stojy/ClrVpin
+* https://github.com/vbousquet/vpx_lightmapper
 
 An example vpx managed in github with some imagemagick scripts to compose textures
 
