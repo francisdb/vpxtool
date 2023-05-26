@@ -8,6 +8,7 @@ use cfb::CompoundFile;
 use clap::{arg, Arg, Command};
 use colored::Colorize;
 use gamedata::Record;
+use serde_json::json;
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::{self, Read};
@@ -31,6 +32,18 @@ fn main() {
         .author("Francis DB")
         .about("Extracts and assembles vpx files")
         .arg_required_else_help(true)
+        .subcommand(
+            Command::new("info")
+                .about("Show information about a vpx file")
+                .arg(arg!(<VPXPATH> "The path to the vpx file").required(true))
+                .arg(
+                    Arg::new("JSON")
+                        .short('j')
+                        .long("json")
+                        .num_args(0)
+                        .help("Output as JSON"),
+                ),
+        )
         .subcommand(
             Command::new("extract")
                 .about("Extracts a vpx file")
@@ -63,6 +76,14 @@ fn main() {
         .get_matches();
 
     match matches.subcommand() {
+        Some(("info", sub_matches)) => {
+            let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
+            let path = path.unwrap_or("");
+            let expanded_path = shellexpand::tilde(path);
+            println!("showing info for {}", expanded_path);
+            let json = sub_matches.get_flag("JSON");
+            info(expanded_path.as_ref(), json);
+        }
         Some(("extract", sub_matches)) => {
             let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
             let path = path.unwrap_or("");
@@ -83,6 +104,18 @@ fn main() {
         }
         _ => unreachable!(), // If all subcommands are defined above, anything else is unreachable!()
     }
+}
+
+fn info(vpx_file_path: &str, json: bool) {
+    let mut comp = cfb::open(&vpx_file_path).unwrap();
+    let version = read_version(&mut comp);
+    // GameData also has a name field that we might want to display here
+    // where is this shown in the UI?
+    let table_info = tableinfo::read_tableinfo(&mut comp);
+    // TODO come up with a proper format with colors and handle newlines?
+    // TODO check the json flag
+    dbg!(version);
+    dbg!(table_info);
 }
 
 fn extract(vpx_file_path: &str, yes: bool) {
@@ -221,8 +254,19 @@ fn read_gamedata(comp: &mut CompoundFile<File>) -> Vec<Record> {
 
 fn extract_info<P: AsRef<Path>>(comp: &mut CompoundFile<File>, json_path: &P) {
     let mut json_file = std::fs::File::create(json_path).unwrap();
-    let json_root = tableinfo::read_tableinfo(comp);
-    serde_json::to_writer_pretty(&mut json_file, &json_root).unwrap();
+    let table_info = tableinfo::read_tableinfo(comp);
+
+    // TODO convert to a serde
+    // TODO add free properties
+    // TODO add missing data
+    let info = json!({
+        "name": table_info.table_name,
+        "author": table_info.author_name,
+    });
+
+    dbg!(table_info);
+
+    serde_json::to_writer_pretty(&mut json_file, &info).unwrap();
     println!("Info file written to\n  {}", json_path.as_ref().display());
 }
 

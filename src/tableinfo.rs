@@ -1,55 +1,98 @@
 use cfb::CompoundFile;
-use serde_json::json;
-use serde_json::{Map, Value};
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
 use utf16string::WStr;
 
-pub fn read_tableinfo(comp: &mut CompoundFile<File>) -> Value {
+#[derive(Debug)]
+pub struct TableInfo {
+    pub table_name: String,
+    pub author_name: String,
+    pub screenshot: Vec<u8>,
+    pub table_blurb: String,
+    pub table_rules: String,
+    pub author_email: String,
+    pub release_date: String,
+    pub table_save_rev: String,
+    pub table_version: String,
+    pub author_website: String,
+    pub table_save_date: String,
+    pub table_description: String,
+    pub properties: HashMap<String, String>,
+}
+
+pub fn read_tableinfo(comp: &mut CompoundFile<File>) -> TableInfo {
     let table_info_path = "/TableInfo";
     // println!("Reading table info at {}", table_info_path);
-    let stream_paths: Vec<String> = {
-        let walk = comp.walk_storage(table_info_path).unwrap();
-        let stream_paths = walk.flat_map(|entry| {
-            let path = entry.path();
-            let path = path.to_str().unwrap().to_string();
-            if entry.is_stream() {
-                return Some(path);
-            } else {
-                return None;
-            }
-        });
-        stream_paths.collect()
-    };
+    let mut table_name: String = "".to_string();
+    let mut author_name: String = "".to_string();
+    let mut screenshot: Vec<u8> = vec![];
+    let mut table_blurb: String = "".to_string();
+    let mut table_rules: String = "".to_string();
+    let mut author_email: String = "".to_string();
+    let mut release_date: String = "".to_string();
+    let mut table_save_rev: String = "".to_string();
+    let mut table_version: String = "".to_string();
+    let mut author_website: String = "".to_string();
+    let mut table_save_date: String = "".to_string();
+    let mut table_description: String = "".to_string();
+    let mut properties: HashMap<String, String> = HashMap::new();
 
-    let keys_vals = stream_paths
-        .iter()
-        .map(|path| {
-            let mut stream = comp.open_stream(path).unwrap();
-            // read the stream to a string
-            let mut buffer = Vec::new();
-            stream.read_to_end(&mut buffer).unwrap();
+    let entries = comp.read_storage(table_info_path).unwrap();
+    // read all the entries in the entrues
+    let paths: Vec<String> = entries
+        .filter(|entry| entry.is_stream())
+        .map(|entry| entry.path().to_str().unwrap().to_owned())
+        .collect();
 
-            let s = WStr::from_utf16le(&buffer).unwrap().to_utf8();
-            let key = path.replace(table_info_path, "").replacen("/", "", 1);
+    paths.iter().for_each(|path| match path.as_str() {
+        "/TableInfo/TableName" => table_name = read_stream_string(comp, path),
+        "/TableInfo/AuthorName" => author_name = read_stream_string(comp, path),
+        "/TableInfo/Screenshot" => screenshot = read_stream_binary(comp, path),
+        "/TableInfo/TableBlurb" => table_blurb = read_stream_string(comp, path),
+        "/TableInfo/TableRules" => table_rules = read_stream_string(comp, path),
+        "/TableInfo/AuthorEmail" => author_email = read_stream_string(comp, path),
+        "/TableInfo/ReleaseDate" => release_date = read_stream_string(comp, path),
+        "/TableInfo/TableSaveRev" => table_save_rev = read_stream_string(comp, path),
+        "/TableInfo/TableVersion" => table_version = read_stream_string(comp, path),
+        "/TableInfo/AuthorWebSite" => author_website = read_stream_string(comp, path),
+        "/TableInfo/TableSaveDate" => table_save_date = read_stream_string(comp, path),
+        "/TableInfo/TableDescription" => table_description = read_stream_string(comp, path),
+        other => {
+            let key = other.replace(table_info_path, "").replacen("/", "", 1);
+            properties.insert(key, read_stream_string(comp, path));
+            ()
+        }
+    });
 
-            return (key, s.to_string());
-        })
-        .collect::<Vec<_>>();
-
-    // keys_vals.iter().for_each(|(path, value)| {
-    //     println!("{} -> {}", path, value);
-    // });
-
-    let mut table_info_map = Map::new();
-
-    // assuming keys_vals is a Vec<(String, String)>
-    for (key, val) in keys_vals {
-        table_info_map.insert(key.to_string(), Value::String(val));
+    TableInfo {
+        table_name,
+        author_name,
+        screenshot: vec![],
+        table_blurb,
+        table_rules,
+        author_email,
+        release_date,
+        table_save_rev,
+        table_version,
+        author_website,
+        table_save_date,
+        table_description,
+        properties,
     }
+}
 
-    let json_tableinfo = Value::Object(table_info_map);
+fn read_stream_string(comp: &mut CompoundFile<File>, path: &str) -> String {
+    let mut stream = comp.open_stream(path).unwrap();
+    let mut buffer = Vec::new();
+    stream.read_to_end(&mut buffer).unwrap();
 
-    let json_root = json!({ "TableInfo": json_tableinfo });
-    json_root
+    WStr::from_utf16le(&buffer).unwrap().to_utf8()
+}
+
+fn read_stream_binary(comp: &mut CompoundFile<File>, path: &str) -> Vec<u8> {
+    let mut stream = comp.open_stream(path).unwrap();
+    let mut buffer = Vec::new();
+    stream.read_to_end(&mut buffer).unwrap();
+    buffer
 }
