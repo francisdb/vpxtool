@@ -75,7 +75,6 @@ pub fn write_sound(sound_data: &SoundData) -> Vec<u8> {
         buf.put_slice(&write_wav_header(sound_data));
         buf
     } else {
-        dbg!(sound_data);
         let buf = BytesMut::with_capacity(sound_data.data.len());
         buf
     };

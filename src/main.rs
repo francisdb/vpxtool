@@ -10,7 +10,7 @@ use colored::Colorize;
 use gamedata::Record;
 use serde_json::json;
 use std::fmt::Debug;
-use std::fs::File;
+use std::fs::{metadata, File};
 use std::io::{self, Read};
 use std::path::Path;
 use std::process::exit;
@@ -79,7 +79,7 @@ fn main() {
         Some(("info", sub_matches)) => {
             let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
             let path = path.unwrap_or("");
-            let expanded_path = shellexpand::tilde(path);
+            let expanded_path = expand_path(path);
             println!("showing info for {}", expanded_path);
             let json = sub_matches.get_flag("JSON");
             info(expanded_path.as_ref(), json);
@@ -88,7 +88,7 @@ fn main() {
             let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
             let path = path.unwrap_or("");
             // TODO expand all instead of only tilde?
-            let expanded_path = shellexpand::tilde(path);
+            let expanded_path = expand_path(path);
             println!("extracting from {}", expanded_path);
             let yes = sub_matches.get_flag("FORCE");
             extract(expanded_path.as_ref(), yes);
@@ -96,14 +96,31 @@ fn main() {
         Some(("extractvbs", sub_matches)) => {
             let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
             let path = path.unwrap_or("");
-            // TODO expand all instead of only tilde?
-            let expanded_path = shellexpand::tilde(path);
+            let expanded_path = expand_path(path);
             println!("extracting from {}", expanded_path);
             let yes = sub_matches.get_flag("FORCE");
             extractvbs(expanded_path.as_ref(), yes);
         }
         _ => unreachable!(), // If all subcommands are defined above, anything else is unreachable!()
     }
+}
+
+fn expand_path(path: &str) -> String {
+    // TODO expand all instead of only tilde?
+    let expanded_path = shellexpand::tilde(path);
+    match metadata(path) {
+        Ok(md) => {
+            if !md.is_file() {
+                println!("{} is not a file", expanded_path);
+                exit(1);
+            }
+        }
+        Err(msg) => {
+            println!("Failed to open {}: {}", expanded_path, msg);
+            exit(1);
+        }
+    }
+    expanded_path.to_string()
 }
 
 fn info(vpx_file_path: &str, json: bool) {
