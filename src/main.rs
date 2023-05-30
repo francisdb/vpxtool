@@ -281,8 +281,6 @@ fn extract_info<P: AsRef<Path>>(comp: &mut CompoundFile<File>, json_path: &P) {
         "author": table_info.author_name,
     });
 
-    dbg!(table_info);
-
     serde_json::to_writer_pretty(&mut json_file, &info).unwrap();
     println!("Info file written to\n  {}", json_path.as_ref().display());
 }

@@ -130,7 +130,7 @@ impl SoundData {
     }
 }
 
-pub fn read(fs_path: String, fileVersion: u32, input: &[u8]) -> IResult<&[u8], SoundData> {
+pub fn read(fs_path: String, file_version: u32, input: &[u8]) -> IResult<&[u8], SoundData> {
     let mut input = input;
     let mut name: String = "".to_string();
     let mut path: String = "".to_string();
@@ -145,14 +145,13 @@ pub fn read(fs_path: String, fileVersion: u32, input: &[u8]) -> IResult<&[u8], S
     // TODO add support for the old format file version < 1031
     // https://github.com/freezy/VisualPinball.Engine/blob/ec1e9765cd4832c134e889d6e6d03320bc404bd5/VisualPinball.Engine/VPT/Sound/SoundData.cs#L98
 
-    let numValues = if fileVersion < NEW_SOUND_FORMAT_VERSION {
+    let num_values = if file_version < NEW_SOUND_FORMAT_VERSION {
         5
     } else {
         10
     };
 
-    for i in 0..numValues {
-        let len: u32;
+    for i in 0..num_values {
         input = match i {
             0 => {
                 let (remaining, n) = read_string_record(input)?;

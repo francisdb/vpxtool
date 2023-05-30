@@ -167,7 +167,7 @@ pub fn read(fs_path: String, input: &[u8]) -> IResult<&[u8], ImageData> {
 }
 
 fn read_bits(input: &[u8]) -> IResult<&[u8], ImageDataBits> {
-    let mut input = input;
+    // let mut input = input;
 
     // lzw encoded data but probably using some custom format
     // using
@@ -187,15 +187,8 @@ fn read_bits(input: &[u8]) -> IResult<&[u8], ImageDataBits> {
     //dbg!(decoded.len(), n);
 
     println!("dropping remaining bytes for BITS: {:?}", input.len());
-    let mut data: &[u8] = &[];
-    input = &[];
 
-    Ok((
-        input,
-        ImageDataBits {
-            data: data.to_vec(),
-        },
-    ))
+    Ok((&[], ImageDataBits { data: vec![] }))
 }
 
 fn read_jpeg(input: &[u8]) -> IResult<&[u8], ImageDataJpeg> {
