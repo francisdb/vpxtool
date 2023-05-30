@@ -8,7 +8,7 @@ rust-version = "1.69"
 
 [dependencies]
 bytes = "1.4.0"
-cfb = "0.7.3"
+cfb = "0.8.0"
 clap = "4.3.0"
 colored = "2.0.0"
 git-version = "0.3.5"
