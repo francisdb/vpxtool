@@ -21,7 +21,7 @@ use std::io::Write; // bring trait into scope
 
 use git_version::git_version;
 
-use crate::sound::write_wav;
+use crate::sound::write_sound;
 
 // see https://github.com/fusion-engineering/rust-git-version/issues/21 for why the ""
 const GIT_VERSION: &str = git_version!(args = ["--tags", "--always", "--dirty=-modified"]);
@@ -358,7 +358,7 @@ fn extract_sounds(
         sound_path.push(format!("Sound{}.{}.{}", index, sound.name, ext));
         //dbg!(&jpeg_path);
         let mut file = std::fs::File::create(sound_path).unwrap();
-        file.write_all(&write_wav(&sound)).unwrap();
+        file.write_all(&write_sound(&sound)).unwrap();
     }
 }
 

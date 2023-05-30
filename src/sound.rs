@@ -4,9 +4,7 @@ use bytes::{BufMut, BytesMut};
 
 use nom::IResult;
 
-use crate::biff::{
-    read_byte, read_bytes_record, read_string_record, read_u16, read_u32,
-};
+use crate::biff::{read_byte, read_bytes_record, read_string_record, read_u16, read_u32};
 
 const NEW_SOUND_FORMAT_VERSION: u32 = 1031;
 
@@ -71,9 +69,16 @@ fn write_wav_header(sound_data: &SoundData) -> Vec<u8> {
     buf.to_vec() // total 44 bytes
 }
 
-pub fn write_wav(sound_data: &SoundData) -> Vec<u8> {
-    let mut buf = BytesMut::with_capacity(44 + sound_data.data.len());
-    buf.put_slice(&write_wav_header(sound_data));
+pub fn write_sound(sound_data: &SoundData) -> Vec<u8> {
+    let mut buf = if is_wav(&sound_data.path) {
+        let mut buf = BytesMut::with_capacity(44 + sound_data.data.len());
+        buf.put_slice(&write_wav_header(sound_data));
+        buf
+    } else {
+        dbg!(sound_data);
+        let buf = BytesMut::with_capacity(sound_data.data.len());
+        buf
+    };
     buf.put_slice(&sound_data.data);
     buf.to_vec()
 }
@@ -145,10 +150,6 @@ pub fn read(fs_path: String, fileVersion: u32, input: &[u8]) -> IResult<&[u8], S
         5
     } else {
         10
-    };
-
-    fn is_wav(path: &String) -> bool {
-        path.to_lowercase().ends_with(".wav")
     };
 
     for i in 0..numValues {
@@ -252,4 +253,8 @@ pub fn read(fs_path: String, fileVersion: u32, input: &[u8]) -> IResult<&[u8], S
         },
     ))
     // while input is not empty consume 4 bytes in a loop
+}
+
+fn is_wav(path: &String) -> bool {
+    path.to_lowercase().ends_with(".wav")
 }
