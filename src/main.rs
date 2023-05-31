@@ -5,6 +5,8 @@ pub mod image;
 pub mod sound;
 pub mod tableinfo;
 
+pub mod directb2s;
+
 use cfb::CompoundFile;
 use clap::{arg, Arg, Command};
 use colored::Colorize;
@@ -22,6 +24,7 @@ use std::io::Write; // bring trait into scope
 
 use git_version::git_version;
 
+use crate::directb2s::load;
 use crate::sound::write_sound;
 
 // see https://github.com/fusion-engineering/rust-git-version/issues/21 for why the ""
@@ -92,7 +95,15 @@ fn main() {
             let expanded_path = expand_path(path);
             println!("extracting from {}", expanded_path);
             let yes = sub_matches.get_flag("FORCE");
-            extract(expanded_path.as_ref(), yes);
+            if (expanded_path.ends_with(".directb2s")) {
+                // read file to string
+                let mut file = File::open(expanded_path).unwrap();
+                let mut text = String::new();
+                file.read_to_string(&mut text).unwrap();
+                load(&text).unwrap();
+            } else {
+                extract(expanded_path.as_ref(), yes);
+            }
         }
         Some(("extractvbs", sub_matches)) => {
             let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
