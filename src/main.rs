@@ -1,4 +1,5 @@
 pub mod biff;
+pub mod font;
 pub mod gamedata;
 pub mod image;
 pub mod sound;
@@ -138,10 +139,8 @@ fn info(vpx_file_path: &str, json: bool) {
 fn extract(vpx_file_path: &str, yes: bool) {
     let root_dir_path_str = vpx_file_path.replace(".vpx", "");
     let root_dir_path = Path::new(&root_dir_path_str);
-
-    let json_path = root_dir_path.join("TableInfo.json");
-    let vbs_path_str = vpx_file_path.replace(".vpx", ".vbs");
-    let vbs_path = Path::new(&vbs_path_str);
+    let mut root_dir = std::fs::DirBuilder::new();
+    let vbs_path = root_dir_path.join("script.vbs").to_owned();
 
     let mut root_dir = std::fs::DirBuilder::new();
     root_dir.recursive(true);
@@ -164,11 +163,12 @@ fn extract(vpx_file_path: &str, yes: bool) {
     let version = read_version(&mut comp);
     let records = read_gamedata(&mut comp);
 
-    extract_info(&mut comp, &json_path);
-    extract_script(&records, vbs_path);
+    extract_info(&mut comp, root_dir_path);
+    extract_script(&records, &vbs_path);
     extract_binaries(&mut comp, root_dir_path);
     extract_images(&mut comp, &records, root_dir_path);
     extract_sounds(&mut comp, &records, root_dir_path, version);
+    extract_fonts(&mut comp, &records, root_dir_path);
 
     // let mut file_version = String::new();
     // comp.open_stream("/GameStg/Version")
@@ -200,13 +200,16 @@ fn extractvbs(vpx_file_path: &str, yes: bool) {
     let mut comp = cfb::open(&vpx_file_path).unwrap();
     let _version = read_version(&mut comp);
     let records = read_gamedata(&mut comp);
-    extract_script(&records, vbs_path);
+    extract_script(&records, &vbs_path);
 }
 
-fn extract_script(records: &Vec<Record>, vbs_path: &Path) {
+fn extract_script<P: AsRef<Path>>(records: &Vec<Record>, vbs_path: &P) {
     let script = read_script(records);
     std::fs::write(vbs_path, script).unwrap();
-    println!("VBScript file written to\n  {}", vbs_path.display());
+    println!(
+        "VBScript file written to\n  {}",
+        vbs_path.as_ref().display()
+    );
 }
 
 fn dump<T: Debug>(res: IResult<&[u8], T>) {
@@ -269,9 +272,15 @@ fn read_gamedata(comp: &mut CompoundFile<File>) -> Vec<Record> {
     records
 }
 
-fn extract_info<P: AsRef<Path>>(comp: &mut CompoundFile<File>, json_path: &P) {
-    let mut json_file = std::fs::File::create(json_path).unwrap();
+fn extract_info(comp: &mut CompoundFile<File>, root_dir_path: &Path) {
+    let json_path = root_dir_path.join("TableInfo.json");
+    let mut json_file = std::fs::File::create(&json_path).unwrap();
     let table_info = tableinfo::read_tableinfo(comp);
+    if table_info.screenshot.len() > 0 {
+        let screenshot_path = root_dir_path.join("screenshot.bin");
+        let mut screenshot_file = std::fs::File::create(screenshot_path).unwrap();
+        screenshot_file.write_all(&table_info.screenshot).unwrap();
+    }
 
     // TODO convert to a serde
     // TODO add free properties
@@ -282,7 +291,7 @@ fn extract_info<P: AsRef<Path>>(comp: &mut CompoundFile<File>, json_path: &P) {
     });
 
     serde_json::to_writer_pretty(&mut json_file, &info).unwrap();
-    println!("Info file written to\n  {}", json_path.as_ref().display());
+    println!("Info file written to\n  {}", &json_path.display());
 }
 
 fn extract_images(comp: &mut CompoundFile<File>, records: &Vec<Record>, root_dir_path: &Path) {
@@ -374,6 +383,46 @@ fn extract_sounds(
         //dbg!(&jpeg_path);
         let mut file = std::fs::File::create(sound_path).unwrap();
         file.write_all(&write_sound(&sound)).unwrap();
+    }
+}
+
+fn extract_fonts(comp: &mut CompoundFile<File>, records: &Vec<Record>, root_dir_path: &Path) {
+    // let result = parseGameData(&game_data_vec[..]);
+    // dump(result);
+
+    let fonts_size = records
+        .iter()
+        .find_map(|r| match r {
+            Record::FontsSize(size) => Some(size),
+            _ => None,
+        })
+        .unwrap_or(&0)
+        .to_owned();
+
+    let fonts_path = root_dir_path.join("fonts");
+    std::fs::create_dir_all(&fonts_path).unwrap();
+
+    println!(
+        "Writing {} fonts to\n  {}",
+        fonts_size,
+        fonts_path.display()
+    );
+
+    for index in 0..fonts_size {
+        let path = format!("GameStg/Font{}", index);
+        let mut input = Vec::new();
+        comp.open_stream(&path)
+            .unwrap()
+            .read_to_end(&mut input)
+            .unwrap();
+        let (_, font) = font::read(path.to_owned(), &input).unwrap();
+
+        let ext = font.ext();
+        let mut font_path = fonts_path.clone();
+        font_path.push(format!("Font{}.{}.{}", index, font.name, ext));
+        //dbg!(&jpeg_path);
+        let mut file = std::fs::File::create(font_path).unwrap();
+        file.write_all(&font.data).unwrap();
     }
 }
 

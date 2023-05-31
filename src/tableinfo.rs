@@ -48,7 +48,11 @@ pub fn read_tableinfo(comp: &mut CompoundFile<File>) -> TableInfo {
     paths.iter().for_each(|path| match path.as_str() {
         "/TableInfo/TableName" => table_name = read_stream_string(comp, path),
         "/TableInfo/AuthorName" => author_name = read_stream_string(comp, path),
-        "/TableInfo/Screenshot" => screenshot = read_stream_binary(comp, path),
+        "/TableInfo/Screenshot" => {
+            // seems to be a full image file, eg if there is no jpeg data in the image this is a full png
+            // but how do we know the extension?
+            screenshot = read_stream_binary(comp, path)
+        }
         "/TableInfo/TableBlurb" => table_blurb = read_stream_string(comp, path),
         "/TableInfo/TableRules" => table_rules = read_stream_string(comp, path),
         "/TableInfo/AuthorEmail" => author_email = read_stream_string(comp, path),
@@ -68,7 +72,7 @@ pub fn read_tableinfo(comp: &mut CompoundFile<File>) -> TableInfo {
     TableInfo {
         table_name,
         author_name,
-        screenshot: vec![],
+        screenshot,
         table_blurb,
         table_rules,
         author_email,

@@ -8,8 +8,8 @@ use nom::multi::many0;
 use nom::{number::complete::le_u32, IResult};
 
 use crate::biff::{
-    read_float_record, read_string_record, read_tag_record, read_u32,
-    read_wide_string_record, RECORD_TAG_LEN,
+    read_float_record, read_string_record, read_tag_record, read_u32, read_wide_string_record,
+    RECORD_TAG_LEN,
 };
 
 #[derive(Debug)]
@@ -31,6 +31,8 @@ pub enum Record {
     MaterialsSize(u32),
     ImagesSize(u32),
     SoundsSize(u32),
+    FontsSize(u32),
+    CollectionsSize(u32),
     Unknonw { name: String, data: Vec<u8> },
     End,
 }
@@ -88,12 +90,23 @@ fn read_gamedata_record_value(tag: String, len: u32, input: &[u8]) -> IResult<&[
             let rec = Record::ImagesSize(n);
             Ok((rest, rec))
         }
+        "SFNT" => {
+            let (rest, n) = read_u32(input)?;
+            let rec = Record::FontsSize(n);
+            Ok((rest, rec))
+        }
+        "SCOL" => {
+            let (rest, n) = read_u32(input)?;
+            let rec = Record::CollectionsSize(n);
+            Ok((rest, rec))
+        }
         "ENDB" => {
             // ENDB is just a tag, it should have a remaining length of 0
             read_tag_record(len);
             Ok((input, Record::End))
         }
         _ => {
+            // dbg!(&tag);
             //let string = String::from_utf8(chars.to_vec()).unwrap();
             // the name tag is included in the length
             let n_rest = len - RECORD_TAG_LEN;

@@ -250,7 +250,6 @@ pub fn read(fs_path: String, file_version: u32, input: &[u8]) -> IResult<&[u8], 
             output_target,
         },
     ))
-    // while input is not empty consume 4 bytes in a loop
 }
 
 fn is_wav(path: &String) -> bool {
