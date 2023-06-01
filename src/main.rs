@@ -444,7 +444,7 @@ fn extract_sounds(
     comp: &mut CompoundFile<File>,
     records: &Vec<Record>,
     root_dir_path: &Path,
-    fileVersion: u32,
+    file_version: u32,
 ) {
     // let result = parseGameData(&game_data_vec[..]);
     // dump(result);
@@ -474,7 +474,7 @@ fn extract_sounds(
             .unwrap()
             .read_to_end(&mut input)
             .unwrap();
-        let (_, sound) = sound::read(path.to_owned(), fileVersion, &input).unwrap();
+        let (_, sound) = sound::read(path.to_owned(), file_version, &input).unwrap();
 
         let ext = sound.ext();
         let mut sound_path = sounds_path.clone();
