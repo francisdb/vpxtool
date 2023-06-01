@@ -54,27 +54,6 @@ pub struct AnimationStep {
 
 #[derive(Debug, Deserialize)]
 pub struct Animation {
-//   <Animation Name="skull_lights" Parent="Backglass" DualMode="0" Interval="100" Loops="0" IDJoin="" StartAnimationAtBackglassStartup="1" LightsStateAtAnimationStart="4" LightsStateAtAnimationEnd="1" AnimationStopBehaviour="1" LockInvolvedLamps="0" HideScoreDisplays="0" BringToFront="0">
-//     <AnimationStep Step="1" On="lights eyeskopie2" WaitLoopsAfterOn="1" Off="" WaitLoopsAfterOff="0" />
-//     <AnimationStep Step="2" On="" WaitLoopsAfterOn="1" Off="lights eyeskopie2" WaitLoopsAfterOff="0" />
-//     <AnimationStep Step="3" On="" WaitLoopsAfterOn="1" Off="lights eyeskopie2" WaitLoopsAfterOff="0" />
-//     <AnimationStep Step="4" On="lights eyeskopie2" WaitLoopsAfterOn="1" Off="" WaitLoopsAfterOff="0" />
-//     <AnimationStep Step="5" On="" WaitLoopsAfterOn="1" Off="lights eyeskopie2" WaitLoopsAfterOff="0" />
-//     <AnimationStep Step="6" On="" WaitLoopsAfterOn="1" Off="lights eyeskopie2" WaitLoopsAfterOff="0" />
-//     <AnimationStep Step="7" On="lights eyeskopie2" WaitLoopsAfterOn="1" Off="" WaitLoopsAfterOff="0" />
-//     <AnimationStep Step="8" On="" WaitLoopsAfterOn="1" Off="lights eyeskopie2" WaitLoopsAfterOff="0" />
-//     <AnimationStep Step="9" On="" WaitLoopsAfterOn="1" Off="lights eyeskopie2" WaitLoopsAfterOff="0" />
-//     <AnimationStep Step="10" On="lights eyeskopie2" WaitLoopsAfterOn="1" Off="" WaitLoopsAfterOff="0" />
-//     <AnimationStep Step="11" On="" WaitLoopsAfterOn="1" Off="lights eyeskopie2" WaitLoopsAfterOff="0" />
-//     <AnimationStep Step="12" On="" WaitLoopsAfterOn="1" Off="lights eyeskopie2" WaitLoopsAfterOff="0" />
-//     <AnimationStep Step="13" On="lights eyeskopie2" WaitLoopsAfterOn="1" Off="" WaitLoopsAfterOff="0" />
-//     <AnimationStep Step="14" On="" WaitLoopsAfterOn="1" Off="lights eyeskopie2" WaitLoopsAfterOff="0" />
-//     <AnimationStep Step="15" On="" WaitLoopsAfterOn="1" Off="lights eyeskopie2" WaitLoopsAfterOff="0" />
-//     <AnimationStep Step="16" On="lights eyeskopie2" WaitLoopsAfterOn="1" Off="" WaitLoopsAfterOff="0" />
-//     <AnimationStep Step="17" On="" WaitLoopsAfterOn="1" Off="lights eyeskopie2" WaitLoopsAfterOff="0" />
-//     <AnimationStep Step="18" On="" WaitLoopsAfterOn="1" Off="lights eyeskopie2" WaitLoopsAfterOff="0" />
-//     <AnimationStep Step="19" On="" WaitLoopsAfterOn="1" Off="" WaitLoopsAfterOff="0" />
-//   </Animation>
     #[serde(rename = "@Name")]
     name: String,
     #[serde(rename = "@Parent")]
@@ -118,9 +97,9 @@ pub struct Bulb {
     #[serde(rename = "@Name")]
     pub name: String,
     #[serde(rename = "@RomID")]
-    pub rom_id: String,
+    pub rom_id: Option<String>,
     #[serde(rename = "@RomIDType")]
-    pub rom_id_type: String,
+    pub rom_id_type: Option<String>,
     #[serde(rename = "@RomInverted")]
     pub rom_inverted: Option<String>,
     #[serde(rename = "@InitialState")]
@@ -147,6 +126,9 @@ pub struct Bulb {
     pub height: String,
     #[serde(rename = "@IsImageSnippit")]
     pub is_image_snippit: String,
+    #[serde(rename = "@SnippitType")]
+    // TODO add more from https://github.com/vpinball/b2s-backglass/blob/f43ae8aacbb79d3413531991e4c0156264442c39/b2sbackglassdesigner/b2sbackglassdesigner/classes/Save.vb#LL309C50-L309C61
+    pub snippit_type: Option<String>,
     #[serde(rename = "@Image")]
     pub image: String,
     #[serde(rename = "@Text")]
@@ -195,7 +177,7 @@ impl Debug for Bulb {
 #[derive(Debug, Deserialize)]
 pub struct Illumination {
     #[serde(rename = "Bulb")]
-    bulb: Vec<Bulb>,
+    pub bulb: Vec<Bulb>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -211,30 +193,26 @@ pub struct Scores {
 #[derive(Debug, Deserialize)]
 pub struct DirectB2SData {
     #[serde(rename = "@Version")]
-    version: String,
+    pub version: String,
     #[serde(rename = "Name")]
-    name: ValueTag,
+    pub name: ValueTag,
     #[serde(rename = "TableType")]
-    table_type: ValueTag,
+    pub table_type: ValueTag,
     #[serde(rename = "DMDType")]
-    dmd_type: ValueTag,
+    pub dmd_type: ValueTag,
     #[serde(rename = "VSName")]
-    vsname: ValueTag,
+    pub vsname: ValueTag,
     #[serde(rename = "NumberOfPlayers")]
-    number_of_players: ValueTag,
-    animations: Option<Animations>,
-    scores: Option<Scores>,
+    pub number_of_players: ValueTag,
+    pub animations: Option<Animations>,
+    pub scores: Option<Scores>,
     #[serde(rename = "Illumination")]
-    illumination: Illumination,
+    pub illumination: Illumination,
     #[serde(rename = "Images")]
-    images: Images,
+    pub images: Images,
 }
 
 pub fn load(text: &str) -> Result<DirectB2SData, DeError> {
     // this will probably use up a lot of memory
-    let doc = from_str::<DirectB2SData>(text).unwrap();
-
-    dbg!(&doc);
-
-    Result::Ok(doc)
+    from_str::<DirectB2SData>(text)
 }

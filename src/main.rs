@@ -24,6 +24,8 @@ use std::io::Write; // bring trait into scope
 
 use git_version::git_version;
 
+use base64::{engine::general_purpose, Engine as _};
+
 use crate::directb2s::load;
 use crate::sound::write_sound;
 
@@ -96,11 +98,7 @@ fn main() {
             println!("extracting from {}", expanded_path);
             let yes = sub_matches.get_flag("FORCE");
             if (expanded_path.ends_with(".directb2s")) {
-                // read file to string
-                let mut file = File::open(expanded_path).unwrap();
-                let mut text = String::new();
-                file.read_to_string(&mut text).unwrap();
-                load(&text).unwrap();
+                extract_directb2s(&expanded_path);
             } else {
                 extract(expanded_path.as_ref(), yes);
             }
@@ -115,6 +113,96 @@ fn main() {
         }
         _ => unreachable!(), // If all subcommands are defined above, anything else is unreachable!()
     }
+}
+
+fn extract_directb2s(expanded_path: &String) {
+    let mut file = File::open(expanded_path).unwrap();
+    let mut text = String::new();
+    file.read_to_string(&mut text).unwrap();
+    match load(&text) {
+        Ok(b2s) => {
+            let root_dir_path_str = expanded_path.replace(".directb2s", ".directb2s.extracted");
+
+            let root_dir_path = Path::new(&root_dir_path_str);
+            let mut root_dir = std::fs::DirBuilder::new();
+            root_dir.recursive(true);
+            root_dir.create(root_dir_path).unwrap();
+
+            wite_images(b2s, root_dir_path);
+        }
+        Err(msg) => {
+            println!("Failed to load {}: {}", expanded_path, msg);
+            exit(1);
+        }
+    }
+}
+
+fn wite_images(b2s: directb2s::DirectB2SData, root_dir_path: &Path) {
+    let backglass_image = b2s.images.backglass_image;
+    write_base64_to_file(
+        root_dir_path,
+        backglass_image.file_name,
+        "backglassimage.img".to_string(),
+        &backglass_image.value,
+    );
+
+    if let Some(dmd_image) = b2s.images.dmd_image {
+        write_base64_to_file(
+            root_dir_path,
+            dmd_image.file_name,
+            "dmdimage.img".to_string(),
+            &dmd_image.value,
+        );
+    }
+
+    let thumbnail_image = b2s.images.thumbnail_image;
+    write_base64_to_file(
+        root_dir_path,
+        thumbnail_image.file_name,
+        "thumbnailimage.png".to_string(),
+        &thumbnail_image.value,
+    );
+
+    for bulb in b2s.illumination.bulb {
+        write_base64_to_file(
+            root_dir_path,
+            None,
+            format!("{}.png", bulb.name).to_string(),
+            &bulb.image,
+        );
+    }
+}
+
+fn write_base64_to_file(
+    root_dir_path: &Path,
+    original_file_path: Option<String>,
+    default: String,
+    base64data_with_cr_lf: &String,
+) {
+    // TODO bring in the other default here
+    let file_name: String =
+        os_independent_file_name(original_file_path.unwrap_or(default.clone())).unwrap_or(default);
+
+    let file_path = root_dir_path.join(file_name);
+
+    let mut file = File::create(file_path).unwrap();
+    let base64data = strip_cr_lf(&base64data_with_cr_lf);
+
+    let decoded_data = general_purpose::STANDARD.decode(base64data).unwrap();
+    file.write_all(&decoded_data).unwrap();
+}
+
+fn strip_cr_lf(s: &str) -> String {
+    s.chars().filter(|c| !c.is_ascii_whitespace()).collect()
+}
+
+fn os_independent_file_name(file_path: String) -> Option<String> {
+    // we can't use path here as this uses the system path encoding
+    // we might have to parse windows paths on mac/linux
+    file_path
+        .rsplit(|c| c == '/' || c == '\\')
+        .next()
+        .map(|f| f.to_string())
 }
 
 fn expand_path(path: &str) -> String {
