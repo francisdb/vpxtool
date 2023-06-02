@@ -4,6 +4,9 @@ use quick_xml::de::from_str;
 use quick_xml::de::*;
 use serde::{Deserialize, Serialize};
 
+// The xml model is based on this
+// https://github.com/vpinball/b2s-backglass/blob/f43ae8aacbb79d3413531991e4c0156264442c39/b2sbackglassdesigner/b2sbackglassdesigner/classes/CreateCode/Coding.vb#L30
+
 #[derive(Debug, Deserialize)]
 pub struct ValueTag {
     #[serde(rename = "@Value")]
@@ -87,15 +90,23 @@ pub struct Animation {
 #[derive(Debug, Deserialize)]
 pub struct Animations {
     #[serde(rename = "Animation")]
-    animation: Vec<Animation>,
+    animation: Option<Vec<Animation>>,
 }
 
 #[derive(Deserialize)]
 pub struct Bulb {
     #[serde(rename = "@ID")]
     pub id: String,
+    #[serde(rename = "@Parent")]
+    pub parent: Option<String>,
     #[serde(rename = "@Name")]
     pub name: String,
+    #[serde(rename = "@B2SID")]
+    pub b2s_id: Option<String>,
+    #[serde(rename = "@B2SIDType")]
+    pub b2s_id_type: Option<String>,
+    #[serde(rename = "@B2SValue")]
+    pub b2s_value: Option<String>,
     #[serde(rename = "@RomID")]
     pub rom_id: Option<String>,
     #[serde(rename = "@RomIDType")]
@@ -114,6 +125,8 @@ pub struct Bulb {
     pub dodge_color: String,
     #[serde(rename = "@IlluMode")]
     pub illu_mode: Option<String>,
+    #[serde(rename = "@ZOrder")]
+    pub z_order: Option<String>,
     #[serde(rename = "@Visible")]
     pub visible: String,
     #[serde(rename = "@LocX")]
@@ -127,7 +140,11 @@ pub struct Bulb {
     #[serde(rename = "@IsImageSnippit")]
     pub is_image_snippit: String,
     #[serde(rename = "@SnippitType")]
-    // TODO add more from https://github.com/vpinball/b2s-backglass/blob/f43ae8aacbb79d3413531991e4c0156264442c39/b2sbackglassdesigner/b2sbackglassdesigner/classes/Save.vb#LL309C50-L309C61
+    // SnippitMechID
+    // SnippitRotatingSteps
+    // SnippitRotatingDirection
+    // SnippitRotatingStopBehaviour
+    // SnippitRotatingInterval
     pub snippit_type: Option<String>,
     #[serde(rename = "@Image")]
     pub image: String,
@@ -177,7 +194,65 @@ impl Debug for Bulb {
 #[derive(Debug, Deserialize)]
 pub struct Illumination {
     #[serde(rename = "Bulb")]
-    pub bulb: Vec<Bulb>,
+    pub bulb: Option<Vec<Bulb>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Score {
+    #[serde(rename = "@Parent")]
+    parent: String,
+    #[serde(rename = "@ID")]
+    id: String,
+    #[serde(rename = "@B2SStartDigit")]
+    b2s_start_digit: String,
+    #[serde(rename = "@B2SScoreType")]
+    b2s_score_type: String,
+    #[serde(rename = "@B2SPlayerNo")]
+    b2s_player_no: String,
+    #[serde(rename = "@ReelType")]
+    reel_type: String,
+    #[serde(rename = "@ReelIlluImageSet")]
+    reel_illu_image_set: Option<String>,
+    #[serde(rename = "@ReelIlluLocation")]
+    reel_illu_location: Option<String>,
+    #[serde(rename = "@ReelIlluIntensity")]
+    reel_illu_intensity: Option<String>,
+    #[serde(rename = "@ReelIlluB2SID")]
+    reel_illu_b2s_id: Option<String>,
+    #[serde(rename = "@ReelIlluB2SIDType")]
+    reel_illu_b2s_id_type: Option<String>,
+    #[serde(rename = "@ReelIlluB2SValue")]
+    reel_illu_b2s_value: Option<String>,
+    #[serde(rename = "@ReelLitColor")]
+    reel_lit_color: String,
+    #[serde(rename = "@ReelDarkColor")]
+    reel_dark_color: String,
+    #[serde(rename = "@Glow")]
+    glow: String,
+    #[serde(rename = "@Thickness")]
+    thickness: String,
+    #[serde(rename = "@Shear")]
+    shear: String,
+    #[serde(rename = "@Digits")]
+    digits: String,
+    #[serde(rename = "@Spacing")]
+    spacing: String,
+    #[serde(rename = "@DisplayState")]
+    display_state: String,
+    #[serde(rename = "@LocX")]
+    loc_x: String,
+    #[serde(rename = "@LocY")]
+    loc_y: String,
+    #[serde(rename = "@Width")]
+    width: String,
+    #[serde(rename = "@Height")]
+    height: String,
+    #[serde(rename = "@Sound3")]
+    sound3: Option<String>,
+    #[serde(rename = "@Sound4")]
+    sound4: Option<String>,
+    #[serde(rename = "@Sound5")]
+    sound5: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -188,6 +263,78 @@ pub struct Scores {
     reel_rolling_direction: String,
     #[serde(rename = "@ReelRollingInterval")]
     reel_rolling_interval: String,
+
+    #[serde(rename = "Score")]
+    score: Option<Vec<Score>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ReelsImage {
+    #[serde(rename = "@Name")]
+    name: String,
+    #[serde(rename = "@CountOfIntermediates")]
+    count_of_intermediates: String,
+    #[serde(rename = "@Image")]
+    image: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ReelsImages {
+    #[serde(rename = "Image")]
+    image: Vec<ReelsImage>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ReelsIlluminatedImage {
+    #[serde(rename = "@Name")]
+    name: String,
+    #[serde(rename = "@CountOfIntermediates")]
+    count_of_intermediates: String,
+    #[serde(rename = "@Image")]
+    image: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ReelsIlluminatedImagesSet {
+    #[serde(rename = "@ID")]
+    id: String,
+    #[serde(rename = "IlluminatedImage")]
+    illuminated_image: Vec<ReelsIlluminatedImage>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ReelsIlluminatedImages {
+    #[serde(rename = "Set")]
+    set: Option<Vec<ReelsIlluminatedImagesSet>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Reels {
+    #[serde(rename = "Images")]
+    pub images: ReelsImages,
+    #[serde(rename = "IlluminatedImages")]
+    pub illuminated_images: ReelsIlluminatedImages,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Sounds {
+    // as far as I can see this is not in use
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DMDDefaultLocation {
+    #[serde(rename = "@LocX")]
+    pub loc_x: String,
+    #[serde(rename = "@LocY")]
+    pub loc_y: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GrillHeight {
+    #[serde(rename = "@Value")]
+    pub value: String,
+    #[serde(rename = "@Small")]
+    pub small: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -200,14 +347,24 @@ pub struct DirectB2SData {
     pub table_type: ValueTag,
     #[serde(rename = "DMDType")]
     pub dmd_type: ValueTag,
+    #[serde(rename = "DMDDefaultLocation")]
+    pub dmd_default_location: DMDDefaultLocation,
+    #[serde(rename = "GrillHeight")]
+    pub grill_height: GrillHeight,
     #[serde(rename = "VSName")]
     pub vsname: ValueTag,
     #[serde(rename = "NumberOfPlayers")]
     pub number_of_players: ValueTag,
-    pub animations: Option<Animations>,
+    #[serde(rename = "Animations")]
+    pub animations: Animations,
+    #[serde(rename = "Scores")]
     pub scores: Option<Scores>,
+    #[serde(rename = "Reels")]
+    pub reels: Option<Reels>,
     #[serde(rename = "Illumination")]
     pub illumination: Illumination,
+    #[serde(rename = "Sounds")]
+    pub sounds: Option<Sounds>,
     #[serde(rename = "Images")]
     pub images: Images,
 }

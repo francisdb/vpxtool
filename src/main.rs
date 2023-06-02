@@ -121,6 +121,7 @@ fn extract_directb2s(expanded_path: &String) {
     file.read_to_string(&mut text).unwrap();
     match load(&text) {
         Ok(b2s) => {
+            println!("DirectB2S file version {}", b2s.version);
             let root_dir_path_str = expanded_path.replace(".directb2s", ".directb2s.extracted");
 
             let root_dir_path = Path::new(&root_dir_path_str);
@@ -128,6 +129,7 @@ fn extract_directb2s(expanded_path: &String) {
             root_dir.recursive(true);
             root_dir.create(root_dir_path).unwrap();
 
+            println!("Writing to {}", root_dir_path_str);
             wite_images(b2s, root_dir_path);
         }
         Err(msg) => {
@@ -163,7 +165,7 @@ fn wite_images(b2s: directb2s::DirectB2SData, root_dir_path: &Path) {
         &thumbnail_image.value,
     );
 
-    for bulb in b2s.illumination.bulb {
+    for bulb in b2s.illumination.bulb.unwrap_or_default() {
         write_base64_to_file(
             root_dir_path,
             None,
@@ -245,6 +247,8 @@ fn extract(vpx_file_path: &str, yes: bool) {
     root_dir.recursive(true);
     // ask for confirmation if the directory exists
     if root_dir_path.exists() && !yes {
+        // TODO do we need to check for terminal here?
+        //   let use_color = stdout().is_terminal();
         let warning =
             format!("Directory {} already exists", root_dir_path.display()).truecolor(255, 125, 0);
         println!("{}", warning);
