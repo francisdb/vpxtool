@@ -140,27 +140,52 @@ fn extract_directb2s(expanded_path: &String) {
 }
 
 fn wite_images(b2s: directb2s::DirectB2SData, root_dir_path: &Path) {
-    let backglass_image = b2s.images.backglass_image;
-    write_base64_to_file(
-        root_dir_path,
-        backglass_image.file_name,
-        "backglassimage.img".to_string(),
-        &backglass_image.value,
-    );
+    if let Some(backglass_off_image) = b2s.images.backglass_off_image {
+        write_base64_to_file(
+            root_dir_path,
+            None,
+            "backglassimage.img".to_string(),
+            &backglass_off_image.value,
+        );
+    }
+    if let Some(backglass_on_image) = b2s.images.backglass_on_image {
+        write_base64_to_file(
+            root_dir_path,
+            Some(backglass_on_image.file_name),
+            "backglassimage.img".to_string(),
+            &backglass_on_image.value,
+        );
+    }
+    if let Some(backglass_image) = b2s.images.backglass_image {
+        write_base64_to_file(
+            root_dir_path,
+            Some(backglass_image.file_name),
+            "backglassimage.img".to_string(),
+            &backglass_image.value,
+        );
+    }
 
     if let Some(dmd_image) = b2s.images.dmd_image {
         write_base64_to_file(
             root_dir_path,
-            dmd_image.file_name,
+            Some(dmd_image.file_name),
             "dmdimage.img".to_string(),
             &dmd_image.value,
+        );
+    }
+    if let Some(illumination_image) = b2s.images.illumination_image {
+        write_base64_to_file(
+            root_dir_path,
+            None,
+            "dmdimage.img".to_string(),
+            &illumination_image.value,
         );
     }
 
     let thumbnail_image = b2s.images.thumbnail_image;
     write_base64_to_file(
         root_dir_path,
-        thumbnail_image.file_name,
+        None,
         "thumbnailimage.png".to_string(),
         &thumbnail_image.value,
     );
@@ -172,6 +197,35 @@ fn wite_images(b2s: directb2s::DirectB2SData, root_dir_path: &Path) {
             format!("{}.png", bulb.name).to_string(),
             &bulb.image,
         );
+        if let Some(off_image) = bulb.off_image {
+            write_base64_to_file(
+                root_dir_path,
+                None,
+                format!("{}_off.png", bulb.name).to_string(),
+                &off_image,
+            );
+        }
+    }
+
+    if let Some(reel) = b2s.reels {
+        for reels_image in reel.images.image.iter().flatten() {
+            write_base64_to_file(
+                root_dir_path,
+                None,
+                format!("{}.png", reels_image.name).to_string(),
+                &reels_image.image,
+            );
+        }
+        for illuminated_set in reel.illuminated_images.set.iter().flatten() {
+            for reels_image in &illuminated_set.illuminated_image {
+                write_base64_to_file(
+                    root_dir_path,
+                    None,
+                    format!("{}.png", reels_image.name).to_string(),
+                    &reels_image.image,
+                );
+            }
+        }
     }
 }
 
@@ -313,17 +367,6 @@ fn extract_script<P: AsRef<Path>>(records: &Vec<Record>, vbs_path: &P) {
         "VBScript file written to\n  {}",
         vbs_path.as_ref().display()
     );
-}
-
-fn dump<T: Debug>(res: IResult<&[u8], T>) {
-    match res {
-        IResult::Ok((rest, value)) => {
-            println!("Done {:?} {:?}...", value, rest)
-        }
-        IResult::Err(err) => {
-            println!("Err {:?}", err)
-        } // IResult::Incomplete(needed) => {println!("Needed {:?}",needed)}
-    }
 }
 
 // TODO: read version

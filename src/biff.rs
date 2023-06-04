@@ -1,7 +1,7 @@
 use std::str::from_utf8;
 
 use nom::bytes::streaming::take;
-use nom::number::complete::{le_f32, le_u8, le_u16};
+use nom::number::complete::{le_f32, le_u16, le_u8};
 use nom::{number::complete::le_u32, IResult};
 use utf16string::WStr;
 
@@ -50,6 +50,7 @@ pub fn read_float_record(input: &[u8]) -> IResult<&[u8], (&str, f32)> {
     let (input, name_bytes) = take(4u8)(input)?;
     let name = from_utf8(name_bytes).unwrap();
     let (input, data) = le_f32(input)?;
+    // TODO does data always have the same value and do we want to add an assertion?
     let (input, f) = read_float(input, n_rest)?;
     Ok((input, (name, f)))
 }

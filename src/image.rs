@@ -144,7 +144,7 @@ pub fn read(fs_path: String, input: &[u8]) -> IResult<&[u8], ImageData> {
                 // TODO seems to be 1 for some kind of link type img, related to screenshots.
                 // we only see this where a screenshot is set on the table info.
                 // https://github.com/vpinball/vpinball/blob/1a70aa35eb57ec7b5fbbb9727f6735e8ef3183e0/Texture.cpp#L588
-                let (i, link) = read_u32(i)?;
+                let (i, _link) = read_u32(i)?;
                 i
             }
             _ => {

@@ -33,7 +33,7 @@ pub struct SoundData {
      * Original path of the sound in the vpx file
      * we could probably just keep the index?
      */
-    fs_path: String,
+    pub fs_path: String,
     pub name: String,
     pub path: String,
     pub wave_form: WaveForm,
