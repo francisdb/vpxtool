@@ -5,6 +5,8 @@ pub mod image;
 pub mod sound;
 pub mod tableinfo;
 
+pub mod directb2s;
+
 use cfb::CompoundFile;
 use clap::{arg, Arg, Command};
 use colored::Colorize;
@@ -22,6 +24,9 @@ use std::io::Write; // bring trait into scope
 
 use git_version::git_version;
 
+use base64::{engine::general_purpose, Engine as _};
+
+use crate::directb2s::load;
 use crate::sound::write_sound;
 
 // see https://github.com/fusion-engineering/rust-git-version/issues/21 for why the ""
@@ -92,7 +97,11 @@ fn main() {
             let expanded_path = expand_path(path);
             println!("extracting from {}", expanded_path);
             let yes = sub_matches.get_flag("FORCE");
-            extract(expanded_path.as_ref(), yes);
+            if (expanded_path.ends_with(".directb2s")) {
+                extract_directb2s(&expanded_path);
+            } else {
+                extract(expanded_path.as_ref(), yes);
+            }
         }
         Some(("extractvbs", sub_matches)) => {
             let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
@@ -104,6 +113,152 @@ fn main() {
         }
         _ => unreachable!(), // If all subcommands are defined above, anything else is unreachable!()
     }
+}
+
+fn extract_directb2s(expanded_path: &String) {
+    let mut file = File::open(expanded_path).unwrap();
+    let mut text = String::new();
+    file.read_to_string(&mut text).unwrap();
+    match load(&text) {
+        Ok(b2s) => {
+            println!("DirectB2S file version {}", b2s.version);
+            let root_dir_path_str = expanded_path.replace(".directb2s", ".directb2s.extracted");
+
+            let root_dir_path = Path::new(&root_dir_path_str);
+            let mut root_dir = std::fs::DirBuilder::new();
+            root_dir.recursive(true);
+            root_dir.create(root_dir_path).unwrap();
+
+            println!("Writing to {}", root_dir_path_str);
+            wite_images(b2s, root_dir_path);
+        }
+        Err(msg) => {
+            println!("Failed to load {}: {}", expanded_path, msg);
+            exit(1);
+        }
+    }
+}
+
+fn wite_images(b2s: directb2s::DirectB2SData, root_dir_path: &Path) {
+    if let Some(backglass_off_image) = b2s.images.backglass_off_image {
+        write_base64_to_file(
+            root_dir_path,
+            None,
+            "backglassimage.img".to_string(),
+            &backglass_off_image.value,
+        );
+    }
+    if let Some(backglass_on_image) = b2s.images.backglass_on_image {
+        write_base64_to_file(
+            root_dir_path,
+            Some(backglass_on_image.file_name),
+            "backglassimage.img".to_string(),
+            &backglass_on_image.value,
+        );
+    }
+    if let Some(backglass_image) = b2s.images.backglass_image {
+        write_base64_to_file(
+            root_dir_path,
+            Some(backglass_image.file_name),
+            "backglassimage.img".to_string(),
+            &backglass_image.value,
+        );
+    }
+
+    if let Some(dmd_image) = b2s.images.dmd_image {
+        write_base64_to_file(
+            root_dir_path,
+            Some(dmd_image.file_name),
+            "dmdimage.img".to_string(),
+            &dmd_image.value,
+        );
+    }
+    if let Some(illumination_image) = b2s.images.illumination_image {
+        write_base64_to_file(
+            root_dir_path,
+            None,
+            "dmdimage.img".to_string(),
+            &illumination_image.value,
+        );
+    }
+
+    let thumbnail_image = b2s.images.thumbnail_image;
+    write_base64_to_file(
+        root_dir_path,
+        None,
+        "thumbnailimage.png".to_string(),
+        &thumbnail_image.value,
+    );
+
+    for bulb in b2s.illumination.bulb.unwrap_or_default() {
+        write_base64_to_file(
+            root_dir_path,
+            None,
+            format!("{}.png", bulb.name).to_string(),
+            &bulb.image,
+        );
+        if let Some(off_image) = bulb.off_image {
+            write_base64_to_file(
+                root_dir_path,
+                None,
+                format!("{}_off.png", bulb.name).to_string(),
+                &off_image,
+            );
+        }
+    }
+
+    if let Some(reel) = b2s.reels {
+        for reels_image in reel.images.image.iter().flatten() {
+            write_base64_to_file(
+                root_dir_path,
+                None,
+                format!("{}.png", reels_image.name).to_string(),
+                &reels_image.image,
+            );
+        }
+        for illuminated_set in reel.illuminated_images.set.iter().flatten() {
+            for reels_image in &illuminated_set.illuminated_image {
+                write_base64_to_file(
+                    root_dir_path,
+                    None,
+                    format!("{}.png", reels_image.name).to_string(),
+                    &reels_image.image,
+                );
+            }
+        }
+    }
+}
+
+fn write_base64_to_file(
+    root_dir_path: &Path,
+    original_file_path: Option<String>,
+    default: String,
+    base64data_with_cr_lf: &String,
+) {
+    // TODO bring in the other default here
+    let file_name: String =
+        os_independent_file_name(original_file_path.unwrap_or(default.clone())).unwrap_or(default);
+
+    let file_path = root_dir_path.join(file_name);
+
+    let mut file = File::create(file_path).unwrap();
+    let base64data = strip_cr_lf(&base64data_with_cr_lf);
+
+    let decoded_data = general_purpose::STANDARD.decode(base64data).unwrap();
+    file.write_all(&decoded_data).unwrap();
+}
+
+fn strip_cr_lf(s: &str) -> String {
+    s.chars().filter(|c| !c.is_ascii_whitespace()).collect()
+}
+
+fn os_independent_file_name(file_path: String) -> Option<String> {
+    // we can't use path here as this uses the system path encoding
+    // we might have to parse windows paths on mac/linux
+    file_path
+        .rsplit(|c| c == '/' || c == '\\')
+        .next()
+        .map(|f| f.to_string())
 }
 
 fn expand_path(path: &str) -> String {
@@ -146,6 +301,8 @@ fn extract(vpx_file_path: &str, yes: bool) {
     root_dir.recursive(true);
     // ask for confirmation if the directory exists
     if root_dir_path.exists() && !yes {
+        // TODO do we need to check for terminal here?
+        //   let use_color = stdout().is_terminal();
         let warning =
             format!("Directory {} already exists", root_dir_path.display()).truecolor(255, 125, 0);
         println!("{}", warning);
@@ -210,17 +367,6 @@ fn extract_script<P: AsRef<Path>>(records: &Vec<Record>, vbs_path: &P) {
         "VBScript file written to\n  {}",
         vbs_path.as_ref().display()
     );
-}
-
-fn dump<T: Debug>(res: IResult<&[u8], T>) {
-    match res {
-        IResult::Ok((rest, value)) => {
-            println!("Done {:?} {:?}...", value, rest)
-        }
-        IResult::Err(err) => {
-            println!("Err {:?}", err)
-        } // IResult::Incomplete(needed) => {println!("Needed {:?}",needed)}
-    }
 }
 
 // TODO: read version
@@ -345,7 +491,7 @@ fn extract_sounds(
     comp: &mut CompoundFile<File>,
     records: &Vec<Record>,
     root_dir_path: &Path,
-    fileVersion: u32,
+    file_version: u32,
 ) {
     // let result = parseGameData(&game_data_vec[..]);
     // dump(result);
@@ -375,7 +521,7 @@ fn extract_sounds(
             .unwrap()
             .read_to_end(&mut input)
             .unwrap();
-        let (_, sound) = sound::read(path.to_owned(), fileVersion, &input).unwrap();
+        let (_, sound) = sound::read(path.to_owned(), file_version, &input).unwrap();
 
         let ext = sound.ext();
         let mut sound_path = sounds_path.clone();
