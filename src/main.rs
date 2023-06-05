@@ -12,7 +12,6 @@ use clap::{arg, Arg, Command};
 use colored::Colorize;
 use gamedata::Record;
 use serde_json::json;
-use std::fmt::Debug;
 use std::fs::{metadata, File};
 use std::io::{self, Read};
 use std::path::Path;
@@ -53,25 +52,34 @@ fn main() {
         .subcommand(
             Command::new("extract")
                 .about("Extracts a vpx file")
-                .arg(arg!(<VPXPATH> "The path to the vpx file").required(true))
                 .arg(
                     Arg::new("FORCE")
                         .short('f')
                         .long("force")
                         .num_args(0)
                         .help("Do not ask for confirmation before overwriting existing files"),
+                )
+                .arg(
+                    arg!(<VPXPATH> "The path(s) to the vpx file(s)")
+                        .required(true)
+                        .num_args(1..),
                 ),
         )
         .subcommand(
             Command::new("extractvbs")
                 .about("Extracts the vbs from a vpx file")
-                .arg(arg!(<VPXPATH> "The path to the vpx file").required(true))
                 .arg(
-                    Arg::new("FORCE")
-                        .short('f')
-                        .long("force")
+                    Arg::new("OVERWRITE")
+                        .short('o')
+                        .long("overwrite")
                         .num_args(0)
-                        .help("Do not ask for confirmation before overwriting existing files"),
+                        .default_value("false")
+                        .help("(Default: false) Will overwrite existing .vbs files if true, will skip the table file if false."),
+                )
+                .arg(
+                    arg!(<VPXPATH> "The path(s) to the vpx file(s)")
+                        .required(true)
+                        .num_args(1..),
                 ),
         )
         .subcommand(
@@ -79,7 +87,7 @@ fn main() {
                 .about("Assembles a vpx file")
                 .arg(arg!(<DIRPATH> "The path to the vpx structure").required(true)),
         )
-        .get_matches();
+        .get_matches_from(wild::args());
 
     match matches.subcommand() {
         Some(("info", sub_matches)) => {
@@ -91,25 +99,33 @@ fn main() {
             info(expanded_path.as_ref(), json);
         }
         Some(("extract", sub_matches)) => {
-            let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
-            let path = path.unwrap_or("");
-            // TODO expand all instead of only tilde?
-            let expanded_path = expand_path(path);
-            println!("extracting from {}", expanded_path);
             let yes = sub_matches.get_flag("FORCE");
-            if (expanded_path.ends_with(".directb2s")) {
-                extract_directb2s(&expanded_path);
-            } else {
-                extract(expanded_path.as_ref(), yes);
+            let paths: Vec<&str> = sub_matches
+                .get_many::<String>("VPXPATH")
+                .unwrap_or_default()
+                .map(|v| v.as_str())
+                .collect::<Vec<_>>();
+            for path in paths {
+                let expanded_path = expand_path(path);
+                println!("extracting from {}", expanded_path);
+                if expanded_path.ends_with(".directb2s") {
+                    extract_directb2s(&expanded_path);
+                } else {
+                    extract(expanded_path.as_ref(), yes);
+                }
             }
         }
         Some(("extractvbs", sub_matches)) => {
-            let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
-            let path = path.unwrap_or("");
-            let expanded_path = expand_path(path);
-            println!("extracting from {}", expanded_path);
-            let yes = sub_matches.get_flag("FORCE");
-            extractvbs(expanded_path.as_ref(), yes);
+            let overwrite = sub_matches.get_flag("OVERWRITE");
+            let paths: Vec<&str> = sub_matches
+                .get_many::<String>("VPXPATH")
+                .unwrap_or_default()
+                .map(|v| v.as_str())
+                .collect::<Vec<_>>();
+            for path in paths {
+                let expanded_path = expand_path(path);
+                extractvbs(expanded_path.as_ref(), overwrite);
+            }
         }
         _ => unreachable!(), // If all subcommands are defined above, anything else is unreachable!()
     }
@@ -322,6 +338,10 @@ fn extract(vpx_file_path: &str, yes: bool) {
 
     extract_info(&mut comp, root_dir_path);
     extract_script(&records, &vbs_path);
+    println!(
+        "VBScript file written to\n  {}",
+        &vbs_path.display()
+    );
     extract_binaries(&mut comp, root_dir_path);
     extract_images(&mut comp, &records, root_dir_path);
     extract_sounds(&mut comp, &records, root_dir_path, version);
@@ -338,35 +358,25 @@ fn extract(vpx_file_path: &str, yes: bool) {
     // io::copy(&mut stream, &mut io::stdout()).unwrap();
 }
 
-fn extractvbs(vpx_file_path: &str, yes: bool) {
+fn extractvbs(vpx_file_path: &str, overwrite: bool) {
     let vbs_path_str = vpx_file_path.replace(".vpx", ".vbs");
     let vbs_path = Path::new(&vbs_path_str);
 
-    if vbs_path.exists() && !yes {
-        let warning = format!("File {} already exists", vbs_path.display()).truecolor(255, 125, 0);
+    if !vbs_path.exists() || (vbs_path.exists() && overwrite) {
+        let mut comp = cfb::open(&vpx_file_path).unwrap();
+        let _version = read_version(&mut comp);
+        let records = read_gamedata(&mut comp);
+        extract_script(&records, &vbs_path);
+        println!("CREATED {}", vbs_path.display());
+    } else {
+        let warning = format!("EXISTED {}", vbs_path.display()).truecolor(255, 125, 0);
         println!("{}", warning);
-        println!("Do you want to continue exporting? (y/n)");
-        let mut input = String::new();
-        std::io::stdin().read_line(&mut input).unwrap();
-        if input.trim() != "y" {
-            println!("Aborting");
-            exit(1);
-        }
     }
-
-    let mut comp = cfb::open(&vpx_file_path).unwrap();
-    let _version = read_version(&mut comp);
-    let records = read_gamedata(&mut comp);
-    extract_script(&records, &vbs_path);
 }
 
 fn extract_script<P: AsRef<Path>>(records: &Vec<Record>, vbs_path: &P) {
     let script = read_script(records);
     std::fs::write(vbs_path, script).unwrap();
-    println!(
-        "VBScript file written to\n  {}",
-        vbs_path.as_ref().display()
-    );
 }
 
 // TODO: read version
@@ -386,7 +396,7 @@ fn read_version(comp: &mut cfb::CompoundFile<std::fs::File>) -> u32 {
     let (_, version) = read_version(&file_version[..]).unwrap();
 
     // let version_float = (version as f32)/100f32;
-    println!("VPX file version: {}", version);
+    // println!("VPX file version: {}", version);
     version
 }
 

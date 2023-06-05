@@ -1,3 +1,5 @@
+use std::borrow::Borrow;
+use std::ops::Deref;
 use std::str::from_utf8;
 
 use nom::bytes::streaming::take;
@@ -19,12 +21,15 @@ pub fn read_tag_start(input: &[u8]) -> IResult<&[u8], (&str, u32)> {
     Ok((input, (tag, n_rest)))
 }
 
-pub fn read_string_record(input: &[u8]) -> IResult<&[u8], &str> {
+pub fn read_string_record(input: &[u8]) -> IResult<&[u8], String> {
     let (input, len) = le_u32(input)?;
     let (input, data) = take(len)(input)?;
-    // should probably use latin_1
-    let string = from_utf8(data).unwrap();
-    Ok((input, string))
+    // should probably use latin_1?
+    // use encoding_rs::WINDOWS_1252;
+    // TODO this fails for "Spider-Man Classic_VPWmod_V1.0.1.vpx"
+    // let string = from_utf8(data).unwrap();
+    let string = String::from_utf8_lossy(data);
+    Ok((input, string.to_string()))
 }
 
 pub fn read_bytes_record(input: &[u8]) -> IResult<&[u8], &[u8]> {
