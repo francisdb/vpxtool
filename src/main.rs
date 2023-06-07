@@ -50,6 +50,11 @@ fn main() {
                 ),
         )
         .subcommand(
+            Command::new("diff")
+                .about("Prints out a diff between the vbs in the vpx and the sidecar vbs")
+                .arg(arg!(<VPXPATH> "The path to the vpx file").required(true))
+        )
+        .subcommand(
             Command::new("extract")
                 .about("Extracts a vpx file")
                 .arg(
@@ -97,6 +102,12 @@ fn main() {
             println!("showing info for {}", expanded_path);
             let json = sub_matches.get_flag("JSON");
             info(expanded_path.as_ref(), json);
+        }
+        Some(("diff", sub_matches)) => {
+            let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
+            let path = path.unwrap_or("");
+            let expanded_path = expand_path(path);
+            diff(expanded_path.as_ref());
         }
         Some(("extract", sub_matches)) => {
             let yes = sub_matches.get_flag("FORCE");
@@ -307,6 +318,55 @@ fn info(vpx_file_path: &str, json: bool) {
     dbg!(table_info);
 }
 
+fn diff(vpx_file_path: &str) {
+    let vbs_path_str = vpx_file_path.replace(".vpx", ".vbs");
+    let vbs_path = Path::new(&vbs_path_str);
+    let original_vbs_path_str = vpx_file_path.replace(".vpx", ".vbs.original.tmp");
+    let original_vbs_path = Path::new(&original_vbs_path_str);
+
+    if vbs_path.exists() {
+        match cfb::open(&vpx_file_path) {
+            Ok(mut comp) => {
+                let records = read_gamedata(&mut comp);
+                let script = find_script(&records);
+                std::fs::write(original_vbs_path, &script).unwrap();
+
+                match run_diff(original_vbs_path, vbs_path) {
+                    Ok(output) => {
+                        println!("{}", String::from_utf8_lossy(&output.stdout));
+                    }
+                    Err(e) => {
+                        println!("Error running diff: {}", e);
+                    }
+                }
+
+                if original_vbs_path.exists() {
+                    std::fs::remove_file(original_vbs_path).unwrap();
+                }
+            }
+            Err(e) => {
+                let warning = format!("Not a valid vpx file {}: {}", vpx_file_path, e).red();
+                println!("{}", warning);
+                exit(1)
+            }
+        }
+    } else {
+        let warning = format!("No sidecar vbs file found: {}", vbs_path.display()).red();
+        println!("{}", warning);
+        exit(1)
+    }
+}
+
+fn run_diff(original_vbs_path: &Path, vbs_path: &Path) -> Result<std::process::Output, io::Error> {
+    std::process::Command::new("diff")
+        .arg("-u")
+        .arg("-w")
+        .arg("--color=always")
+        .arg(original_vbs_path)
+        .arg(vbs_path)
+        .output()
+}
+
 fn extract(vpx_file_path: &str, yes: bool) {
     let root_dir_path_str = vpx_file_path.replace(".vpx", "");
     let root_dir_path = Path::new(&root_dir_path_str);
@@ -338,10 +398,7 @@ fn extract(vpx_file_path: &str, yes: bool) {
 
     extract_info(&mut comp, root_dir_path);
     extract_script(&records, &vbs_path);
-    println!(
-        "VBScript file written to\n  {}",
-        &vbs_path.display()
-    );
+    println!("VBScript file written to\n  {}", &vbs_path.display());
     extract_binaries(&mut comp, root_dir_path);
     extract_images(&mut comp, &records, root_dir_path);
     extract_sounds(&mut comp, &records, root_dir_path, version);
@@ -375,7 +432,7 @@ fn extractvbs(vpx_file_path: &str, overwrite: bool) {
 }
 
 fn extract_script<P: AsRef<Path>>(records: &Vec<Record>, vbs_path: &P) {
-    let script = read_script(records);
+    let script = find_script(records);
     std::fs::write(vbs_path, script).unwrap();
 }
 
@@ -400,9 +457,7 @@ fn read_version(comp: &mut cfb::CompoundFile<std::fs::File>) -> u32 {
     version
 }
 
-fn read_script(records: &Vec<Record>) -> String {
-    //dump(result);
-
+fn find_script(records: &Vec<Record>) -> String {
     let code = records
         .iter()
         .find_map(|r| match r {
