@@ -12,10 +12,13 @@ use clap::{arg, Arg, Command};
 use colored::Colorize;
 use gamedata::Record;
 use serde_json::json;
-use std::fs::{metadata, File};
+use std::ffi::OsStr;
+use std::fs::{self, metadata, File};
 use std::io::{self, Read};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::exit;
+use tableinfo::{read_tableinfo, TableInfo};
+use walkdir::WalkDir;
 
 use nom::{number::complete::le_u32, IResult};
 
@@ -53,6 +56,21 @@ fn main() {
             Command::new("diff")
                 .about("Prints out a diff between the vbs in the vpx and the sidecar vbs")
                 .arg(arg!(<VPXPATH> "The path to the vpx file").required(true))
+        )
+        .subcommand(
+            Command::new("index")
+                .about("Indexes a directory of vpx files")
+                .arg(
+                    Arg::new("RECURSIVE")
+                        .short('r')
+                        .long("recursive")
+                        .num_args(0)
+                        .help("Recursively index subdirectories"),
+                )
+                .arg(
+                    arg!(<VPXROOTPATH> "The path to the root directory of vpx files")
+                        .required(true)
+                ),
         )
         .subcommand(
             Command::new("extract")
@@ -108,6 +126,16 @@ fn main() {
             let path = path.unwrap_or("");
             let expanded_path = expand_path(path);
             diff(expanded_path.as_ref());
+        }
+        Some(("index", sub_matches)) => {
+            let recursive = sub_matches.get_flag("RECURSIVE");
+            let path = sub_matches
+                .get_one::<String>("VPXROOTPATH")
+                .map(|s| s.as_str());
+            let path = path.unwrap_or("");
+            let expanded_path = expand_path(path);
+            println!("indexing {}", expanded_path);
+            index(expanded_path.as_ref(), recursive);
         }
         Some(("extract", sub_matches)) => {
             let yes = sub_matches.get_flag("FORCE");
@@ -293,13 +321,14 @@ fn expand_path(path: &str) -> String {
     let expanded_path = shellexpand::tilde(path);
     match metadata(path) {
         Ok(md) => {
-            if !md.is_file() {
+            if !md.is_file() && !md.is_dir() && md.is_symlink() {
                 println!("{} is not a file", expanded_path);
                 exit(1);
             }
         }
         Err(msg) => {
-            println!("Failed to open {}: {}", expanded_path, msg);
+            let warning = format!("{}: {}", expanded_path, msg).red();
+            println!("{}", warning);
             exit(1);
         }
     }
@@ -355,6 +384,76 @@ fn diff(vpx_file_path: &str) {
         println!("{}", warning);
         exit(1)
     }
+}
+
+fn index(expanded_path: &str, recursive: bool) {
+    let mut vpx_files = Vec::new();
+    if recursive {
+        for entry in WalkDir::new(expanded_path)
+            .into_iter()
+            .filter_map(|e| e.ok())
+        {
+            if entry.file_type().is_file() {
+                if let Some("vpx") = entry.path().extension().and_then(OsStr::to_str) {
+                    vpx_files.push(entry.path().to_owned());
+                }
+            }
+        }
+    } else {
+        for entry in fs::read_dir(expanded_path).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if path.is_file() {
+                if let Some("vpx") = path.extension().and_then(OsStr::to_str) {
+                    vpx_files.push(path);
+                }
+            }
+        }
+    }
+
+    // TODO tried using rayon here but it's not faster and uses up all cpu
+    // use rayon::prelude::*;
+    // .par_iter() instead of .iter()
+    let mut vpx_files_with_tableinfo: Vec<(&PathBuf, TableInfo)> = vpx_files
+        .iter()
+        .flat_map(|vpx_file| {
+            print!(".");
+            io::stdout().flush().unwrap();
+            match cfb::open(&vpx_file) {
+                Ok(mut comp) => {
+                    let table_info = read_tableinfo(&mut comp);
+                    Some((vpx_file, table_info))
+                }
+                Err(e) => {
+                    let warning =
+                        format!("Not a valid vpx file {}: {}", vpx_file.display(), e).red();
+                    println!("{}", warning);
+                    None
+                }
+            }
+        })
+        .collect();
+
+    // sort by name
+    vpx_files_with_tableinfo.sort_by(|(_, a), (_, b)| {
+        a.table_name
+            .to_lowercase()
+            .cmp(&b.table_name.to_lowercase())
+    });
+
+    // print to console
+    for (vpx_file, table_info) in &vpx_files_with_tableinfo {
+        println!(
+            "{} ({})",
+            table_info.table_name,
+            vpx_file
+                .file_name()
+                .and_then(OsStr::to_str)
+                .unwrap_or("[unknown]")
+        );
+    }
+
+    println!("scanned {} vpx files", vpx_files_with_tableinfo.len());
 }
 
 fn run_diff(original_vbs_path: &Path, vbs_path: &Path) -> Result<std::process::Output, io::Error> {
