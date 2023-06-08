@@ -64,14 +64,14 @@ fn read_gamedata_record_value(tag: String, len: u32, input: &[u8]) -> IResult<&[
         "NAME" => {
             let n_rest = len - RECORD_TAG_LEN;
             let (rest, string) = read_wide_string_record(input, n_rest)?;
-            let rec = Record::Name(string.to_string());
+            let rec = Record::Name(string);
             // println!("NAME: {}", string);
             Ok((rest, rec))
         }
         "CODE" => {
             let (rest, string) = read_string_record(input)?;
             let rec = Record::Code {
-                script: string.to_string(),
+                script: string,
             };
             Ok((rest, rec))
         }

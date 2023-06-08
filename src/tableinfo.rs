@@ -63,9 +63,8 @@ pub fn read_tableinfo(comp: &mut CompoundFile<File>) -> TableInfo {
         "/TableInfo/TableSaveDate" => table_save_date = read_stream_string(comp, path),
         "/TableInfo/TableDescription" => table_description = read_stream_string(comp, path),
         other => {
-            let key = other.replace(table_info_path, "").replacen("/", "", 1);
+            let key = other.replace(table_info_path, "").replacen('/', "", 1);
             properties.insert(key, read_stream_string(comp, path));
-            ()
         }
     });
 

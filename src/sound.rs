@@ -75,8 +75,7 @@ pub fn write_sound(sound_data: &SoundData) -> Vec<u8> {
         buf.put_slice(&write_wav_header(sound_data));
         buf
     } else {
-        let buf = BytesMut::with_capacity(sound_data.data.len());
-        buf
+        BytesMut::with_capacity(sound_data.data.len())
     };
     buf.put_slice(&sound_data.data);
     buf.to_vec()
@@ -252,6 +251,6 @@ pub fn read(fs_path: String, file_version: u32, input: &[u8]) -> IResult<&[u8], 
     ))
 }
 
-fn is_wav(path: &String) -> bool {
+fn is_wav(path: &str) -> bool {
     path.to_lowercase().ends_with(".wav")
 }

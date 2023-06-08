@@ -310,7 +310,7 @@ fn write_base64_to_file(
     root_dir_path: &Path,
     original_file_path: Option<String>,
     default: String,
-    base64data_with_cr_lf: &String,
+    base64data_with_cr_lf: &str,
 ) {
     // TODO bring in the other default here
     let file_name: String =
@@ -319,7 +319,7 @@ fn write_base64_to_file(
     let file_path = root_dir_path.join(file_name);
 
     let mut file = File::create(file_path).unwrap();
-    let base64data = strip_cr_lf(&base64data_with_cr_lf);
+    let base64data = strip_cr_lf(base64data_with_cr_lf);
 
     let decoded_data = general_purpose::STANDARD.decode(base64data).unwrap();
     file.write_all(&decoded_data).unwrap();
@@ -358,7 +358,7 @@ fn expand_path(path: &str) -> String {
 }
 
 fn info(vpx_file_path: &str, json: bool) {
-    let mut comp = cfb::open(&vpx_file_path).unwrap();
+    let mut comp = cfb::open(vpx_file_path).unwrap();
     let version = read_version(&mut comp);
     // GameData also has a name field that we might want to display here
     // where is this shown in the UI?
@@ -376,11 +376,11 @@ fn diff(vpx_file_path: &str) {
     let original_vbs_path = Path::new(&original_vbs_path_str);
 
     if vbs_path.exists() {
-        match cfb::open(&vpx_file_path) {
+        match cfb::open(vpx_file_path) {
             Ok(mut comp) => {
                 let records = read_gamedata(&mut comp);
                 let script = find_script(&records);
-                std::fs::write(original_vbs_path, &script).unwrap();
+                std::fs::write(original_vbs_path, script).unwrap();
 
                 match run_diff(original_vbs_path, vbs_path) {
                     Ok(output) => {
@@ -421,7 +421,7 @@ fn run_diff(original_vbs_path: &Path, vbs_path: &Path) -> Result<std::process::O
 fn extract(vpx_file_path: &str, yes: bool) {
     let root_dir_path_str = vpx_file_path.replace(".vpx", "");
     let root_dir_path = Path::new(&root_dir_path_str);
-    let vbs_path = root_dir_path.join("script.vbs").to_owned();
+    let vbs_path = root_dir_path.join("script.vbs");
 
     let mut root_dir = std::fs::DirBuilder::new();
     root_dir.recursive(true);
@@ -442,7 +442,7 @@ fn extract(vpx_file_path: &str, yes: bool) {
     }
     root_dir.create(root_dir_path).unwrap();
 
-    let mut comp = cfb::open(&vpx_file_path).unwrap();
+    let mut comp = cfb::open(vpx_file_path).unwrap();
     let version = read_version(&mut comp);
     let records = read_gamedata(&mut comp);
 
@@ -470,7 +470,7 @@ fn extractvbs(vpx_file_path: &str, overwrite: bool) {
     let vbs_path = Path::new(&vbs_path_str);
 
     if !vbs_path.exists() || (vbs_path.exists() && overwrite) {
-        let mut comp = cfb::open(&vpx_file_path).unwrap();
+        let mut comp = cfb::open(vpx_file_path).unwrap();
         let _version = read_version(&mut comp);
         let records = read_gamedata(&mut comp);
         extract_script(&records, &vbs_path);
@@ -481,7 +481,7 @@ fn extractvbs(vpx_file_path: &str, overwrite: bool) {
     }
 }
 
-fn extract_script<P: AsRef<Path>>(records: &Vec<Record>, vbs_path: &P) {
+fn extract_script<P: AsRef<Path>>(records: &[Record], vbs_path: &P) {
     let script = find_script(records);
     std::fs::write(vbs_path, script).unwrap();
 }
@@ -507,7 +507,7 @@ fn read_version(comp: &mut cfb::CompoundFile<std::fs::File>) -> u32 {
     version
 }
 
-fn find_script(records: &Vec<Record>) -> String {
+fn find_script(records: &[Record]) -> String {
     let code = records
         .iter()
         .find_map(|r| match r {
@@ -537,7 +537,7 @@ fn extract_info(comp: &mut CompoundFile<File>, root_dir_path: &Path) {
     let json_path = root_dir_path.join("TableInfo.json");
     let mut json_file = std::fs::File::create(&json_path).unwrap();
     let table_info = tableinfo::read_tableinfo(comp);
-    if table_info.screenshot.len() > 0 {
+    if !table_info.screenshot.is_empty() {
         let screenshot_path = root_dir_path.join("screenshot.bin");
         let mut screenshot_file = std::fs::File::create(screenshot_path).unwrap();
         screenshot_file.write_all(&table_info.screenshot).unwrap();
@@ -549,7 +549,7 @@ fn extract_info(comp: &mut CompoundFile<File>, root_dir_path: &Path) {
     println!("Info file written to\n  {}", &json_path.display());
 }
 
-fn extract_images(comp: &mut CompoundFile<File>, records: &Vec<Record>, root_dir_path: &Path) {
+fn extract_images(comp: &mut CompoundFile<File>, records: &[Record], root_dir_path: &Path) {
     // let result = parseGameData(&game_data_vec[..]);
     // dump(result);
 
@@ -598,7 +598,7 @@ fn extract_images(comp: &mut CompoundFile<File>, records: &Vec<Record>, root_dir
 
 fn extract_sounds(
     comp: &mut CompoundFile<File>,
-    records: &Vec<Record>,
+    records: &[Record],
     root_dir_path: &Path,
     file_version: u32,
 ) {
@@ -641,7 +641,7 @@ fn extract_sounds(
     }
 }
 
-fn extract_fonts(comp: &mut CompoundFile<File>, records: &Vec<Record>, root_dir_path: &Path) {
+fn extract_fonts(comp: &mut CompoundFile<File>, records: &[Record], root_dir_path: &Path) {
     // let result = parseGameData(&game_data_vec[..]);
     // dump(result);
 
@@ -694,7 +694,7 @@ fn extract_binaries(comp: &mut CompoundFile<std::fs::File>, root_dir_path: &Path
             let path = entry.path();
             let path = path.to_str().unwrap();
             //println!("{} {} {}", path, entry.is_stream(), entry.len());
-            return path.to_owned();
+            path.to_owned()
         })
         .collect();
 

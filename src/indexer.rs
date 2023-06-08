@@ -38,8 +38,8 @@ pub fn find_vpx_files(recursive: bool, tables_path: &str) -> Vec<PathBuf> {
 }
 
 pub fn index_vpx_files(
-    vpx_files: &Vec<PathBuf>,
-    progress: impl Fn(u64) -> (),
+    vpx_files: &[PathBuf],
+    progress: impl Fn(u64),
 ) -> Vec<(PathBuf, TableInfo)> {
     // TODO tried using rayon here but it's not faster and uses up all cpu
     // use rayon::prelude::*;
@@ -48,7 +48,7 @@ pub fn index_vpx_files(
         .iter()
         .enumerate()
         .flat_map(|(i, vpx_file)| {
-            let result = match cfb::open(&vpx_file) {
+            let result = match cfb::open(vpx_file) {
                 Ok(mut comp) => {
                     let table_info = read_tableinfo(&mut comp);
                     Some((vpx_file.clone(), table_info))
@@ -92,6 +92,6 @@ pub fn write_index_json(vpx_files_with_tableinfo: Vec<(PathBuf, TableInfo)>, jso
     let json_tables = serde_json::Value::Array(json_items);
     let json = json!({ "tables": json_tables });
 
-    let json_file = File::create(&json_path).unwrap();
+    let json_file = File::create(json_path).unwrap();
     serde_json::to_writer_pretty(json_file, &json).unwrap();
 }
