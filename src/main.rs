@@ -1,24 +1,22 @@
 pub mod biff;
+pub mod directb2s;
 pub mod font;
 pub mod gamedata;
 pub mod image;
+pub mod indexer;
+pub mod jsonmodel;
 pub mod sound;
 pub mod tableinfo;
-
-pub mod directb2s;
 
 use cfb::CompoundFile;
 use clap::{arg, Arg, Command};
 use colored::Colorize;
 use gamedata::Record;
-use serde_json::json;
-use std::ffi::OsStr;
-use std::fs::{self, metadata, File};
+use indicatif::{ProgressBar, ProgressStyle};
+use std::fs::{metadata, File};
 use std::io::{self, Read};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::exit;
-use tableinfo::{read_tableinfo, TableInfo};
-use walkdir::WalkDir;
 
 use nom::{number::complete::le_u32, IResult};
 
@@ -29,10 +27,14 @@ use git_version::git_version;
 use base64::{engine::general_purpose, Engine as _};
 
 use crate::directb2s::load;
+use crate::jsonmodel::table_json;
 use crate::sound::write_sound;
 
-// see https://github.com/fusion-engineering/rust-git-version/issues/21 for why the ""
+// see https://github.com/fusion-engineering/rust-git-version/issues/21
 const GIT_VERSION: &str = git_version!(args = ["--tags", "--always", "--dirty=-modified"]);
+
+const DEFAULT_VPINBALL_ROOT: &str = "~/vpinball";
+const DEFAULT_TABLES_ROOT: &str = "~/vpinball/tables";
 
 fn main() {
     let matches = Command::new("vpxtool")
@@ -65,11 +67,13 @@ fn main() {
                         .short('r')
                         .long("recursive")
                         .num_args(0)
-                        .help("Recursively index subdirectories"),
+                        .help("Recursively index subdirectories")
+                        .default_value("true"),
                 )
                 .arg(
                     arg!(<VPXROOTPATH> "The path to the root directory of vpx files")
-                        .required(true)
+                        .required(false)
+                        .default_value(DEFAULT_TABLES_ROOT)
                 ),
         )
         .subcommand(
@@ -134,8 +138,26 @@ fn main() {
                 .map(|s| s.as_str());
             let path = path.unwrap_or("");
             let expanded_path = expand_path(path);
-            println!("indexing {}", expanded_path);
-            index(expanded_path.as_ref(), recursive);
+            println!("Indexing {}", expanded_path);
+            let vpx_files = indexer::find_vpx_files(recursive, expanded_path.as_ref());
+            let pb = ProgressBar::new(vpx_files.len() as u64);
+            pb.set_style(
+                ProgressStyle::with_template(
+                    "{spinner:.green} [{bar:.cyan/blue}] {pos}/{human_len} ({eta})",
+                )
+                .unwrap(),
+            );
+            let vpx_files_with_tableinfo = indexer::index_vpx_files(&vpx_files, |pos: u64| {
+                pb.set_position(pos);
+            });
+            pb.finish_and_clear();
+            let json_path = Path::new(&expanded_path).join("index.json");
+            indexer::write_index_json(vpx_files_with_tableinfo, json_path.clone());
+            println!(
+                "Indexed {} vpx files into {}",
+                vpx_files.len(),
+                &json_path.display()
+            );
         }
         Some(("extract", sub_matches)) => {
             let yes = sub_matches.get_flag("FORCE");
@@ -143,7 +165,7 @@ fn main() {
                 .get_many::<String>("VPXPATH")
                 .unwrap_or_default()
                 .map(|v| v.as_str())
-                .collect::<Vec<_>>();
+                .collect();
             for path in paths {
                 let expanded_path = expand_path(path);
                 println!("extracting from {}", expanded_path);
@@ -319,7 +341,7 @@ fn os_independent_file_name(file_path: String) -> Option<String> {
 fn expand_path(path: &str) -> String {
     // TODO expand all instead of only tilde?
     let expanded_path = shellexpand::tilde(path);
-    match metadata(path) {
+    match metadata(expanded_path.as_ref()) {
         Ok(md) => {
             if !md.is_file() && !md.is_dir() && md.is_symlink() {
                 println!("{} is not a file", expanded_path);
@@ -327,7 +349,7 @@ fn expand_path(path: &str) -> String {
             }
         }
         Err(msg) => {
-            let warning = format!("{}: {}", expanded_path, msg).red();
+            let warning = format!("Failed to read metadata for {}: {}", expanded_path, msg).red();
             println!("{}", warning);
             exit(1);
         }
@@ -386,76 +408,6 @@ fn diff(vpx_file_path: &str) {
     }
 }
 
-fn index(expanded_path: &str, recursive: bool) {
-    let mut vpx_files = Vec::new();
-    if recursive {
-        for entry in WalkDir::new(expanded_path)
-            .into_iter()
-            .filter_map(|e| e.ok())
-        {
-            if entry.file_type().is_file() {
-                if let Some("vpx") = entry.path().extension().and_then(OsStr::to_str) {
-                    vpx_files.push(entry.path().to_owned());
-                }
-            }
-        }
-    } else {
-        for entry in fs::read_dir(expanded_path).unwrap() {
-            let entry = entry.unwrap();
-            let path = entry.path();
-            if path.is_file() {
-                if let Some("vpx") = path.extension().and_then(OsStr::to_str) {
-                    vpx_files.push(path);
-                }
-            }
-        }
-    }
-
-    // TODO tried using rayon here but it's not faster and uses up all cpu
-    // use rayon::prelude::*;
-    // .par_iter() instead of .iter()
-    let mut vpx_files_with_tableinfo: Vec<(&PathBuf, TableInfo)> = vpx_files
-        .iter()
-        .flat_map(|vpx_file| {
-            print!(".");
-            io::stdout().flush().unwrap();
-            match cfb::open(&vpx_file) {
-                Ok(mut comp) => {
-                    let table_info = read_tableinfo(&mut comp);
-                    Some((vpx_file, table_info))
-                }
-                Err(e) => {
-                    let warning =
-                        format!("Not a valid vpx file {}: {}", vpx_file.display(), e).red();
-                    println!("{}", warning);
-                    None
-                }
-            }
-        })
-        .collect();
-
-    // sort by name
-    vpx_files_with_tableinfo.sort_by(|(_, a), (_, b)| {
-        a.table_name
-            .to_lowercase()
-            .cmp(&b.table_name.to_lowercase())
-    });
-
-    // print to console
-    for (vpx_file, table_info) in &vpx_files_with_tableinfo {
-        println!(
-            "{} ({})",
-            table_info.table_name,
-            vpx_file
-                .file_name()
-                .and_then(OsStr::to_str)
-                .unwrap_or("[unknown]")
-        );
-    }
-
-    println!("scanned {} vpx files", vpx_files_with_tableinfo.len());
-}
-
 fn run_diff(original_vbs_path: &Path, vbs_path: &Path) -> Result<std::process::Output, io::Error> {
     std::process::Command::new("diff")
         .arg("-u")
@@ -469,7 +421,6 @@ fn run_diff(original_vbs_path: &Path, vbs_path: &Path) -> Result<std::process::O
 fn extract(vpx_file_path: &str, yes: bool) {
     let root_dir_path_str = vpx_file_path.replace(".vpx", "");
     let root_dir_path = Path::new(&root_dir_path_str);
-    let mut root_dir = std::fs::DirBuilder::new();
     let vbs_path = root_dir_path.join("script.vbs").to_owned();
 
     let mut root_dir = std::fs::DirBuilder::new();
@@ -592,13 +543,7 @@ fn extract_info(comp: &mut CompoundFile<File>, root_dir_path: &Path) {
         screenshot_file.write_all(&table_info.screenshot).unwrap();
     }
 
-    // TODO convert to a serde
-    // TODO add free properties
-    // TODO add missing data
-    let info = json!({
-        "name": table_info.table_name,
-        "author": table_info.author_name,
-    });
+    let info = table_json(&table_info);
 
     serde_json::to_writer_pretty(&mut json_file, &info).unwrap();
     println!("Info file written to\n  {}", &json_path.display());
@@ -725,7 +670,7 @@ fn extract_fonts(comp: &mut CompoundFile<File>, records: &Vec<Record>, root_dir_
             .unwrap()
             .read_to_end(&mut input)
             .unwrap();
-        let (_, font) = font::read(path.to_owned(), &input).unwrap();
+        let (_, font) = font::read(&input).unwrap();
 
         let ext = font.ext();
         let mut font_path = fonts_path.clone();

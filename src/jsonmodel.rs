@@ -1,0 +1,28 @@
+use serde_json::json;
+
+use crate::tableinfo::TableInfo;
+
+pub fn table_json(table_info: &TableInfo) -> serde_json::Value {
+    // TODO convert to a serde
+    // TODO add missing data
+
+    let base = json!({
+        "name": table_info.table_name,
+        "authorName": table_info.author_name,
+        "authorEmail": table_info.author_email,
+        "authorWebsite": table_info.author_website,
+        "description": table_info.table_description,
+        "blurb": table_info.table_blurb,
+        "rules": table_info.table_rules,
+        "version": table_info.table_version,
+        "releaseDate": table_info.release_date,
+        "saveRev": table_info.table_save_rev,
+    });
+
+    let mut extended = base.as_object().unwrap().clone();
+    table_info.properties.iter().for_each(|(k, v)| {
+        extended.insert(k.clone(), serde_json::Value::String(v.clone()));
+    });
+
+    serde_json::Value::Object(extended)
+}

@@ -1,5 +1,3 @@
-use std::borrow::Borrow;
-use std::ops::Deref;
 use std::str::from_utf8;
 
 use nom::bytes::streaming::take;

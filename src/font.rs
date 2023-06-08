@@ -19,7 +19,7 @@ impl FontData {
     }
 }
 
-pub fn read(fs_path: String, input: &[u8]) -> IResult<&[u8], FontData> {
+pub fn read(input: &[u8]) -> IResult<&[u8], FontData> {
     let mut input = input;
     let mut name: String = "".to_string();
     let mut path: String = "".to_string();
