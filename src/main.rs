@@ -11,6 +11,8 @@ pub mod tableinfo;
 use cfb::CompoundFile;
 use clap::{arg, Arg, Command};
 use colored::Colorize;
+use dialoguer::theme::ColorfulTheme;
+use dialoguer::Select;
 use gamedata::Record;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::fs::{metadata, File};
@@ -58,6 +60,23 @@ fn main() {
             Command::new("diff")
                 .about("Prints out a diff between the vbs in the vpx and the sidecar vbs")
                 .arg(arg!(<VPXPATH> "The path to the vpx file").required(true))
+        )
+        .subcommand(
+            Command::new("frontend")
+                .about("Acts as a frontend for launching vpx files")
+                .arg(
+                    Arg::new("RECURSIVE")
+                        .short('r')
+                        .long("recursive")
+                        .num_args(0)
+                        .help("Recursively index subdirectories")
+                        .default_value("true"),
+                )
+                .arg(
+                    arg!(<VPXROOTPATH> "The path to the root directory of vpx files")
+                        .required(false)
+                        .default_value(DEFAULT_TABLES_ROOT)
+                ),
         )
         .subcommand(
             Command::new("index")
@@ -131,6 +150,61 @@ fn main() {
             let expanded_path = expand_path(path);
             diff(expanded_path.as_ref());
         }
+        Some(("frontend", sub_matches)) => {
+            let recursive = sub_matches.get_flag("RECURSIVE");
+            let path = sub_matches
+                .get_one::<String>("VPXROOTPATH")
+                .map(|s| s.as_str());
+            let path = path.unwrap_or("");
+            let expanded_path = expand_path(path);
+            println!("Indexing {}", expanded_path);
+            let vpx_files = indexer::find_vpx_files(recursive, expanded_path.as_ref());
+            let pb = ProgressBar::new(vpx_files.len() as u64);
+            pb.set_style(
+                ProgressStyle::with_template(
+                    "{spinner:.green} [{bar:.cyan/blue}] {pos}/{human_len} ({eta})",
+                )
+                .unwrap(),
+            );
+            let mut vpx_files_with_tableinfo = indexer::index_vpx_files(&vpx_files, |pos: u64| {
+                pb.set_position(pos);
+            });
+            pb.finish_and_clear();
+
+            // TODO this is a second sort, does not make a lot of sense to do the first one
+            vpx_files_with_tableinfo.sort_by_key(|(path1, info1)| display_table_line(path1, info1));
+
+            // extract table names and paths to display to user
+            let selections = vpx_files_with_tableinfo
+                .iter()
+                // TODO can we expand the tuple to args?
+                .map(|(path, info)| display_table_line(path, info))
+                .collect::<Vec<String>>();
+
+            let selection = Select::with_theme(&ColorfulTheme::default())
+                .with_prompt("Select a table to launch")
+                .default(0)
+                .items(&selections[..])
+                .interact()
+                .unwrap();
+
+            let (selected_path, _selected_info) = vpx_files_with_tableinfo.get(selection).unwrap();
+
+            println!("Launching {:?}", selected_path);
+
+            let executable = expand_path("~/workspace/somatik/vpinball/build/VPinballX_GL");
+
+            // start process ./VPinballX_GL -play [table path]
+            let mut cmd = std::process::Command::new(executable);
+            cmd.arg("-play");
+            cmd.arg(selected_path);
+            let mut child = cmd.spawn().unwrap();
+            let result = child.wait().unwrap();
+            println!("result: {:?}", result);
+
+            // let mut app = frontend::Frontend::new(vpx_files_with_tableinfo);
+            // app.run();
+        }
         Some(("index", sub_matches)) => {
             let recursive = sub_matches.get_flag("RECURSIVE");
             let path = sub_matches
@@ -190,6 +264,14 @@ fn main() {
         }
         _ => unreachable!(), // If all subcommands are defined above, anything else is unreachable!()
     }
+}
+
+fn display_table_line(path: &std::path::PathBuf, info: &tableinfo::TableInfo) -> String {
+    let file_name = path.file_stem().unwrap().to_str().unwrap().to_string();
+    Some(info.table_name.to_owned())
+        .filter(|s| !s.is_empty())
+        .map(|s| format!("{} ({})", s, file_name))
+        .unwrap_or(file_name)
 }
 
 fn extract_directb2s(expanded_path: &String) {
