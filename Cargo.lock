@@ -676,6 +676,7 @@ dependencies = [
  "cfb",
  "clap",
  "colored",
+ "console",
  "dialoguer",
  "git-version",
  "indicatif",

@@ -11,14 +11,15 @@ pub mod tableinfo;
 use cfb::CompoundFile;
 use clap::{arg, Arg, Command};
 use colored::Colorize;
+use console::Emoji;
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::Select;
 use gamedata::Record;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::fs::{metadata, File};
 use std::io::{self, Read};
-use std::path::Path;
-use std::process::exit;
+use std::path::{Path, PathBuf};
+use std::process::{exit, ExitStatus};
 
 use nom::{number::complete::le_u32, IResult};
 
@@ -174,33 +175,50 @@ fn main() {
             // TODO this is a second sort, does not make a lot of sense to do the first one
             vpx_files_with_tableinfo.sort_by_key(|(path1, info1)| display_table_line(path1, info1));
 
-            // extract table names and paths to display to user
-            let selections = vpx_files_with_tableinfo
-                .iter()
-                // TODO can we expand the tuple to args?
-                .map(|(path, info)| display_table_line(path, info))
-                .collect::<Vec<String>>();
+            loop {
+                let selections = vpx_files_with_tableinfo
+                    .iter()
+                    // TODO can we expand the tuple to args?
+                    .map(|(path, info)| display_table_line(path, info))
+                    .collect::<Vec<String>>();
 
-            let selection = Select::with_theme(&ColorfulTheme::default())
-                .with_prompt("Select a table to launch")
-                .default(0)
-                .items(&selections[..])
-                .interact()
-                .unwrap();
+                let selection = Select::with_theme(&ColorfulTheme::default())
+                    .with_prompt("Select a table to launch")
+                    .default(0)
+                    .items(&selections[..])
+                    .interact()
+                    .unwrap();
 
-            let (selected_path, _selected_info) = vpx_files_with_tableinfo.get(selection).unwrap();
+                let (selected_path, _selected_info) =
+                    vpx_files_with_tableinfo.get(selection).unwrap();
 
-            println!("Launching {:?}", selected_path);
+                let launch = Emoji("🚚 ", "[launch]");
+                let crash = Emoji("💥 ", "[crash]");
 
-            let executable = expand_path("~/workspace/somatik/vpinball/build/VPinballX_GL");
-
-            // start process ./VPinballX_GL -play [table path]
-            let mut cmd = std::process::Command::new(executable);
-            cmd.arg("-play");
-            cmd.arg(selected_path);
-            let mut child = cmd.spawn().unwrap();
-            let result = child.wait().unwrap();
-            println!("result: {:?}", result);
+                println!("{} {}", launch, selected_path.display());
+                match launch_table(selected_path) {
+                    Ok(status) => match status.code() {
+                        Some(0) => {
+                            //println!("Table exited normally");
+                        }
+                        Some(11) => {
+                            println!("{} Table exited with segfault, you might want to report this to the vpinball team.", crash);
+                        }
+                        Some(139) => {
+                            println!("{} Table exited with segfault, you might want to report this to the vpinball team.", crash);
+                        }
+                        Some(code) => {
+                            println!("Table exited with code {}", code);
+                        }
+                        None => {
+                            println!("Table exited with unknown code");
+                        }
+                    },
+                    Err(e) => {
+                        println!("Error launching table: {:?}", e);
+                    }
+                }
+            }
 
             // let mut app = frontend::Frontend::new(vpx_files_with_tableinfo);
             // app.run();
@@ -264,6 +282,18 @@ fn main() {
         }
         _ => unreachable!(), // If all subcommands are defined above, anything else is unreachable!()
     }
+}
+
+fn launch_table(selected_path: &PathBuf) -> io::Result<ExitStatus> {
+    let executable = expand_path("~/workspace/somatik/vpinball/build/VPinballX_GL");
+
+    // start process ./VPinballX_GL -play [table path]
+    let mut cmd = std::process::Command::new(executable);
+    cmd.arg("-play");
+    cmd.arg(selected_path);
+    let mut child = cmd.spawn()?;
+    let result = child.wait()?;
+    Ok(result)
 }
 
 fn display_table_line(path: &std::path::PathBuf, info: &tableinfo::TableInfo) -> String {
