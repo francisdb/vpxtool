@@ -219,9 +219,6 @@ fn main() {
                     }
                 }
             }
-
-            // let mut app = frontend::Frontend::new(vpx_files_with_tableinfo);
-            // app.run();
         }
         Some(("index", sub_matches)) => {
             let recursive = sub_matches.get_flag("RECURSIVE");
@@ -285,7 +282,9 @@ fn main() {
 }
 
 fn launch_table(selected_path: &PathBuf) -> io::Result<ExitStatus> {
-    let executable = expand_path("~/workspace/somatik/vpinball/build/VPinballX_GL");
+    let executable = Path::new(&expand_path(DEFAULT_VPINBALL_ROOT))
+        .join("vpinball")
+        .join("VPinballX_GL");
 
     // start process ./VPinballX_GL -play [table path]
     let mut cmd = std::process::Command::new(executable);
@@ -296,11 +295,11 @@ fn launch_table(selected_path: &PathBuf) -> io::Result<ExitStatus> {
     Ok(result)
 }
 
-fn display_table_line(path: &std::path::PathBuf, info: &tableinfo::TableInfo) -> String {
+fn display_table_line(path: &Path, info: &tableinfo::TableInfo) -> String {
     let file_name = path.file_stem().unwrap().to_str().unwrap().to_string();
     Some(info.table_name.to_owned())
         .filter(|s| !s.is_empty())
-        .map(|s| format!("{} ({})", s, file_name))
+        .map(|s| format!("{} {}", s, (format!("({})", file_name)).dimmed()))
         .unwrap_or(file_name)
 }
 
