@@ -1,25 +1,23 @@
 pub mod biff;
 pub mod directb2s;
 pub mod font;
+mod frontend;
 pub mod gamedata;
 pub mod image;
 pub mod indexer;
 pub mod jsonmodel;
-pub mod sound;
 pub mod tableinfo;
+pub mod vpx;
 
 use cfb::CompoundFile;
 use clap::{arg, Arg, Command};
 use colored::Colorize;
-use console::Emoji;
-use dialoguer::theme::ColorfulTheme;
-use dialoguer::Select;
 use gamedata::Record;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::fs::{metadata, File};
 use std::io::{self, Read};
-use std::path::{Path, PathBuf};
-use std::process::{exit, ExitStatus};
+use std::path::Path;
+use std::process::exit;
 
 use nom::{number::complete::le_u32, IResult};
 
@@ -31,7 +29,7 @@ use base64::{engine::general_purpose, Engine as _};
 
 use crate::directb2s::load;
 use crate::jsonmodel::table_json;
-use crate::sound::write_sound;
+use crate::vpx::sound::write_sound;
 
 // see https://github.com/fusion-engineering/rust-git-version/issues/21
 const GIT_VERSION: &str = git_version!(args = ["--tags", "--always", "--dirty=-modified"]);
@@ -158,67 +156,10 @@ fn main() {
                 .map(|s| s.as_str());
             let path = path.unwrap_or("");
             let expanded_path = expand_path(path);
-            println!("Indexing {}", expanded_path);
-            let vpx_files = indexer::find_vpx_files(recursive, expanded_path.as_ref());
-            let pb = ProgressBar::new(vpx_files.len() as u64);
-            pb.set_style(
-                ProgressStyle::with_template(
-                    "{spinner:.green} [{bar:.cyan/blue}] {pos}/{human_len} ({eta})",
-                )
-                .unwrap(),
-            );
-            let mut vpx_files_with_tableinfo = indexer::index_vpx_files(&vpx_files, |pos: u64| {
-                pb.set_position(pos);
-            });
-            pb.finish_and_clear();
-
-            // TODO this is a second sort, does not make a lot of sense to do the first one
-            vpx_files_with_tableinfo.sort_by_key(|(path1, info1)| display_table_line(path1, info1));
-
-            loop {
-                let selections = vpx_files_with_tableinfo
-                    .iter()
-                    // TODO can we expand the tuple to args?
-                    .map(|(path, info)| display_table_line(path, info))
-                    .collect::<Vec<String>>();
-
-                let selection = Select::with_theme(&ColorfulTheme::default())
-                    .with_prompt("Select a table to launch")
-                    .default(0)
-                    .items(&selections[..])
-                    .interact()
-                    .unwrap();
-
-                let (selected_path, _selected_info) =
-                    vpx_files_with_tableinfo.get(selection).unwrap();
-
-                let launch = Emoji("🚚 ", "[launch]");
-                let crash = Emoji("💥 ", "[crash]");
-
-                println!("{} {}", launch, selected_path.display());
-                match launch_table(selected_path) {
-                    Ok(status) => match status.code() {
-                        Some(0) => {
-                            //println!("Table exited normally");
-                        }
-                        Some(11) => {
-                            println!("{} Table exited with segfault, you might want to report this to the vpinball team.", crash);
-                        }
-                        Some(139) => {
-                            println!("{} Table exited with segfault, you might want to report this to the vpinball team.", crash);
-                        }
-                        Some(code) => {
-                            println!("Table exited with code {}", code);
-                        }
-                        None => {
-                            println!("Table exited with unknown code");
-                        }
-                    },
-                    Err(e) => {
-                        println!("Error launching table: {:?}", e);
-                    }
-                }
-            }
+            let vpx_files_with_tableinfo = frontend::frontend_index(expanded_path, recursive);
+            let expanded_root_str = &expand_path(DEFAULT_VPINBALL_ROOT);
+            let expanded_root = Path::new(expanded_root_str);
+            frontend::frontend(vpx_files_with_tableinfo, expanded_root);
         }
         Some(("index", sub_matches)) => {
             let recursive = sub_matches.get_flag("RECURSIVE");
@@ -279,28 +220,6 @@ fn main() {
         }
         _ => unreachable!(), // If all subcommands are defined above, anything else is unreachable!()
     }
-}
-
-fn launch_table(selected_path: &PathBuf) -> io::Result<ExitStatus> {
-    let executable = Path::new(&expand_path(DEFAULT_VPINBALL_ROOT))
-        .join("vpinball")
-        .join("VPinballX_GL");
-
-    // start process ./VPinballX_GL -play [table path]
-    let mut cmd = std::process::Command::new(executable);
-    cmd.arg("-play");
-    cmd.arg(selected_path);
-    let mut child = cmd.spawn()?;
-    let result = child.wait()?;
-    Ok(result)
-}
-
-fn display_table_line(path: &Path, info: &tableinfo::TableInfo) -> String {
-    let file_name = path.file_stem().unwrap().to_str().unwrap().to_string();
-    Some(info.table_name.to_owned())
-        .filter(|s| !s.is_empty())
-        .map(|s| format!("{} {}", s, (format!("({})", file_name)).dimmed()))
-        .unwrap_or(file_name)
 }
 
 fn extract_directb2s(expanded_path: &String) {
@@ -741,7 +660,7 @@ fn extract_sounds(
             .unwrap()
             .read_to_end(&mut input)
             .unwrap();
-        let (_, sound) = sound::read(path.to_owned(), file_version, &input).unwrap();
+        let (_, sound) = vpx::sound::read(path.to_owned(), file_version, &input).unwrap();
 
         let ext = sound.ext();
         let mut sound_path = sounds_path.clone();
