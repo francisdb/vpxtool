@@ -7,7 +7,7 @@ use nom::combinator::map;
 use nom::multi::many0;
 use nom::{number::complete::le_u32, IResult};
 
-use crate::biff::{
+use super::biff::{
     read_float_record, read_string_record, read_tag_record, read_u32, read_wide_string_record,
     RECORD_TAG_LEN,
 };
@@ -70,9 +70,7 @@ fn read_gamedata_record_value(tag: String, len: u32, input: &[u8]) -> IResult<&[
         }
         "CODE" => {
             let (rest, string) = read_string_record(input)?;
-            let rec = Record::Code {
-                script: string,
-            };
+            let rec = Record::Code { script: string };
             Ok((rest, rec))
         }
         "MASI" => {

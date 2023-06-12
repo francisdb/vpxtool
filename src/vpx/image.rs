@@ -4,7 +4,7 @@ use nom::bytes::complete::take;
 
 use nom::IResult;
 
-use crate::biff::{
+use super::biff::{
     drop_record, read_empty_tag, read_float, read_string_record, read_tag_start, read_u32,
 };
 

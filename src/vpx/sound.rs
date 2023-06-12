@@ -4,7 +4,7 @@ use bytes::{BufMut, BytesMut};
 
 use nom::IResult;
 
-use crate::biff::{read_byte, read_bytes_record, read_string_record, read_u16, read_u32};
+use super::biff::{read_byte, read_bytes_record, read_string_record, read_u16, read_u32};
 
 const NEW_SOUND_FORMAT_VERSION: u32 = 1031;
 

@@ -1,12 +1,7 @@
-pub mod biff;
 pub mod directb2s;
-pub mod font;
 mod frontend;
-pub mod gamedata;
-pub mod image;
-pub mod indexer;
+mod indexer;
 pub mod jsonmodel;
-pub mod tableinfo;
 pub mod vpx;
 
 use cfb::CompoundFile;
@@ -29,7 +24,11 @@ use base64::{engine::general_purpose, Engine as _};
 
 use crate::directb2s::load;
 use crate::jsonmodel::table_json;
+use crate::vpx::font;
+use crate::vpx::gamedata;
+use crate::vpx::image;
 use crate::vpx::sound::write_sound;
+use crate::vpx::tableinfo;
 
 // see https://github.com/fusion-engineering/rust-git-version/issues/21
 const GIT_VERSION: &str = git_version!(args = ["--tags", "--always", "--dirty=-modified"]);

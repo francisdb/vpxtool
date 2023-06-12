@@ -1,6 +1,6 @@
 use nom::{bytes::complete::take, IResult};
 
-use crate::biff::{read_empty_tag, read_string_record, read_tag_start, read_u32};
+use super::biff::{read_empty_tag, read_string_record, read_tag_start, read_u32};
 
 #[derive(Debug)]
 pub struct FontData {
