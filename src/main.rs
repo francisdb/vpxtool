@@ -9,13 +9,10 @@ use clap::{arg, Arg, Command};
 use colored::Colorize;
 use gamedata::Record;
 use indicatif::{ProgressBar, ProgressStyle};
-use std::f32::consts::E;
 use std::fs::{metadata, File};
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::process::exit;
-
-use nom::{number::complete::le_u32, IResult};
 
 use std::io::Write; // bring trait into scope
 
@@ -30,7 +27,7 @@ use vpx::gamedata;
 use vpx::image;
 use vpx::sound::write_sound;
 use vpx::tableinfo;
-use vpx::{extractvbs, find_script, font, read_gamedata, read_version, ExtractResult};
+use vpx::{extractvbs, font, read_gamedata, read_version, ExtractResult};
 
 // see https://github.com/fusion-engineering/rust-git-version/issues/21
 const GIT_VERSION: &str = git_version!(args = ["--tags", "--always", "--dirty=-modified"]);
@@ -148,7 +145,7 @@ fn main() {
             let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
             let path = path.unwrap_or("");
             let expanded_path = expand_path(path);
-            match vpx::diff(expanded_path.as_ref()) {
+            match vpx::diff(PathBuf::from(expanded_path)) {
                 Ok(output) => {
                     println!("{}", output);
                 }
@@ -224,8 +221,8 @@ fn main() {
                 .map(|v| v.as_str())
                 .collect::<Vec<_>>();
             for path in paths {
-                let expanded_path = expand_path(path);
-                match extractvbs(expanded_path.as_ref(), overwrite) {
+                let expanded_path = PathBuf::from(expand_path(path));
+                match extractvbs(&expanded_path, overwrite, None) {
                     ExtractResult::Existed(vbs_path) => {
                         let warning =
                             format!("EXISTED {}", vbs_path.display()).truecolor(255, 125, 0);

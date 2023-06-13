@@ -1,12 +1,13 @@
 use std::{
-    io,
+    fs::File,
+    io::{self, Write},
     path::{Path, PathBuf},
     process::ExitStatus,
 };
 
 use colored::Colorize;
 use console::Emoji;
-use dialoguer::{theme::ColorfulTheme, Confirm};
+use dialoguer::theme::ColorfulTheme;
 use dialoguer::{Input, Select};
 use indicatif::{ProgressBar, ProgressStyle};
 
@@ -25,17 +26,19 @@ enum TableOption {
     ExtractVBS,
     EditVBS,
     ShowVBSDiff,
+    CreateVBSPatch,
     // ClearNVRAM,
 }
 
 impl TableOption {
-    const ALL: [TableOption; 6] = [
+    const ALL: [TableOption; 7] = [
         TableOption::LaunchFullscreen,
         TableOption::LaunchWindowed,
         TableOption::ShowDetails,
         TableOption::ExtractVBS,
         TableOption::EditVBS,
         TableOption::ShowVBSDiff,
+        TableOption::CreateVBSPatch,
         // TableOption::ClearNVRAM,
     ];
 
@@ -47,7 +50,8 @@ impl TableOption {
             3 => Some(TableOption::ExtractVBS),
             4 => Some(TableOption::EditVBS),
             5 => Some(TableOption::ShowVBSDiff),
-            // 6 => Some(TableOption::ClearNVRAM),
+            6 => Some(TableOption::CreateVBSPatch),
+            // 7 => Some(TableOption::ClearNVRAM),
             _ => None,
         }
     }
@@ -57,9 +61,10 @@ impl TableOption {
             TableOption::LaunchFullscreen => "Launch Fullscreen".to_string(),
             TableOption::LaunchWindowed => "Launch Windowed".to_string(),
             TableOption::ShowDetails => "Show Details".to_string(),
-            TableOption::ExtractVBS => "VBScript - Extract".to_string(),
-            TableOption::EditVBS => "VBScript - Edit".to_string(),
-            TableOption::ShowVBSDiff => "VBScript - Diff".to_string(),
+            TableOption::ExtractVBS => "VBScript > Extract".to_string(),
+            TableOption::EditVBS => "VBScript > Edit".to_string(),
+            TableOption::ShowVBSDiff => "VBScript > Diff".to_string(),
+            TableOption::CreateVBSPatch => "VBScript > Create Patch".to_string(),
             // TableOption::ClearNVRAM => "Clear NVRAM".to_string(),
         }
     }
@@ -120,30 +125,48 @@ pub fn frontend(
                         launch(selected_path, vpinball_root, false);
                     }
                     Some(TableOption::EditVBS) => {
-                        let path = vbs_path_for(&selected_path.to_string_lossy());
+                        let path = vbs_path_for(selected_path);
                         if path.exists() {
                             open(path);
                         } else {
-                            extractvbs(&selected_path.to_string_lossy(), false);
+                            extractvbs(selected_path, false, None);
                             open(path);
                         }
                     }
-                    Some(TableOption::ExtractVBS) => {
-                        match extractvbs(&selected_path.to_string_lossy(), false) {
-                            ExtractResult::Extracted(path) => {
-                                prompt(format!("VBS extracted to {}", path.to_string_lossy()));
-                            }
-                            ExtractResult::Existed(path) => {
-                                let msg =
-                                    format!("VBS already exists at {}", path.to_string_lossy());
-                                prompt(msg.truecolor(255, 125, 0).to_string());
-                            }
+                    Some(TableOption::ExtractVBS) => match extractvbs(selected_path, false, None) {
+                        ExtractResult::Extracted(path) => {
+                            prompt(format!("VBS extracted to {}", path.to_string_lossy()));
                         }
-                    }
-                    Some(TableOption::ShowVBSDiff) => {
-                        match vpx::diff(&selected_path.to_string_lossy()) {
+                        ExtractResult::Existed(path) => {
+                            let msg = format!("VBS already exists at {}", path.to_string_lossy());
+                            prompt(msg.truecolor(255, 125, 0).to_string());
+                        }
+                    },
+                    Some(TableOption::ShowVBSDiff) => match vpx::diff(selected_path.clone()) {
+                        Ok(diff) => {
+                            prompt(diff);
+                        }
+                        Err(err) => {
+                            let msg = format!("Unable to diff VBS: {}", err);
+                            prompt(msg.truecolor(255, 125, 0).to_string());
+                        }
+                    },
+                    Some(TableOption::CreateVBSPatch) => {
+                        let original_path =
+                            match vpx::extractvbs(selected_path, true, Some("vbs.original")) {
+                                ExtractResult::Existed(path) => path,
+                                ExtractResult::Extracted(path) => path,
+                            };
+                        let vbs_path = vbs_path_for(selected_path);
+                        let patch_path = vbs_path.with_extension("vbs.patch");
+                        dbg!(original_path.clone());
+                        dbg!(vbs_path.clone());
+                        dbg!(patch_path.clone());
+
+                        match vpx::run_diff(&original_path, &vbs_path, vpx::DiffColor::Never) {
                             Ok(diff) => {
-                                prompt(diff);
+                                let mut file = File::create(&patch_path).unwrap();
+                                file.write_all(&diff).unwrap();
                             }
                             Err(err) => {
                                 let msg = format!("Unable to diff VBS: {}", err);

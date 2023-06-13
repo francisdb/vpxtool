@@ -22,23 +22,33 @@ pub enum ExtractResult {
     Existed(PathBuf),
 }
 
-pub fn extractvbs(vpx_file_path: &str, overwrite: bool) -> ExtractResult {
-    let vbs_path = vbs_path_for(vpx_file_path);
+pub fn extractvbs(
+    vpx_file_path: &PathBuf,
+    overwrite: bool,
+    extension: Option<&str>,
+) -> ExtractResult {
+    let script_path = match extension {
+        Some(ext) => path_for(vpx_file_path, &ext),
+        None => vbs_path_for(vpx_file_path),
+    };
 
-    if !vbs_path.exists() || (vbs_path.exists() && overwrite) {
+    if !script_path.exists() || (script_path.exists() && overwrite) {
         let mut comp = cfb::open(vpx_file_path).unwrap();
         let _version = read_version(&mut comp);
         let records = read_gamedata(&mut comp);
-        extract_script(&records, &vbs_path);
-        ExtractResult::Extracted(vbs_path.to_path_buf())
+        extract_script(&records, &script_path);
+        ExtractResult::Extracted(script_path.to_path_buf())
     } else {
-        ExtractResult::Existed(vbs_path.to_path_buf())
+        ExtractResult::Existed(script_path.to_path_buf())
     }
 }
 
-pub fn vbs_path_for(vpx_file_path: &str) -> PathBuf {
-    let vbs_path_str = vpx_file_path.replace(".vpx", ".vbs");
-    Path::new(&vbs_path_str).to_path_buf()
+pub fn vbs_path_for(vpx_file_path: &PathBuf) -> PathBuf {
+    path_for(vpx_file_path, "vbs")
+}
+
+fn path_for(vpx_file_path: &PathBuf, extension: &str) -> PathBuf {
+    PathBuf::from(vpx_file_path).with_extension(extension)
 }
 
 // TODO: read version
@@ -93,28 +103,31 @@ pub fn find_script(records: &[Record]) -> String {
     code.to_owned()
 }
 
-pub fn diff(vpx_file_path: &str) -> io::Result<String> {
-    let vbs_path_str = vpx_file_path.replace(".vpx", ".vbs");
-    let vbs_path = Path::new(&vbs_path_str);
-    let original_vbs_path_str = vpx_file_path.replace(".vpx", ".vbs.original.tmp");
-    let original_vbs_path = Path::new(&original_vbs_path_str);
+pub fn diff(vpx_file_path: PathBuf) -> io::Result<String> {
+    // set extension for PathBuf
+    let vbs_path = vpx_file_path.with_extension("vbs");
+    let original_vbs_path = vpx_file_path.with_extension("vbs.original.tmp");
 
     if vbs_path.exists() {
-        match cfb::open(vpx_file_path) {
+        match cfb::open(&vpx_file_path) {
             Ok(mut comp) => {
                 let records = read_gamedata(&mut comp);
                 let script = find_script(&records);
-                std::fs::write(original_vbs_path, script).unwrap();
-
-                let output = run_diff(original_vbs_path, vbs_path)?;
+                std::fs::write(&original_vbs_path, script).unwrap();
+                let diff_color = if colored::control::SHOULD_COLORIZE.should_colorize() {
+                    DiffColor::Always
+                } else {
+                    DiffColor::Never
+                };
+                let output = run_diff(&original_vbs_path, &vbs_path, diff_color)?;
 
                 if original_vbs_path.exists() {
                     std::fs::remove_file(original_vbs_path).unwrap();
                 }
-                Ok(String::from_utf8_lossy(&output.stdout).to_string())
+                Ok(String::from_utf8_lossy(&output).to_string())
             }
             Err(e) => {
-                let msg = format!("Not a valid vpx file {}: {}", vpx_file_path, e);
+                let msg = format!("Not a valid vpx file {}: {}", vpx_file_path.display(), e);
                 Err(io::Error::new(io::ErrorKind::InvalidData, msg))
             }
         }
@@ -125,12 +138,32 @@ pub fn diff(vpx_file_path: &str) -> io::Result<String> {
     }
 }
 
-fn run_diff(original_vbs_path: &Path, vbs_path: &Path) -> Result<std::process::Output, io::Error> {
+pub enum DiffColor {
+    Always,
+    Never,
+}
+
+impl DiffColor {
+    // to color arg
+    fn to_diff_arg(&self) -> String {
+        match self {
+            DiffColor::Always => String::from("always"),
+            DiffColor::Never => String::from("never"),
+        }
+    }
+}
+
+pub fn run_diff(
+    original_vbs_path: &Path,
+    vbs_path: &Path,
+    color: DiffColor,
+) -> Result<Vec<u8>, io::Error> {
     std::process::Command::new("diff")
         .arg("-u")
         .arg("-w")
-        .arg("--color=always")
+        .arg(format!("--color={}", color.to_diff_arg()))
         .arg(original_vbs_path)
         .arg(vbs_path)
         .output()
+        .map(|o| o.stdout)
 }
