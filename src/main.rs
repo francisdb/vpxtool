@@ -9,9 +9,10 @@ use clap::{arg, Arg, Command};
 use colored::Colorize;
 use gamedata::Record;
 use indicatif::{ProgressBar, ProgressStyle};
+use std::f32::consts::E;
 use std::fs::{metadata, File};
 use std::io::{self, Read};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::exit;
 
 use nom::{number::complete::le_u32, IResult};
@@ -22,13 +23,14 @@ use git_version::git_version;
 
 use base64::{engine::general_purpose, Engine as _};
 
-use crate::directb2s::load;
-use crate::jsonmodel::table_json;
-use crate::vpx::font;
-use crate::vpx::gamedata;
-use crate::vpx::image;
-use crate::vpx::sound::write_sound;
-use crate::vpx::tableinfo;
+use directb2s::load;
+use jsonmodel::table_json;
+use vpx::extract_script;
+use vpx::gamedata;
+use vpx::image;
+use vpx::sound::write_sound;
+use vpx::tableinfo;
+use vpx::{extractvbs, find_script, font, read_gamedata, read_version, ExtractResult};
 
 // see https://github.com/fusion-engineering/rust-git-version/issues/21
 const GIT_VERSION: &str = git_version!(args = ["--tags", "--always", "--dirty=-modified"]);
@@ -214,7 +216,16 @@ fn main() {
                 .collect::<Vec<_>>();
             for path in paths {
                 let expanded_path = expand_path(path);
-                extractvbs(expanded_path.as_ref(), overwrite);
+                match extractvbs(expanded_path.as_ref(), overwrite) {
+                    ExtractResult::Existed(vbs_path) => {
+                        let warning =
+                            format!("EXISTED {}", vbs_path.display()).truecolor(255, 125, 0);
+                        println!("{}", warning);
+                    }
+                    ExtractResult::Extracted(vbs_path) => {
+                        println!("CREATED {}", vbs_path.display());
+                    }
+                }
             }
         }
         _ => unreachable!(), // If all subcommands are defined above, anything else is unreachable!()
@@ -492,74 +503,6 @@ fn extract(vpx_file_path: &str, yes: bool) {
 
     // let mut stream = comp.open_stream(inner_path).unwrap();
     // io::copy(&mut stream, &mut io::stdout()).unwrap();
-}
-
-fn extractvbs(vpx_file_path: &str, overwrite: bool) {
-    let vbs_path_str = vpx_file_path.replace(".vpx", ".vbs");
-    let vbs_path = Path::new(&vbs_path_str);
-
-    if !vbs_path.exists() || (vbs_path.exists() && overwrite) {
-        let mut comp = cfb::open(vpx_file_path).unwrap();
-        let _version = read_version(&mut comp);
-        let records = read_gamedata(&mut comp);
-        extract_script(&records, &vbs_path);
-        println!("CREATED {}", vbs_path.display());
-    } else {
-        let warning = format!("EXISTED {}", vbs_path.display()).truecolor(255, 125, 0);
-        println!("{}", warning);
-    }
-}
-
-fn extract_script<P: AsRef<Path>>(records: &[Record], vbs_path: &P) {
-    let script = find_script(records);
-    std::fs::write(vbs_path, script).unwrap();
-}
-
-// TODO: read version
-//  https://github.com/vbousquet/vpx_lightmapper/blob/331a8576bb7b86668a023b304e7dd04261487106/addons/vpx_lightmapper/vlm_import.py#L328
-fn read_version(comp: &mut cfb::CompoundFile<std::fs::File>) -> u32 {
-    let mut file_version = Vec::new();
-    comp.open_stream("/GameStg/Version")
-        .unwrap()
-        .read_to_end(&mut file_version)
-        .unwrap();
-
-    fn read_version(input: &[u8]) -> IResult<&[u8], u32> {
-        le_u32(input)
-    }
-
-    // use lut to read as u32
-    let (_, version) = read_version(&file_version[..]).unwrap();
-
-    // let version_float = (version as f32)/100f32;
-    // println!("VPX file version: {}", version);
-    version
-}
-
-fn find_script(records: &[Record]) -> String {
-    let code = records
-        .iter()
-        .find_map(|r| match r {
-            Record::Code { script } => Some(script),
-            _ => None,
-        })
-        .unwrap();
-
-    code.to_owned()
-}
-
-fn read_gamedata(comp: &mut CompoundFile<File>) -> Vec<Record> {
-    let mut game_data_vec = Vec::new();
-    comp.open_stream("/GameStg/GameData")
-        .unwrap()
-        .read_to_end(&mut game_data_vec)
-        .unwrap();
-
-    // let result = parseGameData(&game_data_vec[..]);
-    // dump(result);
-
-    let (_, records) = gamedata::read_all_gamedata_records(&game_data_vec[..]).unwrap();
-    records
 }
 
 fn extract_info(comp: &mut CompoundFile<File>, root_dir_path: &Path) {
