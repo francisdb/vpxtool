@@ -12,7 +12,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 
 use crate::{
     indexer, tableinfo,
-    vpx::{extractvbs, vbs_path_for, ExtractResult},
+    vpx::{self, extractvbs, vbs_path_for, ExtractResult},
 };
 
 const LAUNCH: Emoji = Emoji("🚀", "[launch]");
@@ -24,18 +24,18 @@ enum TableOption {
     ShowDetails,
     ExtractVBS,
     EditVBS,
-    // ShowVBSDiff,
+    ShowVBSDiff,
     // ClearNVRAM,
 }
 
 impl TableOption {
-    const ALL: [TableOption; 5] = [
+    const ALL: [TableOption; 6] = [
         TableOption::LaunchFullscreen,
         TableOption::LaunchWindowed,
         TableOption::ShowDetails,
         TableOption::ExtractVBS,
         TableOption::EditVBS,
-        // TableOption::ShowVBSDiff,
+        TableOption::ShowVBSDiff,
         // TableOption::ClearNVRAM,
     ];
 
@@ -46,7 +46,7 @@ impl TableOption {
             2 => Some(TableOption::ShowDetails),
             3 => Some(TableOption::ExtractVBS),
             4 => Some(TableOption::EditVBS),
-            // 5 => Some(TableOption::ShowVBSDiff),
+            5 => Some(TableOption::ShowVBSDiff),
             // 6 => Some(TableOption::ClearNVRAM),
             _ => None,
         }
@@ -57,9 +57,9 @@ impl TableOption {
             TableOption::LaunchFullscreen => "Launch Fullscreen".to_string(),
             TableOption::LaunchWindowed => "Launch Windowed".to_string(),
             TableOption::ShowDetails => "Show Details".to_string(),
-            TableOption::ExtractVBS => "Extract VBS".to_string(),
-            TableOption::EditVBS => "Edit VBS".to_string(),
-            // TableOption::ShowVBSDiff => "Show VBS Diff".to_string(),
+            TableOption::ExtractVBS => "VBScript - Extract".to_string(),
+            TableOption::EditVBS => "VBScript - Edit".to_string(),
+            TableOption::ShowVBSDiff => "VBScript - Diff".to_string(),
             // TableOption::ClearNVRAM => "Clear NVRAM".to_string(),
         }
     }
@@ -136,6 +136,17 @@ pub fn frontend(
                             ExtractResult::Existed(path) => {
                                 let msg =
                                     format!("VBS already exists at {}", path.to_string_lossy());
+                                prompt(msg.truecolor(255, 125, 0).to_string());
+                            }
+                        }
+                    }
+                    Some(TableOption::ShowVBSDiff) => {
+                        match vpx::diff(&selected_path.to_string_lossy()) {
+                            Ok(diff) => {
+                                prompt(diff);
+                            }
+                            Err(err) => {
+                                let msg = format!("Unable to diff VBS: {}", err);
                                 prompt(msg.truecolor(255, 125, 0).to_string());
                             }
                         }

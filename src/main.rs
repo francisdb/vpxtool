@@ -148,7 +148,16 @@ fn main() {
             let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
             let path = path.unwrap_or("");
             let expanded_path = expand_path(path);
-            diff(expanded_path.as_ref());
+            match vpx::diff(expanded_path.as_ref()) {
+                Ok(output) => {
+                    println!("{}", output);
+                }
+                Err(e) => {
+                    let warning = format!("Error running diff: {}", e).red();
+                    println!("{}", warning);
+                    exit(1);
+                }
+            }
         }
         Some(("frontend", sub_matches)) => {
             let recursive = sub_matches.get_flag("RECURSIVE");
@@ -407,55 +416,6 @@ fn info(vpx_file_path: &str, json: bool) {
     // TODO check the json flag
     dbg!(version);
     dbg!(table_info);
-}
-
-fn diff(vpx_file_path: &str) {
-    let vbs_path_str = vpx_file_path.replace(".vpx", ".vbs");
-    let vbs_path = Path::new(&vbs_path_str);
-    let original_vbs_path_str = vpx_file_path.replace(".vpx", ".vbs.original.tmp");
-    let original_vbs_path = Path::new(&original_vbs_path_str);
-
-    if vbs_path.exists() {
-        match cfb::open(vpx_file_path) {
-            Ok(mut comp) => {
-                let records = read_gamedata(&mut comp);
-                let script = find_script(&records);
-                std::fs::write(original_vbs_path, script).unwrap();
-
-                match run_diff(original_vbs_path, vbs_path) {
-                    Ok(output) => {
-                        println!("{}", String::from_utf8_lossy(&output.stdout));
-                    }
-                    Err(e) => {
-                        println!("Error running diff: {}", e);
-                    }
-                }
-
-                if original_vbs_path.exists() {
-                    std::fs::remove_file(original_vbs_path).unwrap();
-                }
-            }
-            Err(e) => {
-                let warning = format!("Not a valid vpx file {}: {}", vpx_file_path, e).red();
-                println!("{}", warning);
-                exit(1)
-            }
-        }
-    } else {
-        let warning = format!("No sidecar vbs file found: {}", vbs_path.display()).red();
-        println!("{}", warning);
-        exit(1)
-    }
-}
-
-fn run_diff(original_vbs_path: &Path, vbs_path: &Path) -> Result<std::process::Output, io::Error> {
-    std::process::Command::new("diff")
-        .arg("-u")
-        .arg("-w")
-        .arg("--color=always")
-        .arg(original_vbs_path)
-        .arg(vbs_path)
-        .output()
 }
 
 fn extract(vpx_file_path: &str, yes: bool) {

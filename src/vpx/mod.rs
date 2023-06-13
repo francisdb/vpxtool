@@ -1,4 +1,4 @@
-use std::io::Read;
+use std::io::{self, Read};
 use std::{
     fs::File,
     path::{Path, PathBuf},
@@ -91,4 +91,46 @@ pub fn find_script(records: &[Record]) -> String {
         .unwrap();
 
     code.to_owned()
+}
+
+pub fn diff(vpx_file_path: &str) -> io::Result<String> {
+    let vbs_path_str = vpx_file_path.replace(".vpx", ".vbs");
+    let vbs_path = Path::new(&vbs_path_str);
+    let original_vbs_path_str = vpx_file_path.replace(".vpx", ".vbs.original.tmp");
+    let original_vbs_path = Path::new(&original_vbs_path_str);
+
+    if vbs_path.exists() {
+        match cfb::open(vpx_file_path) {
+            Ok(mut comp) => {
+                let records = read_gamedata(&mut comp);
+                let script = find_script(&records);
+                std::fs::write(original_vbs_path, script).unwrap();
+
+                let output = run_diff(original_vbs_path, vbs_path)?;
+
+                if original_vbs_path.exists() {
+                    std::fs::remove_file(original_vbs_path).unwrap();
+                }
+                Ok(String::from_utf8_lossy(&output.stdout).to_string())
+            }
+            Err(e) => {
+                let msg = format!("Not a valid vpx file {}: {}", vpx_file_path, e);
+                Err(io::Error::new(io::ErrorKind::InvalidData, msg))
+            }
+        }
+    } else {
+        // wrap the error
+        let msg = format!("No sidecar vbs file found: {}", vbs_path.display());
+        Err(io::Error::new(io::ErrorKind::NotFound, msg))
+    }
+}
+
+fn run_diff(original_vbs_path: &Path, vbs_path: &Path) -> Result<std::process::Output, io::Error> {
+    std::process::Command::new("diff")
+        .arg("-u")
+        .arg("-w")
+        .arg("--color=always")
+        .arg(original_vbs_path)
+        .arg(vbs_path)
+        .output()
 }
