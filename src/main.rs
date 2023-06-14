@@ -9,6 +9,9 @@ use clap::{arg, Arg, Command};
 use colored::Colorize;
 use gamedata::Record;
 use indicatif::{ProgressBar, ProgressStyle};
+use octocrab::models::RunId;
+use regex::Regex;
+use scraper::{Html, Selector};
 use std::fs::{metadata, File};
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
@@ -35,7 +38,8 @@ const GIT_VERSION: &str = git_version!(args = ["--tags", "--always", "--dirty=-m
 const DEFAULT_VPINBALL_ROOT: &str = "~/vpinball";
 const DEFAULT_TABLES_ROOT: &str = "~/vpinball/tables";
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let matches = Command::new("vpxtool")
         .version(GIT_VERSION)
         .author("Francis DB")
@@ -94,7 +98,7 @@ fn main() {
         )
         .subcommand(
             Command::new("extract")
-                .about("Extracts a vpx file")
+                .about("Extracts a vpx/directb2s file")
                 .arg(
                     Arg::new("FORCE")
                         .short('f')
@@ -129,6 +133,10 @@ fn main() {
             Command::new("assemble")
                 .about("Assembles a vpx file")
                 .arg(arg!(<DIRPATH> "The path to the vpx structure").required(true)),
+        )
+        .subcommand(
+            Command::new("install")
+                .about("Installs or updates your vpinball installation")
         )
         .get_matches_from(wild::args());
 
@@ -234,8 +242,114 @@ fn main() {
                 }
             }
         }
+        Some(("install", _sub_matches)) => {
+            let expanded_root = PathBuf::from(expand_path(DEFAULT_VPINBALL_ROOT));
+            // TODO rename vpinball_test to vpinball
+            let vpinball_root = expanded_root.join("vpinball_test");
+
+            // check if vpinball_root exists and is a folder
+
+            if !vpinball_root.exists() {
+                println!(
+                    "VPinball root {} does not exist, creating...",
+                    vpinball_root.display()
+                );
+                std::fs::create_dir_all(&vpinball_root).unwrap();
+            }
+
+            // check if vpinball_root is a symlink
+
+            if vpinball_root
+                .symlink_metadata()
+                .unwrap()
+                .file_type()
+                .is_symlink()
+            {
+                let warning = format!(
+                    "VPinball root {} exists and is a symlink, skipping install",
+                    vpinball_root.display()
+                )
+                .red();
+                println!("{}", warning);
+                exit(1);
+            }
+
+            if !vpinball_root.is_dir() {
+                let warning = format!(
+                    "VPinball root {} exists and is not a folder, skipping install",
+                    vpinball_root.display()
+                )
+                .red();
+                println!("{}", warning);
+                exit(1);
+            }
+
+            github().await.unwrap();
+
+            println!("{}", vpinball_root.display());
+        }
         _ => unreachable!(), // If all subcommands are defined above, anything else is unreachable!()
     }
+}
+
+async fn github() -> Result<(), reqwest::Error> {
+    // TODO is there no way to fetch this info unauthenticated from the github api?
+
+    let url = "https://github.com/vpinball/vpinball/actions/workflows/vpinball.yml?query=is%3Asuccess+branch%3Astandalone";
+    let resp = reqwest::get(url).await?;
+    assert!(resp.status().is_success());
+    let raw_html_string = resp.text().await?;
+
+    // select the first link that contains actions/runs and display it
+    let html_fragment = Html::parse_fragment(&raw_html_string);
+    let link_selector = Selector::parse("a[href*='actions/runs']").unwrap();
+    let mut links = html_fragment.select(&link_selector);
+    let first_link = links.next().unwrap().value().attr("href").unwrap();
+    let full_link = format!("https://github.com{}", first_link);
+    println!("{}", full_link);
+
+    // fetch the suite
+    let resp = reqwest::get(&full_link).await?;
+    assert!(resp.status().is_success());
+    let raw_html_string = resp.text().await?;
+    let html_fragment = Html::parse_fragment(&raw_html_string);
+    // https://github.com/vpinball/vpinball/actions/runs/5266306352
+
+    // extract the id after /runs/
+    let re = Regex::new(r"/runs/(\d+)").unwrap();
+    let captures = re.captures(&full_link).unwrap();
+    let run_id = captures.get(1).unwrap().as_str();
+    println!("{}", run_id);
+
+    // fetch the artifacts using octocrab
+    let octocrab = octocrab::instance();
+    let artifacts = octocrab
+        .actions()
+        .list_workflow_run_artifacts(
+            "vpinball",
+            "vpinball",
+            RunId::from(run_id.parse::<u64>().unwrap()),
+        )
+        .send()
+        .await;
+
+    let a = artifacts.unwrap().value.unwrap();
+
+    for artifact in a {
+        println!("{:?}", artifact.archive_download_url);
+        let artifact_id = artifact.id;
+        // https://github.com/vpinball/vpinball/suites/[run_id]/artifacts/[artifact_id]
+        // build download url
+        let suite_id = "";
+        let download_url = format!(
+            "https://github.com/vpinball/vpinball/suites/{suite_id}/artifacts/{artifact_id}"
+        );
+
+        println!("{} {}", artifact.name, download_url);
+        // the download url in there does not work without auth
+    }
+
+    Ok(())
 }
 
 fn extract_directb2s(expanded_path: &String) {
