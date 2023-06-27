@@ -158,12 +158,21 @@ pub fn run_diff(
     vbs_path: &Path,
     color: DiffColor,
 ) -> Result<Vec<u8>, io::Error> {
+    let parent = vbs_path
+        .parent()
+        //.and_then(|f| f.parent())
+        .unwrap_or(Path::new("."));
+    let original_vbs_filename = original_vbs_path
+        .file_name()
+        .unwrap_or(original_vbs_path.as_os_str());
+    let vbs_filename = vbs_path.file_name().unwrap_or(vbs_path.as_os_str());
     std::process::Command::new("diff")
+        .current_dir(parent)
         .arg("-u")
         .arg("-w")
         .arg(format!("--color={}", color.to_diff_arg()))
-        .arg(original_vbs_path)
-        .arg(vbs_path)
+        .arg(original_vbs_filename)
+        .arg(vbs_filename)
         .output()
         .map(|o| o.stdout)
 }
