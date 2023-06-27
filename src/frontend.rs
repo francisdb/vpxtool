@@ -159,9 +159,6 @@ pub fn frontend(
                             };
                         let vbs_path = vbs_path_for(selected_path);
                         let patch_path = vbs_path.with_extension("vbs.patch");
-                        dbg!(original_path.clone());
-                        dbg!(vbs_path.clone());
-                        dbg!(patch_path.clone());
 
                         match vpx::run_diff(&original_path, &vbs_path, vpx::DiffColor::Never) {
                             Ok(diff) => {

@@ -443,7 +443,14 @@ fn extract(vpx_file_path: &str, yes: bool) {
     let version = read_version(&mut comp);
     let records = read_gamedata(&mut comp);
 
-    extract_info(&mut comp, root_dir_path);
+    match extract_info(&mut comp, root_dir_path) {
+        Ok(_) => {}
+        Err(msg) => {
+            let warning = format!("Failed to extract info: {}", msg).red();
+            println!("{}", warning);
+            exit(1);
+        }
+    }
     extract_script(&records, &vbs_path);
     println!("VBScript file written to\n  {}", &vbs_path.display());
     extract_binaries(&mut comp, root_dir_path);
@@ -462,10 +469,10 @@ fn extract(vpx_file_path: &str, yes: bool) {
     // io::copy(&mut stream, &mut io::stdout()).unwrap();
 }
 
-fn extract_info(comp: &mut CompoundFile<File>, root_dir_path: &Path) {
+fn extract_info(comp: &mut CompoundFile<File>, root_dir_path: &Path) -> std::io::Result<()> {
     let json_path = root_dir_path.join("TableInfo.json");
     let mut json_file = std::fs::File::create(&json_path).unwrap();
-    let table_info = tableinfo::read_tableinfo(comp);
+    let table_info = tableinfo::read_tableinfo(comp)?;
     if !table_info.screenshot.is_empty() {
         let screenshot_path = root_dir_path.join("screenshot.bin");
         let mut screenshot_file = std::fs::File::create(screenshot_path).unwrap();
@@ -476,6 +483,7 @@ fn extract_info(comp: &mut CompoundFile<File>, root_dir_path: &Path) {
 
     serde_json::to_writer_pretty(&mut json_file, &info).unwrap();
     println!("Info file written to\n  {}", &json_path.display());
+    Ok(())
 }
 
 fn extract_images(comp: &mut CompoundFile<File>, records: &[Record], root_dir_path: &Path) {

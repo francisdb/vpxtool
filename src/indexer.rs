@@ -37,10 +37,7 @@ pub fn find_vpx_files(recursive: bool, tables_path: &str) -> Vec<PathBuf> {
     vpx_files
 }
 
-pub fn index_vpx_files(
-    vpx_files: &[PathBuf],
-    progress: impl Fn(u64),
-) -> Vec<(PathBuf, TableInfo)> {
+pub fn index_vpx_files(vpx_files: &[PathBuf], progress: impl Fn(u64)) -> Vec<(PathBuf, TableInfo)> {
     // TODO tried using rayon here but it's not faster and uses up all cpu
     // use rayon::prelude::*;
     // .par_iter() instead of .iter()
@@ -48,11 +45,9 @@ pub fn index_vpx_files(
         .iter()
         .enumerate()
         .flat_map(|(i, vpx_file)| {
-            let result = match cfb::open(vpx_file) {
-                Ok(mut comp) => {
-                    let table_info = read_tableinfo(&mut comp);
-                    Some((vpx_file.clone(), table_info))
-                }
+            let result = cfb::open(vpx_file).and_then(|mut comp| read_tableinfo(&mut comp));
+            let optional = match result {
+                Ok(table_info) => Some((vpx_file.clone(), table_info)),
                 Err(e) => {
                     // TODO we want to return any failures instead of printing here
                     let warning =
@@ -62,7 +57,7 @@ pub fn index_vpx_files(
                 }
             };
             progress((i + 1) as u64);
-            result
+            optional
         })
         .collect();
 

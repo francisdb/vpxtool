@@ -21,7 +21,7 @@ pub struct TableInfo {
     pub properties: HashMap<String, String>,
 }
 
-pub fn read_tableinfo(comp: &mut CompoundFile<File>) -> TableInfo {
+pub fn read_tableinfo(comp: &mut CompoundFile<File>) -> std::io::Result<TableInfo> {
     let table_info_path = "/TableInfo";
     // println!("Reading table info at {}", table_info_path);
     let mut table_name: String = "".to_string();
@@ -45,30 +45,42 @@ pub fn read_tableinfo(comp: &mut CompoundFile<File>) -> TableInfo {
         .map(|entry| entry.path().to_str().unwrap().to_owned())
         .collect();
 
-    paths.iter().for_each(|path| match path.as_str() {
-        "/TableInfo/TableName" => table_name = read_stream_string(comp, path),
-        "/TableInfo/AuthorName" => author_name = read_stream_string(comp, path),
-        "/TableInfo/Screenshot" => {
-            // seems to be a full image file, eg if there is no jpeg data in the image this is a full png
-            // but how do we know the extension?
-            screenshot = read_stream_binary(comp, path)
-        }
-        "/TableInfo/TableBlurb" => table_blurb = read_stream_string(comp, path),
-        "/TableInfo/TableRules" => table_rules = read_stream_string(comp, path),
-        "/TableInfo/AuthorEmail" => author_email = read_stream_string(comp, path),
-        "/TableInfo/ReleaseDate" => release_date = read_stream_string(comp, path),
-        "/TableInfo/TableSaveRev" => table_save_rev = read_stream_string(comp, path),
-        "/TableInfo/TableVersion" => table_version = read_stream_string(comp, path),
-        "/TableInfo/AuthorWebSite" => author_website = read_stream_string(comp, path),
-        "/TableInfo/TableSaveDate" => table_save_date = read_stream_string(comp, path),
-        "/TableInfo/TableDescription" => table_description = read_stream_string(comp, path),
-        other => {
-            let key = other.replace(table_info_path, "").replacen('/', "", 1);
-            properties.insert(key, read_stream_string(comp, path));
-        }
-    });
+    let result: Result<Vec<_>, _> = paths
+        .iter()
+        .map(|path| match path.as_str() {
+            "/TableInfo/TableName" => read_stream_string(comp, path).map(|s| table_name = s),
+            "/TableInfo/AuthorName" => read_stream_string(comp, path).map(|s| author_name = s),
+            "/TableInfo/Screenshot" => {
+                // seems to be a full image file, eg if there is no jpeg data in the image this is a full png
+                // but how do we know the extension?
+                screenshot = read_stream_binary(comp, path);
+                Ok(())
+            }
+            "/TableInfo/TableBlurb" => read_stream_string(comp, path).map(|s| table_blurb = s),
+            "/TableInfo/TableRules" => read_stream_string(comp, path).map(|s| table_rules = s),
+            "/TableInfo/AuthorEmail" => read_stream_string(comp, path).map(|s| author_email = s),
+            "/TableInfo/ReleaseDate" => read_stream_string(comp, path).map(|s| release_date = s),
+            "/TableInfo/TableSaveRev" => read_stream_string(comp, path).map(|s| table_save_rev = s),
+            "/TableInfo/TableVersion" => read_stream_string(comp, path).map(|s| table_version = s),
+            "/TableInfo/AuthorWebSite" => {
+                read_stream_string(comp, path).map(|s| author_website = s)
+            }
+            "/TableInfo/TableSaveDate" => {
+                read_stream_string(comp, path).map(|s| table_save_date = s)
+            }
+            "/TableInfo/TableDescription" => {
+                read_stream_string(comp, path).map(|s| table_description = s)
+            }
+            other => {
+                let key = other.replace(table_info_path, "").replacen('/', "", 1);
+                let str = read_stream_string(comp, path)?;
+                properties.insert(key, str);
+                Ok(())
+            }
+        })
+        .collect();
 
-    TableInfo {
+    result.map(|_| TableInfo {
         table_name,
         author_name,
         screenshot,
@@ -82,15 +94,25 @@ pub fn read_tableinfo(comp: &mut CompoundFile<File>) -> TableInfo {
         table_save_date,
         table_description,
         properties,
-    }
+    })
 }
 
-fn read_stream_string(comp: &mut CompoundFile<File>, path: &str) -> String {
+fn read_stream_string(comp: &mut CompoundFile<File>, path: &str) -> Result<String, std::io::Error> {
     let mut stream = comp.open_stream(path).unwrap();
     let mut buffer = Vec::new();
     stream.read_to_end(&mut buffer).unwrap();
 
-    WStr::from_utf16le(&buffer).unwrap().to_utf8()
+    match WStr::from_utf16le(&buffer) {
+        Ok(str) => Ok(str.to_utf8()),
+        Err(e) => Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Error reading stream as utf16le for path: ".to_owned()
+                + path
+                + " "
+                + " "
+                + &e.to_string(),
+        )),
+    }
 }
 
 fn read_stream_binary(comp: &mut CompoundFile<File>, path: &str) -> Vec<u8> {
