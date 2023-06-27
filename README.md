@@ -1,5 +1,5 @@
 # vpxtool
-Extracts and assembles visual pinball vpx files
+Cross-platform console based utility for the vpinball ecosystem
 
 ## Usage
 
