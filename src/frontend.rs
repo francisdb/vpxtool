@@ -95,7 +95,7 @@ pub fn frontend_index(
 
 pub fn frontend(
     vpx_files_with_tableinfo: Vec<(PathBuf, tableinfo::TableInfo)>,
-    vpinball_root: &Path,
+    vpinball_executable: &Path,
 ) {
     let mut selection_opt = None;
     loop {
@@ -119,10 +119,10 @@ pub fn frontend(
 
                 match choose_table_option() {
                     Some(TableOption::LaunchFullscreen) => {
-                        launch(selected_path, vpinball_root, true);
+                        launch(selected_path, vpinball_executable, true);
                     }
                     Some(TableOption::LaunchWindowed) => {
-                        launch(selected_path, vpinball_root, false);
+                        launch(selected_path, vpinball_executable, false);
                     }
                     Some(TableOption::EditVBS) => {
                         let path = vbs_path_for(selected_path);
@@ -213,9 +213,9 @@ fn choose_table_option() -> Option<TableOption> {
     selection_opt.and_then(TableOption::from_index)
 }
 
-fn launch(selected_path: &PathBuf, vpinball_root: &Path, fullscreen: bool) {
+fn launch(selected_path: &PathBuf, vpinball_executable: &Path, fullscreen: bool) {
     println!("{} {}", LAUNCH, selected_path.display());
-    match launch_table(selected_path, vpinball_root, fullscreen) {
+    match launch_table(selected_path, vpinball_executable, fullscreen) {
         Ok(status) => match status.code() {
             Some(0) => {
                 //println!("Table exited normally");
@@ -241,13 +241,13 @@ fn launch(selected_path: &PathBuf, vpinball_root: &Path, fullscreen: bool) {
 
 fn launch_table(
     selected_path: &PathBuf,
-    vpinball_root: &Path,
+    vpinball_executable: &Path,
     fullscreen: bool,
 ) -> io::Result<ExitStatus> {
-    let executable = vpinball_root.join("vpinball").join("VPinballX_GL");
+    println!("{} {}", LAUNCH, vpinball_executable.display());
 
     // start process ./VPinballX_GL -play [table path]
-    let mut cmd = std::process::Command::new(executable);
+    let mut cmd = std::process::Command::new(vpinball_executable);
     if !fullscreen {
         cmd.arg("-DisableTrueFullscreen");
     }

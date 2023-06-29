@@ -32,10 +32,41 @@ use vpx::{extractvbs, font, read_gamedata, read_version, ExtractResult};
 // see https://github.com/fusion-engineering/rust-git-version/issues/21
 const GIT_VERSION: &str = git_version!(args = ["--tags", "--always", "--dirty=-modified"]);
 
-const DEFAULT_VPINBALL_ROOT: &str = "~/vpinball";
-const DEFAULT_TABLES_ROOT: &str = "~/vpinball/tables";
+// TODO switch to figment for config
+//   write the config if it doesn't exist
+//   with empty values or defults?
+
+fn default_vpinball_executable() -> PathBuf {
+    if cfg!(target_os = "windows") {
+        // baller installer default
+        let dir = PathBuf::from("c:\\vPinball\\VisualPinball");
+        let exe = dir.join("VPinballX64.exe");
+        if exe.exists() {
+            exe
+        } else {
+            dir.join("VPinballX.exe")
+        }
+    } else {
+        let home = dirs::home_dir().unwrap();
+        home.join("vpinball").join("vpinball").join("VPinballX_GL")
+    }
+}
+
+fn default_tables_root() -> PathBuf {
+    if cfg!(target_os = "windows") {
+        // baller installer default
+        PathBuf::from("c:\\vPinball\\VisualPinball\\Tables")
+    } else {
+        let home = dirs::home_dir().unwrap();
+        home.join("vpinball").join("tables")
+    }
+}
 
 fn main() {
+    // to allow for non static strings in clap
+    // I had to enable the "string" module
+    // is this considered a bad idea?
+    let default_tables_root = default_tables_root().into_os_string();
     let matches = Command::new("vpxtool")
         .version(GIT_VERSION)
         .author("Francis DB")
@@ -72,7 +103,7 @@ fn main() {
                 .arg(
                     arg!(<VPXROOTPATH> "The path to the root directory of vpx files")
                         .required(false)
-                        .default_value(DEFAULT_TABLES_ROOT)
+                        .default_value(&default_tables_root)
                 ),
         )
         .subcommand(
@@ -89,7 +120,7 @@ fn main() {
                 .arg(
                     arg!(<VPXROOTPATH> "The path to the root directory of vpx files")
                         .required(false)
-                        .default_value(DEFAULT_TABLES_ROOT)
+                        .default_value(&default_tables_root)
                 ),
         )
         .subcommand(
@@ -161,12 +192,12 @@ fn main() {
             let path = sub_matches
                 .get_one::<String>("VPXROOTPATH")
                 .map(|s| s.as_str());
-            let path = path.unwrap_or("");
-            let expanded_path = expand_path(path);
-            let vpx_files_with_tableinfo = frontend::frontend_index(expanded_path, recursive);
-            let expanded_root_str = &expand_path(DEFAULT_VPINBALL_ROOT);
-            let expanded_root = Path::new(expanded_root_str);
-            frontend::frontend(vpx_files_with_tableinfo, expanded_root);
+            let tables_path = path.unwrap_or("");
+            let expanded_tables_path = expand_path(tables_path);
+            let vpx_files_with_tableinfo =
+                frontend::frontend_index(expanded_tables_path, recursive);
+            let vpinball_executable = default_vpinball_executable();
+            frontend::frontend(vpx_files_with_tableinfo, &vpinball_executable);
         }
         Some(("index", sub_matches)) => {
             let recursive = sub_matches.get_flag("RECURSIVE");
