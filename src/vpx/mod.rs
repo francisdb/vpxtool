@@ -1,14 +1,18 @@
-use std::io::{self, Read};
+use std::io::{self, Read, Write};
+use std::path::MAIN_SEPARATOR_STR;
 use std::{
     fs::File,
     path::{Path, PathBuf},
 };
 
+use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use cfb::CompoundFile;
 
 use gamedata::Record;
 use nom::number::complete::le_u32;
 use nom::IResult;
+
+use self::tableinfo::{write_tableinfo, TableInfo};
 
 pub mod biff;
 pub mod font;
@@ -20,6 +24,20 @@ pub mod tableinfo;
 pub enum ExtractResult {
     Extracted(PathBuf),
     Existed(PathBuf),
+}
+
+pub fn new_minimal_vpx<P: AsRef<Path>>(vpx_file_path: P) -> std::io::Result<()> {
+    let table_info = TableInfo::new();
+    let file = File::create(vpx_file_path)?;
+    let mut comp = CompoundFile::create(file)?;
+    write_tableinfo(&mut comp, &table_info)?;
+    let game_stg_path = Path::new(MAIN_SEPARATOR_STR).join("GameStg");
+    comp.create_storage(&game_stg_path)?;
+    write_version(&mut comp, 1072)?;
+    let game_data_path = game_stg_path.join("GameData");
+    let game_data_stream = comp.create_stream(game_data_path)?;
+    write_endb(game_data_stream)?;
+    write_mac(&mut comp)
 }
 
 pub fn extractvbs(
@@ -51,25 +69,57 @@ fn path_for(vpx_file_path: &PathBuf, extension: &str) -> PathBuf {
     PathBuf::from(vpx_file_path).with_extension(extension)
 }
 
-// TODO: read version
-//  https://github.com/vbousquet/vpx_lightmapper/blob/331a8576bb7b86668a023b304e7dd04261487106/addons/vpx_lightmapper/vlm_import.py#L328
-pub fn read_version(comp: &mut cfb::CompoundFile<std::fs::File>) -> u32 {
+// Read version
+// https://github.com/vbousquet/vpx_lightmapper/blob/331a8576bb7b86668a023b304e7dd04261487106/addons/vpx_lightmapper/vlm_import.py#L328
+pub fn read_version(comp: &mut cfb::CompoundFile<std::fs::File>) -> std::io::Result<u32> {
     let mut file_version = Vec::new();
     comp.open_stream("/GameStg/Version")
         .unwrap()
-        .read_to_end(&mut file_version)
-        .unwrap();
+        .read_to_end(&mut file_version)?;
 
     fn read_version(input: &[u8]) -> IResult<&[u8], u32> {
         le_u32(input)
     }
 
-    // use lut to read as u32
     let (_, version) = read_version(&file_version[..]).unwrap();
 
     // let version_float = (version as f32)/100f32;
     // println!("VPX file version: {}", version);
-    version
+    Ok(version)
+}
+
+pub fn write_version(
+    comp: &mut cfb::CompoundFile<std::fs::File>,
+    version: u32,
+) -> std::io::Result<()> {
+    // we expect GameStg to exist
+    let version_path = Path::new(MAIN_SEPARATOR_STR)
+        .join("GameStg")
+        .join("Version");
+    let mut stream = comp.create_stream(version_path)?;
+    stream.write_u32::<LittleEndian>(version)
+}
+
+pub fn write_endb(mut stream: cfb::Stream<File>) -> Result<(), io::Error> {
+    // write 4 as le_u32
+    stream.write_u32::<LittleEndian>(4)?;
+    // write "ENDB" tag as ascii/utf8 string
+    let bytes = "ENDB".as_bytes();
+    stream.write_all(bytes)
+}
+
+pub fn write_mac(comp: &mut cfb::CompoundFile<std::fs::File>) -> Result<(), io::Error> {
+    let game_stg_path = Path::new(MAIN_SEPARATOR_STR).join("GameStg");
+    let mac_path = game_stg_path.join("MAC");
+    let mut mac_stream = comp.create_stream(mac_path)?;
+    // TODO implement mac generation, see
+    //  https://github.com/freezy/VisualPinball.Engine/blob/ec1e9765cd4832c134e889d6e6d03320bc404bd5/VisualPinball.Engine/VPT/Table/TableWriter.cs#L42
+    //  https://github.com/vbousquet/vpx_lightmapper/blob/ca5fddd4c2a0fbe817fd546c5f4db609f9d0da9f/addons/vpx_lightmapper/vlm_export.py#L906-L913
+    //  https://github.com/vpinball/vpinball/blob/d9d22a5923ad5a9902a27fae296bc6b2e9ed95ca/pintable.cpp#L2634-L2667
+    //  ordering of writes is important co come up with the correct hash
+
+    // write 16 zeroes (for standalone only 16 bytes are read and no checks are applied)
+    mac_stream.write_all(&[0; 16])
 }
 
 pub fn extract_script<P: AsRef<Path>>(records: &[Record], vbs_path: &P) {

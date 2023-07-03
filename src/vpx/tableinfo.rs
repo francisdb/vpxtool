@@ -20,6 +20,27 @@ pub struct TableInfo {
     pub table_description: String,
     pub properties: HashMap<String, String>,
 }
+impl TableInfo {
+    pub(crate) fn new() -> TableInfo {
+        // current data as ISO string
+        let now: String = chrono::Local::now().to_rfc3339();
+        TableInfo {
+            table_name: "".to_string(),
+            author_name: "".to_string(),
+            screenshot: vec![],
+            table_blurb: "".to_string(),
+            table_rules: "".to_string(),
+            author_email: "".to_string(),
+            release_date: "".to_string(),
+            table_save_rev: "1".to_string(),
+            table_version: "".to_string(),
+            author_website: "".to_string(),
+            table_save_date: now,
+            table_description: "".to_string(),
+            properties: HashMap::new(),
+        }
+    }
+}
 
 pub fn write_tableinfo<F: Read + Write + Seek>(
     comp: &mut CompoundFile<F>,

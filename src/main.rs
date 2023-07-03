@@ -4,6 +4,7 @@ mod indexer;
 pub mod jsonmodel;
 pub mod vpx;
 
+use byteorder::{LittleEndian, WriteBytesExt};
 use cfb::CompoundFile;
 use clap::{arg, Arg, Command};
 use colored::Colorize;
@@ -11,10 +12,10 @@ use gamedata::Record;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::fs::{metadata, File};
 use std::io::{self, Read};
-use std::path::{Path, PathBuf};
+use std::path::{Path, PathBuf, MAIN_SEPARATOR_STR};
 use std::process::exit;
 
-use std::io::Write; // bring trait into scope
+use std::io::Write;
 
 use git_version::git_version;
 
@@ -22,12 +23,12 @@ use base64::{engine::general_purpose, Engine as _};
 
 use directb2s::load;
 use jsonmodel::table_json;
-use vpx::extract_script;
-use vpx::gamedata;
-use vpx::image;
 use vpx::sound::write_sound;
-use vpx::tableinfo;
+use vpx::tableinfo::{self, write_tableinfo, TableInfo};
+use vpx::{extract_script, write_version};
 use vpx::{extractvbs, font, read_gamedata, read_version, ExtractResult};
+use vpx::{gamedata, write_endb};
+use vpx::{image, write_mac};
 
 // see https://github.com/fusion-engineering/rust-git-version/issues/21
 const GIT_VERSION: &str = git_version!(args = ["--tags", "--always", "--dirty=-modified"]);
@@ -161,6 +162,11 @@ fn main() {
                 .about("Assembles a vpx file")
                 .arg(arg!(<DIRPATH> "The path to the vpx structure").required(true)),
         )
+        .subcommand(
+            Command::new("new")
+                .about("Creates a minimal empty new vpx file")
+                .arg(arg!(<VPXPATH> "The path(s) to the vpx file").required(true)),
+        )
         .get_matches_from(wild::args());
 
     match matches.subcommand() {
@@ -265,8 +271,26 @@ fn main() {
                 }
             }
         }
+        Some(("new", sub_matches)) => {
+            let path = {
+                let this = sub_matches.get_one::<String>("VPXPATH").map(|v| v.as_str());
+                match this {
+                    Some(x) => x,
+                    None => unreachable!("VPXPATH is required"),
+                }
+            };
+
+            let expanded_path = shellexpand::tilde(path);
+            println!("creating new vpx file at {}", expanded_path);
+            new(expanded_path.as_ref()).unwrap();
+        }
         _ => unreachable!(), // If all subcommands are defined above, anything else is unreachable!()
     }
+}
+
+fn new(vpx_file_path: &str) -> std::io::Result<()> {
+    // TODO check if file exists and prompt to overwrite / add option to force
+    vpx::new_minimal_vpx(vpx_file_path)
 }
 
 fn extract_directb2s(expanded_path: &String) {
@@ -471,7 +495,7 @@ fn extract(vpx_file_path: &str, yes: bool) {
     root_dir.create(root_dir_path).unwrap();
 
     let mut comp = cfb::open(vpx_file_path).unwrap();
-    let version = read_version(&mut comp);
+    let version = read_version(&mut comp).unwrap();
     let records = read_gamedata(&mut comp);
 
     match extract_info(&mut comp, root_dir_path) {
