@@ -262,6 +262,10 @@ fn display_table_line(path: &Path, info: &tableinfo::TableInfo) -> String {
     let file_name = path.file_stem().unwrap().to_str().unwrap().to_string();
     Some(info.table_name.to_owned())
         .filter(|s| !s.is_empty())
-        .map(|s| format!("{} {}", s, (format!("({})", file_name)).dimmed()))
+        .map(|s| format!("{} {}", capitalize_first_letter(s.as_str()), (format!("({})", file_name)).dimmed()))
         .unwrap_or(file_name)
+}
+
+fn capitalize_first_letter(s: &str) -> String {
+    s[0..1].to_uppercase() + &s[1..]
 }
