@@ -13,7 +13,7 @@ bytes = "1.4.0"
 cfb = "0.8.1"
 chrono = "0.4.26"
 clap = { version = "4.3.10", features = ["derive", "string"] }
-colored = "2.0.1"
+colored = "2.0.2"
 console = "0.15.7"
 dialoguer = "0.10.4"
 dirs = "5.0.1"
