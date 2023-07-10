@@ -1,6 +1,6 @@
 use std::{
     fs::File,
-    io::{self, Write},
+    io::{Result, Write},
     path::{Path, PathBuf},
     process::ExitStatus,
 };
@@ -13,7 +13,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 
 use crate::{
     indexer, tableinfo,
-    vpx::{self, extractvbs, vbs_path_for, ExtractResult},
+    vpx::{self, extractvbs, read_version, vbs_path_for, ExtractResult},
 };
 
 const LAUNCH: Emoji = Emoji("🚀", "[launch]");
@@ -105,6 +105,7 @@ pub fn frontend(
             .map(|(path, info)| display_table_line(path, info))
             .collect::<Vec<String>>();
 
+        // TODO check FuzzySelect, requires feature to be enabled
         selection_opt = Select::with_theme(&ColorfulTheme::default())
             .with_prompt("Select a table to launch")
             .default(selection_opt.unwrap_or(0))
@@ -142,7 +143,7 @@ pub fn frontend(
                             prompt(msg.truecolor(255, 125, 0).to_string());
                         }
                     },
-                    Some(TableOption::ShowVBSDiff) => match vpx::diff(selected_path.clone()) {
+                    Some(TableOption::ShowVBSDiff) => match vpx::diff(selected_path) {
                         Ok(diff) => {
                             prompt(diff);
                         }
@@ -171,15 +172,29 @@ pub fn frontend(
                             }
                         }
                     }
-                    Some(TableOption::ShowDetails) => {
-                        prompt("Not implemented");
-                    }
+                    Some(TableOption::ShowDetails) => match gather_table_info(selected_path) {
+                        Ok(info) => {
+                            prompt(info);
+                        }
+                        Err(err) => {
+                            let msg = format!("Unable to gather table info: {}", err);
+                            prompt(msg.truecolor(255, 125, 0).to_string());
+                        }
+                    },
                     None => (),
                 }
             }
             None => break,
         };
     }
+}
+
+fn gather_table_info(selected_path: &PathBuf) -> Result<String> {
+    let mut comp = cfb::open(selected_path)?;
+    let version = read_version(&mut comp)?;
+    let table_info = tableinfo::read_tableinfo(&mut comp)?;
+    let msg = format!("version: {:#?}\n{:#?}", version, table_info);
+    Ok(msg)
 }
 
 fn open(path: PathBuf) {
@@ -243,7 +258,7 @@ fn launch_table(
     selected_path: &PathBuf,
     vpinball_executable: &Path,
     fullscreen: bool,
-) -> io::Result<ExitStatus> {
+) -> Result<ExitStatus> {
     println!("{} {}", LAUNCH, vpinball_executable.display());
 
     // start process ./VPinballX_GL -play [table path]
@@ -262,7 +277,13 @@ fn display_table_line(path: &Path, info: &tableinfo::TableInfo) -> String {
     let file_name = path.file_stem().unwrap().to_str().unwrap().to_string();
     Some(info.table_name.to_owned())
         .filter(|s| !s.is_empty())
-        .map(|s| format!("{} {}", capitalize_first_letter(s.as_str()), (format!("({})", file_name)).dimmed()))
+        .map(|s| {
+            format!(
+                "{} {}",
+                capitalize_first_letter(s.as_str()),
+                (format!("({})", file_name)).dimmed()
+            )
+        })
         .unwrap_or(file_name)
 }
 
