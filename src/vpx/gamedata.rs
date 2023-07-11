@@ -20,7 +20,7 @@ pub struct GameData {
     botm: f32,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Record {
     PlayfieldLeft(u32),
     PlayfieldTopX(u32),
@@ -33,6 +33,7 @@ pub enum Record {
     SoundsSize(u32),
     FontsSize(u32),
     CollectionsSize(u32),
+    GameItemsSize(u32),
     Unknonw { name: String, data: Vec<u8> },
     End,
 }
@@ -76,6 +77,11 @@ fn read_gamedata_record_value(tag: String, len: u32, input: &[u8]) -> IResult<&[
         "MASI" => {
             let (rest, n) = read_u32(input)?;
             let rec = Record::MaterialsSize(n);
+            Ok((rest, rec))
+        }
+        "SEDT" => {
+            let (rest, n) = read_u32(input)?;
+            let rec = Record::GameItemsSize(n);
             Ok((rest, rec))
         }
         "SSND" => {

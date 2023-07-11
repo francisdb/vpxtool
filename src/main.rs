@@ -4,7 +4,6 @@ mod indexer;
 pub mod jsonmodel;
 pub mod vpx;
 
-use byteorder::{LittleEndian, WriteBytesExt};
 use cfb::CompoundFile;
 use clap::{arg, Arg, Command};
 use colored::Colorize;
@@ -12,7 +11,7 @@ use gamedata::Record;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::fs::{metadata, File};
 use std::io::{self, Read};
-use std::path::{Path, PathBuf, MAIN_SEPARATOR_STR};
+use std::path::{Path, PathBuf};
 use std::process::exit;
 
 use std::io::Write;
@@ -23,12 +22,12 @@ use base64::{engine::general_purpose, Engine as _};
 
 use directb2s::load;
 use jsonmodel::table_json;
+use vpx::extract_script;
+use vpx::gamedata;
+use vpx::image;
 use vpx::sound::write_sound;
-use vpx::tableinfo::{self, write_tableinfo, TableInfo};
-use vpx::{extract_script, write_version};
+use vpx::tableinfo::{self};
 use vpx::{extractvbs, font, read_gamedata, read_version, ExtractResult};
-use vpx::{gamedata, write_endb};
-use vpx::{image, write_mac};
 
 // see https://github.com/fusion-engineering/rust-git-version/issues/21
 const GIT_VERSION: &str = git_version!(args = ["--tags", "--always", "--dirty=-modified"]);
@@ -496,7 +495,7 @@ fn extract(vpx_file_path: &str, yes: bool) {
 
     let mut comp = cfb::open(vpx_file_path).unwrap();
     let version = read_version(&mut comp).unwrap();
-    let records = read_gamedata(&mut comp);
+    let records = read_gamedata(&mut comp).unwrap();
 
     match extract_info(&mut comp, root_dir_path) {
         Ok(_) => {}
