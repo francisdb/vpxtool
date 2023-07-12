@@ -15,8 +15,8 @@ chrono = "0.4.26"
 clap = { version = "4.3.11", features = ["derive", "string"] }
 colored = "2.0.4"
 console = "0.15.7"
-# dialoguer = "0.10.4"
-dialoguer = { path = "../dialoguer" }
+dialoguer = "0.10.4"
+# dialoguer = { path = "../dialoguer" }
 dirs = "5.0.1"
 encoding_rs = "0.8.32"
 git-version = "0.3.5"
