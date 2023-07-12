@@ -30,6 +30,11 @@ pub enum ExtractResult {
     Existed(PathBuf),
 }
 
+pub enum VerifyResult {
+    Ok(PathBuf),
+    Failed(PathBuf, String),
+}
+
 pub fn new_minimal_vpx<P: AsRef<Path>>(vpx_file_path: P) -> std::io::Result<()> {
     let file = File::create(vpx_file_path)?;
     let mut comp = CompoundFile::create(file)?;
@@ -41,14 +46,17 @@ pub fn write_minimal_vpx<F: Read + Write + Seek>(
 ) -> std::io::Result<()> {
     let table_info = TableInfo::new();
     write_tableinfo(comp, &table_info)?;
-    let game_stg_path = Path::new(MAIN_SEPARATOR_STR).join("GameStg");
-    comp.create_storage(&game_stg_path)?;
+    create_game_storage(comp)?;
     write_version(comp, 1072)?;
-    let game_data_path = game_stg_path.join("GameData");
-    let game_data_stream = comp.create_stream(game_data_path)?;
-    write_endb(game_data_stream)?;
+    write_game_data(comp, &[])?;
+    // to be more efficient we could generate the mac while writing the different parts
     let mac = generate_mac(comp)?;
     write_mac(comp, &mac)
+}
+
+fn create_game_storage<F: Read + Write + Seek>(comp: &mut CompoundFile<F>) -> io::Result<()> {
+    let game_stg_path = Path::new(MAIN_SEPARATOR_STR).join("GameStg");
+    comp.create_storage(&game_stg_path)
 }
 
 pub fn extractvbs(
@@ -57,7 +65,7 @@ pub fn extractvbs(
     extension: Option<&str>,
 ) -> ExtractResult {
     let script_path = match extension {
-        Some(ext) => path_for(vpx_file_path, &ext),
+        Some(ext) => path_for(vpx_file_path, ext),
         None => vbs_path_for(vpx_file_path),
     };
 
@@ -69,6 +77,28 @@ pub fn extractvbs(
         ExtractResult::Extracted(script_path)
     } else {
         ExtractResult::Existed(script_path)
+    }
+}
+
+pub fn verify(vpx_file_path: &PathBuf) -> VerifyResult {
+    let mut comp = match cfb::open(vpx_file_path) {
+        Ok(comp) => comp,
+        Err(e) => {
+            return VerifyResult::Failed(
+                vpx_file_path.clone(),
+                format!("Failed to open VPX file {}: {}", vpx_file_path.display(), e),
+            )
+        }
+    };
+    let mac = read_mac(&mut comp).unwrap();
+    let generated_mac = generate_mac(&mut comp).unwrap();
+    if mac == generated_mac {
+        VerifyResult::Ok(vpx_file_path.clone())
+    } else {
+        VerifyResult::Failed(
+            vpx_file_path.clone(),
+            format!("MAC mismatch: {:?} != {:?}", mac, generated_mac),
+        )
     }
 }
 
@@ -171,7 +201,7 @@ pub fn generate_mac<F: Read + Seek>(comp: &mut CompoundFile<F>) -> Result<Vec<u8
     //  https://github.com/vpinball/vpinball/blob/d9d22a5923ad5a9902a27fae296bc6b2e9ed95ca/pintable.cpp#L2634-L2667
     //  ordering of writes is important co come up with the correct hash
 
-    fn item_path(path: &PathBuf, index: i32) -> PathBuf {
+    fn item_path(path: &Path, index: i32) -> PathBuf {
         path.with_file_name(format!(
             "{}{}",
             path.file_name().unwrap().to_string_lossy(),
@@ -214,7 +244,7 @@ pub fn generate_mac<F: Read + Seek>(comp: &mut CompoundFile<F>) -> Result<Vec<u8
         FileStructureItem::new("TableInfo/TableRules", UnstructuredBytes, true),
         FileStructureItem::new("TableInfo/TableSaveDate", UnstructuredBytes, false),
         FileStructureItem::new("TableInfo/TableSaveRev", UnstructuredBytes, false),
-        FileStructureItem::new("TableInfo/Screenshot", Biff, true),
+        FileStructureItem::new("TableInfo/Screenshot", UnstructuredBytes, true),
         FileStructureItem::new("GameStg/CustomInfoTags", Biff, true), // custom info tags must be hashed just after this stream
         FileStructureItem::new("GameStg/GameData", Biff, true),
     ];
@@ -242,8 +272,8 @@ pub fn generate_mac<F: Read + Seek>(comp: &mut CompoundFile<F>) -> Result<Vec<u8
                 hasher.update(&bytes);
             }
             FileType::Biff => {
+                // println!("reading biff: {:?}", item.path);
                 let bytes = read_bytes_at(&item.path, comp)?;
-                println!("reading biff: {:?}", item.path);
                 let mut biff = BiffReader::new(&bytes);
 
                 loop {
@@ -251,7 +281,10 @@ pub fn generate_mac<F: Read + Seek>(comp: &mut CompoundFile<F>) -> Result<Vec<u8
                         break;
                     }
                     biff.next(biff::WARN);
-                    match biff.tag() {
+                    // println!("reading biff: {:?} {}", item.path, biff.tag());
+                    let tag = biff.tag();
+                    let tag_str = tag.as_str();
+                    match tag_str {
                         "CODE" => {
                             //  For some reason, the code length info is not hashed, just the tag and code string
                             hasher.update(b"CODE");
@@ -269,29 +302,44 @@ pub fn generate_mac<F: Read + Seek>(comp: &mut CompoundFile<F>) -> Result<Vec<u8
                 }
             }
         }
+
+        if item.path.ends_with("CustomInfoTags") {
+            let bytes = read_bytes_at(&item.path, comp)?;
+            let mut biff = BiffReader::new(&bytes);
+
+            loop {
+                if biff.is_eof() {
+                    break;
+                }
+                biff.next(biff::WARN);
+                if biff.tag() == "CUST" {
+                    let cust_name = biff.get_string();
+                    //println!("Hashing custom information block {}", cust_name);
+                    let path = format!("TableInfo/{}", cust_name);
+                    if comp.exists(&path) {
+                        let data = read_bytes_at(&path, comp)?;
+                        hasher.update(&data);
+                    }
+                } else {
+                    biff.skip_tag();
+                }
+            }
+        }
     }
     let result = hasher.finalize();
     Ok(result.to_vec())
 }
 
-// TODO this is not very effiscient as we copy the bytes around a lot
+// TODO this is not very efficient as we copy the bytes around a lot
 fn read_bytes_at<F: Read + Seek, P: AsRef<Path>>(
     path: P,
     comp: &mut CompoundFile<F>,
 ) -> Result<Vec<u8>, io::Error> {
-    println!("reading bytes at: {:?}", path.as_ref());
+    // println!("reading bytes at: {:?}", path.as_ref());
     let mut bytes = Vec::new();
     let mut stream = comp.open_stream(path)?;
     stream.read_to_end(&mut bytes)?;
     Ok(bytes)
-}
-
-pub fn write_endb<F: Read + Write + Seek>(mut stream: cfb::Stream<F>) -> Result<(), io::Error> {
-    // write 4 as le_u32
-    stream.write_u32::<LittleEndian>(4)?;
-    // write "ENDB" tag as ascii/utf8 string
-    let bytes = "ENDB".as_bytes();
-    stream.write_all(bytes)
 }
 
 pub fn extract_script<P: AsRef<Path>>(records: &[Record], vbs_path: &P) {
@@ -310,8 +358,23 @@ pub fn read_gamedata<F: Seek + Read>(comp: &mut CompoundFile<F>) -> std::io::Res
     // let result = parseGameData(&game_data_vec[..]);
     // dump(result);
 
-    let (_, records) = gamedata::read_all_gamedata_records(&game_data_vec[..]).unwrap();
+    //let (_, records) = gamedata::read_all_gamedata_records2(&game_data_vec[..]).unwrap();
+    let records = gamedata::read_all_gamedata_records(&game_data_vec[..]);
     Ok(records)
+}
+
+fn write_game_data<F: Read + Write + Seek>(
+    comp: &mut CompoundFile<F>,
+    data: &[Record],
+) -> Result<(), io::Error> {
+    let game_data_path = Path::new(MAIN_SEPARATOR_STR)
+        .join("GameStg")
+        .join("GameData");
+    let mut game_data_stream = comp.create_stream(&game_data_path)?;
+    let data = gamedata::write_all_gamedata_records(data);
+    game_data_stream.write_all(&data)
+    // this flush was required before but now it's working without
+    // game_data_stream.flush()
 }
 
 pub fn find_script(records: &[Record]) -> String {
@@ -406,6 +469,7 @@ pub fn run_diff(
 
 #[cfg(test)]
 mod tests {
+    use pretty_assertions::assert_eq;
     use std::io::Cursor;
 
     use super::*;
@@ -422,7 +486,7 @@ mod tests {
 
         assert_eq!(tableinfo, TableInfo::new());
         assert_eq!(version, 1072);
-        let expected: Vec<Record> = vec![Record::End];
+        let expected: Vec<Record> = vec![];
         assert_eq!(game_data, expected);
     }
 
@@ -440,5 +504,34 @@ mod tests {
 
         let generated_mac = generate_mac(&mut comp).unwrap();
         assert_eq!(mac, generated_mac);
+    }
+
+    #[test]
+    fn test_minimal_mac() {
+        let buff = Cursor::new(vec![0; 15]);
+        let mut comp = CompoundFile::create(buff).unwrap();
+        write_minimal_vpx(&mut comp).unwrap();
+
+        let mac = read_mac(&mut comp).unwrap();
+        let expected = [
+            62, 193, 68, 87, 87, 196, 78, 210, 132, 41, 127, 127, 148, 175, 9, 37,
+        ];
+        assert_eq!(mac, expected);
+    }
+
+    #[test]
+    fn read_write_gamedata() {
+        let path = PathBuf::from("testdata/completely_blank_table_10_7_4.vpx");
+        let mut comp = cfb::open(path).unwrap();
+        let original = read_gamedata(&mut comp).unwrap();
+
+        let buff = Cursor::new(vec![0; 15]);
+        let mut comp = CompoundFile::create(buff).unwrap();
+        create_game_storage(&mut comp).unwrap();
+        write_game_data(&mut comp, &original).unwrap();
+
+        let read = read_gamedata(&mut comp).unwrap();
+
+        assert_eq!(original, read);
     }
 }

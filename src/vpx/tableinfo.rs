@@ -18,6 +18,7 @@ pub struct TableInfo {
     pub author_website: String,
     pub table_save_date: String,
     pub table_description: String,
+    // the keys (and ordering) for these are defined in "GameStg/CustomInfoTags"
     pub properties: HashMap<String, String>,
 }
 impl TableInfo {

@@ -1,5 +1,6 @@
 use std::str::from_utf8;
 
+use encoding_rs::mem::{decode_latin1, encode_latin1_lossy};
 use nom::bytes::streaming::take;
 use nom::number::complete::{
     le_f32, le_f64, le_i16, le_i32, le_i64, le_u16, le_u32, le_u64, le_u8,
@@ -34,11 +35,11 @@ impl<'a> BiffReader<'a> {
         reader
     }
 
-    pub fn tag(&self) -> &str {
-        &self.tag
+    pub fn tag(&self) -> String {
+        self.tag.to_string()
     }
 
-    pub fn is_eof(&mut self) -> bool {
+    pub fn is_eof(&self) -> bool {
         self.pos >= self.data.len() || self.tag == "ENDB"
     }
 
@@ -102,15 +103,33 @@ impl<'a> BiffReader<'a> {
 
     pub fn get_str(&mut self, count: usize) -> String {
         let mut pos_0 = count;
+        // find the end of the string
         for p in 0..count {
             if self.data[self.pos + p] == 0 {
                 pos_0 = p;
                 break;
             }
         }
-        let s = from_utf8(&self.data[self.pos..self.pos + pos_0]).unwrap();
+        let data = &self.data[self.pos..self.pos + pos_0];
+        let s = decode_latin1(data);
         self.pos += count;
         self.bytes_in_record_remaining -= count;
+        s.to_string()
+    }
+
+    pub fn get_str_no_remaining_update(&mut self, count: usize) -> String {
+        let mut pos_0 = count;
+        // find the end of the string
+        for p in 0..count {
+            if self.data[self.pos + p] == 0 {
+                pos_0 = p;
+                break;
+            }
+        }
+        let data = &self.data[self.pos..self.pos + pos_0];
+
+        let s = decode_latin1(data);
+        self.pos += count;
         s.to_string()
     }
 
@@ -121,10 +140,13 @@ impl<'a> BiffReader<'a> {
 
     pub fn get_wide_string(&mut self) -> String {
         let count = self.get_u32().to_usize();
-        let i = from_utf8(&self.data[self.pos..self.pos + count]).unwrap();
+        let data = &self.data[self.pos..self.pos + count];
+        // hmm, this ? seems to be different for nom and utf16string
+        // see https://docs.rs/utf16string/latest/utf16string/
+        let i = WStr::from_utf16le(data).unwrap().to_utf8();
         self.pos += count;
         self.bytes_in_record_remaining -= count;
-        i.to_string()
+        i
     }
 
     pub fn get_color(&mut self, has_alpha: bool) -> (f32, f32, f32, f32) {
@@ -285,11 +307,184 @@ impl<'a> BiffReader<'a> {
         }
         self.record_start = self.pos;
         self.bytes_in_record_remaining = self.get_u32_no_remaining_update().to_usize();
-        let tag = self.get_str(RECORD_TAG_LEN as usize);
+        let tag = self.get_str(RECORD_TAG_LEN.try_into().unwrap());
         self.tag = tag;
     }
 }
 
+pub struct BiffWriter {
+    data: Vec<u8>,
+    tag_start: usize,
+    tag: String,
+    record_size: usize,
+}
+
+impl Default for BiffWriter {
+    fn default() -> Self {
+        BiffWriter {
+            data: Vec::new(),
+            tag_start: 0,
+            tag: "".to_string(),
+            record_size: 0,
+        }
+    }
+}
+
+impl BiffWriter {
+    pub fn new() -> BiffWriter {
+        BiffWriter::default()
+    }
+
+    pub fn get_data(&self) -> &[u8] {
+        &self.data
+    }
+
+    pub fn end_tag(&mut self) {
+        if !self.tag.is_empty() {
+            //let length = self.data.len();
+            let length: &u32 = &self.record_size.try_into().unwrap();
+            let length_bytes = length.to_le_bytes();
+            self.data[self.tag_start..self.tag_start + 4].copy_from_slice(&length_bytes);
+            self.tag = "".to_string();
+        }
+    }
+
+    pub fn end_tag_no_size(&mut self) {
+        if !self.tag.is_empty() {
+            let length: u32 = 4;
+            let length_bytes = length.to_le_bytes();
+            self.data[self.tag_start..self.tag_start + 4].copy_from_slice(&length_bytes);
+            self.tag = "".to_string();
+        }
+    }
+
+    pub fn new_tag(&mut self, tag: &str) {
+        self.end_tag();
+        self.tag_start = self.data.len();
+        self.data.extend_from_slice(&[0, 0, 0, 0]); // placeholder for record size
+        let tag_bytes = tag.as_bytes();
+        // some tags are smaller than 4 characters, so we need to pad them
+        let mut padded_tag_bytes = [0; 4];
+        padded_tag_bytes[..tag_bytes.len()].copy_from_slice(tag_bytes);
+        self.data.extend_from_slice(&padded_tag_bytes);
+        self.tag = tag.to_string();
+        self.record_size = 4;
+    }
+
+    pub fn write_u32(&mut self, value: u32) {
+        self.record_size += 4;
+        self.data.extend_from_slice(&value.to_le_bytes());
+    }
+
+    pub fn write_32(&mut self, value: i32) {
+        self.record_size += 4;
+        self.data.extend_from_slice(&value.to_le_bytes());
+    }
+
+    pub fn write_float(&mut self, value: f32) {
+        self.record_size += 4;
+        self.data.extend_from_slice(&value.to_le_bytes());
+    }
+
+    pub fn write_string(&mut self, value: &str) {
+        let d = encode_latin1_lossy(value);
+        self.write_u32(d.len().try_into().unwrap());
+        self.write_data(&d);
+    }
+
+    pub fn write_wide_string(&mut self, value: &str) {
+        // utf-16-le encode as u8
+        let d = value
+            .encode_utf16()
+            .flat_map(|c| c.to_le_bytes())
+            .collect::<Vec<u8>>();
+        self.write_u32(d.len().try_into().unwrap());
+        self.write_data(&d);
+    }
+
+    pub fn write_bool(&mut self, value: bool) {
+        if value {
+            self.write_u32(0xFFFFFFFF);
+        } else {
+            self.write_u32(0x00000000);
+        }
+    }
+
+    pub fn write_data(&mut self, value: &[u8]) {
+        self.record_size += value.len();
+        self.data.extend_from_slice(value);
+    }
+
+    pub fn write_tagged_empty(&mut self, tag: &str) {
+        self.new_tag(tag);
+        self.end_tag();
+    }
+
+    pub fn write_tagged_bool(&mut self, tag: &str, value: bool) {
+        self.new_tag(tag);
+        self.write_bool(value);
+        self.end_tag();
+    }
+
+    pub fn write_tagged_float(&mut self, tag: &str, value: f32) {
+        self.new_tag(tag);
+        self.write_float(value);
+        self.end_tag();
+    }
+
+    pub fn write_tagged_u32(&mut self, tag: &str, value: u32) {
+        self.new_tag(tag);
+        self.write_u32(value);
+        self.end_tag();
+    }
+
+    pub fn write_tagged_32(&mut self, tag: &str, value: i32) {
+        self.new_tag(tag);
+        self.write_32(value);
+        self.end_tag();
+    }
+
+    pub fn write_tagged_string(&mut self, tag: &str, value: &str) {
+        self.new_tag(tag);
+        self.write_string(value);
+        self.end_tag();
+    }
+
+    pub fn write_tagged_wide_string(&mut self, tag: &str, value: &str) {
+        self.new_tag(tag);
+        self.write_wide_string(value);
+        self.end_tag();
+    }
+
+    pub fn write_tagged_vec2(&mut self, tag: &str, x: f32, y: f32) {
+        self.new_tag(tag);
+        self.write_float(x);
+        self.write_float(y);
+        self.end_tag();
+    }
+
+    pub fn write_tagged_padded_vector(&mut self, tag: &str, x: f32, y: f32, z: f32) {
+        self.new_tag(tag);
+        self.write_float(x);
+        self.write_float(y);
+        self.write_float(z);
+        self.write_float(0.0);
+        self.end_tag();
+    }
+
+    pub fn write_tagged_data(&mut self, tag: &str, value: &[u8]) {
+        self.new_tag(tag);
+        self.write_data(value);
+        self.end_tag();
+    }
+
+    pub fn close(&mut self, write_endb: bool) {
+        if write_endb {
+            self.new_tag("ENDB");
+        }
+        self.end_tag();
+    }
+}
 
 pub fn read_tag_start(input: &[u8]) -> IResult<&[u8], (&str, u32)> {
     let (input, len) = le_u32(input)?;
@@ -327,17 +522,6 @@ pub fn read_u16(input: &[u8]) -> IResult<&[u8], u16> {
     le_u16(input)
 }
 
-pub fn read_float_record(input: &[u8]) -> IResult<&[u8], (&str, f32)> {
-    let (input, n) = le_u32(input)?;
-    let n_rest = n - RECORD_TAG_LEN;
-    let (input, name_bytes) = take(4u8)(input)?;
-    let name = from_utf8(name_bytes).unwrap();
-    let (input, _data) = le_f32(input)?;
-    // TODO does data always have the same value and do we want to add an assertion?
-    let (input, f) = read_float(input, n_rest)?;
-    Ok((input, (name, f)))
-}
-
 pub fn read_float(input: &[u8], n_rest: u32) -> IResult<&[u8], f32> {
     assert!(n_rest == 4, "A float record should be 4 bytes long");
     let (input, data) = le_f32(input)?;
@@ -345,23 +529,9 @@ pub fn read_float(input: &[u8], n_rest: u32) -> IResult<&[u8], f32> {
     Ok((input, data))
 }
 
-pub fn read_tag_record(len: u32) {
-    let n_rest = len - RECORD_TAG_LEN;
-    assert!(n_rest == 0, "a tag should have not have any data");
-}
-
 pub fn read_empty_tag(input: &[u8], len: u32) -> IResult<&[u8], ()> {
     assert!(len == 0, "a tag should have not have any data");
     Ok((input, ()))
-}
-
-pub fn read_wide_string_record(input: &[u8], _len: u32) -> IResult<&[u8], String> {
-    let (input, len) = le_u32(input)?;
-    let (input, data) = take(len)(input)?;
-    // hmm, this ? seems to be different for nom and utf16string
-    // see https://docs.rs/utf16string/latest/utf16string/
-    let string = WStr::from_utf16le(data).unwrap().to_utf8();
-    Ok((input, string))
 }
 
 pub fn drop_record(input: &[u8], len: u32) -> IResult<&[u8], ()> {

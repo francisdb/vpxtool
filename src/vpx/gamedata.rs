@@ -1,24 +1,6 @@
 #![allow(dead_code)]
 
-use std::str::from_utf8;
-
-use nom::bytes::streaming::take;
-use nom::combinator::map;
-use nom::multi::many0;
-use nom::{number::complete::le_u32, IResult};
-
-use super::biff::{
-    read_float_record, read_string_record, read_tag_record, read_u32, read_wide_string_record,
-    RECORD_TAG_LEN,
-};
-
-#[derive(Debug)]
-pub struct GameData {
-    left: f32,
-    topx: f32,
-    rght: f32,
-    botm: f32,
-}
+use super::biff::{self, BiffReader, BiffWriter};
 
 #[derive(Debug, PartialEq)]
 pub enum Record {
@@ -34,110 +16,174 @@ pub enum Record {
     FontsSize(u32),
     CollectionsSize(u32),
     GameItemsSize(u32),
-    Unknonw { name: String, data: Vec<u8> },
-    End,
+    Unknown { name: String, data: Vec<u8> },
 }
 
-fn read_record<T>(
-    input: &[u8],
-    f: fn(String, u32, &[u8]) -> IResult<&[u8], T>,
-) -> IResult<&[u8], T> {
-    let (input, len) = le_u32(input)?;
-    let (input, name_bytes) = take(4u8)(input)?;
-    let tag = from_utf8(name_bytes).unwrap();
-    f(tag.to_string(), len, input)
-}
-
-fn read_gamedata_record(input: &[u8]) -> IResult<&[u8], Record> {
-    read_record(input, read_gamedata_record_value)
-}
-
-fn read_gamedata_record_value(tag: String, len: u32, input: &[u8]) -> IResult<&[u8], Record> {
-    match tag.as_str() {
-        "LEFT" => {
-            // let (rest, n) = read_u32_record(input)?;
-            // Ok((rest, Record::PlayfieldLeft(n)))
-            map(read_u32, Record::PlayfieldLeft)(input)
-        }
-        "TOPX" => map(read_u32, Record::PlayfieldTopX)(input),
-        "RGHT" => map(read_u32, Record::PlayfieldRight)(input),
-        "BOTM" => map(read_u32, Record::PlayfieldBottom)(input),
-        "NAME" => {
-            let n_rest = len - RECORD_TAG_LEN;
-            let (rest, string) = read_wide_string_record(input, n_rest)?;
-            let rec = Record::Name(string);
-            // println!("NAME: {}", string);
-            Ok((rest, rec))
-        }
-        "CODE" => {
-            let (rest, string) = read_string_record(input)?;
-            let rec = Record::Code { script: string };
-            Ok((rest, rec))
-        }
-        "MASI" => {
-            let (rest, n) = read_u32(input)?;
-            let rec = Record::MaterialsSize(n);
-            Ok((rest, rec))
-        }
-        "SEDT" => {
-            let (rest, n) = read_u32(input)?;
-            let rec = Record::GameItemsSize(n);
-            Ok((rest, rec))
-        }
-        "SSND" => {
-            let (rest, n) = read_u32(input)?;
-            let rec = Record::SoundsSize(n);
-            Ok((rest, rec))
-        }
-        "SIMG" => {
-            let (rest, n) = read_u32(input)?;
-            let rec = Record::ImagesSize(n);
-            Ok((rest, rec))
-        }
-        "SFNT" => {
-            let (rest, n) = read_u32(input)?;
-            let rec = Record::FontsSize(n);
-            Ok((rest, rec))
-        }
-        "SCOL" => {
-            let (rest, n) = read_u32(input)?;
-            let rec = Record::CollectionsSize(n);
-            Ok((rest, rec))
-        }
-        "ENDB" => {
-            // ENDB is just a tag, it should have a remaining length of 0
-            read_tag_record(len);
-            Ok((input, Record::End))
-        }
-        _ => {
-            // dbg!(&tag);
-            //let string = String::from_utf8(chars.to_vec()).unwrap();
-            // the name tag is included in the length
-            let n_rest = len - RECORD_TAG_LEN;
-            let (rest, data) = take(n_rest)(input)?;
-            let rec = Record::Unknonw {
-                name: tag.to_owned(),
-                data: data.to_owned(),
-            };
-            Ok((rest, rec))
+pub fn write_all_gamedata_records(game_data_vec: &[Record]) -> Vec<u8> {
+    let mut writer = BiffWriter::new();
+    // iterate over the records and write them
+    for rec in game_data_vec {
+        match rec {
+            Record::PlayfieldLeft(n) => {
+                writer.write_tagged_u32("LEFT", *n);
+            }
+            Record::PlayfieldTopX(n) => {
+                writer.write_tagged_u32("TOPX", *n);
+            }
+            Record::PlayfieldRight(n) => {
+                writer.write_tagged_u32("RGHT", *n);
+            }
+            Record::PlayfieldBottom(n) => {
+                writer.write_tagged_u32("BOTM", *n);
+            }
+            Record::Name(s) => {
+                writer.write_tagged_wide_string("NAME", s);
+            }
+            Record::Code { script } => {
+                writer.new_tag("CODE");
+                writer.write_string(script);
+                // code records do not indicate their size
+                writer.end_tag_no_size();
+            }
+            Record::MaterialsSize(n) => {
+                writer.write_tagged_u32("MASI", *n);
+            }
+            Record::GameItemsSize(n) => {
+                writer.write_tagged_u32("SEDT", *n);
+            }
+            Record::SoundsSize(n) => {
+                writer.write_tagged_u32("SSND", *n);
+            }
+            Record::ImagesSize(n) => {
+                writer.write_tagged_u32("SIMG", *n);
+            }
+            Record::FontsSize(n) => {
+                writer.write_tagged_u32("SFNT", *n);
+            }
+            Record::CollectionsSize(n) => {
+                writer.write_tagged_u32("SCOL", *n);
+            }
+            Record::Unknown { name, data } => {
+                writer.write_tagged_data(name, data);
+            }
         }
     }
+    // TODO how do we get rid of this extra copy?
+    writer.close(true);
+    writer.get_data().to_vec()
 }
 
-pub fn read_all_gamedata_records(input: &[u8]) -> IResult<&[u8], Vec<Record>> {
-    many0(read_gamedata_record)(input)
+pub fn read_all_gamedata_records(input: &[u8]) -> Vec<Record> {
+    let mut reader = BiffReader::new(input);
+    let mut records = Vec::new();
+    loop {
+        reader.next(biff::WARN);
+        if reader.is_eof() {
+            break;
+        }
+        let tag = reader.tag();
+        let tag_str = tag.as_str();
+        let rec = read_record(tag_str, &mut reader);
+        records.push(rec);
+    }
+    records
 }
 
-fn read_game_data(input: &[u8]) -> IResult<&[u8], GameData> {
-    let (input, n1) = read_float_record(input)?;
-    let (input, n2) = read_float_record(input)?;
-    let (input, n3) = read_float_record(input)?;
-    let (input, n4) = read_float_record(input)?;
-    let game_data = GameData {
-        left: n1.1,
-        topx: n2.1,
-        rght: n3.1,
-        botm: n4.1,
+fn read_record(tag_str: &str, reader: &mut BiffReader<'_>) -> Record {
+    let rec = match tag_str {
+        "LEFT" => {
+            let n = &reader.get_u32();
+            Record::PlayfieldLeft(*n)
+        }
+        "TOPX" => {
+            let n = &reader.get_u32();
+            Record::PlayfieldTopX(*n)
+        }
+        "RGHT" => {
+            let n = &reader.get_u32();
+            Record::PlayfieldRight(*n)
+        }
+        "BOTM" => {
+            let n = &reader.get_u32();
+            Record::PlayfieldBottom(*n)
+        }
+        "NAME" => {
+            let s = &reader.get_wide_string();
+            Record::Name(s.to_string())
+        }
+        "CODE" => {
+            let len = reader.get_u32_no_remaining_update();
+            let s = &reader.get_str_no_remaining_update(len as usize);
+            Record::Code {
+                script: s.to_string(),
+            }
+        }
+        "MASI" => {
+            let n = &reader.get_u32();
+            Record::MaterialsSize(*n)
+        }
+        "SEDT" => {
+            let n = &reader.get_u32();
+            Record::GameItemsSize(*n)
+        }
+        "SSND" => {
+            let n = &reader.get_u32();
+            Record::SoundsSize(*n)
+        }
+        "SIMG" => {
+            let n = &reader.get_u32();
+            Record::ImagesSize(*n)
+        }
+        "SFNT" => {
+            let n = &reader.get_u32();
+            Record::FontsSize(*n)
+        }
+        "SCOL" => {
+            let n = &reader.get_u32();
+            Record::CollectionsSize(*n)
+        }
+        other => {
+            //dbg!(other);
+            let data = &reader.get_record_data(false);
+            let tag_str = other.to_string();
+            Record::Unknown {
+                name: tag_str,
+                data: data.to_vec(),
+            }
+        }
     };
-    Ok((input, game_data))
+    rec
+}
+
+#[cfg(test)]
+mod tests {
+
+    use crate::gamedata::*;
+
+    #[test]
+    fn read_write_empty() {
+        let game_data: &[Record] = &[];
+        let bytes = write_all_gamedata_records(game_data);
+        let read_game_data = read_all_gamedata_records(&bytes);
+
+        assert_eq!(game_data, read_game_data);
+    }
+
+    #[test]
+    fn read_write() {
+        let game_data: &[Record] = &[
+            Record::Code {
+                script: String::from("test"),
+            },
+            Record::Name(String::from("test2")),
+            Record::Unknown {
+                name: String::from("TST"),
+                data: vec![4, 3, 2],
+            },
+        ];
+        let bytes = write_all_gamedata_records(game_data);
+        let read_game_data = read_all_gamedata_records(&bytes);
+
+        assert_eq!(game_data, read_game_data);
+    }
 }
