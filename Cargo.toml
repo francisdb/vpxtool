@@ -15,8 +15,10 @@ chrono = "0.4.26"
 clap = { version = "4.3.11", features = ["derive", "string"] }
 colored = "2.0.4"
 console = "0.15.7"
-dialoguer = "0.10.4"
+# dialoguer = "0.10.4"
+dialoguer = { path = "../dialoguer" }
 dirs = "5.0.1"
+encoding_rs = "0.8.32"
 git-version = "0.3.5"
 indicatif = "0.17.5"
 lzw = "0.10.0"
@@ -31,3 +33,5 @@ utf16string = "0.2.0"
 walkdir = "2.3.3"
 wild = "2.1.0"
 
+[dev-dependencies]
+pretty_assertions = "1.4.0"

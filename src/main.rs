@@ -7,6 +7,7 @@ pub mod vpx;
 use cfb::CompoundFile;
 use clap::{arg, Arg, Command};
 use colored::Colorize;
+use console::Emoji;
 use gamedata::Record;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::fs::{metadata, File};
@@ -22,11 +23,11 @@ use base64::{engine::general_purpose, Engine as _};
 
 use directb2s::load;
 use jsonmodel::table_json;
-use vpx::extract_script;
 use vpx::gamedata;
 use vpx::image;
 use vpx::sound::write_sound;
 use vpx::tableinfo::{self};
+use vpx::{extract_script, verify, VerifyResult};
 use vpx::{extractvbs, font, read_gamedata, read_version, ExtractResult};
 
 // see https://github.com/fusion-engineering/rust-git-version/issues/21
@@ -35,6 +36,9 @@ const GIT_VERSION: &str = git_version!(args = ["--tags", "--always", "--dirty=-m
 // TODO switch to figment for config
 //   write the config if it doesn't exist
 //   with empty values or defults?
+
+const OK: Emoji = Emoji("✅", "[launch]");
+const NOK: Emoji = Emoji("❌", "[crash]");
 
 fn default_vpinball_executable() -> PathBuf {
     if cfg!(target_os = "windows") {
@@ -157,6 +161,15 @@ fn main() {
                 ),
         )
         .subcommand(
+            Command::new("verify")
+                .about("Verify the structure of a vpx file")
+                .arg(
+                    arg!(<VPXPATH> "The path(s) to the vpx file(s)")
+                        .required(true)
+                        .num_args(1..),
+                ),
+        )
+        .subcommand(
             Command::new("assemble")
                 .about("Assembles a vpx file")
                 .arg(arg!(<DIRPATH> "The path to the vpx structure").required(true)),
@@ -175,7 +188,7 @@ fn main() {
             let expanded_path = expand_path(path);
             println!("showing info for {}", expanded_path);
             let json = sub_matches.get_flag("JSON");
-            info(expanded_path.as_ref(), json);
+            info(expanded_path.as_ref(), json).unwrap();
         }
         Some(("diff", sub_matches)) => {
             let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
@@ -266,6 +279,26 @@ fn main() {
                     }
                     ExtractResult::Extracted(vbs_path) => {
                         println!("CREATED {}", vbs_path.display());
+                    }
+                }
+            }
+        }
+        Some(("verify", sub_matches)) => {
+            let paths: Vec<&str> = sub_matches
+                .get_many::<String>("VPXPATH")
+                .unwrap_or_default()
+                .map(|v| v.as_str())
+                .collect::<Vec<_>>();
+            for path in paths {
+                let expanded_path = PathBuf::from(expand_path(path));
+                match verify(&expanded_path) {
+                    VerifyResult::Ok(vbs_path) => {
+                        println!("{OK} {}", vbs_path.display());
+                    }
+                    VerifyResult::Failed(vbs_path, msg) => {
+                        let warning =
+                            format!("{NOK} {} {}", vbs_path.display(), msg).truecolor(255, 125, 0);
+                        println!("{}", warning);
                     }
                 }
             }
@@ -457,16 +490,17 @@ fn expand_path(path: &str) -> String {
     expanded_path.to_string()
 }
 
-fn info(vpx_file_path: &str, json: bool) {
-    let mut comp = cfb::open(vpx_file_path).unwrap();
-    let version = read_version(&mut comp);
+fn info(vpx_file_path: &str, json: bool) -> io::Result<()> {
+    let mut comp = cfb::open(vpx_file_path)?;
+    let version = read_version(&mut comp)?;
     // GameData also has a name field that we might want to display here
     // where is this shown in the UI?
-    let table_info = tableinfo::read_tableinfo(&mut comp);
+    let table_info = tableinfo::read_tableinfo(&mut comp)?;
     // TODO come up with a proper format with colors and handle newlines?
     // TODO check the json flag
     dbg!(version);
     dbg!(table_info);
+    Ok(())
 }
 
 fn extract(vpx_file_path: &str, yes: bool) {
