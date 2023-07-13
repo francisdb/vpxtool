@@ -66,16 +66,26 @@ impl<'a> BiffReader<'a> {
     }
 
     pub fn get_u8(&mut self) -> u8 {
-        let i = self.data[self.pos];
-        self.pos += 1;
+        let i = self.get_u8_no_remaining_update();
         self.bytes_in_record_remaining -= 1;
         i
     }
 
+    pub fn get_u8_no_remaining_update(&mut self) -> u8 {
+        let i = self.data[self.pos];
+        self.pos += 1;
+        i
+    }
+
     pub fn get_u16(&mut self) -> u16 {
+        let res = self.get_u16_no_remaining_update();
+        self.bytes_in_record_remaining -= 2;
+        res
+    }
+
+    pub fn get_u16_no_remaining_update(&mut self) -> u16 {
         let i: Result<(&[u8], u16), nom::Err<()>> = le_u16(&self.data[self.pos..]);
         self.pos += 2;
-        self.bytes_in_record_remaining -= 2;
         i.unwrap().1
     }
 
@@ -92,9 +102,13 @@ impl<'a> BiffReader<'a> {
     }
 
     pub fn get_32(&mut self) -> i32 {
+        let res = self.get_32_no_remaining_update();
+        self.bytes_in_record_remaining -= 4;
+        res
+    }
+    pub fn get_32_no_remaining_update(&mut self) -> i32 {
         let i: Result<(&[u8], i32), nom::Err<()>> = le_i32(&self.data[self.pos..]);
         self.pos += 4;
-        self.bytes_in_record_remaining -= 4;
         i.unwrap().1
     }
 
@@ -326,7 +340,7 @@ impl<'a> BiffReader<'a> {
         let tag = self.get_str(RECORD_TAG_LEN.try_into().unwrap());
         self.tag = tag;
         if self.warn_remaining && self.tag == "ENDB" && self.pos < self.data.len() {
-            panic!("{} Remaining bytes after ENDB", self.data.len() < self.pos);
+            panic!("{} Remaining bytes after ENDB", self.data.len() - self.pos);
         }
     }
 
@@ -401,6 +415,26 @@ impl BiffWriter {
         self.record_size = 4;
     }
 
+    pub fn write_u8(&mut self, value: u8) {
+        self.record_size += 1;
+        self.data.push(value);
+    }
+
+    pub fn write_8(&mut self, value: i8) {
+        self.record_size += 1;
+        self.data.push(value as u8);
+    }
+
+    pub fn write_u16(&mut self, value: u16) {
+        self.record_size += 2;
+        self.data.extend_from_slice(&value.to_le_bytes());
+    }
+
+    pub fn write_16(&mut self, value: i16) {
+        self.record_size += 2;
+        self.data.extend_from_slice(&value.to_le_bytes());
+    }
+
     pub fn write_u32(&mut self, value: u32) {
         self.record_size += 4;
         self.data.extend_from_slice(&value.to_le_bytes());
@@ -414,6 +448,12 @@ impl BiffWriter {
     pub fn write_float(&mut self, value: f32) {
         self.record_size += 4;
         self.data.extend_from_slice(&value.to_le_bytes());
+    }
+
+    pub fn write_short_string(&mut self, value: &str) {
+        let d = encode_latin1_lossy(value);
+        self.write_u8(d.len().try_into().unwrap());
+        self.write_data(&d);
     }
 
     pub fn write_string(&mut self, value: &str) {

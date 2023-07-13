@@ -4,11 +4,9 @@ mod indexer;
 pub mod jsonmodel;
 pub mod vpx;
 
-use cfb::CompoundFile;
 use clap::{arg, Arg, Command};
 use colored::Colorize;
 use console::Emoji;
-use gamedata::Record;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::fs::{metadata, File};
 use std::io::{self, Read};
@@ -22,16 +20,9 @@ use git_version::git_version;
 use base64::{engine::general_purpose, Engine as _};
 
 use directb2s::load;
-use jsonmodel::table_json;
-use vpx::gamedata;
-use vpx::image;
-use vpx::sound::write_sound;
 use vpx::tableinfo::{self};
-use vpx::{extract_script, verify, VerifyResult};
-use vpx::{extractvbs, font, read_gamedata, read_version, ExtractResult};
-
-use crate::jsonmodel::collection_json;
-use crate::vpx::collection;
+use vpx::{expanded, verify, VerifyResult};
+use vpx::{extractvbs, read_version, ExtractResult};
 
 // see https://github.com/fusion-engineering/rust-git-version/issues/21
 const GIT_VERSION: &str = git_version!(args = ["--tags", "--always", "--dirty=-modified"]);
@@ -506,8 +497,8 @@ fn info(vpx_file_path: &str, json: bool) -> io::Result<()> {
     Ok(())
 }
 
-fn extract(vpx_file_path: &str, yes: bool) {
-    let root_dir_path_str = vpx_file_path.replace(".vpx", "");
+pub fn extract(vpx_file_path: &Path, yes: bool) {
+    let root_dir_path_str = vpx_file_path.with_extension("");
     let root_dir_path = Path::new(&root_dir_path_str);
     let vbs_path = root_dir_path.join("script.vbs");
 
@@ -525,263 +516,16 @@ fn extract(vpx_file_path: &str, yes: bool) {
         std::io::stdin().read_line(&mut input).unwrap();
         if input.trim() != "y" {
             println!("Aborting");
+            exit(0);
+        }
+    }
+    match expanded::extract(vpx_file_path, root_dir_path) {
+        Ok(_) => {
+            println!("Successfully extracted to {}", root_dir_path.display());
+        }
+        Err(e) => {
+            println!("Failed to extract: {}", e);
             exit(1);
         }
     }
-    root_dir.create(root_dir_path).unwrap();
-
-    let mut comp = cfb::open(vpx_file_path).unwrap();
-    let version = read_version(&mut comp).unwrap();
-    let records = read_gamedata(&mut comp).unwrap();
-
-    match extract_info(&mut comp, root_dir_path) {
-        Ok(_) => {}
-        Err(msg) => {
-            let warning = format!("Failed to extract info: {}", msg).red();
-            println!("{}", warning);
-            exit(1);
-        }
-    }
-    extract_script(&records, &vbs_path);
-    println!("VBScript file written to\n  {}", &vbs_path.display());
-    extract_binaries(&mut comp, root_dir_path);
-    extract_images(&mut comp, &records, root_dir_path);
-    extract_sounds(&mut comp, &records, root_dir_path, version);
-    extract_fonts(&mut comp, &records, root_dir_path);
-    extract_collections(&mut comp, &records, root_dir_path);
-
-    // let mut file_version = String::new();
-    // comp.open_stream("/GameStg/Version")
-    //     .unwrap()
-    //     .read_to_string(&mut file_version)
-    //     .unwrap();
-    // println!("File version: {}", file_version);
-
-    // let mut stream = comp.open_stream(inner_path).unwrap();
-    // io::copy(&mut stream, &mut io::stdout()).unwrap();
-}
-
-fn extract_info(comp: &mut CompoundFile<File>, root_dir_path: &Path) -> std::io::Result<()> {
-    let json_path = root_dir_path.join("TableInfo.json");
-    let mut json_file = std::fs::File::create(&json_path).unwrap();
-    let table_info = tableinfo::read_tableinfo(comp)?;
-    if !table_info.screenshot.is_empty() {
-        let screenshot_path = root_dir_path.join("screenshot.bin");
-        let mut screenshot_file = std::fs::File::create(screenshot_path).unwrap();
-        screenshot_file.write_all(&table_info.screenshot).unwrap();
-    }
-
-    let info = table_json(&table_info);
-
-    serde_json::to_writer_pretty(&mut json_file, &info).unwrap();
-    println!("Info file written to\n  {}", &json_path.display());
-    Ok(())
-}
-
-fn extract_images(comp: &mut CompoundFile<File>, records: &[Record], root_dir_path: &Path) {
-    // let result = parseGameData(&game_data_vec[..]);
-    // dump(result);
-
-    let images_size = records
-        .iter()
-        .find_map(|r| match r {
-            Record::ImagesSize(size) => Some(size),
-            _ => None,
-        })
-        .unwrap_or(&0)
-        .to_owned();
-
-    let images_path = root_dir_path.join("images");
-    std::fs::create_dir_all(&images_path).unwrap();
-
-    println!(
-        "Writing {} images to\n  {}",
-        images_size,
-        images_path.display()
-    );
-
-    for index in 0..images_size {
-        let path = format!("GameStg/Image{}", index);
-        let mut input = Vec::new();
-        comp.open_stream(&path)
-            .unwrap()
-            .read_to_end(&mut input)
-            .unwrap();
-        let img = image::read(path.to_owned(), &input);
-        match &img.jpeg {
-            Some(jpeg) => {
-                let ext = img.ext();
-                let mut jpeg_path = images_path.clone();
-                jpeg_path.push(format!("Image{}.{}.{}", index, img.name, ext));
-                //dbg!(&jpeg_path);
-                let mut file = std::fs::File::create(jpeg_path).unwrap();
-                file.write_all(&jpeg.data).unwrap();
-            }
-            None => {
-                println!("Image {} has no jpeg data", index)
-                // nothing to do here
-            }
-        }
-    }
-}
-
-fn extract_collections(comp: &mut CompoundFile<File>, records: &[Record], root_dir_path: &Path) {
-    // let result = parseGameData(&game_data_vec[..]);
-    // dump(result);
-
-    let collections_size = records
-        .iter()
-        .find_map(|r| match r {
-            Record::CollectionsSize(size) => Some(size),
-            _ => None,
-        })
-        .unwrap_or(&0)
-        .to_owned();
-
-    let collections_path = root_dir_path.join("collections");
-    std::fs::create_dir_all(&collections_path).unwrap();
-
-    println!(
-        "Writing {} collections to\n  {}",
-        collections_size,
-        collections_path.display()
-    );
-
-    for index in 0..collections_size {
-        let path = format!("GameStg/Collection{}", index);
-        let mut input = Vec::new();
-        comp.open_stream(&path)
-            .unwrap()
-            .read_to_end(&mut input)
-            .unwrap();
-        let collection = collection::read(&input);
-        let collection_json = collection_json(&collection);
-        let json_path = collections_path.join(format!("Collection{}.json", index));
-        let mut json_file = std::fs::File::create(&json_path).unwrap();
-        serde_json::to_writer_pretty(&mut json_file, &collection_json).unwrap();
-    }
-}
-
-fn extract_sounds(
-    comp: &mut CompoundFile<File>,
-    records: &[Record],
-    root_dir_path: &Path,
-    file_version: u32,
-) {
-    // let result = parseGameData(&game_data_vec[..]);
-    // dump(result);
-
-    let sounds_size = records
-        .iter()
-        .find_map(|r| match r {
-            Record::SoundsSize(size) => Some(size),
-            _ => None,
-        })
-        .unwrap_or(&0)
-        .to_owned();
-
-    let sounds_path = root_dir_path.join("sounds");
-    std::fs::create_dir_all(&sounds_path).unwrap();
-
-    println!(
-        "Writing {} sounds to\n  {}",
-        sounds_size,
-        sounds_path.display()
-    );
-
-    for index in 0..sounds_size {
-        let path = format!("GameStg/Sound{}", index);
-        let mut input = Vec::new();
-        comp.open_stream(&path)
-            .unwrap()
-            .read_to_end(&mut input)
-            .unwrap();
-        let (_, sound) = vpx::sound::read(path.to_owned(), file_version, &input).unwrap();
-
-        let ext = sound.ext();
-        let mut sound_path = sounds_path.clone();
-        sound_path.push(format!("Sound{}.{}.{}", index, sound.name, ext));
-        //dbg!(&jpeg_path);
-        let mut file = std::fs::File::create(sound_path).unwrap();
-        file.write_all(&write_sound(&sound)).unwrap();
-    }
-}
-
-fn extract_fonts(comp: &mut CompoundFile<File>, records: &[Record], root_dir_path: &Path) {
-    // let result = parseGameData(&game_data_vec[..]);
-    // dump(result);
-
-    let fonts_size = records
-        .iter()
-        .find_map(|r| match r {
-            Record::FontsSize(size) => Some(size),
-            _ => None,
-        })
-        .unwrap_or(&0)
-        .to_owned();
-
-    let fonts_path = root_dir_path.join("fonts");
-    std::fs::create_dir_all(&fonts_path).unwrap();
-
-    println!(
-        "Writing {} fonts to\n  {}",
-        fonts_size,
-        fonts_path.display()
-    );
-
-    for index in 0..fonts_size {
-        let path = format!("GameStg/Font{}", index);
-        let mut input = Vec::new();
-        comp.open_stream(&path)
-            .unwrap()
-            .read_to_end(&mut input)
-            .unwrap();
-        let font = font::read(&input);
-
-        let ext = font.ext();
-        let mut font_path = fonts_path.clone();
-        font_path.push(format!("Font{}.{}.{}", index, font.name, ext));
-        //dbg!(&jpeg_path);
-        let mut file = std::fs::File::create(font_path).unwrap();
-        file.write_all(&font.data).unwrap();
-    }
-}
-
-fn extract_binaries(comp: &mut CompoundFile<std::fs::File>, root_dir_path: &Path) {
-    // write all remaining entries
-    let entries: Vec<String> = comp
-        .walk()
-        .filter(|entry| {
-            entry.is_stream()
-                && !entry.path().starts_with("/TableInfo")
-                && !entry.path().starts_with("/GameStg/MAC")
-                && !entry.path().starts_with("/GameStg/Version")
-                && !entry.path().starts_with("/GameStg/GameData")
-                && !entry.path().starts_with("/GameStg/CustomInfoTags")
-                && !entry.path().to_string_lossy().starts_with("/GameStg/Font")
-                && !entry.path().to_string_lossy().starts_with("/GameStg/Image")
-                && !entry.path().to_string_lossy().starts_with("/GameStg/Sound")
-                && !entry.path().to_string_lossy().starts_with("/GameStg/Collection")
-        })
-        .map(|entry| {
-            let path = entry.path();
-            let path = path.to_str().unwrap();
-            //println!("{} {} {}", path, entry.is_stream(), entry.len());
-            path.to_owned()
-        })
-        .collect();
-
-    entries.iter().for_each(|path| {
-        let mut stream = comp.open_stream(path).unwrap();
-        // write the steam directly to a file
-        let file_path = root_dir_path.join(&path[1..]);
-        // println!("Writing to {}", file_path.display());
-        // make sure the parent directory exists
-        let parent = file_path.parent().unwrap();
-        std::fs::create_dir_all(parent).unwrap();
-        let mut file = std::fs::File::create(file_path).unwrap();
-        io::copy(&mut stream, &mut file).unwrap();
-    });
-
-    println!("Binaries written to\n  {}", root_dir_path.display());
 }

@@ -20,8 +20,10 @@ use self::tableinfo::{write_tableinfo, TableInfo};
 
 pub mod biff;
 pub mod collection;
+pub mod expanded;
 pub mod font;
 pub mod gamedata;
+pub mod gameitem;
 pub mod image;
 pub mod sound;
 pub mod tableinfo;
