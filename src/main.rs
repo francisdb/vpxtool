@@ -603,7 +603,7 @@ fn extract_images(comp: &mut CompoundFile<File>, records: &[Record], root_dir_pa
             .unwrap()
             .read_to_end(&mut input)
             .unwrap();
-        let (_, img) = image::read(path.to_owned(), &input).unwrap();
+        let img = image::read(path.to_owned(), &input);
         match &img.jpeg {
             Some(jpeg) => {
                 let ext = img.ext();
@@ -695,7 +695,7 @@ fn extract_fonts(comp: &mut CompoundFile<File>, records: &[Record], root_dir_pat
             .unwrap()
             .read_to_end(&mut input)
             .unwrap();
-        let (_, font) = font::read(&input).unwrap();
+        let font = font::read(&input);
 
         let ext = font.ext();
         let mut font_path = fonts_path.clone();
@@ -713,7 +713,13 @@ fn extract_binaries(comp: &mut CompoundFile<std::fs::File>, root_dir_path: &Path
         .filter(|entry| {
             entry.is_stream()
                 && !entry.path().starts_with("/TableInfo")
+                && !entry.path().starts_with("/GameStg/MAC")
+                && !entry.path().starts_with("/GameStg/Version")
                 && !entry.path().starts_with("/GameStg/GameData")
+                && !entry.path().starts_with("/GameStg/CustomInfoTags")
+                && !entry.path().to_string_lossy().starts_with("/GameStg/Font")
+                && !entry.path().to_string_lossy().starts_with("/GameStg/Image")
+                && !entry.path().to_string_lossy().starts_with("/GameStg/Sound")
         })
         .map(|entry| {
             let path = entry.path();

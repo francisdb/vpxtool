@@ -92,59 +92,57 @@ pub fn read_all_gamedata_records(input: &[u8]) -> Vec<Record> {
 fn read_record(tag_str: &str, reader: &mut BiffReader<'_>) -> Record {
     let rec = match tag_str {
         "LEFT" => {
-            let n = &reader.get_u32();
-            Record::PlayfieldLeft(*n)
+            let n = reader.get_u32();
+            Record::PlayfieldLeft(n)
         }
         "TOPX" => {
-            let n = &reader.get_u32();
-            Record::PlayfieldTopX(*n)
+            let n = reader.get_u32();
+            Record::PlayfieldTopX(n)
         }
         "RGHT" => {
-            let n = &reader.get_u32();
-            Record::PlayfieldRight(*n)
+            let n = reader.get_u32();
+            Record::PlayfieldRight(n)
         }
         "BOTM" => {
-            let n = &reader.get_u32();
-            Record::PlayfieldBottom(*n)
+            let n = reader.get_u32();
+            Record::PlayfieldBottom(n)
         }
         "NAME" => {
-            let s = &reader.get_wide_string();
-            Record::Name(s.to_string())
+            let s = reader.get_wide_string();
+            Record::Name(s)
         }
         "CODE" => {
             let len = reader.get_u32_no_remaining_update();
-            let s = &reader.get_str_no_remaining_update(len as usize);
-            Record::Code {
-                script: s.to_string(),
-            }
+            let script = reader.get_str_no_remaining_update(len as usize);
+            Record::Code { script }
         }
         "MASI" => {
-            let n = &reader.get_u32();
-            Record::MaterialsSize(*n)
+            let n = reader.get_u32();
+            Record::MaterialsSize(n)
         }
         "SEDT" => {
-            let n = &reader.get_u32();
-            Record::GameItemsSize(*n)
+            let n = reader.get_u32();
+            Record::GameItemsSize(n)
         }
         "SSND" => {
-            let n = &reader.get_u32();
-            Record::SoundsSize(*n)
+            let n = reader.get_u32();
+            Record::SoundsSize(n)
         }
         "SIMG" => {
-            let n = &reader.get_u32();
-            Record::ImagesSize(*n)
+            let n = reader.get_u32();
+            Record::ImagesSize(n)
         }
         "SFNT" => {
-            let n = &reader.get_u32();
-            Record::FontsSize(*n)
+            let n = reader.get_u32();
+            Record::FontsSize(n)
         }
         "SCOL" => {
-            let n = &reader.get_u32();
-            Record::CollectionsSize(*n)
+            let n = reader.get_u32();
+            Record::CollectionsSize(n)
         }
         other => {
             //dbg!(other);
-            let data = &reader.get_record_data(false);
+            let data = reader.get_record_data(false);
             let tag_str = other.to_string();
             Record::Unknown {
                 name: tag_str,

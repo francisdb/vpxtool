@@ -1,5 +1,3 @@
-use std::str::from_utf8;
-
 use encoding_rs::mem::{decode_latin1, encode_latin1_lossy};
 use nom::bytes::streaming::take;
 use nom::number::complete::{
@@ -14,6 +12,7 @@ pub struct BiffReader<'a> {
     bytes_in_record_remaining: usize,
     record_start: usize,
     tag: String,
+    warn_remaining: bool,
 }
 // TODO make private
 /**
@@ -31,8 +30,13 @@ impl<'a> BiffReader<'a> {
             bytes_in_record_remaining: 0,
             record_start: 0,
             tag: "".to_string(),
+            warn_remaining: true,
         };
         reader
+    }
+
+    pub fn pos(&self) -> usize {
+        self.pos
     }
 
     pub fn tag(&self) -> String {
@@ -285,9 +289,21 @@ impl<'a> BiffReader<'a> {
         d
     }
 
+    pub fn get_data(&mut self, count: usize) -> &[u8] {
+        let d = &self.data[self.pos..self.pos + count];
+        self.pos += count;
+        self.bytes_in_record_remaining = 0;
+        d
+    }
+
     pub fn skip(&mut self, count: usize) {
         self.pos += count;
         self.bytes_in_record_remaining -= count;
+    }
+
+    pub fn skip_end_tag(&mut self, count: usize) {
+        self.pos += count;
+        self.bytes_in_record_remaining = 0;
     }
 
     pub fn skip_tag(&mut self) {
@@ -309,6 +325,20 @@ impl<'a> BiffReader<'a> {
         self.bytes_in_record_remaining = self.get_u32_no_remaining_update().to_usize();
         let tag = self.get_str(RECORD_TAG_LEN.try_into().unwrap());
         self.tag = tag;
+        if self.warn_remaining && self.tag == "ENDB" && self.pos < self.data.len() {
+            panic!("{} Remaining bytes after ENDB", self.data.len() < self.pos);
+        }
+    }
+
+    pub fn child_reader(&mut self) -> BiffReader {
+        BiffReader {
+            data: &self.data[self.pos..],
+            pos: 0,
+            bytes_in_record_remaining: 0,
+            record_start: 0,
+            tag: "".to_string(),
+            warn_remaining: false,
+        }
     }
 }
 
@@ -486,14 +516,7 @@ impl BiffWriter {
     }
 }
 
-pub fn read_tag_start(input: &[u8]) -> IResult<&[u8], (&str, u32)> {
-    let (input, len) = le_u32(input)?;
-    let (input, name_bytes) = take(4u8)(input)?;
-    let tag = from_utf8(name_bytes).unwrap();
-    let n_rest = len - RECORD_TAG_LEN;
-    Ok((input, (tag, n_rest)))
-}
-
+#[deprecated]
 pub fn read_string_record(input: &[u8]) -> IResult<&[u8], String> {
     let (input, len) = le_u32(input)?;
     let (input, data) = take(len)(input)?;
@@ -505,36 +528,23 @@ pub fn read_string_record(input: &[u8]) -> IResult<&[u8], String> {
     Ok((input, string.to_string()))
 }
 
+#[deprecated]
 pub fn read_bytes_record(input: &[u8]) -> IResult<&[u8], &[u8]> {
     let (input, len) = le_u32(input)?;
     take(len)(input)
 }
 
+#[deprecated]
 pub fn read_byte(input: &[u8]) -> IResult<&[u8], u8> {
     le_u8(input)
 }
 
+#[deprecated]
 pub fn read_u32(input: &[u8]) -> IResult<&[u8], u32> {
     le_u32(input)
 }
 
+#[deprecated]
 pub fn read_u16(input: &[u8]) -> IResult<&[u8], u16> {
     le_u16(input)
-}
-
-pub fn read_float(input: &[u8], n_rest: u32) -> IResult<&[u8], f32> {
-    assert!(n_rest == 4, "A float record should be 4 bytes long");
-    let (input, data) = le_f32(input)?;
-    //let string = String::from_utf8(chars.to_vec()).unwrap();
-    Ok((input, data))
-}
-
-pub fn read_empty_tag(input: &[u8], len: u32) -> IResult<&[u8], ()> {
-    assert!(len == 0, "a tag should have not have any data");
-    Ok((input, ()))
-}
-
-pub fn drop_record(input: &[u8], len: u32) -> IResult<&[u8], ()> {
-    let (input, _) = take(len)(input)?;
-    Ok((input, ()))
 }

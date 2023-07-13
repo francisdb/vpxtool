@@ -1,14 +1,8 @@
 use std::fmt;
 
-use nom::bytes::complete::take;
+use super::biff::{self, BiffReader, BiffWriter};
 
-use nom::IResult;
-
-use super::biff::{
-    drop_record, read_empty_tag, read_float, read_string_record, read_tag_start, read_u32,
-};
-
-// #[derive(Debug)]
+#[derive(PartialEq)]
 pub struct ImageDataJpeg {
     path: String,
     name: String,
@@ -34,7 +28,7 @@ impl fmt::Debug for ImageDataJpeg {
 /**
  * An bitmap blob, typically used by textures.
  */
-// #[derive(Debug)]
+#[derive(PartialEq)]
 pub struct ImageDataBits {
     pub data: Vec<u8>,
 }
@@ -48,7 +42,7 @@ impl fmt::Debug for ImageDataBits {
     }
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Debug)]
 pub struct ImageData {
     /**
      * Original path of the image in the vpx file
@@ -79,8 +73,8 @@ impl ImageData {
     }
 }
 
-pub fn read(fs_path: String, input: &[u8]) -> IResult<&[u8], ImageData> {
-    let mut input = input;
+pub fn read(fs_path: String, input: &[u8]) -> ImageData {
+    let mut reader = BiffReader::new(input);
     let mut name: String = "".to_string();
     let mut inme: String = "".to_string();
     let mut height: u32 = 0;
@@ -89,186 +83,206 @@ pub fn read(fs_path: String, input: &[u8]) -> IResult<&[u8], ImageData> {
     let mut alpha_test_value: f32 = 0.0;
     let mut jpeg: Option<ImageDataJpeg> = None;
     let mut bits: Option<ImageDataBits> = None;
-    while !input.is_empty() {
-        let (i, (tag, len)) = read_tag_start(input)?;
-        input = match tag {
+    loop {
+        reader.next(biff::WARN);
+        if reader.is_eof() {
+            break;
+        }
+        let tag = reader.tag();
+        let tag_str = tag.as_str();
+        match tag_str {
             "NAME" => {
-                let (i, string) = read_string_record(i)?;
-                name = string.to_owned();
-                i
+                name = reader.get_string();
             }
             "INME" => {
-                let (i, string) = read_string_record(i)?;
-                inme = string.to_owned();
-                i
+                inme = reader.get_string();
             }
             "WDTH" => {
-                let (i, num) = read_u32(i)?;
-                width = num;
-                i
+                width = reader.get_u32();
             }
             "HGHT" => {
-                let (i, num) = read_u32(i)?;
-                height = num;
-                i
+                height = reader.get_u32();
             }
             "PATH" => {
-                let (i, string) = read_string_record(i)?;
-                path = string.to_owned();
-                i
+                path = reader.get_string();
             }
             "ALTV" => {
-                let (i, f) = read_float(i, len)?;
-                alpha_test_value = f;
-                i
-            }
-            "ENDB" => {
-                // ENDB is just a tag, it should have a remaining length of 0
-                // dbg!(tag, len);
-                let (i, _) = read_empty_tag(i, len)?;
-                i
+                alpha_test_value = reader.get_float();
             }
             "BITS" => {
                 // these have zero as length
-                let (i, b) = read_bits(i)?;
-                bits = Some(b);
-                i
+                println!("{path}: Unsupported bmp image file (BITS)", path = fs_path);
+                // uncompressed = zlib.decompress(image_data.data[image_data.pos:]) #, wbits=9)
+                // reader.skip_end_tag(len.try_into().unwrap());
+                bits = Some(ImageDataBits { data: vec![] });
+                break;
             }
             "JPEG" => {
                 // these have zero as length
-                let (i, j) = read_jpeg(i)?;
-                jpeg = Some(j);
-                i
+                // Strangely, raw data are pushed outside of the JPEG tag (breaking the BIFF structure of the file)
+                let mut sub_reader = reader.child_reader();
+                let jpeg_data = read_jpeg(&mut sub_reader);
+                jpeg = Some(jpeg_data);
+                let pos = sub_reader.pos();
+                reader.skip_end_tag(pos);
             }
             "LINK" => {
                 // TODO seems to be 1 for some kind of link type img, related to screenshots.
                 // we only see this where a screenshot is set on the table info.
                 // https://github.com/vpinball/vpinball/blob/1a70aa35eb57ec7b5fbbb9727f6735e8ef3183e0/Texture.cpp#L588
-                let (i, _link) = read_u32(i)?;
-                i
+                let _link = reader.get_u32();
             }
             _ => {
-                println!("Skipping image tag: {} len: {}", tag, len);
-                let (i, _) = take(len)(i)?;
-                i
+                println!("Skipping image tag: {}", tag);
+                reader.skip_tag();
             }
         }
     }
-    let rest = &[];
-    Ok((
-        rest,
-        ImageData {
-            fs_path,
-            name,
-            inme,
-            path,
-            width,
-            height,
-            alpha_test_value,
-            jpeg,
-            bits,
-        },
-    ))
-    // while input is not empty consume 4 bytes in a loop
+    ImageData {
+        fs_path,
+        name,
+        inme,
+        path,
+        width,
+        height,
+        alpha_test_value,
+        jpeg,
+        bits,
+    }
 }
 
-fn read_bits(input: &[u8]) -> IResult<&[u8], ImageDataBits> {
-    // let mut input = input;
-
-    // lzw encoded data but probably using some custom format
-    // using
-
-    //let (i, len) = read_u32_record(input)?;
-    //println!("len: {:?}", len);
-
-    // decode using lzw::Decoder
-    // let reader = lzw::MsbReader::new();
-    // let mut decoder = lzw::DecoderEarlyChange::new(reader, 8);
-    // let (n, decoded) = decoder.decode_bytes(input).unwrap();
-    // let mut data: Vec<u8> = vec![];
-    // while let Some(byte) = decoder.next() {
-    //     data.push(byte);
-    // }
-
-    //dbg!(decoded.len(), n);
-
-    println!("dropping remaining bytes for BITS: {:?}", input.len());
-
-    Ok((&[], ImageDataBits { data: vec![] }))
+pub fn write(data: &ImageData) -> Vec<u8> {
+    let mut writer = BiffWriter::new();
+    writer.write_tagged_string("NAME", &data.name);
+    writer.write_tagged_string("INME", &data.inme);
+    writer.write_tagged_u32("WDTH", data.width);
+    writer.write_tagged_u32("HGHT", data.height);
+    writer.write_tagged_string("PATH", &data.path);
+    writer.write_tagged_float("ALTV", data.alpha_test_value);
+    match &data.bits {
+        Some(bits) => {
+            writer.write_tagged_data("DATA", &bits.data);
+        }
+        None => {}
+    }
+    match &data.jpeg {
+        Some(jpeg) => {
+            let bits = write_jpg(jpeg);
+            writer.write_tagged_data("JPEG", &bits);
+        }
+        None => {}
+    }
+    writer.write_tagged_u32("LINK", 0);
+    writer.close(true);
+    writer.get_data().to_vec()
 }
 
-fn read_jpeg(input: &[u8]) -> IResult<&[u8], ImageDataJpeg> {
+fn read_jpeg(reader: &mut BiffReader) -> ImageDataJpeg {
     // I do wonder why all the tags are duplicated here
-    let mut input = input;
     let mut size_opt: Option<u32> = None;
     let mut path: String = "".to_string();
     let mut name: String = "".to_string();
-    let mut data: &[u8] = &[];
+    let mut data: Vec<u8> = vec![];
     let mut alpha_test_value: f32 = 0.0;
     let mut inme: String = "".to_string();
-    let mut end_reached = false;
-    while !end_reached {
-        let (i, (tag, len)) = read_tag_start(input)?;
-        input = match tag {
+    loop {
+        reader.next(biff::WARN);
+        if reader.is_eof() {
+            break;
+        }
+        let tag = reader.tag();
+        let tag_str = tag.as_str();
+        match tag_str {
             "SIZE" => {
-                let (i, num) = read_u32(i)?;
-                size_opt = Some(num);
-                i
+                size_opt = Some(reader.get_u32());
             }
             "DATA" => match size_opt {
-                Some(size) => {
-                    let (i, d) = take(size)(i)?;
-                    data = d;
-                    i
-                }
+                Some(size) => data = reader.get_data(size.try_into().unwrap()).to_vec(),
                 None => {
                     panic!("DATA tag without SIZE tag");
                 }
             },
-            "NAME" => {
-                let (i, string) = read_string_record(i)?;
-                name = string.to_owned();
-                i
-            }
-            "PATH" => {
-                let (i, string) = read_string_record(i)?;
-                path = string.to_owned();
-                i
-            }
-            "ALTV" => {
-                let (i, f) = read_float(i, len)?;
-                alpha_test_value = f;
-                i
-            }
-            "INME" => {
-                let (i, string) = read_string_record(i)?;
-                inme = string.to_owned();
-                i
-            }
-            "ENDB" => {
-                // ENDB is just a tag, it should have a remaining length of 0
-                // dbg!(tag, len);
-                let (i, _) = read_empty_tag(i, len)?;
-                end_reached = true;
-                i
-            }
+            "NAME" => name = reader.get_string(),
+            "PATH" => path = reader.get_string(),
+            "ALTV" => alpha_test_value = reader.get_float(), // TODO why are these duplicated?
+            "INME" => inme = reader.get_string(),            // TODO why are these duplicated?
             _ => {
                 // skip this record
-                println!("skipping tag inside JPEG {} {}", tag, len);
-                let (i, _) = drop_record(i, len)?;
-                i
+                println!("skipping tag inside JPEG {}", tag);
+                reader.skip_tag();
             }
         }
     }
     let data = data.to_vec();
-    Ok((
-        input,
-        ImageDataJpeg {
-            path,
-            name,
-            inme,
-            alpha_test_value,
-            data,
-        },
-    ))
+    ImageDataJpeg {
+        path,
+        name,
+        inme,
+        alpha_test_value,
+        data,
+    }
+}
+
+fn write_jpg(img: &ImageDataJpeg) -> Vec<u8> {
+    let mut writer = BiffWriter::new();
+    writer.write_tagged_string("NAME", &img.name);
+    writer.write_tagged_string("PATH", &img.path);
+    writer.write_tagged_float("ALTV", img.alpha_test_value);
+    writer.write_tagged_string("INME", &img.inme);
+    writer.write_tagged_u32("SIZE", img.data.len().try_into().unwrap());
+    writer.write_tagged_data("DATA", &img.data);
+    writer.close(true);
+    writer.get_data().to_vec()
+}
+
+#[cfg(test)]
+mod test {
+
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_write_read_jpeg() {
+        let img = ImageDataJpeg {
+            path: "path_value".to_string(),
+            name: "name_value".to_string(),
+            inme: "inme_value".to_string(),
+            alpha_test_value: 1.0,
+            data: vec![1, 2, 3],
+        };
+
+        let bytes = write_jpg(&img);
+
+        let read = read_jpeg(&mut BiffReader::new(&bytes));
+
+        assert_eq!(read, img);
+    }
+
+    #[test]
+    fn test_write_read() {
+        let img = ImageData {
+            fs_path: "/tmp/test.vpx".to_string(),
+            name: "name_value".to_string(),
+            inme: "inme_value".to_string(),
+            path: "path_value".to_string(),
+            width: 1,
+            height: 2,
+            alpha_test_value: 1.0,
+            jpeg: Some(ImageDataJpeg {
+                path: "path_value".to_string(),
+                name: "name_value".to_string(),
+                inme: "inme_value".to_string(),
+                alpha_test_value: 1.0,
+                data: vec![1, 2, 3],
+            }),
+            bits: None,
+        };
+
+        let bytes = write(&img);
+        dbg!(&bytes);
+
+        let read = read(String::from("/tmp/test.vpx"), &bytes);
+
+        assert_eq!(read, img);
+    }
 }

@@ -1,12 +1,25 @@
-use nom::{bytes::complete::take, IResult};
+use std::fmt;
 
-use super::biff::{read_empty_tag, read_string_record, read_tag_start, read_u32};
+use super::biff::{self, BiffReader, BiffWriter};
 
-#[derive(Debug)]
+// TODO comment here a vpx file that contains font data
+
+#[derive(PartialEq)]
 pub struct FontData {
     pub name: String,
     pub path: String, // patho of original file for easy re-importing
     pub data: Vec<u8>,
+}
+
+impl fmt::Debug for FontData {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // avoid writing the data to the debug output
+        f.debug_struct("FontData")
+            .field("name", &self.name)
+            .field("path", &self.path)
+            .field("data", &format!("<{} bytes>", self.data.len()))
+            .finish()
+    }
 }
 
 impl FontData {
@@ -19,54 +32,68 @@ impl FontData {
     }
 }
 
-pub fn read(input: &[u8]) -> IResult<&[u8], FontData> {
-    let mut input = input;
+pub fn read(input: &[u8]) -> FontData {
+    let mut reader = BiffReader::new(input);
     let mut name: String = "".to_string();
     let mut path: String = "".to_string();
     let mut size_opt: Option<u32> = None;
-    let mut data: &[u8] = &[];
-    while !input.is_empty() {
-        let (i, (tag, len)) = read_tag_start(input)?;
-        input = match tag {
+    let mut data: Vec<u8> = vec![];
+    loop {
+        reader.next(biff::WARN);
+        if reader.is_eof() {
+            break;
+        }
+        let tag = reader.tag();
+        let tag_str = tag.as_str();
+        match tag_str {
             "NAME" => {
-                let (i, string) = read_string_record(i)?;
-                name = string.to_owned();
-                i
+                name = reader.get_string();
             }
             "PATH" => {
-                let (i, string) = read_string_record(i)?;
-                path = string.to_owned();
-                i
+                path = reader.get_string();
             }
             "SIZE" => {
-                let (i, num) = read_u32(i)?;
-                size_opt = Some(num);
-                i
+                size_opt = Some((reader.get_u32()).to_owned());
             }
             "DATA" => match size_opt {
                 Some(size) => {
-                    let (i, d) = take(size)(i)?;
-                    data = d;
-                    i
+                    let d = reader.get_data(size.try_into().unwrap());
+                    data = d.to_owned();
                 }
                 None => {
                     panic!("DATA tag without SIZE tag");
                 }
             },
-            "ENDB" => {
-                // ENDB is just a tag, it should have a remaining length of 0
-                // dbg!(tag, len);
-                let (i, _) = read_empty_tag(i, len)?;
-                i
-            }
             _ => {
-                println!("Skipping font tag: {} len: {}", tag, len);
-                let (i, _) = take(len)(i)?;
-                i
+                println!("Skipping font tag: {}", tag_str);
+                reader.skip_tag();
             }
         }
     }
-    let rest = &[];
-    let data = data.to_vec();
-    Ok((rest, FontData { name, path, data }))
+    FontData { name, path, data }
+}
+
+pub fn write(font_data: &FontData) -> Vec<u8> {
+    let mut writer = BiffWriter::new();
+    writer.write_tagged_string("NAME", &font_data.name);
+    writer.write_tagged_string("PATH", &font_data.path);
+    writer.write_tagged_u32("SIZE", font_data.data.len().try_into().unwrap());
+    writer.write_tagged_data("DATA", &font_data.data);
+    writer.close(true);
+    writer.get_data().to_owned()
+}
+
+#[test]
+fn read_write() {
+    use pretty_assertions::assert_eq;
+
+    let font = FontData {
+        name: "test_name".to_string(),
+        path: "/tmp/test".to_string(),
+        data: vec![1, 2, 3, 4],
+    };
+    let bytes = write(&font);
+    let font_read = read(&bytes);
+
+    assert_eq!(font, font_read);
 }
