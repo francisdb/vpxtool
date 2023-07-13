@@ -26,3 +26,13 @@ pub fn table_json(table_info: &TableInfo) -> serde_json::Value {
 
     serde_json::Value::Object(extended)
 }
+
+pub fn collection_json(collection: &crate::collection::Collection) -> serde_json::Value {
+    json!({
+        "name": collection.name,
+        "items": collection.items,
+        "fireEvents": collection.fire_events,
+        "stopSingleEvents": collection.stop_single_events,
+        "groupElements": collection.group_elements,
+    })
+}

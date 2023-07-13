@@ -30,6 +30,9 @@ use vpx::tableinfo::{self};
 use vpx::{extract_script, verify, VerifyResult};
 use vpx::{extractvbs, font, read_gamedata, read_version, ExtractResult};
 
+use crate::jsonmodel::collection_json;
+use crate::vpx::collection;
+
 // see https://github.com/fusion-engineering/rust-git-version/issues/21
 const GIT_VERSION: &str = git_version!(args = ["--tags", "--always", "--dirty=-modified"]);
 
@@ -545,6 +548,7 @@ fn extract(vpx_file_path: &str, yes: bool) {
     extract_images(&mut comp, &records, root_dir_path);
     extract_sounds(&mut comp, &records, root_dir_path, version);
     extract_fonts(&mut comp, &records, root_dir_path);
+    extract_collections(&mut comp, &records, root_dir_path);
 
     // let mut file_version = String::new();
     // comp.open_stream("/GameStg/Version")
@@ -618,6 +622,43 @@ fn extract_images(comp: &mut CompoundFile<File>, records: &[Record], root_dir_pa
                 // nothing to do here
             }
         }
+    }
+}
+
+fn extract_collections(comp: &mut CompoundFile<File>, records: &[Record], root_dir_path: &Path) {
+    // let result = parseGameData(&game_data_vec[..]);
+    // dump(result);
+
+    let collections_size = records
+        .iter()
+        .find_map(|r| match r {
+            Record::CollectionsSize(size) => Some(size),
+            _ => None,
+        })
+        .unwrap_or(&0)
+        .to_owned();
+
+    let collections_path = root_dir_path.join("collections");
+    std::fs::create_dir_all(&collections_path).unwrap();
+
+    println!(
+        "Writing {} collections to\n  {}",
+        collections_size,
+        collections_path.display()
+    );
+
+    for index in 0..collections_size {
+        let path = format!("GameStg/Collection{}", index);
+        let mut input = Vec::new();
+        comp.open_stream(&path)
+            .unwrap()
+            .read_to_end(&mut input)
+            .unwrap();
+        let collection = collection::read(&input);
+        let collection_json = collection_json(&collection);
+        let json_path = collections_path.join(format!("Collection{}.json", index));
+        let mut json_file = std::fs::File::create(&json_path).unwrap();
+        serde_json::to_writer_pretty(&mut json_file, &collection_json).unwrap();
     }
 }
 
@@ -720,6 +761,7 @@ fn extract_binaries(comp: &mut CompoundFile<std::fs::File>, root_dir_path: &Path
                 && !entry.path().to_string_lossy().starts_with("/GameStg/Font")
                 && !entry.path().to_string_lossy().starts_with("/GameStg/Image")
                 && !entry.path().to_string_lossy().starts_with("/GameStg/Sound")
+                && !entry.path().to_string_lossy().starts_with("/GameStg/Collection")
         })
         .map(|entry| {
             let path = entry.path();

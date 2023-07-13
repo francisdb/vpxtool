@@ -19,6 +19,7 @@ use crate::vpx::biff::BiffReader;
 use self::tableinfo::{write_tableinfo, TableInfo};
 
 pub mod biff;
+pub mod collection;
 pub mod font;
 pub mod gamedata;
 pub mod image;
