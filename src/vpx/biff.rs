@@ -6,6 +6,14 @@ use nom::number::complete::{
 use nom::{IResult, ToUsize};
 use utf16string::WStr;
 
+pub trait BiffRead {
+    fn biff_read(reader: &mut BiffReader<'_>) -> Self;
+}
+
+pub trait BiffWrite {
+    fn biff_write(font: &Self) -> Vec<u8>;
+}
+
 pub struct BiffReader<'a> {
     data: &'a [u8],
     pos: usize,

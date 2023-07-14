@@ -267,7 +267,7 @@ fn extract_gameitems(comp: &mut CompoundFile<File>, records: &[Record], root_dir
         println!("GameItem {} size: {}", path, input.len());
         let gameitem = gameitem::read(&input);
 
-        dbg!(gameitem.name);
+        //dbg!(gameitem);
 
         // let ext = gameitem.ext();
         // let mut gameitem_path = gameitems_path.clone();
