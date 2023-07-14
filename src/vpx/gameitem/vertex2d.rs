@@ -20,8 +20,8 @@ impl Default for Vertex2D {
 
 impl BiffRead for Vertex2D {
     fn biff_read(reader: &mut BiffReader<'_>) -> Self {
-        let x = reader.get_float();
-        let y = reader.get_float();
+        let x = reader.get_f32();
+        let y = reader.get_f32();
         Vertex2D { x, y }
     }
 }

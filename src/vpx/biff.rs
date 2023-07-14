@@ -120,7 +120,7 @@ impl<'a> BiffReader<'a> {
         i.unwrap().1
     }
 
-    pub fn get_float(&mut self) -> f32 {
+    pub fn get_f32(&mut self) -> f32 {
         let i: Result<(&[u8], f32), nom::Err<()>> = le_f32(&self.data[self.pos..]);
         self.pos += 4;
         self.bytes_in_record_remaining -= 4;
@@ -175,6 +175,7 @@ impl<'a> BiffReader<'a> {
         i
     }
 
+    #[deprecated]
     pub fn get_color(&mut self, has_alpha: bool) -> (f32, f32, f32, f32) {
         if has_alpha {
             (
@@ -279,7 +280,7 @@ impl<'a> BiffReader<'a> {
     pub fn get_f32_array(&mut self, count: usize) -> Vec<f32> {
         let mut v = Vec::with_capacity(count);
         for _ in 0..count {
-            v.push(self.get_float());
+            v.push(self.get_f32());
         }
         v
     }

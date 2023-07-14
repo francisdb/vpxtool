@@ -31,10 +31,10 @@ impl Default for Vertex3D {
 
 impl BiffRead for Vertex3D {
     fn biff_read(reader: &mut BiffReader<'_>) -> Self {
-        let x = reader.get_float();
-        let y = reader.get_float();
-        let z = reader.get_float();
-        let _padding = reader.get_float();
+        let x = reader.get_f32();
+        let y = reader.get_f32();
+        let z = reader.get_f32();
+        let _padding = reader.get_f32();
         Vertex3D { x, y, z }
     }
 }
