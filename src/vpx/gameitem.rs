@@ -200,10 +200,10 @@ pub fn read(input: &[u8]) -> GameItemEnum {
     //         name: "skipped".to_owned(),
     //     };
     // }
-    println!(
-        "  Item type: {} {}",
-        item_type, TYPE_NAMES[item_type as usize]
-    );
+    // println!(
+    //     "  Item type: {} {}",
+    //     item_type, TYPE_NAMES[item_type as usize]
+    // );
     let item = match item_type {
         ITEM_TYPE_WALL => GameItemEnum::Wall(wall::Wall::biff_read(&mut reader)),
         ITEM_TYPE_FLIPPER => GameItemEnum::Flipper(flipper::Flipper::biff_read(&mut reader)),
@@ -244,7 +244,12 @@ pub fn read(input: &[u8]) -> GameItemEnum {
             GameItemEnum::Generic(other_item_type, generic::Generic::biff_read(&mut reader))
         }
     };
-    println!("  Name: {}", item.name());
+    println!(
+        "  Item {}, type {} {}",
+        item.name(),
+        item_type,
+        TYPE_NAMES[item_type as usize]
+    );
     //dbg!(&item);
     item
 }
