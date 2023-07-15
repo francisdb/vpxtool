@@ -239,6 +239,7 @@ pub fn read(input: &[u8]) -> GameItem {
     item
 }
 
+// TODO also make this a real (Generic) item type that keeps all the data as binary blobs
 fn load_other_item(reader: &mut BiffReader, other_item_type: u32) -> GameItem {
     let mut name = "".to_string();
     loop {
