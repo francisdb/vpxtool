@@ -217,7 +217,11 @@ impl BiffRead for Flasher {
                     drag_points.push(point);
                 }
                 _ => {
-                    //println!("Unknown tag: {}", tag_str);
+                    println!(
+                        "Unknown tag {} for {}",
+                        tag_str,
+                        std::any::type_name::<Self>()
+                    );
                     reader.skip_tag();
                 }
             }

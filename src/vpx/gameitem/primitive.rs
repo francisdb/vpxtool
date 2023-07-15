@@ -291,7 +291,11 @@ impl BiffRead for Primitive {
                     editor_layer_visibility = reader.get_bool();
                 }
                 _ => {
-                    println!("Unknown tag: {}", tag_str);
+                    println!(
+                        "Unknown tag {} for {}",
+                        tag_str,
+                        std::any::type_name::<Self>()
+                    );
                     reader.skip_tag();
                 }
             }

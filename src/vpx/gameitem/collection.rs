@@ -1,14 +1,8 @@
 use crate::vpx::biff::{self, BiffRead, BiffReader};
 
-use super::vertex2d::Vertex2D;
-
 #[derive(Debug, PartialEq)]
-pub struct Timer {
-    pub center: Vertex2D,
-    pub is_timer_enabled: bool,
-    pub timer_interval: i32,
+pub struct Collection {
     pub name: String,
-    pub backglass: bool,
 
     // these are shared between all items
     pub is_locked: bool,
@@ -17,13 +11,9 @@ pub struct Timer {
     pub editor_layer_visibility: bool,
 }
 
-impl BiffRead for Timer {
+impl BiffRead for Collection {
     fn biff_read(reader: &mut BiffReader<'_>) -> Self {
-        let mut center = Vertex2D::default();
-        let mut is_timer_enabled: bool = false;
-        let mut timer_interval: i32 = Default::default();
-        let mut name = String::new();
-        let mut backglass: bool = false;
+        let mut name = Default::default();
 
         // these are shared between all items
         let mut is_locked: bool = false;
@@ -39,20 +29,8 @@ impl BiffRead for Timer {
             let tag = reader.tag();
             let tag_str = tag.as_str();
             match tag_str {
-                "VCEN" => {
-                    center = Vertex2D::biff_read(reader);
-                }
-                "TMON" => {
-                    is_timer_enabled = reader.get_bool();
-                }
-                "TMIN" => {
-                    timer_interval = reader.get_i32();
-                }
                 "NAME" => {
                     name = reader.get_wide_string();
-                }
-                "BGLS" => {
-                    backglass = reader.get_bool();
                 }
                 // shared
                 "LOCK" => {
@@ -77,12 +55,8 @@ impl BiffRead for Timer {
                 }
             }
         }
-        Timer {
-            center,
-            is_timer_enabled,
-            timer_interval,
+        Self {
             name,
-            backglass,
             is_locked,
             editor_layer,
             editor_layer_name,

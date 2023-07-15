@@ -147,7 +147,11 @@ impl BiffRead for Trigger {
                     drag_points.push(point);
                 }
                 _ => {
-                    println!("Unknown tag for Trigger: {}", tag_str);
+                    println!(
+                        "Unknown tag {} for {}",
+                        tag_str,
+                        std::any::type_name::<Self>()
+                    );
                     reader.skip_tag();
                 }
             }

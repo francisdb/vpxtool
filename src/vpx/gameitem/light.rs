@@ -189,9 +189,12 @@ impl BiffRead for Light {
                     points.push(point);
                 }
                 other => {
-                    println!("  Unknown light tag: {}", other);
+                    println!(
+                        "Unknown tag {} for {}",
+                        tag_str,
+                        std::any::type_name::<Self>()
+                    );
                     reader.skip_tag();
-                    //let data = reader.get_record_data(false);
                 }
             }
         }

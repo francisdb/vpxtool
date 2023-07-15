@@ -1,13 +1,30 @@
+mod bumper;
+mod collection;
 mod color;
+mod decal;
 mod dragpoint;
 mod flasher;
+mod flipper;
 mod font;
+mod gate;
+mod hittarget;
+mod kicker;
 mod light;
+mod lightcenter;
+mod lightsequencer;
+mod plunger;
 mod primitive;
+mod ramp;
+mod reel;
+mod rubber;
+mod spinner;
+mod table;
+mod textbox;
 mod timer;
 mod trigger;
 mod vertex2d;
 mod vertex3d;
+mod wall;
 
 use crate::vpx::biff::BiffRead;
 
@@ -21,101 +38,58 @@ use super::biff::{self, BiffReader};
 
 #[derive(PartialEq, Debug)]
 pub enum GameItem {
-    Wall {
-        name: String,
-        points: Vec<DragPoint>,
-    },
-    Flipper {
-        name: String,
-    },
+    Wall(wall::Wall),
+    Flipper(flipper::Flipper),
     Timer(timer::Timer),
-    Plunger {
-        name: String,
-    },
-    TextBox {
-        name: String,
-    },
-    Bumper {
-        name: String,
-    },
+    Plunger(plunger::Plunger),
+    TextBox(textbox::TextBox),
+    Bumper(bumper::Bumper),
     Trigger(trigger::Trigger),
     Light(light::Light),
-    Kicker {
-        name: String,
-    },
-    Decal {
-        name: String,
-        font: Font,
-    },
-    Gate {
-        name: String,
-    },
-    Spinner {
-        name: String,
-    },
-    Ramp {
-        name: String,
-        points: Vec<DragPoint>,
-    },
-    Table {
-        name: String,
-    },
-    LightCenter {
-        name: String,
-    },
-    DragPoint {
-        name: String,
-    },
-    Collection {
-        name: String,
-    },
-    Reel {
-        name: String,
-    },
-    LightSequencer {
-        name: String,
-    },
+    Kicker(kicker::Kicker),
+    Decal(decal::Decal),
+    Gate(gate::Gate),
+    Spinner(spinner::Spinner),
+    Ramp(ramp::Ramp),
+    Table(table::Table),
+    LightCenter(lightcenter::LightCenter),
+    DragPoint(dragpoint::DragPoint),
+    Collection(collection::Collection),
+    Reel(reel::Reel),
+    LightSequencer(lightsequencer::LightSequencer),
     Primitive(primitive::Primitive),
     Flasher(flasher::Flasher),
-    Rubber {
-        name: String,
-        points: Vec<DragPoint>,
-    },
-    HitTarget {
-        name: String,
-    },
-    Other {
-        item_type: u32,
-        name: String,
-    },
+    Rubber(rubber::Rubber),
+    HitTarget(hittarget::HitTarget),
+    Other { item_type: u32, name: String },
 }
 
 impl GameItem {
     fn name(&self) -> &str {
         match self {
-            GameItem::Wall { name, .. } => name,
-            GameItem::Flipper { name, .. } => name,
+            GameItem::Wall(wall) => &wall.name,
+            GameItem::Flipper(flipper) => &flipper.name,
             GameItem::Timer(timer) => &timer.name,
-            GameItem::Plunger { name, .. } => name,
-            GameItem::TextBox { name, .. } => name,
-            GameItem::Bumper { name, .. } => name,
+            GameItem::Plunger(plunger) => &plunger.name,
+            GameItem::TextBox(textbox) => &textbox.name,
+            GameItem::Bumper(bumper) => &bumper.name,
             GameItem::Trigger(trigger) => &trigger.name,
             GameItem::Light(light) => &light.name,
-            GameItem::Kicker { name, .. } => name,
-            GameItem::Decal { name, .. } => name,
-            GameItem::Gate { name, .. } => name,
-            GameItem::Spinner { name, .. } => name,
-            GameItem::Ramp { name, .. } => name,
-            GameItem::Table { name, .. } => name,
-            GameItem::LightCenter { name, .. } => name,
-            GameItem::DragPoint { name, .. } => name,
-            GameItem::Collection { name, .. } => name,
-            GameItem::Reel { name, .. } => name,
-            GameItem::LightSequencer { name, .. } => name,
+            GameItem::Kicker(kicker) => &kicker.name,
+            GameItem::Decal(decal) => &decal.name,
+            GameItem::Gate(gate) => &gate.name,
+            GameItem::Spinner(spinner) => &spinner.name,
+            GameItem::Ramp(ramp) => &ramp.name,
+            GameItem::Table(table) => &table.name,
+            GameItem::LightCenter(lightcenter) => &lightcenter.name,
+            GameItem::DragPoint(dragpoint) => "unnamed dragpoint",
+            GameItem::Collection(collection) => &collection.name,
+            GameItem::Reel(reel) => &reel.name,
+            GameItem::LightSequencer(lightsequencer) => &lightsequencer.name,
             GameItem::Primitive(primitive) => &primitive.name,
             GameItem::Flasher(flasher) => &flasher.name,
-            GameItem::Rubber { name, .. } => name,
-            GameItem::HitTarget { name, .. } => name,
+            GameItem::Rubber(rubber) => &rubber.name,
+            GameItem::HitTarget(hittarget) => &hittarget.name,
             GameItem::Other { name, .. } => name,
         }
     }
@@ -218,138 +192,51 @@ pub const TRIGGER_SHAPE_WIRE_D: u32 = 6;
 pub fn read(input: &[u8]) -> GameItem {
     let mut reader = BiffReader::new(input);
     let item_type = reader.get_u32_no_remaining_update();
-    if item_type != ITEM_TYPE_TRIGGER {
-        return GameItem::Other {
-            item_type,
-            name: "skipped".to_owned(),
-        };
-    }
+    // if item_type != ITEM_TYPE_TRIGGER {
+    //     return GameItem::Other {
+    //         item_type,
+    //         name: "skipped".to_owned(),
+    //     };
+    // }
     println!(
         "  Item type: {} {}",
         item_type, TYPE_NAMES[item_type as usize]
     );
     let item = match item_type {
-        ITEM_TYPE_WALL => load_wall(&mut reader),
+        ITEM_TYPE_WALL => GameItem::Wall(wall::Wall::biff_read(&mut reader)),
+        ITEM_TYPE_FLIPPER => GameItem::Flipper(flipper::Flipper::biff_read(&mut reader)),
         ITEM_TYPE_TIMER => GameItem::Timer(timer::Timer::biff_read(&mut reader)),
+        ITEM_TYPE_PLUNGER => GameItem::Plunger(plunger::Plunger::biff_read(&mut reader)),
+        ITEM_TYPE_TEXT_BOX => GameItem::TextBox(textbox::TextBox::biff_read(&mut reader)),
+        ITEM_TYPE_BUMPER => GameItem::Bumper(bumper::Bumper::biff_read(&mut reader)),
         ITEM_TYPE_TRIGGER => GameItem::Trigger(trigger::Trigger::biff_read(&mut reader)),
         ITEM_TYPE_LIGHT => GameItem::Light(light::Light::biff_read(&mut reader)),
-        ITEM_TYPE_RAMP => load_ramp(&mut reader),
-        ITEM_TYPE_RUBBER => load_rubber(&mut reader),
-        ITEM_TYPE_DECAL => load_decal(&mut reader),
+        ITEM_TYPE_KICKER => GameItem::Kicker(kicker::Kicker::biff_read(&mut reader)),
+        ITEM_TYPE_DECAL => GameItem::Decal(decal::Decal::biff_read(&mut reader)),
+        ITEM_TYPE_GATE => GameItem::Gate(gate::Gate::biff_read(&mut reader)),
+        ITEM_TYPE_SPINNER => GameItem::Spinner(spinner::Spinner::biff_read(&mut reader)),
+        ITEM_TYPE_RAMP => GameItem::Ramp(ramp::Ramp::biff_read(&mut reader)),
+        ITEM_TYPE_TABLE => GameItem::Table(table::Table::biff_read(&mut reader)),
+        ITEM_TYPE_LIGHT_CENTER => {
+            GameItem::LightCenter(lightcenter::LightCenter::biff_read(&mut reader))
+        }
+        ITEM_TYPE_DRAG_POINT => GameItem::DragPoint(dragpoint::DragPoint::biff_read(&mut reader)),
+        ITEM_TYPE_COLLECTION => {
+            GameItem::Collection(collection::Collection::biff_read(&mut reader))
+        }
+        ITEM_TYPE_REEL => GameItem::Reel(reel::Reel::biff_read(&mut reader)),
+        ITEM_TYPE_LIGHT_SEQUENCER => {
+            GameItem::LightSequencer(lightsequencer::LightSequencer::biff_read(&mut reader))
+        }
         ITEM_TYPE_PRIMITIVE => GameItem::Primitive(primitive::Primitive::biff_read(&mut reader)),
         ITEM_TYPE_FLASHER => GameItem::Flasher(flasher::Flasher::biff_read(&mut reader)),
+        ITEM_TYPE_RUBBER => GameItem::Rubber(rubber::Rubber::biff_read(&mut reader)),
+        ITEM_TYPE_HIT_TARGET => GameItem::HitTarget(hittarget::HitTarget::biff_read(&mut reader)),
         other_item_type => load_other_item(&mut reader, other_item_type),
     };
     println!("  Name: {}", item.name());
-    dbg!(&item);
+    //dbg!(&item);
     item
-}
-
-fn load_decal(reader: &mut BiffReader<'_>) -> GameItem {
-    let mut name = Default::default();
-    let mut font = Default::default();
-
-    loop {
-        reader.next(biff::WARN);
-        if reader.is_eof() {
-            break;
-        }
-        let tag = reader.tag();
-        let tag_str = tag.as_str();
-        match tag_str {
-            "NAME" => {
-                name = reader.get_wide_string();
-            }
-            "FONT" => {
-                font = Font::biff_read(reader);
-            }
-            _ => {
-                println!("Unknown tag: {}", tag_str);
-            }
-        }
-    }
-    GameItem::Decal { name, font }
-}
-
-fn load_rubber(reader: &mut BiffReader<'_>) -> GameItem {
-    let mut name = Default::default();
-    let mut points: Vec<DragPoint> = Default::default();
-
-    loop {
-        reader.next(biff::WARN);
-        if reader.is_eof() {
-            break;
-        }
-        let tag = reader.tag();
-        let tag_str = tag.as_str();
-        match tag_str {
-            "NAME" => {
-                name = reader.get_wide_string();
-            }
-            "DPNT" => {
-                let point = DragPoint::biff_read(reader);
-                points.push(point);
-            }
-            _ => {
-                println!("Unknown tag: {}", tag_str);
-            }
-        }
-    }
-    GameItem::Rubber { name, points }
-}
-
-fn load_ramp(reader: &mut BiffReader<'_>) -> GameItem {
-    let mut name = Default::default();
-    let mut points: Vec<DragPoint> = Default::default();
-
-    loop {
-        reader.next(biff::WARN);
-        if reader.is_eof() {
-            break;
-        }
-        let tag = reader.tag();
-        let tag_str = tag.as_str();
-        match tag_str {
-            "NAME" => {
-                name = reader.get_wide_string();
-            }
-            "DPNT" => {
-                let point = DragPoint::biff_read(reader);
-                points.push(point);
-            }
-            _ => {
-                println!("Unknown tag: {}", tag_str);
-            }
-        }
-    }
-    GameItem::Ramp { name, points }
-}
-
-fn load_wall(reader: &mut BiffReader<'_>) -> GameItem {
-    let mut name = Default::default();
-    let mut points: Vec<DragPoint> = Default::default();
-
-    loop {
-        reader.next(biff::WARN);
-        if reader.is_eof() {
-            break;
-        }
-        let tag = reader.tag();
-        let tag_str = tag.as_str();
-        match tag_str {
-            "NAME" => {
-                name = reader.get_wide_string();
-            }
-            "DPNT" => {
-                let point = DragPoint::biff_read(reader);
-                points.push(point);
-            }
-            _ => {
-                println!("Unknown tag: {}", tag_str);
-            }
-        }
-    }
-    GameItem::Wall { name, points }
 }
 
 fn load_other_item(reader: &mut BiffReader, other_item_type: u32) -> GameItem {

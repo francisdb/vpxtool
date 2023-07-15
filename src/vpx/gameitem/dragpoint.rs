@@ -75,7 +75,11 @@ impl BiffRead for DragPoint {
                     editor_layer_visibility = sub_data.get_bool();
                 }
                 other => {
-                    println!("Unknown tag for DragPoint: {}", other);
+                    println!(
+                        "Unknown tag {} for {}",
+                        tag_str,
+                        std::any::type_name::<Self>()
+                    );
                     sub_data.skip_tag();
                 }
             }
