@@ -1,5 +1,7 @@
 use crate::vpx::biff::{self, BiffRead, BiffReader};
 
+use super::GameItem;
+
 #[derive(Debug, PartialEq)]
 pub struct DragPoint {
     x: f32,
@@ -16,6 +18,12 @@ pub struct DragPoint {
     pub editor_layer: u32,
     pub editor_layer_name: String, // default "Layer_{editor_layer + 1}"
     pub editor_layer_visibility: bool,
+}
+
+impl GameItem for DragPoint {
+    fn name(&self) -> &str {
+        "Unnamed DragPoint"
+    }
 }
 
 impl BiffRead for DragPoint {

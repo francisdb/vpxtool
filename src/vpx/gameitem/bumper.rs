@@ -1,14 +1,21 @@
 use crate::vpx::biff::{self, BiffRead, BiffReader};
 
+use super::GameItem;
+
 #[derive(Debug, PartialEq)]
 pub struct Bumper {
-    pub name: String,
+    name: String,
 
     // these are shared between all items
     pub is_locked: bool,
     pub editor_layer: u32,
     pub editor_layer_name: String, // default "Layer_{editor_layer + 1}"
     pub editor_layer_visibility: bool,
+}
+impl GameItem for Bumper {
+    fn name(&self) -> &str {
+        &self.name
+    }
 }
 
 impl BiffRead for Bumper {
