@@ -70,7 +70,7 @@ impl GameItemEnum {
     fn name(&self) -> &str {
         match self {
             GameItemEnum::Wall(wall) => &wall.name,
-            GameItemEnum::Flipper(flipper) => &flipper.name,
+            GameItemEnum::Flipper(flipper) => flipper.name(),
             GameItemEnum::Timer(timer) => &timer.name,
             GameItemEnum::Plunger(plunger) => &plunger.name,
             GameItemEnum::TextBox(textbox) => &textbox.name,
@@ -244,12 +244,12 @@ pub fn read(input: &[u8]) -> GameItemEnum {
             GameItemEnum::Generic(other_item_type, generic::Generic::biff_read(&mut reader))
         }
     };
-    println!(
-        "  Item {}, type {} {}",
-        item.name(),
-        item_type,
-        TYPE_NAMES[item_type as usize]
-    );
+    // println!(
+    //     "  Item {}, type {} {}",
+    //     item.name(),
+    //     item_type,
+    //     TYPE_NAMES[item_type as usize]
+    // );
     //dbg!(&item);
     item
 }

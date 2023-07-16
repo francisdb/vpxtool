@@ -39,6 +39,6 @@ pub fn collection_json(collection: &Collection) -> serde_json::Value {
 
 pub fn collections_json(collections: &[Collection]) -> serde_json::Value {
     let collections: Vec<serde_json::Value> =
-        collections.iter().map(|c| collection_json(c)).collect();
+        collections.iter().map(collection_json).collect();
     json!({ "collections": collections })
 }
