@@ -191,7 +191,7 @@ impl BiffRead for Light {
                 other => {
                     println!(
                         "Unknown tag {} for {}",
-                        tag_str,
+                        other,
                         std::any::type_name::<Self>()
                     );
                     reader.skip_tag();

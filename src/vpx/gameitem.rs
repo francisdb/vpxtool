@@ -29,7 +29,7 @@ mod wall;
 
 use crate::vpx::biff::BiffRead;
 
-use super::biff::{self, BiffReader};
+use super::biff::BiffReader;
 
 // TODO we might come up with a macro that generates the biff reading from the struct annotations
 //   like VPE
