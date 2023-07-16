@@ -1,6 +1,6 @@
 use serde_json::json;
 
-use crate::tableinfo::TableInfo;
+use crate::{tableinfo::TableInfo, vpx::collection::Collection};
 
 pub fn table_json(table_info: &TableInfo) -> serde_json::Value {
     // TODO convert to a serde
@@ -27,7 +27,7 @@ pub fn table_json(table_info: &TableInfo) -> serde_json::Value {
     serde_json::Value::Object(extended)
 }
 
-pub fn collection_json(collection: &crate::collection::Collection) -> serde_json::Value {
+pub fn collection_json(collection: &Collection) -> serde_json::Value {
     json!({
         "name": collection.name,
         "items": collection.items,
@@ -35,4 +35,10 @@ pub fn collection_json(collection: &crate::collection::Collection) -> serde_json
         "stopSingleEvents": collection.stop_single_events,
         "groupElements": collection.group_elements,
     })
+}
+
+pub fn collections_json(collections: &[Collection]) -> serde_json::Value {
+    let collections: Vec<serde_json::Value> =
+        collections.iter().map(collection_json).collect();
+    json!({ "collections": collections })
 }

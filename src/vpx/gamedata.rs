@@ -156,7 +156,7 @@ fn read_record(tag_str: &str, reader: &mut BiffReader<'_>) -> Record {
 #[cfg(test)]
 mod tests {
 
-    use crate::gamedata::*;
+    use super::*;
 
     #[test]
     fn read_write_empty() {

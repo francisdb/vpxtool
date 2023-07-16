@@ -107,7 +107,7 @@ pub fn read(fs_path: String, input: &[u8]) -> ImageData {
                 path = reader.get_string();
             }
             "ALTV" => {
-                alpha_test_value = reader.get_float();
+                alpha_test_value = reader.get_f32();
             }
             "BITS" => {
                 // these have zero as length
@@ -204,8 +204,8 @@ fn read_jpeg(reader: &mut BiffReader) -> ImageDataJpeg {
             },
             "NAME" => name = reader.get_string(),
             "PATH" => path = reader.get_string(),
-            "ALTV" => alpha_test_value = reader.get_float(), // TODO why are these duplicated?
-            "INME" => inme = reader.get_string(),            // TODO why are these duplicated?
+            "ALTV" => alpha_test_value = reader.get_f32(), // TODO why are these duplicated?
+            "INME" => inme = reader.get_string(),          // TODO why are these duplicated?
             _ => {
                 // skip this record
                 println!("skipping tag inside JPEG {}", tag);
