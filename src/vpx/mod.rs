@@ -83,6 +83,39 @@ pub fn extractvbs(
     }
 }
 
+pub fn importvbs(vpx_file_path: &PathBuf, extension: Option<&str>) -> std::io::Result<PathBuf> {
+    let script_path = match extension {
+        Some(ext) => path_for(vpx_file_path, ext),
+        None => vbs_path_for(vpx_file_path),
+    };
+    if !script_path.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("Script file not found: {}", script_path.display()),
+        ));
+    }
+    let mut comp = cfb::open_rw(vpx_file_path)?;
+    let records = read_gamedata(&mut comp)?;
+    let script = std::fs::read_to_string(&script_path)?;
+    // TODO can we do this without cloning? mutating iterator?
+    let mut updated_records = Vec::new();
+    for record in records {
+        match record {
+            Record::Code { script: _ } => {
+                updated_records.push(Record::Code {
+                    script: script.to_owned(),
+                });
+            }
+            other => updated_records.push(other),
+        }
+    }
+    write_game_data(&mut comp, &updated_records)?;
+    let mac = generate_mac(&mut comp)?;
+    write_mac(&mut comp, &mac)?;
+    comp.flush()?;
+    Ok(script_path)
+}
+
 pub fn verify(vpx_file_path: &PathBuf) -> VerifyResult {
     let mut comp = match cfb::open(vpx_file_path) {
         Ok(comp) => comp,
