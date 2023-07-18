@@ -11,7 +11,6 @@ Show help
 
 ```
 > vpxtool --help
-
 Extracts and assembles vpx files
 
 Usage: vpxtool [COMMAND]
@@ -37,7 +36,7 @@ Options:
 Show help for a specific command
 
 ```
-vpxtool frontend --help`
+> vpxtool frontend --help`
 Acts as a frontend for launching vpx files
 
 Usage: vpxtool frontend [OPTIONS] [VPXROOTPATH]
