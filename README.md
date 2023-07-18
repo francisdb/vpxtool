@@ -1,39 +1,54 @@
 # vpxtool
 Cross-platform console based utility for the vpinball ecosystem
 
-## Usage
+## Install
 
-For now you need `rust` on your system
+Download the latest release for your operating system at https://github.com/francisdb/vpxtool/releases, extract it and if wanted copy or symlink the binary to `$HOME/bin` to put in on your path
+
+## Usage
 
 Show help
 
 ```
-> cargo run -- --help
+> vpxtool --help
+
+Extracts and assembles vpx files
+
+Usage: vpxtool [COMMAND]
+
+Commands:
+  info        Show information about a vpx file
+  diff        Prints out a diff between the vbs in the vpx and the sidecar vbs
+  frontend    Acts as a frontend for launching vpx files
+  index       Indexes a directory of vpx files
+  extract     Extracts a vpx file
+  extractvbs  Extracts the vbs from a vpx file next to it
+  importvbs   Imports the vbs next to it into a vpx file
+  verify      Verify the structure of a vpx file
+  assemble    Assembles a vpx file
+  new         Creates a minimal empty new vpx file
+  help        Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help     Print help
+  -V, --version  Print version
 ```
 
-Extract everything
+Show help for a specific command
 
 ```
-> cargo run -- extract ~/path/to/table.vpx
-extracting from /Users/me/Downloads/tlk35/tlk-0.35.vpx
-Info file written to
-  /Users/me/Downloads/tlk35/tlk-0.35/TableInfo.json
-VBScript file written to
-  /Users/me/Downloads/tlk35/tlk-0.35.vbs
-Binaries written to
-  /Users/me/Downloads/tlk35/tlk-0.35
-```
+vpxtool frontend --help`
+Acts as a frontend for launching vpx files
 
-To only extract the `VBScript`
+Usage: vpxtool frontend [OPTIONS] [VPXROOTPATH]
 
-```
-> cargo run -- extractvbs ~/Downloads/tlk35/tlk-0.35.vpx 
-extracting from /Users/me/Downloads/tlk35/tlk-0.35.vpx
-VBScript file written to
-  /Users/me/Downloads/tlk35/tlk-0.35.vbs
-```
+Arguments:
+  [VPXROOTPATH]  The path to the root directory of vpx files [default: /Users/francisdb/vpinball/tables]
 
-This will create a folder `~/path/to/table` containing the contents of the `vpx` file.
+Options:
+  -r, --recursive  Recursively index subdirectories
+  -h, --help       Print help
+```
 
 ## References / Research
 
