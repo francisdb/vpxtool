@@ -21,7 +21,7 @@ use base64::{engine::general_purpose, Engine as _};
 
 use directb2s::load;
 use vpx::tableinfo::{self};
-use vpx::{expanded, verify, VerifyResult};
+use vpx::{expanded, importvbs, verify, VerifyResult};
 use vpx::{extractvbs, read_version, ExtractResult};
 
 // see https://github.com/fusion-engineering/rust-git-version/issues/21
@@ -139,7 +139,7 @@ fn main() {
         )
         .subcommand(
             Command::new("extractvbs")
-                .about("Extracts the vbs from a vpx file")
+                .about("Extracts the vbs from a vpx file next to it")
                 .arg(
                     Arg::new("OVERWRITE")
                         .short('o')
@@ -148,6 +148,15 @@ fn main() {
                         .default_value("false")
                         .help("(Default: false) Will overwrite existing .vbs files if true, will skip the table file if false."),
                 )
+                .arg(
+                    arg!(<VPXPATH> "The path(s) to the vpx file(s)")
+                        .required(true)
+                        .num_args(1..),
+                ),
+        )
+        .subcommand(
+            Command::new("importvbs")
+                .about("Imports the vbs next to it into a vpx file")
                 .arg(
                     arg!(<VPXPATH> "The path(s) to the vpx file(s)")
                         .required(true)
@@ -277,6 +286,21 @@ fn main() {
                 }
             }
         }
+        Some(("importvbs", sub_matches)) => {
+            let path: &str = sub_matches.get_one::<String>("VPXPATH").unwrap().as_str();
+            let expanded_path = PathBuf::from(expand_path(path));
+            match importvbs(&expanded_path, None) {
+                Ok(vbs_path) => {
+                    println!("IMPORTED {}", vbs_path.display());
+                }
+                Err(e) => {
+                    let warning = format!("Error importing vbs: {}", e).red();
+                    println!("{}", warning);
+                    exit(1);
+                }
+            }
+        }
+
         Some(("verify", sub_matches)) => {
             let paths: Vec<&str> = sub_matches
                 .get_many::<String>("VPXPATH")
