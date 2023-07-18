@@ -89,7 +89,8 @@ pub fn frontend_index(
     pb.finish_and_clear();
 
     // TODO this is a second sort, does not make a lot of sense to do the first one
-    vpx_files_with_tableinfo.sort_by_key(|(path1, info1)| display_table_line(path1, info1));
+    vpx_files_with_tableinfo
+        .sort_by_key(|(path1, info1)| display_table_line(path1, info1).to_lowercase());
     vpx_files_with_tableinfo
 }
 
