@@ -13,7 +13,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 
 use crate::{
     indexer, tableinfo,
-    vpx::{self, extractvbs, read_version, vbs_path_for, ExtractResult},
+    vpx::{self, extractvbs, vbs_path_for, version, ExtractResult},
 };
 
 const LAUNCH: Emoji = Emoji("🚀", "[launch]");
@@ -192,7 +192,7 @@ pub fn frontend(
 
 fn gather_table_info(selected_path: &PathBuf) -> Result<String> {
     let mut comp = cfb::open(selected_path)?;
-    let version = read_version(&mut comp)?;
+    let version = version::read_version(&mut comp)?;
     let table_info = tableinfo::read_tableinfo(&mut comp)?;
     let msg = format!("version: {:#?}\n{:#?}", version, table_info);
     Ok(msg)

@@ -3,7 +3,7 @@ use std::{fs::File, path::Path};
 
 use cfb::CompoundFile;
 
-use super::{extract_script, image, read_gamedata, read_version, tableinfo};
+use super::{extract_script, image, read_gamedata, tableinfo, Version};
 
 // TODO move this in here
 use super::collection::{self, Collection};
@@ -12,6 +12,7 @@ use super::gameitem;
 use super::sound;
 use super::sound::write_sound;
 use crate::jsonmodel::{collections_json, table_json};
+use crate::vpx::version;
 
 use super::gamedata::Record;
 
@@ -23,7 +24,7 @@ pub fn extract(vpx_file_path: &Path, root_dir_path: &Path) -> std::io::Result<()
     root_dir.create(root_dir_path).unwrap();
 
     let mut comp = cfb::open(vpx_file_path).unwrap();
-    let version = read_version(&mut comp).unwrap();
+    let version = version::read_version(&mut comp).unwrap();
     let records = read_gamedata(&mut comp).unwrap();
 
     extract_info(&mut comp, root_dir_path)?;
@@ -154,7 +155,7 @@ fn extract_sounds(
     comp: &mut CompoundFile<File>,
     records: &[Record],
     root_dir_path: &Path,
-    file_version: u32,
+    file_version: Version,
 ) {
     // let result = parseGameData(&game_data_vec[..]);
     // dump(result);
@@ -184,7 +185,7 @@ fn extract_sounds(
             .unwrap()
             .read_to_end(&mut input)
             .unwrap();
-        let (_, sound) = sound::read(path.to_owned(), file_version, &input).unwrap();
+        let (_, sound) = sound::read(path.to_owned(), file_version.clone(), &input).unwrap();
 
         let ext = sound.ext();
         let mut sound_path = sounds_path.clone();
