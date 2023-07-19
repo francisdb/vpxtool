@@ -1,6 +1,98 @@
 #![allow(dead_code)]
 
+use nom::combinator::fail;
+
 use super::biff::{self, BiffReader, BiffWriter};
+
+#[derive(Debug, PartialEq)]
+pub struct GameData(pub Vec<Record>);
+
+impl GameData {
+    pub(crate) fn empty() -> GameData {
+        GameData(vec![])
+    }
+    pub fn gameitems_size(&self) -> u32 {
+        self.0
+            .iter()
+            .find_map(|r| match r {
+                Record::GameItemsSize(size) => Some(*size),
+                _ => None,
+            })
+            .unwrap_or(0)
+    }
+
+    pub fn images_size(&self) -> u32 {
+        self.0
+            .iter()
+            .find_map(|r| match r {
+                Record::ImagesSize(size) => Some(*size),
+                _ => None,
+            })
+            .unwrap_or(0)
+    }
+
+    pub fn fonts_size(&self) -> u32 {
+        self.0
+            .iter()
+            .find_map(|r| match r {
+                Record::FontsSize(size) => Some(*size),
+                _ => None,
+            })
+            .unwrap_or(0)
+    }
+
+    pub fn sounds_size(&self) -> u32 {
+        self.0
+            .iter()
+            .find_map(|r| match r {
+                Record::SoundsSize(size) => Some(*size),
+                _ => None,
+            })
+            .unwrap_or(0)
+    }
+
+    pub fn materials_size(&self) -> u32 {
+        self.0
+            .iter()
+            .find_map(|r| match r {
+                Record::MaterialsSize(size) => Some(*size),
+                _ => None,
+            })
+            .unwrap_or(0)
+    }
+
+    pub fn collections_size(&self) -> u32 {
+        self.0
+            .iter()
+            .find_map(|r| match r {
+                Record::CollectionsSize(size) => Some(*size),
+                _ => None,
+            })
+            .unwrap_or(0)
+    }
+
+    pub fn script(&self) -> String {
+        let code = self.0.iter().find_map(|r| match r {
+            Record::Code { script } => Some(script),
+            _ => None,
+        });
+        match code {
+            Some(code) => code.to_owned(),
+            None => panic!("No CODE record found in GameData"),
+        }
+    }
+
+    pub fn set_script(&mut self, script: String) {
+        let code = self.0.iter_mut().find_map(|r| match r {
+            Record::Code { script } => Some(script),
+            _ => None,
+        });
+        match code {
+            Some(code) => *code = script,
+            None => panic!("No CODE record found in GameData"),
+        }
+    }
+}
 
 #[derive(Debug, PartialEq)]
 pub enum Record {

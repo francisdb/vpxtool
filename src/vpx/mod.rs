@@ -16,6 +16,8 @@ use tableinfo::{write_tableinfo, TableInfo};
 use version::Version;
 
 use self::collection::Collection;
+use self::font::FontData;
+use self::gamedata::GameData;
 use self::gameitem::GameItemEnum;
 use self::image::ImageData;
 use self::sound::SoundData;
@@ -34,7 +36,7 @@ pub mod version;
 pub struct VPX {
     info: TableInfo,
     version: Version,
-    gamedata: Vec<Record>,
+    gamedata: GameData,
     gameitems: Vec<gameitem::GameItemEnum>,
     images: Vec<image::ImageData>,
     sounds: Vec<sound::SoundData>,
@@ -65,7 +67,7 @@ pub fn read_vpx<F: Read + Write + Seek>(comp: &mut CompoundFile<F>) -> io::Resul
     let gameitems = read_gameitems(comp, &gamedata)?;
     let images = read_images(comp, &gamedata)?;
     let sounds = read_sounds(comp, &gamedata, &version)?;
-    let fonts = vec![]; // read_fonts(comp)?;
+    let fonts = read_fonts(comp, &gamedata)?;
     let collections = read_collections(comp, &gamedata)?;
     Ok(VPX {
         info,
@@ -92,7 +94,7 @@ pub fn write_minimal_vpx<F: Read + Write + Seek>(
     write_tableinfo(comp, &table_info)?;
     create_game_storage(comp)?;
     version::write_version(comp, Version::new(1072))?;
-    write_game_data(comp, &[])?;
+    write_game_data(comp, &GameData::empty())?;
     // to be more efficient we could generate the mac while writing the different parts
     let mac = generate_mac(comp)?;
     write_mac(comp, &mac)
@@ -116,8 +118,8 @@ pub fn extractvbs(
     if !script_path.exists() || (script_path.exists() && overwrite) {
         let mut comp = cfb::open(vpx_file_path).unwrap();
         let _version = version::read_version(&mut comp);
-        let records = read_gamedata(&mut comp).unwrap();
-        extract_script(&records, &script_path);
+        let gamedata = read_gamedata(&mut comp).unwrap();
+        extract_script(&gamedata, &script_path).unwrap();
         ExtractResult::Extracted(script_path)
     } else {
         ExtractResult::Existed(script_path)
@@ -136,21 +138,10 @@ pub fn importvbs(vpx_file_path: &PathBuf, extension: Option<&str>) -> std::io::R
         ));
     }
     let mut comp = cfb::open_rw(vpx_file_path)?;
-    let records = read_gamedata(&mut comp)?;
+    let mut gamedata = read_gamedata(&mut comp)?;
     let script = std::fs::read_to_string(&script_path)?;
-    // TODO can we do this without cloning? mutating iterator?
-    let mut updated_records = Vec::new();
-    for record in records {
-        match record {
-            Record::Code { script: _ } => {
-                updated_records.push(Record::Code {
-                    script: script.to_owned(),
-                });
-            }
-            other => updated_records.push(other),
-        }
-    }
-    write_game_data(&mut comp, &updated_records)?;
+    gamedata.set_script(script);
+    write_game_data(&mut comp, &gamedata)?;
     let mac = generate_mac(&mut comp)?;
     write_mac(&mut comp, &mac)?;
     comp.flush()?;
@@ -384,12 +375,12 @@ fn read_bytes_at<F: Read + Seek, P: AsRef<Path>>(
     Ok(bytes)
 }
 
-pub fn extract_script<P: AsRef<Path>>(records: &[Record], vbs_path: &P) {
-    let script = find_script(records);
-    std::fs::write(vbs_path, script).unwrap();
+pub fn extract_script<P: AsRef<Path>>(gamedata: &GameData, vbs_path: &P) -> Result<(), io::Error> {
+    let script = gamedata.script();
+    std::fs::write(vbs_path, script)
 }
 
-pub fn read_gamedata<F: Seek + Read>(comp: &mut CompoundFile<F>) -> std::io::Result<Vec<Record>> {
+pub fn read_gamedata<F: Seek + Read>(comp: &mut CompoundFile<F>) -> std::io::Result<GameData> {
     let mut game_data_vec = Vec::new();
     let game_data_path = Path::new(MAIN_SEPARATOR_STR)
         .join("GameStg")
@@ -402,18 +393,18 @@ pub fn read_gamedata<F: Seek + Read>(comp: &mut CompoundFile<F>) -> std::io::Res
 
     //let (_, records) = gamedata::read_all_gamedata_records2(&game_data_vec[..]).unwrap();
     let records = gamedata::read_all_gamedata_records(&game_data_vec[..]);
-    Ok(records)
+    Ok(GameData(records))
 }
 
 fn write_game_data<F: Read + Write + Seek>(
     comp: &mut CompoundFile<F>,
-    data: &[Record],
+    gamedata: &GameData,
 ) -> Result<(), io::Error> {
     let game_data_path = Path::new(MAIN_SEPARATOR_STR)
         .join("GameStg")
         .join("GameData");
     let mut game_data_stream = comp.create_stream(&game_data_path)?;
-    let data = gamedata::write_all_gamedata_records(data);
+    let data = gamedata::write_all_gamedata_records(&gamedata.0);
     game_data_stream.write_all(&data)
     // this flush was required before but now it's working without
     // game_data_stream.flush()
@@ -421,18 +412,9 @@ fn write_game_data<F: Read + Write + Seek>(
 
 fn read_gameitems<F: Read + Seek>(
     comp: &mut CompoundFile<F>,
-    records: &[Record],
+    gamedata: &GameData,
 ) -> io::Result<Vec<GameItemEnum>> {
-    let gameitems_size = records
-        .iter()
-        .find_map(|r| match r {
-            Record::GameItemsSize(size) => Some(size),
-            _ => None,
-        })
-        .unwrap_or(&0)
-        .to_owned();
-
-    (0..gameitems_size)
+    (0..gamedata.gameitems_size())
         .map(|index| {
             let path = format!("GameStg/GameItem{}", index);
             let mut input = Vec::new();
@@ -446,26 +428,19 @@ fn read_gameitems<F: Read + Seek>(
 
 fn read_sounds<F: Read + Seek>(
     comp: &mut CompoundFile<F>,
-    records: &[Record],
+    gamedata: &GameData,
     file_version: &Version,
 ) -> std::io::Result<Vec<SoundData>> {
-    let sounds_size = records
-        .iter()
-        .find_map(|r| match r {
-            Record::SoundsSize(size) => Some(size),
-            _ => None,
-        })
-        .unwrap_or(&0)
-        .to_owned();
-
-    let sounds_path = Path::new(MAIN_SEPARATOR_STR).join("GameStg").join("Sounds");
-    (0..sounds_size)
+    (0..gamedata.sounds_size())
         .map(|index| {
-            let path = format!("GameStg/Sound{}", index);
+            let path = Path::new(MAIN_SEPARATOR_STR)
+                .join("GameStg")
+                .join(format!("Sound{}", index));
             let mut input = Vec::new();
             let mut stream = comp.open_stream(&path)?;
             stream.read_to_end(&mut input)?;
-            let (_, sound) = sound::read(path, file_version.clone(), &input).unwrap();
+            let (_, sound) =
+                sound::read(path.display().to_string(), file_version.clone(), &input).unwrap();
             Ok(sound)
         })
         .collect()
@@ -473,18 +448,9 @@ fn read_sounds<F: Read + Seek>(
 
 fn read_collections<F: Read + Seek>(
     comp: &mut CompoundFile<F>,
-    records: &[Record],
+    gamedata: &GameData,
 ) -> io::Result<Vec<Collection>> {
-    // TODO can we create a generic record finder?
-    let collections_size = records
-        .iter()
-        .find_map(|r| match r {
-            Record::CollectionsSize(size) => Some(size),
-            _ => None,
-        })
-        .unwrap_or(&0)
-        .to_owned();
-    (0..collections_size)
+    (0..gamedata.collections_size())
         .map(|index| {
             let path = format!("GameStg/Collection{}", index);
             let mut input = Vec::new();
@@ -497,18 +463,9 @@ fn read_collections<F: Read + Seek>(
 
 fn read_images<F: Read + Seek>(
     comp: &mut CompoundFile<F>,
-    records: &[Record],
+    gamedata: &GameData,
 ) -> io::Result<Vec<ImageData>> {
-    let images_size = records
-        .iter()
-        .find_map(|r| match r {
-            Record::ImagesSize(size) => Some(size),
-            _ => None,
-        })
-        .unwrap_or(&0)
-        .to_owned();
-
-    (0..images_size)
+    (0..gamedata.images_size())
         .map(|index| {
             let path = format!("GameStg/Image{}", index);
             let mut input = Vec::new();
@@ -519,16 +476,21 @@ fn read_images<F: Read + Seek>(
         .collect()
 }
 
-pub fn find_script(records: &[Record]) -> String {
-    let code = records
-        .iter()
-        .find_map(|r| match r {
-            Record::Code { script } => Some(script),
-            _ => None,
-        })
-        .unwrap();
+fn read_fonts<F: Read + Seek>(
+    comp: &mut CompoundFile<F>,
+    gamedata: &GameData,
+) -> io::Result<Vec<FontData>> {
+    (0..gamedata.fonts_size())
+        .map(|index| {
+            let path = format!("GameStg/Font{}", index);
+            let mut input = Vec::new();
+            let mut stream = comp.open_stream(&path)?;
+            stream.read_to_end(&mut input)?;
 
-    code.to_owned()
+            let font = font::read(&input);
+            Ok(font)
+        })
+        .collect()
 }
 
 pub fn diff<P: AsRef<Path>>(vpx_file_path: P) -> io::Result<String> {
@@ -539,8 +501,8 @@ pub fn diff<P: AsRef<Path>>(vpx_file_path: P) -> io::Result<String> {
     if vbs_path.exists() {
         match cfb::open(&vpx_file_path) {
             Ok(mut comp) => {
-                let records = read_gamedata(&mut comp)?;
-                let script = find_script(&records);
+                let gamedata = read_gamedata(&mut comp)?;
+                let script = gamedata.script();
                 std::fs::write(&original_vbs_path, script).unwrap();
                 let diff_color = if colored::control::SHOULD_COLORIZE.should_colorize() {
                     DiffColor::Always
@@ -628,7 +590,7 @@ mod tests {
 
         assert_eq!(tableinfo, TableInfo::new());
         assert_eq!(version, Version::new(1072));
-        let expected: Vec<Record> = vec![];
+        let expected = GameData(vec![]);
         assert_eq!(game_data, expected);
     }
 
