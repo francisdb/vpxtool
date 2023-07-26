@@ -4,7 +4,10 @@ use bytes::{BufMut, BytesMut};
 
 use nom::IResult;
 
-use super::biff::{read_byte, read_bytes_record, read_string_record, read_u16, read_u32};
+use super::{
+    biff::{read_byte, read_bytes_record, read_string_record, read_u16, read_u32},
+    Version,
+};
 
 const NEW_SOUND_FORMAT_VERSION: u32 = 1031;
 
@@ -129,7 +132,7 @@ impl SoundData {
     }
 }
 
-pub fn read(fs_path: String, file_version: u32, input: &[u8]) -> IResult<&[u8], SoundData> {
+pub fn read(fs_path: String, file_version: Version, input: &[u8]) -> IResult<&[u8], SoundData> {
     let mut input = input;
     let mut name: String = "".to_string();
     let mut path: String = "".to_string();
@@ -144,7 +147,7 @@ pub fn read(fs_path: String, file_version: u32, input: &[u8]) -> IResult<&[u8], 
     // TODO add support for the old format file version < 1031
     // https://github.com/freezy/VisualPinball.Engine/blob/ec1e9765cd4832c134e889d6e6d03320bc404bd5/VisualPinball.Engine/VPT/Sound/SoundData.cs#L98
 
-    let num_values = if file_version < NEW_SOUND_FORMAT_VERSION {
+    let num_values = if file_version.u32() < NEW_SOUND_FORMAT_VERSION {
         5
     } else {
         10

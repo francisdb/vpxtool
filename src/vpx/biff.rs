@@ -505,7 +505,7 @@ impl BiffWriter {
         self.end_tag();
     }
 
-    pub fn write_tagged_float(&mut self, tag: &str, value: f32) {
+    pub fn write_tagged_f32(&mut self, tag: &str, value: f32) {
         self.new_tag(tag);
         self.write_float(value);
         self.end_tag();
@@ -517,7 +517,7 @@ impl BiffWriter {
         self.end_tag();
     }
 
-    pub fn write_tagged_32(&mut self, tag: &str, value: i32) {
+    pub fn write_tagged_i32(&mut self, tag: &str, value: i32) {
         self.new_tag(tag);
         self.write_32(value);
         self.end_tag();
@@ -527,6 +527,12 @@ impl BiffWriter {
         self.new_tag(tag);
         self.write_string(value);
         self.end_tag();
+    }
+
+    pub fn write_tagged_string_no_size(&mut self, tag: &str, value: &str) {
+        self.new_tag(tag);
+        self.write_string(value);
+        self.end_tag_no_size();
     }
 
     pub fn write_tagged_wide_string(&mut self, tag: &str, value: &str) {

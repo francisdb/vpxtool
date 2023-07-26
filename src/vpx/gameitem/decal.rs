@@ -1,6 +1,9 @@
-use crate::vpx::biff::{self, BiffRead, BiffReader};
+use crate::vpx::{
+    biff::{self, BiffRead, BiffReader},
+    color::Color,
+};
 
-use super::{color::Color, font::Font, vertex2d::Vertex2D, GameItem};
+use super::{font::Font, vertex2d::Vertex2D, GameItem};
 
 #[derive(Debug, PartialEq)]
 pub struct Decal {

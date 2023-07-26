@@ -158,7 +158,7 @@ pub fn write(data: &ImageData) -> Vec<u8> {
     writer.write_tagged_u32("WDTH", data.width);
     writer.write_tagged_u32("HGHT", data.height);
     writer.write_tagged_string("PATH", &data.path);
-    writer.write_tagged_float("ALTV", data.alpha_test_value);
+    writer.write_tagged_f32("ALTV", data.alpha_test_value);
     match &data.bits {
         Some(bits) => {
             writer.write_tagged_data("DATA", &bits.data);
@@ -227,7 +227,7 @@ fn write_jpg(img: &ImageDataJpeg) -> Vec<u8> {
     let mut writer = BiffWriter::new();
     writer.write_tagged_string("NAME", &img.name);
     writer.write_tagged_string("PATH", &img.path);
-    writer.write_tagged_float("ALTV", img.alpha_test_value);
+    writer.write_tagged_f32("ALTV", img.alpha_test_value);
     writer.write_tagged_string("INME", &img.inme);
     writer.write_tagged_u32("SIZE", img.data.len().try_into().unwrap());
     writer.write_tagged_data("DATA", &img.data);

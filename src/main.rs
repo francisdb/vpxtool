@@ -22,7 +22,9 @@ use base64::{engine::general_purpose, Engine as _};
 use directb2s::load;
 use vpx::tableinfo::{self};
 use vpx::{expanded, importvbs, verify, VerifyResult};
-use vpx::{extractvbs, read_version, ExtractResult};
+use vpx::{extractvbs, ExtractResult};
+
+use crate::vpx::version;
 
 // see https://github.com/fusion-engineering/rust-git-version/issues/21
 const GIT_VERSION: &str = git_version!(args = ["--tags", "--always", "--dirty=-modified"]);
@@ -510,14 +512,58 @@ fn expand_path(path: &str) -> String {
 
 fn info(vpx_file_path: &str, json: bool) -> io::Result<()> {
     let mut comp = cfb::open(vpx_file_path)?;
-    let version = read_version(&mut comp)?;
+    let version = version::read_version(&mut comp)?;
     // GameData also has a name field that we might want to display here
     // where is this shown in the UI?
     let table_info = tableinfo::read_tableinfo(&mut comp)?;
-    // TODO come up with a proper format with colors and handle newlines?
     // TODO check the json flag
-    dbg!(version);
-    dbg!(table_info);
+
+    println!("{:>18} {}", "VPX Version:".green(), version);
+    println!("{:>18} {}", "Table Name:".green(), table_info.table_name);
+    println!("{:>18} {}", "Version:".green(), table_info.table_version);
+    println!(
+        "{:>18} {}{}{}",
+        "Author:".green(),
+        Some(table_info.author_name)
+            .filter(|s| !s.is_empty())
+            .map(|s| format!("{} ", s))
+            .unwrap_or_default(),
+        Some(table_info.author_email)
+            .filter(|s| !s.is_empty())
+            .map(|s| format!("{} ", s))
+            .unwrap_or_default(),
+        Some(table_info.author_website)
+            .filter(|s| !s.is_empty())
+            .map(|s| format!("{} ", s))
+            .unwrap_or_default(),
+    );
+    println!(
+        "{:>18} {}",
+        "Save revision:".green(),
+        table_info.table_save_rev
+    );
+    println!(
+        "{:>18} {}",
+        "Save date:".green(),
+        table_info.table_save_date
+    );
+    println!(
+        "{:>18} {}",
+        "Release Date:".green(),
+        table_info.release_date
+    );
+    println!(
+        "{:>18} {}",
+        "Description:".green(),
+        table_info.table_description
+    );
+    println!("{:>18} {}", "Blurb:".green(), table_info.table_blurb);
+    println!("{:>18} {}", "Rules:".green(), table_info.table_rules);
+    // other properties
+    table_info.properties.iter().for_each(|(prop, value)| {
+        println!("{:>18}: {}", prop.green(), value);
+    });
+
     Ok(())
 }
 

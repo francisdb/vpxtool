@@ -5,21 +5,25 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use byteorder::{LittleEndian, WriteBytesExt};
 use cfb::CompoundFile;
-
-use gamedata::Record;
-use nom::number::complete::le_u32;
-use nom::IResult;
 
 use md2::{Digest, Md2};
 
 use crate::vpx::biff::BiffReader;
 
-use self::tableinfo::{write_tableinfo, TableInfo};
+use tableinfo::{write_tableinfo, TableInfo};
+use version::Version;
+
+use self::collection::Collection;
+use self::font::FontData;
+use self::gamedata::GameData;
+use self::gameitem::GameItemEnum;
+use self::image::ImageData;
+use self::sound::SoundData;
 
 pub mod biff;
 pub mod collection;
+pub mod color;
 pub mod expanded;
 pub mod font;
 pub mod gamedata;
@@ -27,6 +31,18 @@ pub mod gameitem;
 pub mod image;
 pub mod sound;
 pub mod tableinfo;
+pub mod version;
+
+pub struct VPX {
+    info: TableInfo,
+    version: Version,
+    gamedata: GameData,
+    gameitems: Vec<gameitem::GameItemEnum>,
+    images: Vec<image::ImageData>,
+    sounds: Vec<sound::SoundData>,
+    fonts: Vec<font::FontData>,
+    collections: Vec<collection::Collection>,
+}
 
 pub enum ExtractResult {
     Extracted(PathBuf),
@@ -36,6 +52,33 @@ pub enum ExtractResult {
 pub enum VerifyResult {
     Ok(PathBuf),
     Failed(PathBuf, String),
+}
+
+pub fn read(path: &PathBuf) -> io::Result<VPX> {
+    let file = File::open(path)?;
+    let mut comp = CompoundFile::open(file)?;
+    read_vpx(&mut comp)
+}
+
+pub fn read_vpx<F: Read + Write + Seek>(comp: &mut CompoundFile<F>) -> io::Result<VPX> {
+    let info = tableinfo::read_tableinfo(comp)?;
+    let version = version::read_version(comp)?;
+    let gamedata = read_gamedata(comp)?;
+    let gameitems = read_gameitems(comp, &gamedata)?;
+    let images = read_images(comp, &gamedata)?;
+    let sounds = read_sounds(comp, &gamedata, &version)?;
+    let fonts = read_fonts(comp, &gamedata)?;
+    let collections = read_collections(comp, &gamedata)?;
+    Ok(VPX {
+        info,
+        version,
+        gamedata,
+        gameitems,
+        images,
+        sounds,
+        fonts,
+        collections,
+    })
 }
 
 pub fn new_minimal_vpx<P: AsRef<Path>>(vpx_file_path: P) -> std::io::Result<()> {
@@ -50,8 +93,8 @@ pub fn write_minimal_vpx<F: Read + Write + Seek>(
     let table_info = TableInfo::new();
     write_tableinfo(comp, &table_info)?;
     create_game_storage(comp)?;
-    write_version(comp, 1072)?;
-    write_game_data(comp, &[])?;
+    version::write_version(comp, Version::new(1072))?;
+    write_game_data(comp, &GameData::default())?;
     // to be more efficient we could generate the mac while writing the different parts
     let mac = generate_mac(comp)?;
     write_mac(comp, &mac)
@@ -74,9 +117,9 @@ pub fn extractvbs(
 
     if !script_path.exists() || (script_path.exists() && overwrite) {
         let mut comp = cfb::open(vpx_file_path).unwrap();
-        let _version = read_version(&mut comp);
-        let records = read_gamedata(&mut comp).unwrap();
-        extract_script(&records, &script_path);
+        let _version = version::read_version(&mut comp);
+        let gamedata = read_gamedata(&mut comp).unwrap();
+        extract_script(&gamedata, &script_path).unwrap();
         ExtractResult::Extracted(script_path)
     } else {
         ExtractResult::Existed(script_path)
@@ -95,21 +138,10 @@ pub fn importvbs(vpx_file_path: &PathBuf, extension: Option<&str>) -> std::io::R
         ));
     }
     let mut comp = cfb::open_rw(vpx_file_path)?;
-    let records = read_gamedata(&mut comp)?;
+    let mut gamedata = read_gamedata(&mut comp)?;
     let script = std::fs::read_to_string(&script_path)?;
-    // TODO can we do this without cloning? mutating iterator?
-    let mut updated_records = Vec::new();
-    for record in records {
-        match record {
-            Record::Code { script: _ } => {
-                updated_records.push(Record::Code {
-                    script: script.to_owned(),
-                });
-            }
-            other => updated_records.push(other),
-        }
-    }
-    write_game_data(&mut comp, &updated_records)?;
+    gamedata.set_code(script);
+    write_game_data(&mut comp, &gamedata)?;
     let mac = generate_mac(&mut comp)?;
     write_mac(&mut comp, &mac)?;
     comp.flush()?;
@@ -144,41 +176,6 @@ pub fn vbs_path_for(vpx_file_path: &PathBuf) -> PathBuf {
 
 fn path_for(vpx_file_path: &PathBuf, extension: &str) -> PathBuf {
     PathBuf::from(vpx_file_path).with_extension(extension)
-}
-
-// Read version
-// https://github.com/vbousquet/vpx_lightmapper/blob/331a8576bb7b86668a023b304e7dd04261487106/addons/vpx_lightmapper/vlm_import.py#L328
-pub fn read_version<F: Read + Write + Seek>(
-    comp: &mut cfb::CompoundFile<F>,
-) -> std::io::Result<u32> {
-    let mut file_version = Vec::new();
-    let version_path = Path::new(MAIN_SEPARATOR_STR)
-        .join("GameStg")
-        .join("Version");
-    let mut stream = comp.open_stream(version_path)?;
-    stream.read_to_end(&mut file_version)?;
-
-    fn read_version(input: &[u8]) -> IResult<&[u8], u32> {
-        le_u32(input)
-    }
-
-    let (_, version) = read_version(&file_version[..]).unwrap();
-
-    // let version_float = (version as f32)/100f32;
-    // println!("VPX file version: {}", version);
-    Ok(version)
-}
-
-pub fn write_version<F: Read + Write + Seek>(
-    comp: &mut CompoundFile<F>,
-    version: u32,
-) -> std::io::Result<()> {
-    // we expect GameStg to exist
-    let version_path = Path::new(MAIN_SEPARATOR_STR)
-        .join("GameStg")
-        .join("Version");
-    let mut stream = comp.create_stream(version_path)?;
-    stream.write_u32::<LittleEndian>(version)
 }
 
 pub fn read_mac<F: Read + Write + Seek>(
@@ -378,51 +375,117 @@ fn read_bytes_at<F: Read + Seek, P: AsRef<Path>>(
     Ok(bytes)
 }
 
-pub fn extract_script<P: AsRef<Path>>(records: &[Record], vbs_path: &P) {
-    let script = find_script(records);
-    std::fs::write(vbs_path, script).unwrap();
+pub fn extract_script<P: AsRef<Path>>(gamedata: &GameData, vbs_path: &P) -> Result<(), io::Error> {
+    let script = &gamedata.code;
+    std::fs::write(vbs_path, script)
 }
 
-pub fn read_gamedata<F: Seek + Read>(comp: &mut CompoundFile<F>) -> std::io::Result<Vec<Record>> {
+pub fn read_gamedata<F: Seek + Read>(comp: &mut CompoundFile<F>) -> std::io::Result<GameData> {
     let mut game_data_vec = Vec::new();
     let game_data_path = Path::new(MAIN_SEPARATOR_STR)
         .join("GameStg")
         .join("GameData");
     let mut stream = comp.open_stream(game_data_path)?;
     stream.read_to_end(&mut game_data_vec)?;
-
-    // let result = parseGameData(&game_data_vec[..]);
-    // dump(result);
-
-    //let (_, records) = gamedata::read_all_gamedata_records2(&game_data_vec[..]).unwrap();
-    let records = gamedata::read_all_gamedata_records(&game_data_vec[..]);
-    Ok(records)
+    let gamedata = gamedata::read_all_gamedata_records(&game_data_vec[..]);
+    Ok(gamedata)
 }
 
 fn write_game_data<F: Read + Write + Seek>(
     comp: &mut CompoundFile<F>,
-    data: &[Record],
+    gamedata: &GameData,
 ) -> Result<(), io::Error> {
     let game_data_path = Path::new(MAIN_SEPARATOR_STR)
         .join("GameStg")
         .join("GameData");
     let mut game_data_stream = comp.create_stream(&game_data_path)?;
-    let data = gamedata::write_all_gamedata_records(data);
+    let data = gamedata::write_all_gamedata_records(&gamedata);
     game_data_stream.write_all(&data)
     // this flush was required before but now it's working without
     // game_data_stream.flush()
 }
 
-pub fn find_script(records: &[Record]) -> String {
-    let code = records
-        .iter()
-        .find_map(|r| match r {
-            Record::Code { script } => Some(script),
-            _ => None,
+fn read_gameitems<F: Read + Seek>(
+    comp: &mut CompoundFile<F>,
+    gamedata: &GameData,
+) -> io::Result<Vec<GameItemEnum>> {
+    (0..gamedata.gameitems_size)
+        .map(|index| {
+            let path = format!("GameStg/GameItem{}", index);
+            let mut input = Vec::new();
+            let mut stream = comp.open_stream(&path)?;
+            stream.read_to_end(&mut input)?;
+            let game_item = gameitem::read(&input);
+            Ok(game_item)
         })
-        .unwrap();
+        .collect()
+}
 
-    code.to_owned()
+fn read_sounds<F: Read + Seek>(
+    comp: &mut CompoundFile<F>,
+    gamedata: &GameData,
+    file_version: &Version,
+) -> std::io::Result<Vec<SoundData>> {
+    (0..gamedata.sounds_size)
+        .map(|index| {
+            let path = Path::new(MAIN_SEPARATOR_STR)
+                .join("GameStg")
+                .join(format!("Sound{}", index));
+            let mut input = Vec::new();
+            let mut stream = comp.open_stream(&path)?;
+            stream.read_to_end(&mut input)?;
+            let (_, sound) =
+                sound::read(path.display().to_string(), file_version.clone(), &input).unwrap();
+            Ok(sound)
+        })
+        .collect()
+}
+
+fn read_collections<F: Read + Seek>(
+    comp: &mut CompoundFile<F>,
+    gamedata: &GameData,
+) -> io::Result<Vec<Collection>> {
+    (0..gamedata.collections_size)
+        .map(|index| {
+            let path = format!("GameStg/Collection{}", index);
+            let mut input = Vec::new();
+            let mut stream = comp.open_stream(&path)?;
+            stream.read_to_end(&mut input)?;
+            Ok(collection::read(&input))
+        })
+        .collect()
+}
+
+fn read_images<F: Read + Seek>(
+    comp: &mut CompoundFile<F>,
+    gamedata: &GameData,
+) -> io::Result<Vec<ImageData>> {
+    (0..gamedata.images_size)
+        .map(|index| {
+            let path = format!("GameStg/Image{}", index);
+            let mut input = Vec::new();
+            let mut stream = comp.open_stream(&path)?;
+            stream.read_to_end(&mut input)?;
+            Ok(image::read(path, &input))
+        })
+        .collect()
+}
+
+fn read_fonts<F: Read + Seek>(
+    comp: &mut CompoundFile<F>,
+    gamedata: &GameData,
+) -> io::Result<Vec<FontData>> {
+    (0..gamedata.fonts_size)
+        .map(|index| {
+            let path = format!("GameStg/Font{}", index);
+            let mut input = Vec::new();
+            let mut stream = comp.open_stream(&path)?;
+            stream.read_to_end(&mut input)?;
+
+            let font = font::read(&input);
+            Ok(font)
+        })
+        .collect()
 }
 
 pub fn diff<P: AsRef<Path>>(vpx_file_path: P) -> io::Result<String> {
@@ -433,8 +496,8 @@ pub fn diff<P: AsRef<Path>>(vpx_file_path: P) -> io::Result<String> {
     if vbs_path.exists() {
         match cfb::open(&vpx_file_path) {
             Ok(mut comp) => {
-                let records = read_gamedata(&mut comp)?;
-                let script = find_script(&records);
+                let gamedata = read_gamedata(&mut comp)?;
+                let script = gamedata.code;
                 std::fs::write(&original_vbs_path, script).unwrap();
                 let diff_color = if colored::control::SHOULD_COLORIZE.should_colorize() {
                     DiffColor::Always
@@ -516,13 +579,13 @@ mod tests {
         let mut comp = CompoundFile::create(buff).unwrap();
         write_minimal_vpx(&mut comp).unwrap();
 
-        let version = read_version(&mut comp).unwrap();
+        let version = version::read_version(&mut comp).unwrap();
         let tableinfo = tableinfo::read_tableinfo(&mut comp).unwrap();
         let game_data = read_gamedata(&mut comp).unwrap();
 
         assert_eq!(tableinfo, TableInfo::new());
-        assert_eq!(version, 1072);
-        let expected: Vec<Record> = vec![];
+        assert_eq!(version, Version::new(1072));
+        let expected = GameData::default();
         assert_eq!(game_data, expected);
     }
 
@@ -550,7 +613,7 @@ mod tests {
 
         let mac = read_mac(&mut comp).unwrap();
         let expected = [
-            62, 193, 68, 87, 87, 196, 78, 210, 132, 41, 127, 127, 148, 175, 9, 37,
+            222, 168, 237, 142, 40, 215, 175, 9, 116, 236, 50, 181, 130, 164, 254, 17,
         ];
         assert_eq!(mac, expected);
     }
@@ -569,5 +632,34 @@ mod tests {
         let read = read_gamedata(&mut comp).unwrap();
 
         assert_eq!(original, read);
+    }
+
+    #[test]
+    fn read() {
+        let path = PathBuf::from("testdata/completely_blank_table_10_7_4.vpx");
+        let mut comp = cfb::open(path).unwrap();
+        let original = read_vpx(&mut comp).unwrap();
+
+        let mut expected_info = TableInfo::new();
+        expected_info.table_name = String::from("Visual Pinball Demo Table");
+        expected_info.table_save_rev = String::from("10");
+        expected_info.table_version = String::from("1.2");
+        expected_info.author_website = String::from("http://www.vpforums.org/");
+        expected_info.table_save_date = String::from("Tue Jul 11 15:48:49 2023");
+        expected_info.table_description =
+            String::from("Press C to enable manual Ball Control via the arrow keys and B");
+
+        assert_eq!(original.version, Version::new(1072));
+        assert_eq!(original.info, expected_info);
+        assert_eq!(original.gamedata.collections_size, 9);
+        assert_eq!(original.gamedata.images_size, 1);
+        assert_eq!(original.gamedata.sounds_size, 0);
+        assert_eq!(original.gamedata.fonts_size, 0);
+        assert_eq!(original.gamedata.gameitems_size, 73);
+        assert_eq!(original.gameitems.len(), 73);
+        assert_eq!(original.images.len(), 1);
+        assert_eq!(original.sounds.len(), 0);
+        assert_eq!(original.fonts.len(), 0);
+        assert_eq!(original.collections.len(), 9);
     }
 }

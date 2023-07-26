@@ -1,8 +1,9 @@
-use crate::vpx::biff::{self, BiffRead, BiffReader};
-
-use super::{
-    color::Color, dragpoint::DragPoint, FILTER_OVERLAY, IMAGE_ALIGN_CENTER, IMAGE_ALIGN_TOP_LEFT,
+use crate::vpx::{
+    biff::{self, BiffRead, BiffReader},
+    color::Color,
 };
+
+use super::{dragpoint::DragPoint, FILTER_OVERLAY, IMAGE_ALIGN_CENTER, IMAGE_ALIGN_TOP_LEFT};
 
 // [BiffString("NAME", IsWideString = true, Pos = 10)]
 // public string Name = string.Empty;
