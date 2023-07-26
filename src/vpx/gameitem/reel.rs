@@ -1,6 +1,9 @@
-use crate::vpx::biff::{self, BiffRead, BiffReader};
+use crate::vpx::{
+    biff::{self, BiffRead, BiffReader},
+    color::Color,
+};
 
-use super::{color::Color, vertex2d::Vertex2D};
+use super::vertex2d::Vertex2D;
 
 #[derive(Debug, PartialEq)]
 pub struct Reel {

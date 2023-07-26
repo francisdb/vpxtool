@@ -1,6 +1,5 @@
 mod bumper;
 mod collection;
-mod color;
 mod decal;
 mod dragpoint;
 mod flasher;

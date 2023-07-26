@@ -1,9 +1,10 @@
 use crate::vpx::{
     biff::{self, BiffRead, BiffReader},
+    color::Color,
     gameitem::font::Font,
 };
 
-use super::{color::Color, vertex2d::Vertex2D};
+use super::vertex2d::Vertex2D;
 
 #[derive(Debug, PartialEq)]
 pub struct TextBox {

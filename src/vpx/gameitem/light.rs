@@ -1,6 +1,9 @@
-use crate::vpx::biff::{self, BiffRead, BiffReader};
+use crate::vpx::{
+    biff::{self, BiffRead, BiffReader},
+    color::Color,
+};
 
-use super::{color::Color, dragpoint::DragPoint, vertex2d::Vertex2D};
+use super::{dragpoint::DragPoint, vertex2d::Vertex2D};
 
 #[derive(Debug, PartialEq)]
 pub struct Light {

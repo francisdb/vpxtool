@@ -1,6 +1,6 @@
-use crate::vpx::biff::{BiffRead, BiffReader, BiffWrite};
+use crate::vpx::biff::BiffReader;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub struct Color {
     a: u8,
     r: u8,
@@ -59,7 +59,6 @@ impl Color {
         g: 0,
         b: 0,
     };
-
 
     // TODO do we want a BiffRead with a parameter?
 

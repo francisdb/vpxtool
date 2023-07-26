@@ -1,8 +1,11 @@
 use quick_xml::de::NoEntityResolver;
 
-use crate::vpx::biff::{self, BiffRead, BiffReader};
+use crate::vpx::{
+    biff::{self, BiffRead, BiffReader},
+    color::Color,
+};
 
-use super::{color::Color, vertex3d::Vertex3D};
+use super::vertex3d::Vertex3D;
 
 #[derive(Debug, PartialEq)]
 pub struct Primitive {

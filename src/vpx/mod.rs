@@ -7,7 +7,6 @@ use std::{
 
 use cfb::CompoundFile;
 
-use gamedata::Record;
 use md2::{Digest, Md2};
 
 use crate::vpx::biff::BiffReader;
@@ -24,6 +23,7 @@ use self::sound::SoundData;
 
 pub mod biff;
 pub mod collection;
+pub mod color;
 pub mod expanded;
 pub mod font;
 pub mod gamedata;
@@ -94,7 +94,7 @@ pub fn write_minimal_vpx<F: Read + Write + Seek>(
     write_tableinfo(comp, &table_info)?;
     create_game_storage(comp)?;
     version::write_version(comp, Version::new(1072))?;
-    write_game_data(comp, &GameData::empty())?;
+    write_game_data(comp, &GameData::default())?;
     // to be more efficient we could generate the mac while writing the different parts
     let mac = generate_mac(comp)?;
     write_mac(comp, &mac)
@@ -140,7 +140,7 @@ pub fn importvbs(vpx_file_path: &PathBuf, extension: Option<&str>) -> std::io::R
     let mut comp = cfb::open_rw(vpx_file_path)?;
     let mut gamedata = read_gamedata(&mut comp)?;
     let script = std::fs::read_to_string(&script_path)?;
-    gamedata.set_script(script);
+    gamedata.set_code(script);
     write_game_data(&mut comp, &gamedata)?;
     let mac = generate_mac(&mut comp)?;
     write_mac(&mut comp, &mac)?;
@@ -376,7 +376,7 @@ fn read_bytes_at<F: Read + Seek, P: AsRef<Path>>(
 }
 
 pub fn extract_script<P: AsRef<Path>>(gamedata: &GameData, vbs_path: &P) -> Result<(), io::Error> {
-    let script = gamedata.script();
+    let script = &gamedata.code;
     std::fs::write(vbs_path, script)
 }
 
@@ -387,13 +387,8 @@ pub fn read_gamedata<F: Seek + Read>(comp: &mut CompoundFile<F>) -> std::io::Res
         .join("GameData");
     let mut stream = comp.open_stream(game_data_path)?;
     stream.read_to_end(&mut game_data_vec)?;
-
-    // let result = parseGameData(&game_data_vec[..]);
-    // dump(result);
-
-    //let (_, records) = gamedata::read_all_gamedata_records2(&game_data_vec[..]).unwrap();
-    let records = gamedata::read_all_gamedata_records(&game_data_vec[..]);
-    Ok(GameData(records))
+    let gamedata = gamedata::read_all_gamedata_records(&game_data_vec[..]);
+    Ok(gamedata)
 }
 
 fn write_game_data<F: Read + Write + Seek>(
@@ -404,7 +399,7 @@ fn write_game_data<F: Read + Write + Seek>(
         .join("GameStg")
         .join("GameData");
     let mut game_data_stream = comp.create_stream(&game_data_path)?;
-    let data = gamedata::write_all_gamedata_records(&gamedata.0);
+    let data = gamedata::write_all_gamedata_records(&gamedata);
     game_data_stream.write_all(&data)
     // this flush was required before but now it's working without
     // game_data_stream.flush()
@@ -414,7 +409,7 @@ fn read_gameitems<F: Read + Seek>(
     comp: &mut CompoundFile<F>,
     gamedata: &GameData,
 ) -> io::Result<Vec<GameItemEnum>> {
-    (0..gamedata.gameitems_size())
+    (0..gamedata.gameitems_size)
         .map(|index| {
             let path = format!("GameStg/GameItem{}", index);
             let mut input = Vec::new();
@@ -431,7 +426,7 @@ fn read_sounds<F: Read + Seek>(
     gamedata: &GameData,
     file_version: &Version,
 ) -> std::io::Result<Vec<SoundData>> {
-    (0..gamedata.sounds_size())
+    (0..gamedata.sounds_size)
         .map(|index| {
             let path = Path::new(MAIN_SEPARATOR_STR)
                 .join("GameStg")
@@ -450,7 +445,7 @@ fn read_collections<F: Read + Seek>(
     comp: &mut CompoundFile<F>,
     gamedata: &GameData,
 ) -> io::Result<Vec<Collection>> {
-    (0..gamedata.collections_size())
+    (0..gamedata.collections_size)
         .map(|index| {
             let path = format!("GameStg/Collection{}", index);
             let mut input = Vec::new();
@@ -465,7 +460,7 @@ fn read_images<F: Read + Seek>(
     comp: &mut CompoundFile<F>,
     gamedata: &GameData,
 ) -> io::Result<Vec<ImageData>> {
-    (0..gamedata.images_size())
+    (0..gamedata.images_size)
         .map(|index| {
             let path = format!("GameStg/Image{}", index);
             let mut input = Vec::new();
@@ -480,7 +475,7 @@ fn read_fonts<F: Read + Seek>(
     comp: &mut CompoundFile<F>,
     gamedata: &GameData,
 ) -> io::Result<Vec<FontData>> {
-    (0..gamedata.fonts_size())
+    (0..gamedata.fonts_size)
         .map(|index| {
             let path = format!("GameStg/Font{}", index);
             let mut input = Vec::new();
@@ -502,7 +497,7 @@ pub fn diff<P: AsRef<Path>>(vpx_file_path: P) -> io::Result<String> {
         match cfb::open(&vpx_file_path) {
             Ok(mut comp) => {
                 let gamedata = read_gamedata(&mut comp)?;
-                let script = gamedata.script();
+                let script = gamedata.code;
                 std::fs::write(&original_vbs_path, script).unwrap();
                 let diff_color = if colored::control::SHOULD_COLORIZE.should_colorize() {
                     DiffColor::Always
@@ -590,7 +585,7 @@ mod tests {
 
         assert_eq!(tableinfo, TableInfo::new());
         assert_eq!(version, Version::new(1072));
-        let expected = GameData(vec![]);
+        let expected = GameData::default();
         assert_eq!(game_data, expected);
     }
 
@@ -618,7 +613,7 @@ mod tests {
 
         let mac = read_mac(&mut comp).unwrap();
         let expected = [
-            62, 193, 68, 87, 87, 196, 78, 210, 132, 41, 127, 127, 148, 175, 9, 37,
+            222, 168, 237, 142, 40, 215, 175, 9, 116, 236, 50, 181, 130, 164, 254, 17,
         ];
         assert_eq!(mac, expected);
     }
@@ -656,6 +651,11 @@ mod tests {
 
         assert_eq!(original.version, Version::new(1072));
         assert_eq!(original.info, expected_info);
+        assert_eq!(original.gamedata.collections_size, 9);
+        assert_eq!(original.gamedata.images_size, 1);
+        assert_eq!(original.gamedata.sounds_size, 0);
+        assert_eq!(original.gamedata.fonts_size, 0);
+        assert_eq!(original.gamedata.gameitems_size, 73);
         assert_eq!(original.gameitems.len(), 73);
         assert_eq!(original.images.len(), 1);
         assert_eq!(original.sounds.len(), 0);

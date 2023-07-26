@@ -5,16 +5,14 @@ use cfb::CompoundFile;
 
 use super::{extract_script, image, read_gamedata, tableinfo, Version};
 
-// TODO move this in here
 use super::collection::{self, Collection};
 use super::font;
+use super::gamedata::GameData;
 use super::gameitem;
 use super::sound;
 use super::sound::write_sound;
+use super::version;
 use crate::jsonmodel::{collections_json, table_json};
-use crate::vpx::{gamedata, version};
-
-use super::gamedata::{GameData, Record};
 
 pub fn extract(vpx_file_path: &Path, root_dir_path: &Path) -> std::io::Result<()> {
     let vbs_path = root_dir_path.join("script.vbs");
@@ -29,7 +27,7 @@ pub fn extract(vpx_file_path: &Path, root_dir_path: &Path) -> std::io::Result<()
 
     extract_info(&mut comp, root_dir_path)?;
 
-    extract_script(&gamedata, &vbs_path);
+    extract_script(&gamedata, &vbs_path)?;
     println!("VBScript file written to\n  {}", &vbs_path.display());
     extract_binaries(&mut comp, root_dir_path);
     extract_images(&mut comp, &gamedata, root_dir_path);
@@ -68,7 +66,7 @@ fn extract_info(comp: &mut CompoundFile<File>, root_dir_path: &Path) -> std::io:
 }
 
 fn extract_images(comp: &mut CompoundFile<File>, gamedata: &GameData, root_dir_path: &Path) {
-    let images_size = gamedata.images_size();
+    let images_size = gamedata.images_size;
 
     let images_path = root_dir_path.join("images");
     std::fs::create_dir_all(&images_path).unwrap();
@@ -105,7 +103,7 @@ fn extract_images(comp: &mut CompoundFile<File>, gamedata: &GameData, root_dir_p
 }
 
 fn extract_collections(comp: &mut CompoundFile<File>, gamedata: &GameData, root_dir_path: &Path) {
-    let collections_size = gamedata.collections_size();
+    let collections_size = gamedata.collections_size;
 
     let collections_json_path = root_dir_path.join("collections.json");
     println!(
@@ -137,7 +135,7 @@ fn extract_sounds(
     root_dir_path: &Path,
     file_version: Version,
 ) {
-    let sounds_size = gamedata.sounds_size();
+    let sounds_size = gamedata.sounds_size;
     let sounds_path = root_dir_path.join("sounds");
     std::fs::create_dir_all(&sounds_path).unwrap();
 
@@ -166,7 +164,7 @@ fn extract_sounds(
 }
 
 fn extract_fonts(comp: &mut CompoundFile<File>, gamedata: &GameData, root_dir_path: &Path) {
-    let fonts_size = gamedata.fonts_size();
+    let fonts_size = gamedata.fonts_size;
 
     let fonts_path = root_dir_path.join("fonts");
     std::fs::create_dir_all(&fonts_path).unwrap();
@@ -196,7 +194,7 @@ fn extract_fonts(comp: &mut CompoundFile<File>, gamedata: &GameData, root_dir_pa
 }
 
 fn extract_gameitems(comp: &mut CompoundFile<File>, gamedata: &GameData, root_dir_path: &Path) {
-    let gameitems_size = gamedata.gameitems_size();
+    let gameitems_size = gamedata.gameitems_size;
 
     let gameitems_path = root_dir_path.join("gameitems");
     std::fs::create_dir_all(&gameitems_path).unwrap();
