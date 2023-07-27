@@ -1,5 +1,5 @@
 use crate::vpx::{
-    biff::{self, BiffRead, BiffReader},
+    biff::{self, BiffRead, BiffReader, BiffWrite},
     color::Color,
     gameitem::font::Font,
 };
@@ -142,5 +142,67 @@ impl BiffRead for TextBox {
             editor_layer_name,
             editor_layer_visibility,
         }
+    }
+}
+
+impl BiffWrite for TextBox {
+    fn biff_write(item: &Self, writer: &mut biff::BiffWriter) {
+        writer.write_tagged("VER1", &item.ver1);
+        writer.write_tagged("VER2", &item.ver2);
+        writer.write_tagged_with("CLRB", &item.back_color, |c, writer| {
+            Color::biff_write_bgr(c, writer)
+        });
+        writer.write_tagged_with("CLRF", &item.font_color, |c, writer| {
+            Color::biff_write_bgr(c, writer)
+        });
+        writer.write_tagged_f32("INSC", item.intensity_scale);
+        writer.write_tagged_string("TEXT", &item.text);
+        writer.write_tagged_bool("TMON", item.is_timer_enabled);
+        writer.write_tagged_u32("TMIN", item.timer_interval);
+        writer.write_tagged_wide_string("NAME", &item.name);
+        writer.write_tagged_u32("ALGN", item.align);
+        writer.write_tagged_bool("TRNS", item.is_transparent);
+        writer.write_tagged_bool("IDMD", item.is_dmd);
+        // shared
+        writer.write_tagged_bool("LOCK", item.is_locked);
+        writer.write_tagged_u32("LAYR", item.editor_layer);
+        writer.write_tagged_string("LANR", &item.editor_layer_name);
+        writer.write_tagged_bool("LVIS", item.editor_layer_visibility);
+        writer.close(true);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::vpx::biff::BiffWriter;
+
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_write_read() {
+        let textbox = TextBox {
+            ver1: Vertex2D::new(1.0, 2.0),
+            ver2: Vertex2D::new(3.0, 4.0),
+            back_color: Color::new_bgr(0x1234567),
+            font_color: Color::new_bgr(0xfedcba9),
+            intensity_scale: 1.0,
+            text: "test text".to_string(),
+            is_timer_enabled: true,
+            timer_interval: 3,
+            name: "test timer".to_string(),
+            align: 0,
+            is_transparent: false,
+            is_dmd: false,
+            font: Font::default(),
+            is_locked: false,
+            editor_layer: 1,
+            editor_layer_name: "test layer".to_string(),
+            editor_layer_visibility: true,
+        };
+        let mut writer = BiffWriter::new();
+        TextBox::biff_write(&textbox, &mut writer);
+        let textbox_read = TextBox::biff_read(&mut BiffReader::new(&writer.get_data()));
+        assert_eq!(textbox, textbox_read);
     }
 }

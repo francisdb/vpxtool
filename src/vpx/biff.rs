@@ -576,6 +576,12 @@ impl BiffWriter {
         self.end_tag();
     }
 
+    pub fn write_tagged_with<T>(&mut self, tag: &str, value: &T, f: fn(&T, &mut BiffWriter) -> ()) {
+        self.new_tag(tag);
+        f(value, self);
+        self.end_tag();
+    }
+
     pub fn close(&mut self, write_endb: bool) {
         if write_endb {
             self.new_tag("ENDB");

@@ -259,6 +259,7 @@ pub(crate) fn write(gameitem: &GameItemEnum) -> Vec<u8> {
         GameItemEnum::Flipper(flipper) => write_with_type(ITEM_TYPE_FLIPPER, flipper),
         GameItemEnum::Timer(timer) => write_with_type(ITEM_TYPE_TIMER, timer),
         GameItemEnum::Plunger(plunger) => write_with_type(ITEM_TYPE_PLUNGER, plunger),
+        GameItemEnum::TextBox(textbox) => write_with_type(ITEM_TYPE_TEXT_BOX, textbox),
         _ => {
             println!("TODO: write gameitem {:?}", gameitem);
             vec![]
