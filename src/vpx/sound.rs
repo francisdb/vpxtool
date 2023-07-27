@@ -2,12 +2,7 @@ use std::fmt;
 
 use bytes::{BufMut, BytesMut};
 
-use nom::IResult;
-
-use super::{
-    biff::{BiffRead, BiffReader, BiffWrite},
-    Version,
-};
+use super::{biff::BiffReader, Version};
 
 const NEW_SOUND_FORMAT_VERSION: u32 = 1031;
 
@@ -226,10 +221,4 @@ pub fn read(fs_path: String, file_version: Version, reader: &mut BiffReader) -> 
 
 fn is_wav(path: &str) -> bool {
     path.to_lowercase().ends_with(".wav")
-}
-
-impl BiffWrite for SoundData {
-    fn biff_write(item: &Self, writer: &mut super::biff::BiffWriter) {
-        todo!()
-    }
 }

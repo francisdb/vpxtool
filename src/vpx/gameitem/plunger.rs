@@ -262,49 +262,50 @@ impl BiffRead for Plunger {
 }
 
 impl BiffWrite for Plunger {
-    fn biff_write(item: &Self, writer: &mut biff::BiffWriter) {
-        writer.write_tagged("VCEN", &item.center);
-        writer.write_tagged_f32("WDTH", item.width);
-        writer.write_tagged_f32("HIGH", item.height);
-        writer.write_tagged_f32("ZADJ", item.z_adjust);
-        writer.write_tagged_f32("HPSL", item.stroke);
-        writer.write_tagged_f32("SPDP", item.speed_pull);
-        writer.write_tagged_f32("SPDF", item.speed_fire);
-        writer.write_tagged_u32("TYPE", item.plunger_type);
-        writer.write_tagged_u32("ANFR", item.anim_frames);
-        writer.write_tagged_string("MATR", &item.material);
-        writer.write_tagged_string("IMAG", &item.image);
-        writer.write_tagged_f32("MEST", item.mech_strength);
-        writer.write_tagged_bool("MECH", item.is_mech_plunger);
-        writer.write_tagged_bool("APLG", item.auto_plunger);
-        writer.write_tagged_f32("MPRK", item.park_position);
-        writer.write_tagged_f32("PSCV", item.scatter_velocity);
-        writer.write_tagged_f32("MOMX", item.momentum_xfer);
-        writer.write_tagged_bool("TMON", item.is_timer_enabled);
-        writer.write_tagged_u32("TMIN", item.timer_interval);
-        writer.write_tagged_bool("VSBL", item.is_visible);
-        writer.write_tagged_bool("REEN", item.is_reflection_enabled);
-        writer.write_tagged_string("SURF", &item.surface);
-        writer.write_tagged_wide_string("NAME", &item.name);
-        writer.write_tagged_string("TIPS", &item.tip_shape);
-        writer.write_tagged_f32("RODD", item.rod_diam);
-        writer.write_tagged_f32("RNGG", item.ring_gap);
-        writer.write_tagged_f32("RNGD", item.ring_diam);
-        writer.write_tagged_f32("RNGW", item.ring_width);
-        writer.write_tagged_f32("SPRD", item.spring_diam);
-        writer.write_tagged_f32("SPRG", item.spring_gauge);
-        writer.write_tagged_f32("SPRL", item.spring_loops);
-        writer.write_tagged_f32("SPRE", item.spring_end_loops);
+    fn biff_write(&self, writer: &mut biff::BiffWriter) {
+        writer.write_tagged("VCEN", &self.center);
+        writer.write_tagged_f32("WDTH", self.width);
+        writer.write_tagged_f32("HIGH", self.height);
+        writer.write_tagged_f32("ZADJ", self.z_adjust);
+        writer.write_tagged_f32("HPSL", self.stroke);
+        writer.write_tagged_f32("SPDP", self.speed_pull);
+        writer.write_tagged_f32("SPDF", self.speed_fire);
+        writer.write_tagged_u32("TYPE", self.plunger_type);
+        writer.write_tagged_u32("ANFR", self.anim_frames);
+        writer.write_tagged_string("MATR", &self.material);
+        writer.write_tagged_string("IMAG", &self.image);
+        writer.write_tagged_f32("MEST", self.mech_strength);
+        writer.write_tagged_bool("MECH", self.is_mech_plunger);
+        writer.write_tagged_bool("APLG", self.auto_plunger);
+        writer.write_tagged_f32("MPRK", self.park_position);
+        writer.write_tagged_f32("PSCV", self.scatter_velocity);
+        writer.write_tagged_f32("MOMX", self.momentum_xfer);
+        writer.write_tagged_bool("TMON", self.is_timer_enabled);
+        writer.write_tagged_u32("TMIN", self.timer_interval);
+        writer.write_tagged_bool("VSBL", self.is_visible);
+        writer.write_tagged_bool("REEN", self.is_reflection_enabled);
+        writer.write_tagged_string("SURF", &self.surface);
+        writer.write_tagged_wide_string("NAME", &self.name);
+        writer.write_tagged_string("TIPS", &self.tip_shape);
+        writer.write_tagged_f32("RODD", self.rod_diam);
+        writer.write_tagged_f32("RNGG", self.ring_gap);
+        writer.write_tagged_f32("RNGD", self.ring_diam);
+        writer.write_tagged_f32("RNGW", self.ring_width);
+        writer.write_tagged_f32("SPRD", self.spring_diam);
+        writer.write_tagged_f32("SPRG", self.spring_gauge);
+        writer.write_tagged_f32("SPRL", self.spring_loops);
+        writer.write_tagged_f32("SPRE", self.spring_end_loops);
         // shared
-        writer.write_tagged_bool("LOCK", item.is_locked);
-        writer.write_tagged_u32("LAYR", item.editor_layer);
-        writer.write_tagged_string("LANR", &item.editor_layer_name);
-        writer.write_tagged_bool("LVIS", item.editor_layer_visibility);
+        writer.write_tagged_bool("LOCK", self.is_locked);
+        writer.write_tagged_u32("LAYR", self.editor_layer);
+        writer.write_tagged_string("LANR", &self.editor_layer_name);
+        writer.write_tagged_bool("LVIS", self.editor_layer_visibility);
 
         writer.close(true);
     }
 }
 
+#[cfg(test)]
 mod tests {
     use crate::vpx::biff::BiffWriter;
 

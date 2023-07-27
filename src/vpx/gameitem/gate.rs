@@ -1,4 +1,4 @@
-use crate::vpx::biff::{self, BiffRead, BiffReader};
+use crate::vpx::biff::{self, BiffRead, BiffReader, BiffWrite};
 
 use super::vertex2d::Vertex2D;
 
@@ -186,5 +186,83 @@ impl BiffRead for Gate {
             editor_layer_name,
             editor_layer_visibility,
         }
+    }
+}
+
+impl BiffWrite for Gate {
+    fn biff_write(&self, writer: &mut biff::BiffWriter) {
+        writer.write_tagged("VCEN", &self.center);
+        writer.write_tagged_f32("LGTH", self.length);
+        writer.write_tagged_f32("HGTH", self.height);
+        writer.write_tagged_f32("ROTA", self.rotation);
+        writer.write_tagged_string("MATR", &self.material);
+        writer.write_tagged_bool("TMON", self.is_timer_enabled);
+        writer.write_tagged_bool("GSUP", self.show_bracket);
+        writer.write_tagged_bool("GCOL", self.is_collidable);
+        writer.write_tagged_f32("TMIN", self.timer_interval);
+        writer.write_tagged_string("SURF", &self.surface);
+        writer.write_tagged_f32("ELAS", self.elasticity);
+        writer.write_tagged_f32("GAMA", self.angle_max);
+        writer.write_tagged_f32("GAMI", self.angle_min);
+        writer.write_tagged_f32("GFRC", self.friction);
+        writer.write_tagged_f32("AFRC", self.damping);
+        writer.write_tagged_f32("GGFC", self.gravity_factor);
+        writer.write_tagged_bool("GVSB", self.is_visible);
+        writer.write_tagged_wide_string("NAME", &self.name);
+        writer.write_tagged_bool("TWWA", self.two_way);
+        writer.write_tagged_bool("REEN", self.is_reflection_enabled);
+        writer.write_tagged_u32("GATY", self.gate_type);
+
+        // shared
+        writer.write_tagged_bool("LOCK", self.is_locked);
+        writer.write_tagged_u32("LAYR", self.editor_layer);
+        writer.write_tagged_string("LANR", &self.editor_layer_name);
+        writer.write_tagged_bool("LVIS", self.editor_layer_visibility);
+
+        writer.close(true);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::vpx::biff::BiffWriter;
+
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_write_read() {
+        // values not equal to the defaults
+        let gate = Gate {
+            center: Vertex2D::new(1.0, 2.0),
+            length: 3.0,
+            height: 4.0,
+            rotation: 5.0,
+            material: "material".to_string(),
+            is_timer_enabled: true,
+            show_bracket: false,
+            is_collidable: false,
+            timer_interval: 6.0,
+            surface: "surface".to_string(),
+            elasticity: 7.0,
+            angle_max: 8.0,
+            angle_min: 9.0,
+            friction: 10.0,
+            damping: 11.0,
+            gravity_factor: 12.0,
+            is_visible: false,
+            name: "name".to_string(),
+            two_way: true,
+            is_reflection_enabled: false,
+            gate_type: 13,
+            is_locked: true,
+            editor_layer: 14,
+            editor_layer_name: "editor_layer_name".to_string(),
+            editor_layer_visibility: false,
+        };
+        let mut writer = BiffWriter::new();
+        Gate::biff_write(&gate, &mut writer);
+        let gate_read = Gate::biff_read(&mut BiffReader::new(writer.get_data()));
+        assert_eq!(gate, gate_read);
     }
 }

@@ -1,4 +1,4 @@
-use crate::vpx::biff::{self, BiffRead, BiffReader};
+use crate::vpx::biff::{self, BiffRead, BiffReader, BiffWrite, BiffWriter};
 
 use super::dragpoint::DragPoint;
 
@@ -210,5 +210,96 @@ impl BiffRead for Rubber {
             editor_layer_visibility,
             points,
         }
+    }
+}
+
+impl BiffWrite for Rubber {
+    fn biff_write(&self, writer: &mut biff::BiffWriter) {
+        writer.write_tagged_f32("HTTP", self.height);
+        writer.write_tagged_f32("HTHI", self.hit_height);
+        writer.write_tagged_i32("WDTP", self.thickness);
+        writer.write_tagged_bool("HTEV", self.hit_event);
+        writer.write_tagged_string("MATR", &self.material);
+        writer.write_tagged_bool("TMON", self.is_timer_enabled);
+        writer.write_tagged_i32("TMIN", self.timer_interval);
+        writer.write_tagged_wide_string("NAME", &self.name);
+        writer.write_tagged_string("IMAG", &self.image);
+        writer.write_tagged_f32("ELAS", self.elasticity);
+        writer.write_tagged_f32("ELFO", self.elasticity_falloff);
+        writer.write_tagged_f32("RFCT", self.friction);
+        writer.write_tagged_f32("RSCT", self.scatter);
+        writer.write_tagged_bool("CLDR", self.is_collidable);
+        writer.write_tagged_bool("RVIS", self.is_visible);
+        writer.write_tagged_bool("ESTR", self.static_rendering);
+        writer.write_tagged_bool("ESIE", self.show_in_editor);
+        writer.write_tagged_f32("ROTX", self.rot_x);
+        writer.write_tagged_f32("ROTY", self.rot_y);
+        writer.write_tagged_f32("ROTZ", self.rot_z);
+        writer.write_tagged_bool("REEN", self.is_reflection_enabled);
+        writer.write_tagged_string("MAPH", &self.physics_material);
+        writer.write_tagged_bool("OVPH", self.overwrite_physics);
+
+        // shared
+        writer.write_tagged_bool("LOCK", self.is_locked);
+        writer.write_tagged_u32("LAYR", self.editor_layer);
+        writer.write_tagged_string("LANR", &self.editor_layer_name);
+        writer.write_tagged_bool("LVIS", self.editor_layer_visibility);
+
+        writer.write_marker_tag("PNTS");
+
+        for point in &self.points {
+            writer.write_tagged("DPNT", point);
+        }
+
+        writer.close(true);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::vpx::biff::BiffWriter;
+
+    use super::*;
+    use pretty_assertions::assert_eq;
+    use rand::Rng;
+
+    #[test]
+    fn test_write_read() {
+        let mut rng = rand::thread_rng();
+        // values not equal to the defaults
+        let rubber: Rubber = Rubber {
+            height: 1.0,
+            hit_height: 2.0,
+            thickness: 3,
+            hit_event: rng.gen(),
+            material: "material".to_string(),
+            is_timer_enabled: rng.gen(),
+            timer_interval: 4,
+            name: "name".to_string(),
+            image: "image".to_string(),
+            elasticity: 5.0,
+            elasticity_falloff: 6.0,
+            friction: 7.0,
+            scatter: 8.0,
+            is_collidable: rng.gen(),
+            is_visible: rng.gen(),
+            static_rendering: rng.gen(),
+            show_in_editor: rng.gen(),
+            rot_x: 9.0,
+            rot_y: 10.0,
+            rot_z: 11.0,
+            is_reflection_enabled: rng.gen(),
+            physics_material: "physics_material".to_string(),
+            overwrite_physics: rng.gen(),
+            is_locked: rng.gen(),
+            editor_layer: 12,
+            editor_layer_name: "editor_layer_name".to_string(),
+            editor_layer_visibility: rng.gen(),
+            points: vec![DragPoint::default()],
+        };
+        let mut writer = BiffWriter::new();
+        Rubber::biff_write(&rubber, &mut writer);
+        let rubber_read = Rubber::biff_read(&mut BiffReader::new(writer.get_data()));
+        assert_eq!(rubber, rubber_read);
     }
 }

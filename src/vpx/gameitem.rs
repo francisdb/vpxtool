@@ -264,6 +264,25 @@ pub(crate) fn write(gameitem: &GameItemEnum) -> Vec<u8> {
         GameItemEnum::Trigger(trigger) => write_with_type(ITEM_TYPE_TRIGGER, trigger),
         GameItemEnum::Light(light) => write_with_type(ITEM_TYPE_LIGHT, light),
         GameItemEnum::Kicker(kicker) => write_with_type(ITEM_TYPE_KICKER, kicker),
+        GameItemEnum::Decal(decal) => write_with_type(ITEM_TYPE_DECAL, decal),
+        GameItemEnum::Gate(gate) => write_with_type(ITEM_TYPE_GATE, gate),
+        // GameItemEnum::Spinner(spinner) => write_with_type(ITEM_TYPE_SPINNER, spinner),
+        GameItemEnum::Ramp(ramp) => write_with_type(ITEM_TYPE_RAMP, ramp),
+        // GameItemEnum::Table(table) => write_with_type(ITEM_TYPE_TABLE, table),
+        // GameItemEnum::LightCenter(lightcenter) => {
+        //     write_with_type(ITEM_TYPE_LIGHT_CENTER, lightcenter)
+        // }
+        // GameItemEnum::DragPoint(dragpoint) => write_with_type(ITEM_TYPE_DRAG_POINT, dragpoint),
+        // GameItemEnum::Collection(collection) => write_with_type(ITEM_TYPE_COLLECTION, collection),
+        // GameItemEnum::Reel(reel) => write_with_type(ITEM_TYPE_REEL, reel),
+        // GameItemEnum::LightSequencer(lightsequencer) => {
+        //     write_with_type(ITEM_TYPE_LIGHT_SEQUENCER, lightsequencer)
+        // }
+        GameItemEnum::Primitive(primitive) => write_with_type(ITEM_TYPE_PRIMITIVE, primitive),
+        // GameItemEnum::Flasher(flasher) => write_with_type(ITEM_TYPE_FLASHER, flasher),
+        GameItemEnum::Rubber(rubber) => write_with_type(ITEM_TYPE_RUBBER, rubber),
+        // GameItemEnum::HitTarget(hittarget) => write_with_type(ITEM_TYPE_HIT_TARGET, hittarget),
+        // GameItemEnum::Generic(item_type, generic) => write_with_type(*item_type, generic),
         _ => {
             println!("TODO: write gameitem {:?}", gameitem);
             vec![]
@@ -274,6 +293,6 @@ pub(crate) fn write(gameitem: &GameItemEnum) -> Vec<u8> {
 fn write_with_type<T: BiffWrite>(item_type: u32, item: &T) -> Vec<u8> {
     let mut writer = BiffWriter::new();
     writer.write_u32(item_type);
-    BiffWrite::biff_write(item, &mut writer);
+    item.biff_write(&mut writer);
     writer.get_data().to_vec()
 }

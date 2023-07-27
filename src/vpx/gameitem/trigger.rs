@@ -184,31 +184,31 @@ impl BiffRead for Trigger {
 }
 
 impl BiffWrite for Trigger {
-    fn biff_write(item: &Self, writer: &mut biff::BiffWriter) {
-        writer.write_tagged("VCEN", &item.center);
-        writer.write_tagged_f32("RADI", item.radius);
-        writer.write_tagged_f32("ROTA", item.rotation);
-        writer.write_tagged_f32("WITI", item.wire_thickness);
-        writer.write_tagged_f32("SCAX", item.scale_x);
-        writer.write_tagged_f32("SCAY", item.scale_y);
-        writer.write_tagged_bool("TMON", item.is_timer_enabled);
-        writer.write_tagged_i32("TMIN", item.timer_interval);
-        writer.write_tagged_string("MATR", &item.material);
-        writer.write_tagged_string("SURF", &item.surface);
-        writer.write_tagged_bool("VSBL", item.is_visible);
-        writer.write_tagged_bool("EBLD", item.is_enabled);
-        writer.write_tagged_f32("THOT", item.hit_height);
-        writer.write_tagged_wide_string("NAME", &item.name);
-        writer.write_tagged_u32("SHAP", item.shape);
-        writer.write_tagged_f32("ANSP", item.anim_speed);
-        writer.write_tagged_bool("REEN", item.is_reflection_enabled);
+    fn biff_write(&self, writer: &mut biff::BiffWriter) {
+        writer.write_tagged("VCEN", &self.center);
+        writer.write_tagged_f32("RADI", self.radius);
+        writer.write_tagged_f32("ROTA", self.rotation);
+        writer.write_tagged_f32("WITI", self.wire_thickness);
+        writer.write_tagged_f32("SCAX", self.scale_x);
+        writer.write_tagged_f32("SCAY", self.scale_y);
+        writer.write_tagged_bool("TMON", self.is_timer_enabled);
+        writer.write_tagged_i32("TMIN", self.timer_interval);
+        writer.write_tagged_string("MATR", &self.material);
+        writer.write_tagged_string("SURF", &self.surface);
+        writer.write_tagged_bool("VSBL", self.is_visible);
+        writer.write_tagged_bool("EBLD", self.is_enabled);
+        writer.write_tagged_f32("THOT", self.hit_height);
+        writer.write_tagged_wide_string("NAME", &self.name);
+        writer.write_tagged_u32("SHAP", self.shape);
+        writer.write_tagged_f32("ANSP", self.anim_speed);
+        writer.write_tagged_bool("REEN", self.is_reflection_enabled);
         // shared
-        writer.write_tagged_bool("LOCK", item.is_locked);
-        writer.write_tagged_u32("LAYR", item.editor_layer);
-        writer.write_tagged_string("LANR", &item.editor_layer_name);
-        writer.write_tagged_bool("LVIS", item.editor_layer_visibility);
+        writer.write_tagged_bool("LOCK", self.is_locked);
+        writer.write_tagged_u32("LAYR", self.editor_layer);
+        writer.write_tagged_string("LANR", &self.editor_layer_name);
+        writer.write_tagged_bool("LVIS", self.editor_layer_visibility);
 
-        for point in &item.drag_points {
+        for point in &self.drag_points {
             writer.write_tagged("DPNT", point);
         }
 

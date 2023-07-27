@@ -120,23 +120,23 @@ impl BiffRead for DragPoint {
 }
 
 impl BiffWrite for DragPoint {
-    fn biff_write(item: &Self, writer: &mut biff::BiffWriter) {
+    fn biff_write(&self, writer: &mut biff::BiffWriter) {
         writer.new_tag("VCEN");
-        writer.write_f32(item.x);
-        writer.write_f32(item.y);
+        writer.write_f32(self.x);
+        writer.write_f32(self.y);
         writer.end_tag();
-        writer.write_tagged_f32("POSZ", item.z);
-        writer.write_tagged_bool("SMTH", item.smooth);
-        if let Some(is_slingshot) = item.is_slingshot {
+        writer.write_tagged_f32("POSZ", self.z);
+        writer.write_tagged_bool("SMTH", self.smooth);
+        if let Some(is_slingshot) = self.is_slingshot {
             writer.write_tagged_bool("SLNG", is_slingshot);
         }
-        writer.write_tagged_bool("ATEX", item.has_auto_texture);
-        writer.write_tagged_f32("TEXC", item.tex_coord);
+        writer.write_tagged_bool("ATEX", self.has_auto_texture);
+        writer.write_tagged_f32("TEXC", self.tex_coord);
         // shared
-        writer.write_tagged_bool("LOCK", item.is_locked);
-        writer.write_tagged_u32("LAYR", item.editor_layer);
-        writer.write_tagged_string("LANR", &item.editor_layer_name);
-        writer.write_tagged_bool("LVIS", item.editor_layer_visibility);
+        writer.write_tagged_bool("LOCK", self.is_locked);
+        writer.write_tagged_u32("LAYR", self.editor_layer);
+        writer.write_tagged_string("LANR", &self.editor_layer_name);
+        writer.write_tagged_bool("LVIS", self.editor_layer_visibility);
         writer.close(true);
     }
 }

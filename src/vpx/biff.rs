@@ -8,7 +8,7 @@ pub trait BiffRead {
 }
 
 pub trait BiffWrite {
-    fn biff_write(item: &Self, writer: &mut BiffWriter);
+    fn biff_write(&self, writer: &mut BiffWriter);
 }
 
 pub struct BiffReader<'a> {
@@ -583,6 +583,11 @@ impl BiffWriter {
         if write_endb {
             self.new_tag("ENDB");
         }
+        self.end_tag();
+    }
+
+    pub(crate) fn write_marker_tag(&mut self, tag: &str) {
+        self.new_tag(tag);
         self.end_tag();
     }
 }

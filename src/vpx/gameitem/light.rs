@@ -181,44 +181,44 @@ impl BiffRead for Light {
 }
 
 impl BiffWrite for Light {
-    fn biff_write(item: &Self, writer: &mut biff::BiffWriter) {
+    fn biff_write(&self, writer: &mut biff::BiffWriter) {
         // write all fields like n the read
-        writer.write_tagged("VCEN", &item.center);
-        writer.write_tagged_f32("RADI", item.falloff_radius);
-        writer.write_tagged_f32("FAPO", item.falloff_power);
-        writer.write_tagged_u32("STAT", item.status);
-        writer.write_tagged_with("COLR", &item.color, Color::biff_write_bgr);
-        writer.write_tagged_with("COL2", &item.color2, Color::biff_write_bgr);
-        writer.write_tagged_bool("TMON", item.is_timer_enabled);
-        writer.write_tagged_u32("TMIN", item.timer_interval);
-        writer.write_tagged_string("BPAT", &item.blink_pattern);
-        writer.write_tagged_string("IMG1", &item.off_image);
-        writer.write_tagged_u32("BINT", item.blink_interval);
-        writer.write_tagged_f32("BWTH", item.intensity);
-        writer.write_tagged_f32("TRMS", item.transmission_scale);
+        writer.write_tagged("VCEN", &self.center);
+        writer.write_tagged_f32("RADI", self.falloff_radius);
+        writer.write_tagged_f32("FAPO", self.falloff_power);
+        writer.write_tagged_u32("STAT", self.status);
+        writer.write_tagged_with("COLR", &self.color, Color::biff_write_bgr);
+        writer.write_tagged_with("COL2", &self.color2, Color::biff_write_bgr);
+        writer.write_tagged_bool("TMON", self.is_timer_enabled);
+        writer.write_tagged_u32("TMIN", self.timer_interval);
+        writer.write_tagged_string("BPAT", &self.blink_pattern);
+        writer.write_tagged_string("IMG1", &self.off_image);
+        writer.write_tagged_u32("BINT", self.blink_interval);
+        writer.write_tagged_f32("BWTH", self.intensity);
+        writer.write_tagged_f32("TRMS", self.transmission_scale);
 
-        writer.write_tagged_string("SURF", &item.surface);
-        writer.write_tagged_wide_string("NAME", &item.name);
+        writer.write_tagged_string("SURF", &self.surface);
+        writer.write_tagged_wide_string("NAME", &self.name);
         // shared
-        writer.write_tagged_bool("LOCK", item.is_locked);
-        writer.write_tagged_u32("LAYR", item.editor_layer);
-        writer.write_tagged_string("LANR", &item.editor_layer_name);
-        writer.write_tagged_bool("LVIS", item.editor_layer_visibility);
+        writer.write_tagged_bool("LOCK", self.is_locked);
+        writer.write_tagged_u32("LAYR", self.editor_layer);
+        writer.write_tagged_string("LANR", &self.editor_layer_name);
+        writer.write_tagged_bool("LVIS", self.editor_layer_visibility);
 
-        writer.write_tagged_bool("BGLS", item.is_backglass);
-        writer.write_tagged_f32("LIDB", item.depth_bias);
-        writer.write_tagged_f32("FASP", item.fade_speed_up);
-        writer.write_tagged_f32("FASD", item.fade_speed_down);
-        writer.write_tagged_bool("BULT", item.is_bulb_light);
-        writer.write_tagged_bool("IMMO", item.is_image_mode);
-        writer.write_tagged_bool("SHBM", item.show_bulb_mesh);
-        writer.write_tagged_bool("STBM", item.has_static_bulb_mesh);
-        writer.write_tagged_bool("SHRB", item.show_reflection_on_ball);
-        writer.write_tagged_f32("BMSC", item.mesh_radius);
-        writer.write_tagged_f32("BMVA", item.bulb_modulate_vs_add);
-        writer.write_tagged_f32("BHHI", item.bulb_halo_height);
+        writer.write_tagged_bool("BGLS", self.is_backglass);
+        writer.write_tagged_f32("LIDB", self.depth_bias);
+        writer.write_tagged_f32("FASP", self.fade_speed_up);
+        writer.write_tagged_f32("FASD", self.fade_speed_down);
+        writer.write_tagged_bool("BULT", self.is_bulb_light);
+        writer.write_tagged_bool("IMMO", self.is_image_mode);
+        writer.write_tagged_bool("SHBM", self.show_bulb_mesh);
+        writer.write_tagged_bool("STBM", self.has_static_bulb_mesh);
+        writer.write_tagged_bool("SHRB", self.show_reflection_on_ball);
+        writer.write_tagged_f32("BMSC", self.mesh_radius);
+        writer.write_tagged_f32("BMVA", self.bulb_modulate_vs_add);
+        writer.write_tagged_f32("BHHI", self.bulb_halo_height);
         // many of these
-        for point in &item.drag_points {
+        for point in &self.drag_points {
             writer.write_tagged("DPNT", point);
         }
         writer.close(true);

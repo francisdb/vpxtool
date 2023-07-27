@@ -92,17 +92,17 @@ impl BiffRead for Timer {
 }
 
 impl BiffWrite for Timer {
-    fn biff_write(item: &Self, writer: &mut biff::BiffWriter) {
-        writer.write_tagged("VCEN", &item.center);
-        writer.write_tagged_bool("TMON", item.is_timer_enabled);
-        writer.write_tagged_i32("TMIN", item.timer_interval);
-        writer.write_tagged_wide_string("NAME", &item.name);
-        writer.write_tagged_bool("BGLS", item.backglass);
+    fn biff_write(&self, writer: &mut biff::BiffWriter) {
+        writer.write_tagged("VCEN", &self.center);
+        writer.write_tagged_bool("TMON", self.is_timer_enabled);
+        writer.write_tagged_i32("TMIN", self.timer_interval);
+        writer.write_tagged_wide_string("NAME", &self.name);
+        writer.write_tagged_bool("BGLS", self.backglass);
         // shared
-        writer.write_tagged_bool("LOCK", item.is_locked);
-        writer.write_tagged_u32("LAYR", item.editor_layer);
-        writer.write_tagged_string("LANR", &item.editor_layer_name);
-        writer.write_tagged_bool("LVIS", item.editor_layer_visibility);
+        writer.write_tagged_bool("LOCK", self.is_locked);
+        writer.write_tagged_u32("LAYR", self.editor_layer);
+        writer.write_tagged_string("LANR", &self.editor_layer_name);
+        writer.write_tagged_bool("LVIS", self.editor_layer_visibility);
         writer.close(true);
     }
 }

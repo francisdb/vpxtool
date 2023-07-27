@@ -1,5 +1,5 @@
 use crate::vpx::{
-    biff::{self, BiffRead, BiffReader},
+    biff::{self, BiffRead, BiffReader, BiffWrite, BiffWriter},
     color::Color,
 };
 
@@ -170,5 +170,72 @@ impl BiffRead for Decal {
             editor_layer_name,
             editor_layer_visibility,
         }
+    }
+}
+
+impl BiffWrite for Decal {
+    fn biff_write(&self, writer: &mut biff::BiffWriter) {
+        writer.write_tagged("VCEN", &self.center);
+        writer.write_tagged_f32("WDTH", self.width);
+        writer.write_tagged_f32("HIGH", self.height);
+        writer.write_tagged_f32("ROTA", self.rotation);
+        writer.write_tagged_string("IMAG", &self.image);
+        writer.write_tagged_string("SURF", &self.surface);
+        writer.write_tagged_wide_string("NAME", &self.name);
+        writer.write_tagged_string("TEXT", &self.text);
+        writer.write_tagged_u32("TYPE", self.decal_type);
+        writer.write_tagged_string("MATR", &self.material);
+        writer.write_tagged_with("COLR", &self.color, Color::biff_write_bgr);
+        writer.write_tagged_u32("SIZE", self.sizing_type);
+        writer.write_tagged_bool("VERT", self.vertical_text);
+        writer.write_tagged_bool("BGLS", self.backglass);
+
+        writer.write_tagged("FONT", &self.font);
+
+        // shared
+        writer.write_tagged_bool("LOCK", self.is_locked);
+        writer.write_tagged_u32("LAYR", self.editor_layer);
+        writer.write_tagged_string("LANR", &self.editor_layer_name);
+        writer.write_tagged_bool("LVIS", self.editor_layer_visibility);
+
+        writer.close(true);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::vpx::biff::BiffWriter;
+
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_write_read() {
+        // values not equal to the defaults
+        let decal = Decal {
+            center: Vertex2D::new(1.0, 2.0),
+            width: 3.0,
+            height: 4.0,
+            rotation: 5.0,
+            image: "image".to_owned(),
+            surface: "surface".to_owned(),
+            name: "name".to_owned(),
+            text: "text".to_owned(),
+            decal_type: 1,
+            material: "material".to_owned(),
+            color: Color::new_bgr(0x010203),
+            sizing_type: 2,
+            vertical_text: true,
+            backglass: true,
+            font: Font::default(),
+            is_locked: true,
+            editor_layer: 3,
+            editor_layer_name: "editor_layer_name".to_owned(),
+            editor_layer_visibility: false,
+        };
+        let mut writer = BiffWriter::new();
+        Decal::biff_write(&decal, &mut writer);
+        let decal_read = Decal::biff_read(&mut BiffReader::new(writer.get_data()));
+        assert_eq!(decal, decal_read);
     }
 }

@@ -57,12 +57,12 @@ impl BiffRead for Font {
 }
 
 impl BiffWrite for Font {
-    fn biff_write(font: &Self, writer: &mut BiffWriter) {
+    fn biff_write(&self, writer: &mut BiffWriter) {
         writer.write_data(&[0x01, 0x00, 0x00]);
-        writer.write_u8(font.style);
-        writer.write_u16(font.weight);
-        writer.write_u32(font.size);
-        writer.write_short_string(&font.name);
+        writer.write_u8(self.style);
+        writer.write_u16(self.weight);
+        writer.write_u32(self.size);
+        writer.write_short_string(&self.name);
     }
 }
 

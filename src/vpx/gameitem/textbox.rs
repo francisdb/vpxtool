@@ -146,24 +146,25 @@ impl BiffRead for TextBox {
 }
 
 impl BiffWrite for TextBox {
-    fn biff_write(item: &Self, writer: &mut biff::BiffWriter) {
-        writer.write_tagged("VER1", &item.ver1);
-        writer.write_tagged("VER2", &item.ver2);
-        writer.write_tagged_with("CLRB", &item.back_color, Color::biff_write_bgr);
-        writer.write_tagged_with("CLRF", &item.font_color, Color::biff_write_bgr);
-        writer.write_tagged_f32("INSC", item.intensity_scale);
-        writer.write_tagged_string("TEXT", &item.text);
-        writer.write_tagged_bool("TMON", item.is_timer_enabled);
-        writer.write_tagged_u32("TMIN", item.timer_interval);
-        writer.write_tagged_wide_string("NAME", &item.name);
-        writer.write_tagged_u32("ALGN", item.align);
-        writer.write_tagged_bool("TRNS", item.is_transparent);
-        writer.write_tagged_bool("IDMD", item.is_dmd);
+    fn biff_write(&self, writer: &mut biff::BiffWriter) {
+        writer.write_tagged("VER1", &self.ver1);
+        writer.write_tagged("VER2", &self.ver2);
+        writer.write_tagged_with("CLRB", &self.back_color, Color::biff_write_bgr);
+        writer.write_tagged_with("CLRF", &self.font_color, Color::biff_write_bgr);
+        writer.write_tagged_f32("INSC", self.intensity_scale);
+        writer.write_tagged_string("TEXT", &self.text);
+        writer.write_tagged_bool("TMON", self.is_timer_enabled);
+        writer.write_tagged_u32("TMIN", self.timer_interval);
+        writer.write_tagged_wide_string("NAME", &self.name);
+        writer.write_tagged_u32("ALGN", self.align);
+        writer.write_tagged_bool("TRNS", self.is_transparent);
+        writer.write_tagged_bool("IDMD", self.is_dmd);
+        writer.write_tagged("FONT", &self.font);
         // shared
-        writer.write_tagged_bool("LOCK", item.is_locked);
-        writer.write_tagged_u32("LAYR", item.editor_layer);
-        writer.write_tagged_string("LANR", &item.editor_layer_name);
-        writer.write_tagged_bool("LVIS", item.editor_layer_visibility);
+        writer.write_tagged_bool("LOCK", self.is_locked);
+        writer.write_tagged_u32("LAYR", self.editor_layer);
+        writer.write_tagged_string("LANR", &self.editor_layer_name);
+        writer.write_tagged_bool("LVIS", self.editor_layer_visibility);
         writer.close(true);
     }
 }
@@ -190,7 +191,7 @@ mod tests {
             align: 0,
             is_transparent: false,
             is_dmd: false,
-            font: Font::default(),
+            font: Font::new(2, 123, 456, "test font".to_string()),
             is_locked: false,
             editor_layer: 1,
             editor_layer_name: "test layer".to_string(),

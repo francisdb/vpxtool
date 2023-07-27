@@ -665,6 +665,26 @@ mod tests {
     }
 
     #[test]
+    fn read_write_gameitems() {
+        let path = PathBuf::from("testdata/completely_blank_table_10_7_4.vpx");
+        let mut comp = cfb::open(path).unwrap();
+
+        let gamedata = read_gamedata(&mut comp).unwrap();
+        let original = read_gameitems(&mut comp, &gamedata).unwrap();
+
+        let buff = Cursor::new(vec![0; 15]);
+        let mut comp = CompoundFile::create(buff).unwrap();
+        create_game_storage(&mut comp).unwrap();
+        write_game_items(&mut comp, &original).unwrap();
+
+        let read = read_gameitems(&mut comp, &gamedata).unwrap();
+
+        assert_eq!(original.len(), read.len());
+        assert_eq!(original, read);
+        // TODO match original bytes and written bytes for each item
+    }
+
+    #[test]
     fn read() {
         let path = PathBuf::from("testdata/completely_blank_table_10_7_4.vpx");
         let mut comp = cfb::open(path).unwrap();

@@ -270,44 +270,44 @@ impl BiffRead for Flipper {
 }
 
 impl BiffWrite for Flipper {
-    fn biff_write(item: &Self, writer: &mut biff::BiffWriter) {
-        writer.write_tagged("VCEN", &item.center);
-        writer.write_tagged_f32("BASR", item.base_radius);
-        writer.write_tagged_f32("ENDR", item.end_radius);
-        writer.write_tagged_f32("FLPR", item.flipper_radius_max);
-        writer.write_tagged_f32("FRTN", item.return_);
-        writer.write_tagged_f32("ANGS", item.start_angle);
-        writer.write_tagged_f32("ANGE", item.end_angle);
-        writer.write_tagged_u32("OVRP", item.override_physics);
-        writer.write_tagged_f32("FORC", item.mass);
-        writer.write_tagged_bool("TMON", item.is_timer_enabled);
-        writer.write_tagged_u32("TMIN", item.timer_interval);
-        writer.write_tagged_string("SURF", &item.surface);
-        writer.write_tagged_string("MATR", &item.material);
-        writer.write_tagged_wide_string("NAME", &item.name);
-        writer.write_tagged_string("RUMA", &item.rubber_material);
-        writer.write_tagged_f32("RTHK", item.rubber_thickness);
-        writer.write_tagged_f32("RHGT", item.rubber_height);
-        writer.write_tagged_f32("RWDT", item.rubber_width);
-        writer.write_tagged_f32("STRG", item.strength);
-        writer.write_tagged_f32("ELAS", item.elasticity);
-        writer.write_tagged_f32("ELFO", item.elasticity_falloff);
-        writer.write_tagged_f32("FRIC", item.friction);
-        writer.write_tagged_f32("RPUP", item.ramp_up);
-        writer.write_tagged_f32("SCTR", item.scatter);
-        writer.write_tagged_f32("TODA", item.torque_damping);
-        writer.write_tagged_f32("TDAA", item.torque_damping_angle);
-        writer.write_tagged_bool("VSBL", item.is_visible);
-        writer.write_tagged_bool("ENBL", item.is_enabled);
-        writer.write_tagged_f32("FRMN", item.flipper_radius_min);
-        writer.write_tagged_f32("FHGT", item.height);
-        writer.write_tagged_string("IMAG", &item.image);
-        writer.write_tagged_bool("REEN", item.is_reflection_enabled);
+    fn biff_write(&self, writer: &mut biff::BiffWriter) {
+        writer.write_tagged("VCEN", &self.center);
+        writer.write_tagged_f32("BASR", self.base_radius);
+        writer.write_tagged_f32("ENDR", self.end_radius);
+        writer.write_tagged_f32("FLPR", self.flipper_radius_max);
+        writer.write_tagged_f32("FRTN", self.return_);
+        writer.write_tagged_f32("ANGS", self.start_angle);
+        writer.write_tagged_f32("ANGE", self.end_angle);
+        writer.write_tagged_u32("OVRP", self.override_physics);
+        writer.write_tagged_f32("FORC", self.mass);
+        writer.write_tagged_bool("TMON", self.is_timer_enabled);
+        writer.write_tagged_u32("TMIN", self.timer_interval);
+        writer.write_tagged_string("SURF", &self.surface);
+        writer.write_tagged_string("MATR", &self.material);
+        writer.write_tagged_wide_string("NAME", &self.name);
+        writer.write_tagged_string("RUMA", &self.rubber_material);
+        writer.write_tagged_f32("RTHK", self.rubber_thickness);
+        writer.write_tagged_f32("RHGT", self.rubber_height);
+        writer.write_tagged_f32("RWDT", self.rubber_width);
+        writer.write_tagged_f32("STRG", self.strength);
+        writer.write_tagged_f32("ELAS", self.elasticity);
+        writer.write_tagged_f32("ELFO", self.elasticity_falloff);
+        writer.write_tagged_f32("FRIC", self.friction);
+        writer.write_tagged_f32("RPUP", self.ramp_up);
+        writer.write_tagged_f32("SCTR", self.scatter);
+        writer.write_tagged_f32("TODA", self.torque_damping);
+        writer.write_tagged_f32("TDAA", self.torque_damping_angle);
+        writer.write_tagged_bool("VSBL", self.is_visible);
+        writer.write_tagged_bool("ENBL", self.is_enabled);
+        writer.write_tagged_f32("FRMN", self.flipper_radius_min);
+        writer.write_tagged_f32("FHGT", self.height);
+        writer.write_tagged_string("IMAG", &self.image);
+        writer.write_tagged_bool("REEN", self.is_reflection_enabled);
         // shared
-        writer.write_tagged_bool("LOCK", item.is_locked);
-        writer.write_tagged_u32("LAYR", item.editor_layer);
-        writer.write_tagged_string("LANR", &item.editor_layer_name);
-        writer.write_tagged_bool("LVIS", item.editor_layer_visibility);
+        writer.write_tagged_bool("LOCK", self.is_locked);
+        writer.write_tagged_u32("LAYR", self.editor_layer);
+        writer.write_tagged_string("LANR", &self.editor_layer_name);
+        writer.write_tagged_bool("LVIS", self.editor_layer_visibility);
 
         writer.close(true);
     }

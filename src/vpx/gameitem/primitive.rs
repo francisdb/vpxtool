@@ -1,5 +1,5 @@
 use crate::vpx::{
-    biff::{self, BiffRead, BiffReader},
+    biff::{self, BiffRead, BiffReader, BiffWrite},
     color::Color,
 };
 
@@ -352,5 +352,131 @@ impl BiffRead for Primitive {
             editor_layer_name,
             editor_layer_visibility,
         }
+    }
+}
+
+impl BiffWrite for Primitive {
+    fn biff_write(&self, writer: &mut biff::BiffWriter) {
+        writer.write_tagged("VPOS", &self.position);
+        writer.write_tagged("VSIZ", &self.size);
+        writer.write_tagged_f32("RTV0", self.rot_and_tra[0]);
+        writer.write_tagged_f32("RTV1", self.rot_and_tra[1]);
+        writer.write_tagged_f32("RTV2", self.rot_and_tra[2]);
+        writer.write_tagged_f32("RTV3", self.rot_and_tra[3]);
+        writer.write_tagged_f32("RTV4", self.rot_and_tra[4]);
+        writer.write_tagged_f32("RTV5", self.rot_and_tra[5]);
+        writer.write_tagged_f32("RTV6", self.rot_and_tra[6]);
+        writer.write_tagged_f32("RTV7", self.rot_and_tra[7]);
+        writer.write_tagged_f32("RTV8", self.rot_and_tra[8]);
+        writer.write_tagged_string("IMAG", &self.image);
+        writer.write_tagged_string("NRMA", &self.normal_map);
+        writer.write_tagged_u32("SIDS", self.sides);
+        writer.write_tagged_wide_string("NAME", &self.name);
+        writer.write_tagged_string("MATR", &self.material);
+        writer.write_tagged_with("SCOL", &self.side_color, Color::biff_write_bgr);
+        writer.write_tagged_bool("TVIS", self.is_visible);
+        writer.write_tagged_bool("DTXI", self.draw_textures_inside);
+        writer.write_tagged_bool("HTEV", self.hit_event);
+        writer.write_tagged_f32("THRS", self.threshold);
+        writer.write_tagged_f32("ELAS", self.elasticity);
+        writer.write_tagged_f32("ELFO", self.elasticity_falloff);
+        writer.write_tagged_f32("RFCT", self.friction);
+        writer.write_tagged_f32("RSCT", self.scatter);
+        writer.write_tagged_f32("EFUI", self.edge_factor_ui);
+        writer.write_tagged_f32("CORF", self.collision_reduction_factor);
+        writer.write_tagged_bool("CLDR", self.is_collidable);
+        writer.write_tagged_bool("ISTO", self.is_toy);
+        writer.write_tagged_bool("U3DM", self.use_3d_mesh);
+        writer.write_tagged_bool("STRE", self.static_rendering);
+        writer.write_tagged_bool("DILI", self.disable_lighting_top);
+        writer.write_tagged_bool("DILB", self.disable_lighting_below);
+        writer.write_tagged_bool("REEN", self.is_reflection_enabled);
+        writer.write_tagged_bool("EBFC", self.backfaces_enabled);
+        writer.write_tagged_string("MAPH", &self.physics_material);
+        writer.write_tagged_bool("OVPH", self.overwrite_physics);
+        writer.write_tagged_bool("DIPT", self.display_texture);
+        writer.write_tagged_bool("OSNM", self.object_space_normal_map);
+        writer.write_tagged_string("M3DN", &self.mesh_file_name);
+        writer.write_tagged_u32("M3VN", self.num_vertices);
+        writer.write_tagged_u32("M3CY", self.compressed_vertices);
+        writer.write_tagged_u32("M3FN", self.num_indices);
+        writer.write_tagged_u32("M3CJ", self.compressed_indices);
+        writer.write_tagged_f32("PIDB", self.depth_bias);
+        writer.write_tagged_bool("ADDB", self.add_blend);
+        writer.write_tagged_f32("FALP", self.alpha);
+        writer.write_tagged_with("COLR", &self.color, Color::biff_write_bgr);
+        // shared
+        writer.write_tagged_bool("LOCK", self.is_locked);
+        writer.write_tagged_u32("LAYR", self.editor_layer);
+        writer.write_tagged_string("LANR", &self.editor_layer_name);
+        writer.write_tagged_bool("LVIS", self.editor_layer_visibility);
+
+        writer.close(true);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::vpx::biff::BiffWriter;
+
+    use super::*;
+    use pretty_assertions::assert_eq;
+    use rand::Rng;
+
+    #[test]
+    fn test_write_read() {
+        let mut rng = rand::thread_rng();
+        // values not equal to the defaults
+        let primitive: Primitive = Primitive {
+            position: Vertex3D::new(1.0, 2.0, 3.0),
+            size: Vertex3D::new(4.0, 5.0, 6.0),
+            rot_and_tra: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
+            image: "image".to_string(),
+            normal_map: "normal_map".to_string(),
+            sides: 1,
+            name: "name".to_string(),
+            material: "material".to_string(),
+            side_color: Color::new_bgr(0x12345678),
+            is_visible: rng.gen(),
+            // random bool
+            draw_textures_inside: rng.gen(),
+            hit_event: rng.gen(),
+            threshold: 1.0,
+            elasticity: 2.0,
+            elasticity_falloff: 3.0,
+            friction: 4.0,
+            scatter: 5.0,
+            edge_factor_ui: 6.0,
+            collision_reduction_factor: 7.0,
+            is_collidable: rng.gen(),
+            is_toy: rng.gen(),
+            use_3d_mesh: rng.gen(),
+            static_rendering: rng.gen(),
+            disable_lighting_top: rng.gen(),
+            disable_lighting_below: rng.gen(),
+            is_reflection_enabled: rng.gen(),
+            backfaces_enabled: rng.gen(),
+            physics_material: "physics_material".to_string(),
+            overwrite_physics: rng.gen(),
+            display_texture: rng.gen(),
+            object_space_normal_map: rng.gen(),
+            mesh_file_name: "mesh_file_name".to_string(),
+            num_vertices: 8,
+            compressed_vertices: 9,
+            num_indices: 10,
+            compressed_indices: 11,
+            depth_bias: 12.0,
+            add_blend: rng.gen(),
+            alpha: 13.0,
+            color: Color::new_bgr(0x23456789),
+            is_locked: rng.gen(),
+            editor_layer: 17,
+            editor_layer_name: "editor_layer_name".to_string(),
+            editor_layer_visibility: rng.gen(),
+        };
+        let mut writer = BiffWriter::new();
+        Primitive::biff_write(&primitive, &mut writer);
+        let primitive_read = Primitive::biff_read(&mut BiffReader::new(writer.get_data()));
+        assert_eq!(primitive, primitive_read);
     }
 }

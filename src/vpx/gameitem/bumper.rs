@@ -212,37 +212,37 @@ impl BiffRead for Bumper {
 }
 
 impl BiffWrite for Bumper {
-    fn biff_write(item: &Self, writer: &mut biff::BiffWriter) {
-        writer.write_tagged("VCEN", &item.center);
-        writer.write_tagged_f32("RADI", item.radius);
-        writer.write_tagged_bool("TMON", item.is_timer_enabled);
-        writer.write_tagged_i32("TMIN", item.timer_interval);
-        writer.write_tagged_f32("THRS", item.threshold);
-        writer.write_tagged_f32("FORC", item.force);
-        writer.write_tagged_f32("BSCT", item.scatter);
-        writer.write_tagged_f32("HISC", item.height_scale);
-        writer.write_tagged_f32("RISP", item.ring_speed);
-        writer.write_tagged_f32("ORIN", item.orientation);
-        writer.write_tagged_f32("RDLI", item.ring_drop_offset);
-        writer.write_tagged_string("MATR", &item.cap_material);
-        writer.write_tagged_string("BAMA", &item.base_material);
-        writer.write_tagged_string("SKMA", &item.socket_material);
-        writer.write_tagged_string("RIMA", &item.ring_material);
-        writer.write_tagged_string("SURF", &item.surface);
-        writer.write_tagged_wide_string("NAME", &item.name);
-        writer.write_tagged_bool("CAVI", item.is_cap_visible);
-        writer.write_tagged_bool("BSVS", item.is_base_visible);
-        writer.write_tagged_bool("RIVS", item.is_ring_visible);
-        writer.write_tagged_bool("SKVS", item.is_socket_visible);
-        writer.write_tagged_bool("HAHE", item.hit_event);
-        writer.write_tagged_bool("COLI", item.is_collidable);
-        writer.write_tagged_bool("REEN", item.is_reflection_enabled);
+    fn biff_write(&self, writer: &mut biff::BiffWriter) {
+        writer.write_tagged("VCEN", &self.center);
+        writer.write_tagged_f32("RADI", self.radius);
+        writer.write_tagged_bool("TMON", self.is_timer_enabled);
+        writer.write_tagged_i32("TMIN", self.timer_interval);
+        writer.write_tagged_f32("THRS", self.threshold);
+        writer.write_tagged_f32("FORC", self.force);
+        writer.write_tagged_f32("BSCT", self.scatter);
+        writer.write_tagged_f32("HISC", self.height_scale);
+        writer.write_tagged_f32("RISP", self.ring_speed);
+        writer.write_tagged_f32("ORIN", self.orientation);
+        writer.write_tagged_f32("RDLI", self.ring_drop_offset);
+        writer.write_tagged_string("MATR", &self.cap_material);
+        writer.write_tagged_string("BAMA", &self.base_material);
+        writer.write_tagged_string("SKMA", &self.socket_material);
+        writer.write_tagged_string("RIMA", &self.ring_material);
+        writer.write_tagged_string("SURF", &self.surface);
+        writer.write_tagged_wide_string("NAME", &self.name);
+        writer.write_tagged_bool("CAVI", self.is_cap_visible);
+        writer.write_tagged_bool("BSVS", self.is_base_visible);
+        writer.write_tagged_bool("RIVS", self.is_ring_visible);
+        writer.write_tagged_bool("SKVS", self.is_socket_visible);
+        writer.write_tagged_bool("HAHE", self.hit_event);
+        writer.write_tagged_bool("COLI", self.is_collidable);
+        writer.write_tagged_bool("REEN", self.is_reflection_enabled);
         // shared
-        writer.write_tagged_bool("LOCK", item.is_locked);
-        writer.write_tagged_u32("LAYR", item.editor_layer);
-        writer.write_tagged_string("LANR", &item.editor_layer_name);
-        writer.write_tagged_bool("LVIS", item.editor_layer_visibility);
-        
+        writer.write_tagged_bool("LOCK", self.is_locked);
+        writer.write_tagged_u32("LAYR", self.editor_layer);
+        writer.write_tagged_string("LANR", &self.editor_layer_name);
+        writer.write_tagged_bool("LVIS", self.editor_layer_visibility);
+
         writer.close(true);
     }
 }

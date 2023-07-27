@@ -163,27 +163,27 @@ impl BiffRead for Kicker {
 }
 
 impl BiffWrite for Kicker {
-    fn biff_write(item: &Self, writer: &mut biff::BiffWriter) {
-        writer.write_tagged("VCEN", &item.center);
-        writer.write_tagged_f32("RADI", item.radius);
-        writer.write_tagged_bool("TMON", item.is_timer_enabled);
-        writer.write_tagged_u32("TMIN", item.timer_interval);
-        writer.write_tagged_string("MATR", &item.material);
-        writer.write_tagged_string("SURF", &item.surface);
-        writer.write_tagged_bool("EBLD", item.is_enabled);
-        writer.write_tagged_wide_string("NAME", &item.name);
-        writer.write_tagged_u32("TYPE", item.kicker_type);
-        writer.write_tagged_f32("KSCT", item.scatter);
-        writer.write_tagged_f32("KHAC", item.hit_accuracy);
-        writer.write_tagged_f32("KHHI", item.hit_height);
-        writer.write_tagged_f32("KORI", item.orientation);
-        writer.write_tagged_bool("FATH", item.fall_through);
-        writer.write_tagged_bool("LEMO", item.legacy_mode);
+    fn biff_write(&self, writer: &mut biff::BiffWriter) {
+        writer.write_tagged("VCEN", &self.center);
+        writer.write_tagged_f32("RADI", self.radius);
+        writer.write_tagged_bool("TMON", self.is_timer_enabled);
+        writer.write_tagged_u32("TMIN", self.timer_interval);
+        writer.write_tagged_string("MATR", &self.material);
+        writer.write_tagged_string("SURF", &self.surface);
+        writer.write_tagged_bool("EBLD", self.is_enabled);
+        writer.write_tagged_wide_string("NAME", &self.name);
+        writer.write_tagged_u32("TYPE", self.kicker_type);
+        writer.write_tagged_f32("KSCT", self.scatter);
+        writer.write_tagged_f32("KHAC", self.hit_accuracy);
+        writer.write_tagged_f32("KHHI", self.hit_height);
+        writer.write_tagged_f32("KORI", self.orientation);
+        writer.write_tagged_bool("FATH", self.fall_through);
+        writer.write_tagged_bool("LEMO", self.legacy_mode);
         // shared
-        writer.write_tagged_bool("LOCK", item.is_locked);
-        writer.write_tagged_u32("LAYR", item.editor_layer);
-        writer.write_tagged_string("LANR", &item.editor_layer_name);
-        writer.write_tagged_bool("LVIS", item.editor_layer_visibility);
+        writer.write_tagged_bool("LOCK", self.is_locked);
+        writer.write_tagged_u32("LAYR", self.editor_layer);
+        writer.write_tagged_string("LANR", &self.editor_layer_name);
+        writer.write_tagged_bool("LVIS", self.editor_layer_visibility);
         writer.close(true);
     }
 }
