@@ -1,4 +1,4 @@
-use crate::vpx::biff::{self, BiffRead, BiffReader};
+use crate::vpx::biff::{self, BiffRead, BiffReader, BiffWrite};
 
 use super::vertex2d::Vertex2D;
 
@@ -88,5 +88,48 @@ impl BiffRead for Timer {
             editor_layer_name,
             editor_layer_visibility,
         }
+    }
+}
+
+impl BiffWrite for Timer {
+    fn biff_write(item: &Self, writer: &mut biff::BiffWriter) {
+        writer.write_tagged("VCEN", &item.center);
+        writer.write_tagged_bool("TMON", item.is_timer_enabled);
+        writer.write_tagged_i32("TMIN", item.timer_interval);
+        writer.write_tagged_wide_string("NAME", &item.name);
+        writer.write_tagged_bool("BGLS", item.backglass);
+        // shared
+        writer.write_tagged_bool("LOCK", item.is_locked);
+        writer.write_tagged_u32("LAYR", item.editor_layer);
+        writer.write_tagged_string("LANR", &item.editor_layer_name);
+        writer.write_tagged_bool("LVIS", item.editor_layer_visibility);
+        writer.close(true);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::vpx::biff::BiffWriter;
+
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_write_read() {
+        let timer = Timer {
+            center: Vertex2D::new(1.0, 2.0),
+            is_timer_enabled: true,
+            timer_interval: 3,
+            name: "test timer".to_string(),
+            backglass: false,
+            is_locked: true,
+            editor_layer: 5,
+            editor_layer_name: "test layer".to_string(),
+            editor_layer_visibility: false,
+        };
+        let mut writer = BiffWriter::new();
+        Timer::biff_write(&timer, &mut writer);
+        let timer_read = Timer::biff_read(&mut BiffReader::new(&writer.get_data()));
+        assert_eq!(timer, timer_read);
     }
 }

@@ -28,7 +28,7 @@ mod wall;
 
 use crate::vpx::biff::BiffRead;
 
-use super::biff::BiffReader;
+use super::biff::{BiffReader, BiffWrite, BiffWriter};
 
 // TODO we might come up with a macro that generates the biff reading from the struct annotations
 //   like VPE
@@ -251,4 +251,24 @@ pub fn read(input: &[u8]) -> GameItemEnum {
     // );
     //dbg!(&item);
     item
+}
+
+pub(crate) fn write(gameitem: &GameItemEnum) -> Vec<u8> {
+    match gameitem {
+        GameItemEnum::Wall(wall) => write_with_type(ITEM_TYPE_WALL, wall),
+        GameItemEnum::Flipper(flipper) => write_with_type(ITEM_TYPE_FLIPPER, flipper),
+        GameItemEnum::Timer(timer) => write_with_type(ITEM_TYPE_TIMER, timer),
+        GameItemEnum::Plunger(plunger) => write_with_type(ITEM_TYPE_PLUNGER, plunger),
+        _ => {
+            println!("TODO: write gameitem {:?}", gameitem);
+            vec![]
+        }
+    }
+}
+
+fn write_with_type<T: BiffWrite>(item_type: u32, item: &T) -> Vec<u8> {
+    let mut writer = BiffWriter::new();
+    writer.write_u32(item_type);
+    BiffWrite::biff_write(item, &mut writer);
+    writer.get_data().to_vec()
 }

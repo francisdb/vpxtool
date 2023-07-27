@@ -1,4 +1,4 @@
-use crate::vpx::biff::{self, BiffRead, BiffReader};
+use crate::vpx::biff::{self, BiffRead, BiffReader, BiffWrite};
 
 use super::vertex2d::Vertex2D;
 
@@ -258,5 +258,103 @@ impl BiffRead for Plunger {
             editor_layer_name,
             editor_layer_visibility,
         }
+    }
+}
+
+impl BiffWrite for Plunger {
+    fn biff_write(item: &Self, writer: &mut biff::BiffWriter) {
+        writer.write_tagged("VCEN", &item.center);
+        writer.write_tagged_f32("WDTH", item.width);
+        writer.write_tagged_f32("HIGH", item.height);
+        writer.write_tagged_f32("ZADJ", item.z_adjust);
+        writer.write_tagged_f32("HPSL", item.stroke);
+        writer.write_tagged_f32("SPDP", item.speed_pull);
+        writer.write_tagged_f32("SPDF", item.speed_fire);
+        writer.write_tagged_u32("TYPE", item.plunger_type);
+        writer.write_tagged_u32("ANFR", item.anim_frames);
+        writer.write_tagged_string("MATR", &item.material);
+        writer.write_tagged_string("IMAG", &item.image);
+        writer.write_tagged_f32("MEST", item.mech_strength);
+        writer.write_tagged_bool("MECH", item.is_mech_plunger);
+        writer.write_tagged_bool("APLG", item.auto_plunger);
+        writer.write_tagged_f32("MPRK", item.park_position);
+        writer.write_tagged_f32("PSCV", item.scatter_velocity);
+        writer.write_tagged_f32("MOMX", item.momentum_xfer);
+        writer.write_tagged_bool("TMON", item.is_timer_enabled);
+        writer.write_tagged_u32("TMIN", item.timer_interval);
+        writer.write_tagged_bool("VSBL", item.is_visible);
+        writer.write_tagged_bool("REEN", item.is_reflection_enabled);
+        writer.write_tagged_string("SURF", &item.surface);
+        writer.write_tagged_wide_string("NAME", &item.name);
+        writer.write_tagged_string("TIPS", &item.tip_shape);
+        writer.write_tagged_f32("RODD", item.rod_diam);
+        writer.write_tagged_f32("RNGG", item.ring_gap);
+        writer.write_tagged_f32("RNGD", item.ring_diam);
+        writer.write_tagged_f32("RNGW", item.ring_width);
+        writer.write_tagged_f32("SPRD", item.spring_diam);
+        writer.write_tagged_f32("SPRG", item.spring_gauge);
+        writer.write_tagged_f32("SPRL", item.spring_loops);
+        writer.write_tagged_f32("SPRE", item.spring_end_loops);
+        // shared
+        writer.write_tagged_bool("LOCK", item.is_locked);
+        writer.write_tagged_u32("LAYR", item.editor_layer);
+        writer.write_tagged_string("LANR", &item.editor_layer_name);
+        writer.write_tagged_bool("LVIS", item.editor_layer_visibility);
+
+        writer.close(true);
+    }
+}
+
+mod tests {
+    use crate::vpx::biff::BiffWriter;
+
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_write_read() {
+        let plunger = Plunger {
+            center: Vertex2D::new(1.0, 2.0),
+            width: 1.0,
+            height: 1.0,
+            z_adjust: 0.1,
+            stroke: 2.0,
+            speed_pull: 0.5,
+            speed_fire: 3.0,
+            plunger_type: Plunger::PLUNGER_TYPE_MODERN,
+            anim_frames: 1,
+            material: "test material".to_string(),
+            image: "test image".to_string(),
+            mech_strength: 85.0,
+            is_mech_plunger: false,
+            auto_plunger: false,
+            park_position: 0.5 / 3.0,
+            scatter_velocity: 0.0,
+            momentum_xfer: 1.0,
+            is_timer_enabled: false,
+            timer_interval: 0,
+            is_visible: true,
+            is_reflection_enabled: true,
+            surface: "test surface".to_string(),
+            name: "test plunger".to_string(),
+            tip_shape: "0 .34; 2 .6; 3 .64; 5 .7; 7 .84; 8 .88; 9 .9; 11 .92; 14 .92; 39 .83"
+                .to_string(),
+            rod_diam: 0.6,
+            ring_gap: 2.0,
+            ring_diam: 0.94,
+            ring_width: 3.0,
+            spring_diam: 0.77,
+            spring_gauge: 1.38,
+            spring_loops: 8.0,
+            spring_end_loops: 2.5,
+            is_locked: true,
+            editor_layer: 0,
+            editor_layer_name: "test layer".to_string(),
+            editor_layer_visibility: false,
+        };
+        let mut writer = BiffWriter::new();
+        Plunger::biff_write(&plunger, &mut writer);
+        let plunger_read = Plunger::biff_read(&mut BiffReader::new(&writer.get_data()));
+        assert_eq!(plunger, plunger_read);
     }
 }

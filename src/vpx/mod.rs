@@ -81,6 +81,15 @@ pub fn read_vpx<F: Read + Write + Seek>(comp: &mut CompoundFile<F>) -> io::Resul
     })
 }
 
+fn write_vpx(comp: &mut CompoundFile<File>, original: &VPX) -> io::Result<()> {
+    write_tableinfo(comp, &original.info)?;
+    create_game_storage(comp)?;
+    version::write_version(comp, &original.version)?;
+    write_game_data(comp, &original.gamedata)?;
+    write_game_items(comp, &original.gameitems)?;
+    Ok(())
+}
+
 pub fn new_minimal_vpx<P: AsRef<Path>>(vpx_file_path: P) -> std::io::Result<()> {
     let file = File::create(vpx_file_path)?;
     let mut comp = CompoundFile::create(file)?;
@@ -93,7 +102,7 @@ pub fn write_minimal_vpx<F: Read + Write + Seek>(
     let table_info = TableInfo::new();
     write_tableinfo(comp, &table_info)?;
     create_game_storage(comp)?;
-    version::write_version(comp, Version::new(1072))?;
+    version::write_version(comp, &Version::new(1072))?;
     write_game_data(comp, &GameData::default())?;
     // to be more efficient we could generate the mac while writing the different parts
     let mac = generate_mac(comp)?;
@@ -398,8 +407,9 @@ fn write_game_data<F: Read + Write + Seek>(
     let game_data_path = Path::new(MAIN_SEPARATOR_STR)
         .join("GameStg")
         .join("GameData");
+    // we expect GameStg to exist
     let mut game_data_stream = comp.create_stream(&game_data_path)?;
-    let data = gamedata::write_all_gamedata_records(&gamedata);
+    let data = gamedata::write_all_gamedata_records(gamedata);
     game_data_stream.write_all(&data)
     // this flush was required before but now it's working without
     // game_data_stream.flush()
@@ -409,9 +419,10 @@ fn read_gameitems<F: Read + Seek>(
     comp: &mut CompoundFile<F>,
     gamedata: &GameData,
 ) -> io::Result<Vec<GameItemEnum>> {
+    let gamestg = Path::new(MAIN_SEPARATOR_STR).join("GameStg");
     (0..gamedata.gameitems_size)
         .map(|index| {
-            let path = format!("GameStg/GameItem{}", index);
+            let path = gamestg.join(format!("GameItem{}", index));
             let mut input = Vec::new();
             let mut stream = comp.open_stream(&path)?;
             stream.read_to_end(&mut input)?;
@@ -419,6 +430,20 @@ fn read_gameitems<F: Read + Seek>(
             Ok(game_item)
         })
         .collect()
+}
+
+fn write_game_items<F: Read + Write + Seek>(
+    comp: &mut CompoundFile<F>,
+    gameitems: &[GameItemEnum],
+) -> io::Result<()> {
+    let gamestg = Path::new(MAIN_SEPARATOR_STR).join("GameStg");
+    for (index, gameitem) in gameitems.iter().enumerate() {
+        let path = gamestg.join(format!("GameItem{}", index));
+        let mut stream = comp.create_stream(&path)?;
+        let data = gameitem::write(gameitem);
+        stream.write_all(&data)?;
+    }
+    Ok(())
 }
 
 fn read_sounds<F: Read + Seek>(
@@ -570,6 +595,7 @@ pub fn run_diff(
 mod tests {
     use pretty_assertions::assert_eq;
     use std::io::Cursor;
+    use testdir::testdir;
 
     use super::*;
 
@@ -661,5 +687,24 @@ mod tests {
         assert_eq!(original.sounds.len(), 0);
         assert_eq!(original.fonts.len(), 0);
         assert_eq!(original.collections.len(), 9);
+    }
+
+    #[test]
+    fn read_and_write() {
+        let path = PathBuf::from("testdata/completely_blank_table_10_7_4.vpx");
+        let mut comp = cfb::open(&path).unwrap();
+        let original = read_vpx(&mut comp).unwrap();
+
+        // create temp file and write the vpx to it
+        let dir: PathBuf = testdir!();
+        let test_vpx_path = dir.join("test.vpx");
+        let mut comp2 = cfb::create(&test_vpx_path).unwrap();
+        write_vpx(&mut comp2, &original).unwrap();
+        comp2.flush().unwrap();
+
+        // compare both files
+        let original_bytes = std::fs::read(path).unwrap();
+        let test_bytes = std::fs::read(test_vpx_path).unwrap();
+        assert_eq!(original_bytes.len(), test_bytes.len());
     }
 }

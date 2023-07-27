@@ -57,17 +57,14 @@ impl BiffRead for Font {
 }
 
 impl BiffWrite for Font {
-    fn biff_write(font: &Font) -> Vec<u8> {
-        let mut writer = BiffWriter::new();
+    fn biff_write(font: &Self, writer: &mut BiffWriter) {
         writer.write_data(&[0x01, 0x00, 0x00]);
         writer.write_u8(font.style);
         writer.write_u16(font.weight);
         writer.write_u32(font.size);
         writer.write_short_string(&font.name);
-        writer.get_data().to_owned()
     }
 }
-
 
 #[cfg(test)]
 mod test {
@@ -85,8 +82,9 @@ mod test {
             size: 0,
             name: "Arial Black".to_string(),
         };
-        let data = Font::biff_write(&font);
-        let mut reader = BiffReader::new(&data);
+        let mut writer = &mut BiffWriter::new();
+        let data = Font::biff_write(&font, &mut writer);
+        let mut reader = BiffReader::new(&writer.get_data());
         let font2 = Font::biff_read(&mut reader);
         assert_eq!(font, font2);
     }

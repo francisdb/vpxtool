@@ -1,4 +1,4 @@
-use crate::vpx::biff::{self, BiffRead, BiffReader};
+use crate::vpx::biff::{self, BiffRead, BiffReader, BiffWrite};
 
 use super::{vertex2d::Vertex2D, GameItem};
 
@@ -266,5 +266,103 @@ impl BiffRead for Flipper {
             mass,
             elasticity_falloff,
         }
+    }
+}
+
+impl BiffWrite for Flipper {
+    fn biff_write(item: &Self, writer: &mut biff::BiffWriter) {
+        writer.write_tagged("VCEN", &item.center);
+        writer.write_tagged_f32("BASR", item.base_radius);
+        writer.write_tagged_f32("ENDR", item.end_radius);
+        writer.write_tagged_f32("FLPR", item.flipper_radius_max);
+        writer.write_tagged_f32("FRTN", item.return_);
+        writer.write_tagged_f32("ANGS", item.start_angle);
+        writer.write_tagged_f32("ANGE", item.end_angle);
+        writer.write_tagged_u32("OVRP", item.override_physics);
+        writer.write_tagged_f32("FORC", item.mass);
+        writer.write_tagged_bool("TMON", item.is_timer_enabled);
+        writer.write_tagged_u32("TMIN", item.timer_interval);
+        writer.write_tagged_string("SURF", &item.surface);
+        writer.write_tagged_string("MATR", &item.material);
+        writer.write_tagged_wide_string("NAME", &item.name);
+        writer.write_tagged_string("RUMA", &item.rubber_material);
+        writer.write_tagged_f32("RTHK", item.rubber_thickness);
+        writer.write_tagged_f32("RHGT", item.rubber_height);
+        writer.write_tagged_f32("RWDT", item.rubber_width);
+        writer.write_tagged_f32("STRG", item.strength);
+        writer.write_tagged_f32("ELAS", item.elasticity);
+        writer.write_tagged_f32("ELFO", item.elasticity_falloff);
+        writer.write_tagged_f32("FRIC", item.friction);
+        writer.write_tagged_f32("RPUP", item.ramp_up);
+        writer.write_tagged_f32("SCTR", item.scatter);
+        writer.write_tagged_f32("TODA", item.torque_damping);
+        writer.write_tagged_f32("TDAA", item.torque_damping_angle);
+        writer.write_tagged_bool("VSBL", item.is_visible);
+        writer.write_tagged_bool("ENBL", item.is_enabled);
+        writer.write_tagged_f32("FRMN", item.flipper_radius_min);
+        writer.write_tagged_f32("FHGT", item.height);
+        writer.write_tagged_string("IMAG", &item.image);
+        writer.write_tagged_bool("REEN", item.is_reflection_enabled);
+        // shared
+        writer.write_tagged_bool("LOCK", item.is_locked);
+        writer.write_tagged_u32("LAYR", item.editor_layer);
+        writer.write_tagged_string("LANR", &item.editor_layer_name);
+        writer.write_tagged_bool("LVIS", item.editor_layer_visibility);
+
+        writer.close(true);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::vpx::biff::BiffWriter;
+
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_write_read() {
+        let flipper = Flipper {
+            center: Vertex2D::new(0.0, 0.0),
+            base_radius: 21.5,
+            end_radius: 13.0,
+            flipper_radius_max: 130.0,
+            return_: 0.058,
+            start_angle: 121.0,
+            end_angle: 70.0,
+            override_physics: 0,
+            mass: 1.0,
+            is_timer_enabled: false,
+            timer_interval: 0,
+            surface: String::from("test surface"),
+            material: String::from("test material"),
+            name: String::from("test name"),
+            rubber_material: String::from("test rubber material"),
+            rubber_thickness: 7.0,
+            rubber_height: 19.0,
+            rubber_width: 24.0,
+            strength: 2200.0,
+            elasticity: 0.8,
+            elasticity_falloff: 0.43,
+            friction: 0.6,
+            ramp_up: 3.0,
+            scatter: 0.0,
+            torque_damping: 0.75,
+            torque_damping_angle: 6.0,
+            flipper_radius_min: 0.0,
+            is_visible: true,
+            is_enabled: true,
+            height: 50.0,
+            image: String::from("test image"),
+            is_reflection_enabled: true,
+            is_locked: false,
+            editor_layer: 123,
+            editor_layer_name: String::from("test editor layer name"),
+            editor_layer_visibility: true,
+        };
+        let mut writer = BiffWriter::new();
+        Flipper::biff_write(&flipper, &mut writer);
+        let flipper_read = Flipper::biff_read(&mut BiffReader::new(&writer.get_data()));
+        assert_eq!(flipper, flipper_read);
     }
 }

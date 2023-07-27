@@ -11,7 +11,7 @@ pub trait BiffRead {
 }
 
 pub trait BiffWrite {
-    fn biff_write(font: &Self) -> Vec<u8>;
+    fn biff_write(item: &Self, writer: &mut BiffWriter);
 }
 
 pub struct BiffReader<'a> {
@@ -345,6 +345,13 @@ impl<'a> BiffReader<'a> {
             self.skip(self.bytes_in_record_remaining);
         }
         self.record_start = self.pos;
+        if self.pos >= self.data.len() {
+            panic!(
+                "Unexpected end of biff stream at {}/{} while reading next tag. Missing ENDB?",
+                self.pos(),
+                self.data.len()
+            );
+        }
         self.bytes_in_record_remaining = self.get_u32_no_remaining_update().to_usize();
         let tag = self.get_str(RECORD_TAG_LEN.try_into().unwrap());
         self.tag = tag;
@@ -454,7 +461,7 @@ impl BiffWriter {
         self.data.extend_from_slice(&value.to_le_bytes());
     }
 
-    pub fn write_float(&mut self, value: f32) {
+    pub fn write_f32(&mut self, value: f32) {
         self.record_size += 4;
         self.data.extend_from_slice(&value.to_le_bytes());
     }
@@ -507,7 +514,7 @@ impl BiffWriter {
 
     pub fn write_tagged_f32(&mut self, tag: &str, value: f32) {
         self.new_tag(tag);
-        self.write_float(value);
+        self.write_f32(value);
         self.end_tag();
     }
 
@@ -543,23 +550,29 @@ impl BiffWriter {
 
     pub fn write_tagged_vec2(&mut self, tag: &str, x: f32, y: f32) {
         self.new_tag(tag);
-        self.write_float(x);
-        self.write_float(y);
+        self.write_f32(x);
+        self.write_f32(y);
         self.end_tag();
     }
 
     pub fn write_tagged_padded_vector(&mut self, tag: &str, x: f32, y: f32, z: f32) {
         self.new_tag(tag);
-        self.write_float(x);
-        self.write_float(y);
-        self.write_float(z);
-        self.write_float(0.0);
+        self.write_f32(x);
+        self.write_f32(y);
+        self.write_f32(z);
+        self.write_f32(0.0);
         self.end_tag();
     }
 
     pub fn write_tagged_data(&mut self, tag: &str, value: &[u8]) {
         self.new_tag(tag);
         self.write_data(value);
+        self.end_tag();
+    }
+
+    pub fn write_tagged<T: BiffWrite>(&mut self, tag: &str, value: &T) {
+        self.new_tag(tag);
+        BiffWrite::biff_write(value, self);
         self.end_tag();
     }
 

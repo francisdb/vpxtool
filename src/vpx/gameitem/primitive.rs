@@ -1,5 +1,3 @@
-use quick_xml::de::NoEntityResolver;
-
 use crate::vpx::{
     biff::{self, BiffRead, BiffReader},
     color::Color,

@@ -1,4 +1,4 @@
-use crate::vpx::biff::{self, BiffRead, BiffReader};
+use crate::vpx::biff::{self, BiffRead, BiffReader, BiffWrite, BiffWriter};
 
 use super::dragpoint::DragPoint;
 
@@ -324,5 +324,123 @@ impl BiffRead for Wall {
             editor_layer_visibility,
             drag_points,
         }
+    }
+}
+
+impl BiffWrite for Wall {
+    fn biff_write(item: &Self, writer: &mut BiffWriter) {
+        writer.write_tagged_bool("HTEV", item.hit_event);
+        writer.write_tagged_bool("DROP", item.is_droppable);
+        writer.write_tagged_bool("FLIP", item.is_flipbook);
+        writer.write_tagged_bool("BOTS", item.is_bottom_solid);
+        writer.write_tagged_bool("COLL", item.is_collidable);
+        writer.write_tagged_f32("THRS", item.threshold);
+        writer.write_tagged_string("IMGF", &item.image);
+        writer.write_tagged_string("IMGS", &item.side_image);
+        writer.write_tagged_string("MATR", &item.side_material);
+        writer.write_tagged_string("MATP", &item.top_material);
+        writer.write_tagged_string("MATL", &item.slingshot_material);
+        writer.write_tagged_f32("HIBO", item.height_bottom);
+        writer.write_tagged_f32("HITO", item.height_top);
+        writer.write_tagged_wide_string("NAME", &item.name);
+        writer.write_tagged_bool("DTEX", item.display_texture);
+        writer.write_tagged_f32("SLFO", item.slingshot_force);
+        writer.write_tagged_f32("SLTH", item.slingshot_threshold);
+        writer.write_tagged_bool("SLAN", item.slingshot_animation);
+        writer.write_tagged_f32("ELAS", item.elasticity);
+        writer.write_tagged_f32("ELFO", item.elasticity_falloff);
+        writer.write_tagged_f32("FRIC", item.friction);
+        writer.write_tagged_f32("SCAT", item.scatter);
+        writer.write_tagged_bool("TBVI", item.is_top_bottom_visible);
+        writer.write_tagged_bool("OVPH", item.overwrite_physics);
+        writer.write_tagged_f32("DLTO", item.disable_lighting_top);
+        writer.write_tagged_f32("DLBE", item.disable_lighting_below);
+        writer.write_tagged_bool("SIVI", item.is_side_visible);
+        writer.write_tagged_bool("REFL", item.is_reflection_enabled);
+        writer.write_tagged_bool("TMRN", item.is_timer_enabled);
+        writer.write_tagged_u32("TMIN", item.timer_interval);
+        writer.write_tagged_string("PMAT", &item.physics_material);
+        writer.write_tagged_bool("ISBS", item.is_bottom_solid);
+        writer.write_tagged_bool("CLDW", item.is_collidable);
+        writer.write_tagged_bool("TMON", item.is_timer_enabled);
+        writer.write_tagged_bool("VSBL", item.is_top_bottom_visible);
+        writer.write_tagged_bool("SLGA", item.slingshot_animation);
+        writer.write_tagged_bool("SVBL", item.is_side_visible);
+        writer.write_tagged_f32("DILI", item.disable_lighting_top);
+        writer.write_tagged_f32("DILB", item.disable_lighting_below);
+        writer.write_tagged_string("MAPH", &item.physics_material);
+        writer.write_tagged_bool("REEN", item.is_reflection_enabled);
+        writer.write_tagged_string("IMAG", &item.image);
+        writer.write_tagged_string("SIMG", &item.side_image);
+        writer.write_tagged_string("SIMA", &item.side_material);
+        writer.write_tagged_string("TOMA", &item.top_material);
+        writer.write_tagged_string("SLMA", &item.slingshot_material);
+        writer.write_tagged_f32("HTBT", item.height_bottom);
+        writer.write_tagged_f32("HTTP", item.height_top);
+        writer.write_tagged_bool("DSPT", item.display_texture);
+        writer.write_tagged_f32("SLGF", item.slingshot_force);
+        writer.write_tagged_f32("WFCT", item.slingshot_threshold);
+        writer.write_tagged_bool("WSCT", item.slingshot_animation);
+        // shared
+        writer.write_tagged_bool("LOCK", item.is_locked);
+        writer.write_tagged_u32("LAYR", item.editor_layer);
+        writer.write_tagged_string("LANR", &item.editor_layer_name);
+        writer.write_tagged_bool("LVIS", item.editor_layer_visibility);
+
+        writer.write_tagged_u32("PNTS", item.drag_points.len() as u32);
+
+        writer.close(true);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_write_read() {
+        let wall = Wall {
+            hit_event: true,
+            is_droppable: true,
+            is_flipbook: true,
+            is_bottom_solid: true,
+            is_collidable: true,
+            is_timer_enabled: true,
+            timer_interval: 1,
+            threshold: 2.0,
+            image: "image".to_string(),
+            side_image: "side_image".to_string(),
+            side_material: "side_material".to_string(),
+            top_material: "top_material".to_string(),
+            slingshot_material: "slingshot_material".to_string(),
+            height_bottom: 3.0,
+            height_top: 4.0,
+            name: "name".to_string(),
+            display_texture: true,
+            slingshot_force: 5.0,
+            slingshot_threshold: 6.0,
+            elasticity: 7.0,
+            elasticity_falloff: 8.0,
+            friction: 9.0,
+            scatter: 10.0,
+            is_top_bottom_visible: true,
+            slingshot_animation: true,
+            is_side_visible: true,
+            disable_lighting_top: 11.0,
+            disable_lighting_below: 12.0,
+            is_reflection_enabled: true,
+            physics_material: "physics_material".to_string(),
+            overwrite_physics: true,
+            is_locked: true,
+            editor_layer: 13,
+            editor_layer_name: "editor_layer_name".to_string(),
+            editor_layer_visibility: true,
+            drag_points: vec![],
+        };
+        let mut writer = BiffWriter::new();
+        Wall::biff_write(&wall, &mut writer);
+        let wall_read = Wall::biff_read(&mut BiffReader::new(&writer.get_data()));
+        assert_eq!(wall, wall_read);
     }
 }
