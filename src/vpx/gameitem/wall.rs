@@ -440,7 +440,7 @@ mod tests {
         };
         let mut writer = BiffWriter::new();
         Wall::biff_write(&wall, &mut writer);
-        let wall_read = Wall::biff_read(&mut BiffReader::new(&writer.get_data()));
+        let wall_read = Wall::biff_read(&mut BiffReader::new(writer.get_data()));
         assert_eq!(wall, wall_read);
     }
 }

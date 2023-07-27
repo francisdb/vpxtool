@@ -1,9 +1,6 @@
 use encoding_rs::mem::{decode_latin1, encode_latin1_lossy};
-use nom::bytes::streaming::take;
-use nom::number::complete::{
-    le_f32, le_f64, le_i16, le_i32, le_i64, le_u16, le_u32, le_u64, le_u8,
-};
-use nom::{IResult, ToUsize};
+use nom::number::complete::{le_f32, le_f64, le_i16, le_i32, le_i64, le_u16, le_u32, le_u64};
+use nom::ToUsize;
 use utf16string::WStr;
 
 pub trait BiffRead {
@@ -301,7 +298,7 @@ impl<'a> BiffReader<'a> {
         v
     }
 
-    pub fn get_record_data(&mut self, with_tag: bool) -> &[u8] {
+    pub fn get_record_data(&mut self, with_tag: bool) -> Vec<u8> {
         let d = if with_tag {
             &self.data[self.pos - 4..self.pos + self.bytes_in_record_remaining]
         } else {
@@ -309,7 +306,7 @@ impl<'a> BiffReader<'a> {
         };
         self.pos += self.bytes_in_record_remaining;
         self.bytes_in_record_remaining = 0;
-        d
+        d.to_vec()
     }
 
     pub fn get_data(&mut self, count: usize) -> &[u8] {
@@ -588,37 +585,4 @@ impl BiffWriter {
         }
         self.end_tag();
     }
-}
-
-#[deprecated]
-pub fn read_string_record(input: &[u8]) -> IResult<&[u8], String> {
-    let (input, len) = le_u32(input)?;
-    let (input, data) = take(len)(input)?;
-    // should probably use latin_1?
-    // use encoding_rs::WINDOWS_1252;
-    // TODO this fails for "Spider-Man Classic_VPWmod_V1.0.1.vpx"
-    // let string = from_utf8(data).unwrap();
-    let string = String::from_utf8_lossy(data);
-    Ok((input, string.to_string()))
-}
-
-#[deprecated]
-pub fn read_bytes_record(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let (input, len) = le_u32(input)?;
-    take(len)(input)
-}
-
-#[deprecated]
-pub fn read_byte(input: &[u8]) -> IResult<&[u8], u8> {
-    le_u8(input)
-}
-
-#[deprecated]
-pub fn read_u32(input: &[u8]) -> IResult<&[u8], u32> {
-    le_u32(input)
-}
-
-#[deprecated]
-pub fn read_u16(input: &[u8]) -> IResult<&[u8], u16> {
-    le_u16(input)
 }

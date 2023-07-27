@@ -354,7 +354,7 @@ mod tests {
         };
         let mut writer = BiffWriter::new();
         Plunger::biff_write(&plunger, &mut writer);
-        let plunger_read = Plunger::biff_read(&mut BiffReader::new(&writer.get_data()));
+        let plunger_read = Plunger::biff_read(&mut BiffReader::new(writer.get_data()));
         assert_eq!(plunger, plunger_read);
     }
 }

@@ -570,7 +570,6 @@ fn info(vpx_file_path: &str, json: bool) -> io::Result<()> {
 pub fn extract(vpx_file_path: &Path, yes: bool) {
     let root_dir_path_str = vpx_file_path.with_extension("");
     let root_dir_path = Path::new(&root_dir_path_str);
-    let vbs_path = root_dir_path.join("script.vbs");
 
     let mut root_dir = std::fs::DirBuilder::new();
     root_dir.recursive(true);

@@ -1,4 +1,4 @@
-use crate::vpx::biff::{self, BiffRead, BiffReader};
+use crate::vpx::biff::{self, BiffRead, BiffReader, BiffWrite};
 
 use super::{dragpoint::DragPoint, vertex2d::Vertex2D, TRIGGER_SHAPE_WIRE_A};
 
@@ -180,5 +180,79 @@ impl BiffRead for Trigger {
             editor_layer_visibility,
             drag_points,
         }
+    }
+}
+
+impl BiffWrite for Trigger {
+    fn biff_write(item: &Self, writer: &mut biff::BiffWriter) {
+        writer.write_tagged("VCEN", &item.center);
+        writer.write_tagged_f32("RADI", item.radius);
+        writer.write_tagged_f32("ROTA", item.rotation);
+        writer.write_tagged_f32("WITI", item.wire_thickness);
+        writer.write_tagged_f32("SCAX", item.scale_x);
+        writer.write_tagged_f32("SCAY", item.scale_y);
+        writer.write_tagged_bool("TMON", item.is_timer_enabled);
+        writer.write_tagged_i32("TMIN", item.timer_interval);
+        writer.write_tagged_string("MATR", &item.material);
+        writer.write_tagged_string("SURF", &item.surface);
+        writer.write_tagged_bool("VSBL", item.is_visible);
+        writer.write_tagged_bool("EBLD", item.is_enabled);
+        writer.write_tagged_f32("THOT", item.hit_height);
+        writer.write_tagged_wide_string("NAME", &item.name);
+        writer.write_tagged_u32("SHAP", item.shape);
+        writer.write_tagged_f32("ANSP", item.anim_speed);
+        writer.write_tagged_bool("REEN", item.is_reflection_enabled);
+        // shared
+        writer.write_tagged_bool("LOCK", item.is_locked);
+        writer.write_tagged_u32("LAYR", item.editor_layer);
+        writer.write_tagged_string("LANR", &item.editor_layer_name);
+        writer.write_tagged_bool("LVIS", item.editor_layer_visibility);
+
+        for point in &item.drag_points {
+            writer.write_tagged("DPNT", point);
+        }
+
+        writer.close(true);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::vpx::biff::BiffWriter;
+
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_write_read() {
+        // values not equal to the defaults
+        let trigger = Trigger {
+            center: Vertex2D::new(1.0, 2.0),
+            radius: 25.0,
+            rotation: 3.0,
+            wire_thickness: 4.0,
+            scale_x: 5.0,
+            scale_y: 6.0,
+            is_timer_enabled: true,
+            timer_interval: 7,
+            material: "test material".to_string(),
+            surface: "test surface".to_string(),
+            is_visible: false,
+            is_enabled: false,
+            hit_height: 8.0,
+            name: "test name".to_string(),
+            shape: 9,
+            anim_speed: 10.0,
+            is_reflection_enabled: false,
+            is_locked: true,
+            editor_layer: 11,
+            editor_layer_name: "test layer name".to_string(),
+            editor_layer_visibility: false,
+            drag_points: vec![DragPoint::default()],
+        };
+        let mut writer = BiffWriter::new();
+        Trigger::biff_write(&trigger, &mut writer);
+        let trigger_read = Trigger::biff_read(&mut BiffReader::new(writer.get_data()));
+        assert_eq!(trigger, trigger_read);
     }
 }

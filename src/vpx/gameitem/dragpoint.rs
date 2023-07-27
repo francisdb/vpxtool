@@ -1,4 +1,4 @@
-use crate::vpx::biff::{self, BiffRead, BiffReader};
+use crate::vpx::biff::{self, BiffRead, BiffReader, BiffWrite};
 
 use super::GameItem;
 
@@ -20,81 +20,22 @@ pub struct DragPoint {
     pub editor_layer_visibility: bool,
 }
 
-impl GameItem for DragPoint {
-    fn name(&self) -> &str {
-        "Unnamed DragPoint"
-    }
-}
-
-impl BiffRead for DragPoint {
-    fn biff_read(reader: &mut BiffReader<'_>) -> DragPoint {
-        let mut sub_data = reader.child_reader();
-        let mut x = 0.0;
-        let mut y = 0.0;
-        let mut z = 0.0;
-        let mut tex_coord = 0.0;
-        let mut smooth = false;
-        let mut is_slingshot: Option<bool> = None;
-        let mut has_auto_texture = false;
+impl DragPoint {
+    pub fn default() -> Self {
+        let x = 0.0;
+        let y = 0.0;
+        let z = 0.0;
+        let tex_coord = 0.0;
+        let smooth = false;
+        let is_slingshot: Option<bool> = None;
+        let has_auto_texture = false;
 
         // these are shared between all items
-        let mut is_locked: bool = false;
-        let mut editor_layer: u32 = Default::default();
-        let mut editor_layer_name: String = Default::default();
-        let mut editor_layer_visibility: bool = true;
-        loop {
-            sub_data.next(biff::WARN);
-            if sub_data.is_eof() {
-                break;
-            }
-            let tag = sub_data.tag();
-            let tag_str = tag.as_str();
-            match tag_str {
-                "VCEN" => {
-                    x = sub_data.get_f32();
-                    y = sub_data.get_f32();
-                }
-                "POSZ" => {
-                    z = sub_data.get_f32();
-                }
-                "SMTH" => {
-                    smooth = sub_data.get_bool();
-                }
-                "SLNG" => {
-                    is_slingshot = Some(sub_data.get_bool());
-                }
-                "ATEX" => {
-                    has_auto_texture = sub_data.get_bool();
-                }
-                "TEXC" => {
-                    tex_coord = sub_data.get_f32();
-                }
-                // shared
-                "LOCK" => {
-                    is_locked = sub_data.get_bool();
-                }
-                "LAYR" => {
-                    editor_layer = sub_data.get_u32();
-                }
-                "LANR" => {
-                    editor_layer_name = sub_data.get_string();
-                }
-                "LVIS" => {
-                    editor_layer_visibility = sub_data.get_bool();
-                }
-                other => {
-                    println!(
-                        "Unknown tag {} for {}",
-                        tag_str,
-                        std::any::type_name::<Self>()
-                    );
-                    sub_data.skip_tag();
-                }
-            }
-        }
-        let pos = sub_data.pos();
-        reader.skip_end_tag(pos);
-        DragPoint {
+        let is_locked: bool = false;
+        let editor_layer: u32 = Default::default();
+        let editor_layer_name: String = Default::default();
+        let editor_layer_visibility: bool = true;
+        Self {
             x,
             y,
             z,
@@ -107,5 +48,125 @@ impl BiffRead for DragPoint {
             editor_layer_name,
             editor_layer_visibility,
         }
+    }
+}
+
+impl GameItem for DragPoint {
+    fn name(&self) -> &str {
+        "Unnamed DragPoint"
+    }
+}
+
+impl BiffRead for DragPoint {
+    fn biff_read(reader: &mut BiffReader<'_>) -> DragPoint {
+        let mut sub_data = reader.child_reader();
+
+        let mut dragpoint = DragPoint::default();
+
+        loop {
+            sub_data.next(biff::WARN);
+            if sub_data.is_eof() {
+                break;
+            }
+            let tag = sub_data.tag();
+            let tag_str = tag.as_str();
+            match tag_str {
+                "VCEN" => {
+                    dragpoint.x = sub_data.get_f32();
+                    dragpoint.y = sub_data.get_f32();
+                }
+                "POSZ" => {
+                    dragpoint.z = sub_data.get_f32();
+                }
+                "SMTH" => {
+                    dragpoint.smooth = sub_data.get_bool();
+                }
+                "SLNG" => {
+                    dragpoint.is_slingshot = Some(sub_data.get_bool());
+                }
+                "ATEX" => {
+                    dragpoint.has_auto_texture = sub_data.get_bool();
+                }
+                "TEXC" => {
+                    dragpoint.tex_coord = sub_data.get_f32();
+                }
+                // shared
+                "LOCK" => {
+                    dragpoint.is_locked = sub_data.get_bool();
+                }
+                "LAYR" => {
+                    dragpoint.editor_layer = sub_data.get_u32();
+                }
+                "LANR" => {
+                    dragpoint.editor_layer_name = sub_data.get_string();
+                }
+                "LVIS" => {
+                    dragpoint.editor_layer_visibility = sub_data.get_bool();
+                }
+                other => {
+                    println!(
+                        "Unknown tag {} for {}",
+                        other,
+                        std::any::type_name::<Self>()
+                    );
+                    sub_data.skip_tag();
+                }
+            }
+        }
+        let pos = sub_data.pos();
+        reader.skip_end_tag(pos);
+        dragpoint
+    }
+}
+
+impl BiffWrite for DragPoint {
+    fn biff_write(item: &Self, writer: &mut biff::BiffWriter) {
+        writer.new_tag("VCEN");
+        writer.write_f32(item.x);
+        writer.write_f32(item.y);
+        writer.end_tag();
+        writer.write_tagged_f32("POSZ", item.z);
+        writer.write_tagged_bool("SMTH", item.smooth);
+        if let Some(is_slingshot) = item.is_slingshot {
+            writer.write_tagged_bool("SLNG", is_slingshot);
+        }
+        writer.write_tagged_bool("ATEX", item.has_auto_texture);
+        writer.write_tagged_f32("TEXC", item.tex_coord);
+        // shared
+        writer.write_tagged_bool("LOCK", item.is_locked);
+        writer.write_tagged_u32("LAYR", item.editor_layer);
+        writer.write_tagged_string("LANR", &item.editor_layer_name);
+        writer.write_tagged_bool("LVIS", item.editor_layer_visibility);
+        writer.close(true);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::vpx::biff::BiffWriter;
+
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_write_read() {
+        // values not equal to the defaults
+        let dragpoint = DragPoint {
+            x: 1.0,
+            y: 2.0,
+            z: 3.0,
+            smooth: true,
+            is_slingshot: Some(true),
+            has_auto_texture: true,
+            tex_coord: 4.0,
+            is_locked: true,
+            editor_layer: 1,
+            editor_layer_name: "test layer".to_string(),
+            editor_layer_visibility: true,
+        };
+        let mut writer = BiffWriter::new();
+        DragPoint::biff_write(&dragpoint, &mut writer);
+        let dragpoint_read = DragPoint::biff_read(&mut BiffReader::new(writer.get_data()));
+        assert_eq!(dragpoint, dragpoint_read);
     }
 }

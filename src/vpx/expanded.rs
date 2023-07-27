@@ -13,6 +13,7 @@ use super::sound;
 use super::sound::write_sound;
 use super::version;
 use crate::jsonmodel::{collections_json, table_json};
+use crate::vpx::biff::BiffReader;
 
 pub fn extract(vpx_file_path: &Path, root_dir_path: &Path) -> std::io::Result<()> {
     let vbs_path = root_dir_path.join("script.vbs");
@@ -152,7 +153,8 @@ fn extract_sounds(
             .unwrap()
             .read_to_end(&mut input)
             .unwrap();
-        let (_, sound) = sound::read(path.to_owned(), file_version.clone(), &input).unwrap();
+        let mut reader = BiffReader::new(&input);
+        let sound = sound::read(path.to_owned(), file_version.clone(), &mut reader);
 
         let ext = sound.ext();
         let mut sound_path = sounds_path.clone();

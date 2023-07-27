@@ -362,7 +362,7 @@ mod tests {
         };
         let mut writer = BiffWriter::new();
         Flipper::biff_write(&flipper, &mut writer);
-        let flipper_read = Flipper::biff_read(&mut BiffReader::new(&writer.get_data()));
+        let flipper_read = Flipper::biff_read(&mut BiffReader::new(writer.get_data()));
         assert_eq!(flipper, flipper_read);
     }
 }

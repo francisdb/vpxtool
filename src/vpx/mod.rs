@@ -459,8 +459,12 @@ fn read_sounds<F: Read + Seek>(
             let mut input = Vec::new();
             let mut stream = comp.open_stream(&path)?;
             stream.read_to_end(&mut input)?;
-            let (_, sound) =
-                sound::read(path.display().to_string(), file_version.clone(), &input).unwrap();
+            let mut reader = BiffReader::new(&input);
+            let sound = sound::read(
+                path.display().to_string(),
+                file_version.clone(),
+                &mut reader,
+            );
             Ok(sound)
         })
         .collect()

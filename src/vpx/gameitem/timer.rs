@@ -116,6 +116,7 @@ mod tests {
 
     #[test]
     fn test_write_read() {
+        // values not equal to the defaults
         let timer = Timer {
             center: Vertex2D::new(1.0, 2.0),
             is_timer_enabled: true,
@@ -129,7 +130,7 @@ mod tests {
         };
         let mut writer = BiffWriter::new();
         Timer::biff_write(&timer, &mut writer);
-        let timer_read = Timer::biff_read(&mut BiffReader::new(&writer.get_data()));
+        let timer_read = Timer::biff_read(&mut BiffReader::new(writer.get_data()));
         assert_eq!(timer, timer_read);
     }
 }

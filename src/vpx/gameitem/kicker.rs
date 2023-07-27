@@ -1,4 +1,4 @@
-use crate::vpx::biff::{self, BiffRead, BiffReader};
+use crate::vpx::biff::{self, BiffRead, BiffReader, BiffWrite};
 
 use super::vertex2d::Vertex2D;
 
@@ -159,5 +159,69 @@ impl BiffRead for Kicker {
             editor_layer_name,
             editor_layer_visibility,
         }
+    }
+}
+
+impl BiffWrite for Kicker {
+    fn biff_write(item: &Self, writer: &mut biff::BiffWriter) {
+        writer.write_tagged("VCEN", &item.center);
+        writer.write_tagged_f32("RADI", item.radius);
+        writer.write_tagged_bool("TMON", item.is_timer_enabled);
+        writer.write_tagged_u32("TMIN", item.timer_interval);
+        writer.write_tagged_string("MATR", &item.material);
+        writer.write_tagged_string("SURF", &item.surface);
+        writer.write_tagged_bool("EBLD", item.is_enabled);
+        writer.write_tagged_wide_string("NAME", &item.name);
+        writer.write_tagged_u32("TYPE", item.kicker_type);
+        writer.write_tagged_f32("KSCT", item.scatter);
+        writer.write_tagged_f32("KHAC", item.hit_accuracy);
+        writer.write_tagged_f32("KHHI", item.hit_height);
+        writer.write_tagged_f32("KORI", item.orientation);
+        writer.write_tagged_bool("FATH", item.fall_through);
+        writer.write_tagged_bool("LEMO", item.legacy_mode);
+        // shared
+        writer.write_tagged_bool("LOCK", item.is_locked);
+        writer.write_tagged_u32("LAYR", item.editor_layer);
+        writer.write_tagged_string("LANR", &item.editor_layer_name);
+        writer.write_tagged_bool("LVIS", item.editor_layer_visibility);
+        writer.close(true);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::vpx::biff::BiffWriter;
+
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_write_read() {
+        // values not equal to the defaults
+        let kicker = Kicker {
+            center: Vertex2D::new(1.0, 2.0),
+            radius: 3.0,
+            is_timer_enabled: true,
+            timer_interval: 4,
+            material: "material".to_string(),
+            surface: "surface".to_string(),
+            is_enabled: false,
+            name: "name".to_string(),
+            kicker_type: 5,
+            scatter: 6.0,
+            hit_accuracy: 7.0,
+            hit_height: 8.0,
+            orientation: 9.0,
+            fall_through: true,
+            legacy_mode: false,
+            is_locked: true,
+            editor_layer: 10,
+            editor_layer_name: "editor_layer_name".to_string(),
+            editor_layer_visibility: false,
+        };
+        let mut writer = BiffWriter::new();
+        Kicker::biff_write(&kicker, &mut writer);
+        let kicker_read = Kicker::biff_read(&mut BiffReader::new(writer.get_data()));
+        assert_eq!(kicker, kicker_read);
     }
 }

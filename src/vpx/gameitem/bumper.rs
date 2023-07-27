@@ -1,4 +1,4 @@
-use crate::vpx::biff::{self, BiffRead, BiffReader};
+use crate::vpx::biff::{self, BiffRead, BiffReader, BiffWrite};
 
 use super::{vertex2d::Vertex2D, GameItem};
 
@@ -208,5 +208,88 @@ impl BiffRead for Bumper {
             editor_layer_name,
             editor_layer_visibility,
         }
+    }
+}
+
+impl BiffWrite for Bumper {
+    fn biff_write(item: &Self, writer: &mut biff::BiffWriter) {
+        writer.write_tagged("VCEN", &item.center);
+        writer.write_tagged_f32("RADI", item.radius);
+        writer.write_tagged_bool("TMON", item.is_timer_enabled);
+        writer.write_tagged_i32("TMIN", item.timer_interval);
+        writer.write_tagged_f32("THRS", item.threshold);
+        writer.write_tagged_f32("FORC", item.force);
+        writer.write_tagged_f32("BSCT", item.scatter);
+        writer.write_tagged_f32("HISC", item.height_scale);
+        writer.write_tagged_f32("RISP", item.ring_speed);
+        writer.write_tagged_f32("ORIN", item.orientation);
+        writer.write_tagged_f32("RDLI", item.ring_drop_offset);
+        writer.write_tagged_string("MATR", &item.cap_material);
+        writer.write_tagged_string("BAMA", &item.base_material);
+        writer.write_tagged_string("SKMA", &item.socket_material);
+        writer.write_tagged_string("RIMA", &item.ring_material);
+        writer.write_tagged_string("SURF", &item.surface);
+        writer.write_tagged_wide_string("NAME", &item.name);
+        writer.write_tagged_bool("CAVI", item.is_cap_visible);
+        writer.write_tagged_bool("BSVS", item.is_base_visible);
+        writer.write_tagged_bool("RIVS", item.is_ring_visible);
+        writer.write_tagged_bool("SKVS", item.is_socket_visible);
+        writer.write_tagged_bool("HAHE", item.hit_event);
+        writer.write_tagged_bool("COLI", item.is_collidable);
+        writer.write_tagged_bool("REEN", item.is_reflection_enabled);
+        // shared
+        writer.write_tagged_bool("LOCK", item.is_locked);
+        writer.write_tagged_u32("LAYR", item.editor_layer);
+        writer.write_tagged_string("LANR", &item.editor_layer_name);
+        writer.write_tagged_bool("LVIS", item.editor_layer_visibility);
+        
+        writer.close(true);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::vpx::biff::BiffWriter;
+
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_write_read() {
+        // random data not same as default data above
+        let bumper = Bumper {
+            center: Vertex2D::new(1.0, 2.0),
+            radius: 45.0,
+            is_timer_enabled: true,
+            timer_interval: 3,
+            threshold: 1.0,
+            force: 15.0,
+            scatter: 0.0,
+            height_scale: 90.0,
+            ring_speed: 0.5,
+            orientation: 0.0,
+            ring_drop_offset: 0.0,
+            cap_material: "ctest cap material".to_string(),
+            base_material: "test base material".to_string(),
+            socket_material: "test socket material".to_string(),
+            ring_material: "test ring material".to_string(),
+            surface: "test surface".to_string(),
+            name: "test bumper".to_string(),
+            is_cap_visible: true,
+            is_base_visible: true,
+            is_ring_visible: true,
+            is_socket_visible: true,
+            hit_event: true,
+            is_collidable: true,
+            is_reflection_enabled: true,
+            is_locked: true,
+            editor_layer: 5,
+            editor_layer_name: "layer".to_string(),
+            editor_layer_visibility: true,
+        };
+        let mut writer = BiffWriter::new();
+        Bumper::biff_write(&bumper, &mut writer);
+        let bumper_read = Bumper::biff_read(&mut BiffReader::new(writer.get_data()));
+        assert_eq!(bumper, bumper_read);
     }
 }

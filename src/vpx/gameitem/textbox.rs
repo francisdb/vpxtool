@@ -149,12 +149,8 @@ impl BiffWrite for TextBox {
     fn biff_write(item: &Self, writer: &mut biff::BiffWriter) {
         writer.write_tagged("VER1", &item.ver1);
         writer.write_tagged("VER2", &item.ver2);
-        writer.write_tagged_with("CLRB", &item.back_color, |c, writer| {
-            Color::biff_write_bgr(c, writer)
-        });
-        writer.write_tagged_with("CLRF", &item.font_color, |c, writer| {
-            Color::biff_write_bgr(c, writer)
-        });
+        writer.write_tagged_with("CLRB", &item.back_color, Color::biff_write_bgr);
+        writer.write_tagged_with("CLRF", &item.font_color, Color::biff_write_bgr);
         writer.write_tagged_f32("INSC", item.intensity_scale);
         writer.write_tagged_string("TEXT", &item.text);
         writer.write_tagged_bool("TMON", item.is_timer_enabled);
@@ -202,7 +198,7 @@ mod tests {
         };
         let mut writer = BiffWriter::new();
         TextBox::biff_write(&textbox, &mut writer);
-        let textbox_read = TextBox::biff_read(&mut BiffReader::new(&writer.get_data()));
+        let textbox_read = TextBox::biff_read(&mut BiffReader::new(writer.get_data()));
         assert_eq!(textbox, textbox_read);
     }
 }

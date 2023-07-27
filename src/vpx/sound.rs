@@ -5,7 +5,7 @@ use bytes::{BufMut, BytesMut};
 use nom::IResult;
 
 use super::{
-    biff::{read_byte, read_bytes_record, read_string_record, read_u16, read_u32},
+    biff::{BiffRead, BiffReader, BiffWrite},
     Version,
 };
 
@@ -132,8 +132,7 @@ impl SoundData {
     }
 }
 
-pub fn read(fs_path: String, file_version: Version, input: &[u8]) -> IResult<&[u8], SoundData> {
-    let mut input = input;
+pub fn read(fs_path: String, file_version: Version, reader: &mut BiffReader) -> SoundData {
     let mut name: String = "".to_string();
     let mut path: String = "".to_string();
     let mut internal_name: String = "".to_string();
@@ -141,7 +140,7 @@ pub fn read(fs_path: String, file_version: Version, input: &[u8]) -> IResult<&[u
     let mut volume: u32 = 0;
     let mut balance: u32 = 0;
     let mut output_target: u8 = 0;
-    let mut data: &[u8] = &[];
+    let mut data: Vec<u8> = Vec::new();
     let mut wave_form: WaveForm = WaveForm::new();
 
     // TODO add support for the old format file version < 1031
@@ -154,38 +153,25 @@ pub fn read(fs_path: String, file_version: Version, input: &[u8]) -> IResult<&[u
     };
 
     for i in 0..num_values {
-        input = match i {
+        match i {
             0 => {
-                let (remaining, n) = read_string_record(input)?;
-                name = n.to_string();
-                remaining
+                name = reader.get_string();
             }
             1 => {
-                let (remaining, p) = read_string_record(input)?;
-                path = p.to_string();
-                remaining
+                path = reader.get_string();
             }
             2 => {
-                let (remaining, n) = read_string_record(input)?;
-                internal_name = n.to_string();
-                remaining
+                internal_name = reader.get_string();
             }
             3 => {
                 if is_wav(&path.to_owned()) {
-                    // FormatTag = reader.ReadUInt16();
-                    // Channels = reader.ReadUInt16();
-                    // SamplesPerSec = reader.ReadUInt32();
-                    // AvgBytesPerSec = reader.ReadUInt32();
-                    // BlockAlign = reader.ReadUInt16();
-                    // BitsPerSample = reader.ReadUInt16();
-                    // CbSize = reader.ReadUInt16();
-                    let (input, format_tag) = read_u16(input)?;
-                    let (input, channels) = read_u16(input)?;
-                    let (input, samples_per_sec) = read_u32(input)?;
-                    let (input, avg_bytes_per_sec) = read_u32(input)?;
-                    let (input, block_align) = read_u16(input)?;
-                    let (input, bits_per_sample) = read_u16(input)?;
-                    let (input, cb_size) = read_u16(input)?;
+                    let format_tag = reader.get_u16();
+                    let channels = reader.get_u16();
+                    let samples_per_sec = reader.get_u32();
+                    let avg_bytes_per_sec = reader.get_u32();
+                    let block_align = reader.get_u16();
+                    let bits_per_sample = reader.get_u16();
+                    let cb_size = reader.get_u16();
                     wave_form = WaveForm {
                         format_tag,
                         channels,
@@ -195,41 +181,28 @@ pub fn read(fs_path: String, file_version: Version, input: &[u8]) -> IResult<&[u
                         bits_per_sample,
                         cb_size,
                     };
-                    input
                 } else {
-                    input
+                    // should we be doing something here?
                 }
             }
             4 => {
-                let (remaining, d) = read_bytes_record(input)?;
-                data = d;
-                remaining
+                data = reader.get_record_data(false);
             }
             5 => {
-                let (remaining, t) = read_byte(input)?;
-                output_target = t;
-                remaining
+                output_target = reader.get_u8();
             }
             6 => {
-                let (remaining, v) = read_u32(input)?;
-                volume = v;
-                remaining
+                volume = reader.get_u32();
             }
             7 => {
-                let (remaining, b) = read_u32(input)?;
-                balance = b;
-                remaining
+                balance = reader.get_u32();
             }
             8 => {
-                let (remaining, f) = read_u32(input)?;
-                fade = f;
-                remaining
+                fade = reader.get_u32();
             }
             9 => {
                 // TODO why do we have the volume twice?
-                let (remaining, v) = read_u32(input)?;
-                volume = v;
-                remaining
+                volume = reader.get_u32();
             }
             unexpected => {
                 panic!("unexpected value {}", unexpected);
@@ -237,23 +210,26 @@ pub fn read(fs_path: String, file_version: Version, input: &[u8]) -> IResult<&[u
         }
     }
 
-    Ok((
-        input,
-        SoundData {
-            fs_path,
-            name,
-            path,
-            data: data.to_vec(),
-            wave_form,
-            internal_name,
-            fade,
-            volume,
-            balance,
-            output_target,
-        },
-    ))
+    SoundData {
+        fs_path,
+        name,
+        path,
+        data: data.to_vec(),
+        wave_form,
+        internal_name,
+        fade,
+        volume,
+        balance,
+        output_target,
+    }
 }
 
 fn is_wav(path: &str) -> bool {
     path.to_lowercase().ends_with(".wav")
+}
+
+impl BiffWrite for SoundData {
+    fn biff_write(item: &Self, writer: &mut super::biff::BiffWriter) {
+        todo!()
+    }
 }
