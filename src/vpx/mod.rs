@@ -824,60 +824,44 @@ mod tests {
         // create temp file and write the vpx to it
         let dir: PathBuf = testdir!();
         let test_vpx_path = dir.join("test.vpx");
-        let mut comp2 = cfb::create(&test_vpx_path).unwrap();
-        write_vpx(&mut comp2, &original).unwrap();
-        comp2.flush().unwrap();
+        let mut test_comp = cfb::create(&test_vpx_path).unwrap();
+        write_vpx(&mut test_comp, &original).unwrap();
+        test_comp.flush().unwrap();
 
-        let item_tags = tags_and_hashes(&mut comp, Path::new("/GameStg/GameData"), 0);
-        let test_item_tags = tags_and_hashes(&mut comp2, Path::new("/GameStg/GameData"), 0);
-        assert_eq!(item_tags, test_item_tags);
-        // we need to skip the first 32 bits because they are the type of gameitem
-        let item_tags = tags_and_hashes(&mut comp, Path::new("/GameStg/GameItem0"), 4);
-        let test_item_tags = tags_and_hashes(&mut comp2, Path::new("/GameStg/GameItem0"), 4);
-        assert_eq!(item_tags, test_item_tags);
-        let item_tags = tags_and_hashes(&mut comp, Path::new("/GameStg/GameItem3"), 4);
-        let test_item_tags = tags_and_hashes(&mut comp2, Path::new("/GameStg/GameItem3"), 4);
-        assert_eq!(item_tags, test_item_tags);
-        let item_tags = tags_and_hashes(&mut comp, Path::new("/GameStg/GameItem9"), 4);
-        let test_item_tags = tags_and_hashes(&mut comp2, Path::new("/GameStg/GameItem9"), 4);
-        assert_eq!(item_tags, test_item_tags);
-        let item_tags = tags_and_hashes(&mut comp, Path::new("/GameStg/GameItem38"), 4);
-        let test_item_tags = tags_and_hashes(&mut comp2, Path::new("/GameStg/GameItem38"), 4);
-        assert_eq!(item_tags, test_item_tags);
-        let item_tags = tags_and_hashes(&mut comp, Path::new("/GameStg/Image0"), 0);
-        let test_item_tags = tags_and_hashes(&mut comp2, Path::new("/GameStg/Image0"), 0);
-        assert_eq!(item_tags, test_item_tags);
+        let gamestg_path = Path::new(MAIN_SEPARATOR_STR).join("GameStg");
+        let mac_path = gamestg_path.join("MAC");
+        let version_path = gamestg_path.join("Version");
+        let tableinfo_path = Path::new(MAIN_SEPARATOR_STR).join("TableInfo");
 
+        // make sure we have the same paths and lengths
         let original_paths = compound_file_paths_and_lengths(&path);
         let test_paths = compound_file_paths_and_lengths(&test_vpx_path);
         assert_eq!(original_paths, test_paths);
 
-        // for each path in the original compound file, check that the data is the same
+        // check all streams
         for (path, _) in original_paths {
-            // TODO for now we skip the MAC as there's still something wrong with it
-            // TODO for now we skip the Image0 as it's not written correctly
-            if comp.is_stream(&path)
-                && path != Path::new("/GameStg/MAC")
-                && path != Path::new("/GameStg/Image0")
-                && path != Path::new("/GameStg/Version")
-                && !path.to_string_lossy().contains("TableInfo")
-            {
+            if comp.is_stream(&path) {
                 println!("path: {:?}", path);
-                // let mut original_data = Vec::new();
-                // let mut test_data = Vec::new();
-                // let mut original_stream = comp.open_stream(&path).unwrap();
-                // let mut test_stream = comp2.open_stream(&path).unwrap();
-                // original_stream.read_to_end(&mut original_data).unwrap();
-                // test_stream.read_to_end(&mut test_data).unwrap();
-                // assert!(original_data == test_data);
-                let skip = if path.to_str().unwrap().starts_with("/GameStg/GameItem") {
-                    4
+
+                if path == mac_path || path == version_path || path.starts_with(&tableinfo_path) {
+                    let mut original_data = Vec::new();
+                    let mut test_data = Vec::new();
+                    let mut original_stream = comp.open_stream(&path).unwrap();
+                    let mut test_stream = test_comp.open_stream(&path).unwrap();
+                    original_stream.read_to_end(&mut original_data).unwrap();
+                    test_stream.read_to_end(&mut test_data).unwrap();
+                    assert!(original_data == test_data);
                 } else {
-                    0
-                };
-                let item_tags = tags_and_hashes(&mut comp, &path, skip);
-                let test_item_tags = tags_and_hashes(&mut comp2, &path, skip);
-                assert_eq!(item_tags, test_item_tags);
+                    let skip = if path.to_string_lossy().contains("GameItem") {
+                        // we need to skip the first 32 bits because they are the type of gameitem
+                        4
+                    } else {
+                        0
+                    };
+                    let item_tags = tags_and_hashes(&mut comp, &path, skip);
+                    let test_item_tags = tags_and_hashes(&mut test_comp, &path, skip);
+                    assert_eq!(item_tags, test_item_tags);
+                }
             }
         }
     }
