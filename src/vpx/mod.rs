@@ -5,6 +5,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use base64::write;
 use cfb::CompoundFile;
 
 use md2::{Digest, Md2};
@@ -15,16 +16,19 @@ use tableinfo::{write_tableinfo, TableInfo};
 use version::Version;
 
 use self::collection::Collection;
+use self::custominfotags::CustomInfoTags;
 use self::font::FontData;
 use self::gamedata::GameData;
 use self::gameitem::GameItemEnum;
 use self::image::ImageData;
 use self::sound::SoundData;
-use self::version::write_version;
+use self::tableinfo::read_tableinfo;
+use self::version::{read_version, write_version};
 
 pub mod biff;
 pub mod collection;
 pub mod color;
+pub mod custominfotags;
 pub mod expanded;
 pub mod font;
 pub mod gamedata;
@@ -35,6 +39,7 @@ pub mod tableinfo;
 pub mod version;
 
 pub struct VPX {
+    custominfotags: custominfotags::CustomInfoTags, // this is a bit redundant
     info: TableInfo,
     version: Version,
     gamedata: GameData,
@@ -62,8 +67,9 @@ pub fn read(path: &PathBuf) -> io::Result<VPX> {
 }
 
 pub fn read_vpx<F: Read + Write + Seek>(comp: &mut CompoundFile<F>) -> io::Result<VPX> {
-    let info = tableinfo::read_tableinfo(comp)?;
-    let version = version::read_version(comp)?;
+    let custominfotags = read_custominfotags(comp)?;
+    let info = read_tableinfo(comp)?;
+    let version = read_version(comp)?;
     let gamedata = read_gamedata(comp)?;
     let gameitems = read_gameitems(comp, &gamedata)?;
     let images = read_images(comp, &gamedata)?;
@@ -71,6 +77,7 @@ pub fn read_vpx<F: Read + Write + Seek>(comp: &mut CompoundFile<F>) -> io::Resul
     let fonts = read_fonts(comp, &gamedata)?;
     let collections = read_collections(comp, &gamedata)?;
     Ok(VPX {
+        custominfotags,
         info,
         version,
         gamedata,
@@ -83,8 +90,9 @@ pub fn read_vpx<F: Read + Write + Seek>(comp: &mut CompoundFile<F>) -> io::Resul
 }
 
 pub fn write_vpx(comp: &mut CompoundFile<File>, original: &VPX) -> io::Result<()> {
-    write_tableinfo(comp, &original.info)?;
     create_game_storage(comp)?;
+    write_custominfotags(comp, &original.custominfotags)?;
+    write_tableinfo(comp, &original.info)?;
     write_version(comp, &original.version)?;
     write_game_data(comp, &original.gamedata)?;
     write_game_items(comp, &original.gameitems)?;
@@ -581,6 +589,34 @@ fn write_fonts<F: Read + Write + Seek>(
     Ok(())
 }
 
+fn read_custominfotags<F: Read + Write + Seek>(
+    comp: &mut CompoundFile<F>,
+) -> io::Result<CustomInfoTags> {
+    let path = Path::new(MAIN_SEPARATOR_STR)
+        .join("GameStg")
+        .join("CustomInfoTags");
+    let mut tags_data = Vec::new();
+    let mut stream = comp.open_stream(path)?;
+    stream.read_to_end(&mut tags_data)?;
+
+    let tags = custominfotags::read_custominfotags(&tags_data);
+    Ok(tags)
+}
+
+fn write_custominfotags<F: Read + Write + Seek>(
+    comp: &mut CompoundFile<F>,
+    tags: &CustomInfoTags,
+) -> io::Result<()> {
+    let path = Path::new(MAIN_SEPARATOR_STR)
+        .join("GameStg")
+        .join("CustomInfoTags");
+
+    let data = custominfotags::write_custominfotags(tags);
+
+    let mut stream = comp.create_stream(path)?;
+    stream.write_all(&data)
+}
+
 pub fn diff_script<P: AsRef<Path>>(vpx_file_path: P) -> io::Result<String> {
     // set extension for PathBuf
     let vbs_path = vpx_file_path.as_ref().with_extension("vbs");
@@ -790,9 +826,24 @@ mod tests {
         write_vpx(&mut comp2, &original).unwrap();
         comp2.flush().unwrap();
 
-        // compare both files
+        let original_paths = compound_file_paths(&path);
+        let test_paths = compound_file_paths(&test_vpx_path);
+        assert_eq!(original_paths, test_paths);
+
+        // compare both files on the binary level
         let original_bytes = std::fs::read(path).unwrap();
         let test_bytes = std::fs::read(test_vpx_path).unwrap();
         assert_eq!(original_bytes.len(), test_bytes.len());
+    }
+
+    fn compound_file_paths(compound_file_path: &PathBuf) -> Vec<PathBuf> {
+        let mut comp3 = cfb::open(compound_file_path).unwrap();
+        comp3
+            .walk()
+            .map(|entry| {
+                let path = entry.path();
+                path.to_path_buf()
+            })
+            .collect()
     }
 }

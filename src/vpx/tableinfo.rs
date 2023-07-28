@@ -4,15 +4,22 @@ use std::io::{Read, Seek, Write};
 use std::path::{Path, MAIN_SEPARATOR_STR};
 use utf16string::{LittleEndian, WStr, WString};
 
+// >    "/TableInfo/AuthorName",
+// >    "/TableInfo/Screenshot",
+// >    "/TableInfo/TableBlurb",
+// >    "/TableInfo/TableRules",
+// >    "/TableInfo/AuthorEmail",
+// >    "/TableInfo/ReleaseDate",
+
 #[derive(PartialEq, Debug)]
 pub struct TableInfo {
     pub table_name: String,
-    pub author_name: String,
-    pub screenshot: Vec<u8>,
-    pub table_blurb: String,
-    pub table_rules: String,
-    pub author_email: String,
-    pub release_date: String,
+    pub author_name: Option<String>,
+    pub screenshot: Option<Vec<u8>>,
+    pub table_blurb: Option<String>,
+    pub table_rules: Option<String>,
+    pub author_email: Option<String>,
+    pub release_date: Option<String>,
     pub table_save_rev: String,
     pub table_version: String,
     pub author_website: String,
@@ -27,12 +34,12 @@ impl TableInfo {
         //let now: String = chrono::Local::now().to_rfc3339();
         TableInfo {
             table_name: "".to_string(),
-            author_name: "".to_string(),
-            screenshot: vec![],
-            table_blurb: "".to_string(),
-            table_rules: "".to_string(),
-            author_email: "".to_string(),
-            release_date: "".to_string(),
+            author_name: None,
+            screenshot: None,
+            table_blurb: None,
+            table_rules: None,
+            author_email: None,
+            release_date: None,
             table_save_rev: "".to_string(),
             table_version: "".to_string(),
             author_website: "".to_string(),
@@ -54,36 +61,73 @@ pub fn write_tableinfo<F: Read + Write + Seek>(
         table_info_path.join("TableName").as_path(),
         &table_info.table_name,
     )?;
-    write_stream_string(
-        comp,
-        table_info_path.join("AuthorName").as_path(),
-        &table_info.author_name,
-    )?;
-    write_stream_binary(
-        comp,
-        table_info_path.join("Screenshot").as_path(),
-        &table_info.screenshot,
-    )?;
-    write_stream_string(
-        comp,
-        table_info_path.join("TableBlurb").as_path(),
-        &table_info.table_blurb,
-    )?;
-    write_stream_string(
-        comp,
-        table_info_path.clone().join("TableRules").as_path(),
-        &table_info.table_rules,
-    )?;
-    write_stream_string(
-        comp,
-        table_info_path.join("AuthorEmail").as_path(),
-        &table_info.author_email,
-    )?;
-    write_stream_string(
-        comp,
-        table_info_path.join("ReleaseDate").as_path(),
-        &table_info.release_date,
-    )?;
+    table_info
+        .author_name
+        .as_ref()
+        .map(|author_name| {
+            write_stream_string(
+                comp,
+                table_info_path.join("AuthorName").as_path(),
+                author_name,
+            )
+        })
+        .unwrap_or(Ok(()))?;
+    table_info
+        .screenshot
+        .as_ref()
+        .map(|screenshot| {
+            write_stream_binary(
+                comp,
+                table_info_path.join("Screenshot").as_path(),
+                screenshot,
+            )
+        })
+        .unwrap_or(Ok(()))?;
+    table_info
+        .table_blurb
+        .as_ref()
+        .map(|table_blurb| {
+            write_stream_string(
+                comp,
+                table_info_path.join("TableBlurb").as_path(),
+                table_blurb,
+            )
+        })
+        .unwrap_or(Ok(()))?;
+    table_info
+        .table_rules
+        .as_ref()
+        .map(|table_rules| {
+            write_stream_string(
+                comp,
+                table_info_path.join("TableRules").as_path(),
+                table_rules,
+            )
+        })
+        .unwrap_or(Ok(()))?;
+    table_info
+        .author_email
+        .as_ref()
+        .map(|author_email| {
+            write_stream_string(
+                comp,
+                table_info_path.join("AuthorEmail").as_path(),
+                author_email,
+            )
+        })
+        .unwrap_or(Ok(()))?;
+
+    table_info
+        .release_date
+        .as_ref()
+        .map(|release_date| {
+            write_stream_string(
+                comp,
+                table_info_path.join("ReleaseDate").as_path(),
+                release_date,
+            )
+        })
+        .unwrap_or(Ok(()))?;
     write_stream_string(
         comp,
         table_info_path.join("TableSaveRev").as_path(),
@@ -123,20 +167,7 @@ pub fn read_tableinfo<F: Read + Write + Seek>(
 ) -> std::io::Result<TableInfo> {
     // create path to table info using path separator
     let table_info_path = Path::new(MAIN_SEPARATOR_STR).join("TableInfo");
-    // println!("Reading table info at {}", table_info_path);
-    let mut table_name: String = "".to_string();
-    let mut author_name: String = "".to_string();
-    let mut screenshot: Vec<u8> = vec![];
-    let mut table_blurb: String = "".to_string();
-    let mut table_rules: String = "".to_string();
-    let mut author_email: String = "".to_string();
-    let mut release_date: String = "".to_string();
-    let mut table_save_rev: String = "".to_string();
-    let mut table_version: String = "".to_string();
-    let mut author_website: String = "".to_string();
-    let mut table_save_date: String = "".to_string();
-    let mut table_description: String = "".to_string();
-    let mut properties: HashMap<String, String> = HashMap::new();
+    let mut table_info = TableInfo::new();
 
     let entries = comp.read_storage(table_info_path).unwrap();
     // read all the entries in the entrues
@@ -156,46 +187,52 @@ pub fn read_tableinfo<F: Read + Write + Seek>(
                 .map(|s| s.to_str().unwrap_or("[not unicode]"))
                 .unwrap_or("..");
             match file_name {
-                "TableName" => read_stream_string(comp, path).map(|s| table_name = s),
-                "AuthorName" => read_stream_string(comp, path).map(|s| author_name = s),
+                "TableName" => read_stream_string(comp, path).map(|s| table_info.table_name = s),
+                "AuthorName" => {
+                    read_stream_string(comp, path).map(|s| table_info.author_name = Some(s))
+                }
                 "Screenshot" => {
                     // seems to be a full image file, eg if there is no jpeg data in the image this is a full png
                     // but how do we know the extension?
-                    read_stream_binary(comp, path).map(|v| screenshot = v)
+                    read_stream_binary(comp, path).map(|v| table_info.screenshot = Some(v))
                 }
-                "TableBlurb" => read_stream_string(comp, path).map(|s| table_blurb = s),
-                "TableRules" => read_stream_string(comp, path).map(|s| table_rules = s),
-                "AuthorEmail" => read_stream_string(comp, path).map(|s| author_email = s),
-                "ReleaseDate" => read_stream_string(comp, path).map(|s| release_date = s),
-                "TableSaveRev" => read_stream_string(comp, path).map(|s| table_save_rev = s),
-                "TableVersion" => read_stream_string(comp, path).map(|s| table_version = s),
-                "AuthorWebSite" => read_stream_string(comp, path).map(|s| author_website = s),
-                "TableSaveDate" => read_stream_string(comp, path).map(|s| table_save_date = s),
-                "TableDescription" => read_stream_string(comp, path).map(|s| table_description = s),
+                "TableBlurb" => {
+                    read_stream_string(comp, path).map(|s| table_info.table_blurb = Some(s))
+                }
+                "TableRules" => {
+                    read_stream_string(comp, path).map(|s| table_info.table_rules = Some(s))
+                }
+                "AuthorEmail" => {
+                    read_stream_string(comp, path).map(|s| table_info.author_email = Some(s))
+                }
+                "ReleaseDate" => {
+                    read_stream_string(comp, path).map(|s| table_info.release_date = Some(s))
+                }
+                "TableSaveRev" => {
+                    read_stream_string(comp, path).map(|s| table_info.table_save_rev = s)
+                }
+                "TableVersion" => {
+                    read_stream_string(comp, path).map(|s| table_info.table_version = s)
+                }
+                "AuthorWebSite" => {
+                    read_stream_string(comp, path).map(|s| table_info.author_website = s)
+                }
+                "TableSaveDate" => {
+                    read_stream_string(comp, path).map(|s| table_info.table_save_date = s)
+                }
+                "TableDescription" => {
+                    read_stream_string(comp, path).map(|s| table_info.table_description = s)
+                }
                 other => {
                     let str = read_stream_string(comp, path)?;
-                    properties.insert(other.to_string(), str);
+                    table_info.properties.insert(other.to_string(), str);
                     Ok(())
                 }
             }
         })
         .collect();
 
-    result.map(|_| TableInfo {
-        table_name,
-        author_name,
-        screenshot,
-        table_blurb,
-        table_rules,
-        author_email,
-        release_date,
-        table_save_rev,
-        table_version,
-        author_website,
-        table_save_date,
-        table_description,
-        properties,
-    })
+    result.map(|_| table_info)
 }
 
 fn read_stream_string<F: Read + Write + Seek>(
@@ -259,12 +296,12 @@ mod tests {
         let mut comp = CompoundFile::create(buff).unwrap();
         let table_info = TableInfo {
             table_name: "test_table_name".to_string(),
-            author_name: "test_author_name".to_string(),
-            screenshot: vec![1, 2, 3],
-            table_blurb: "test_table_blurb".to_string(),
-            table_rules: "test_table_rules".to_string(),
-            author_email: "test_author_email".to_string(),
-            release_date: "test_release_date".to_string(),
+            author_name: Some("test_author_name".to_string()),
+            screenshot: Some(vec![1, 2, 3]),
+            table_blurb: Some("test_table_blurb".to_string()),
+            table_rules: Some("test_table_rules".to_string()),
+            author_email: Some("test_author_email".to_string()),
+            release_date: None,
             table_save_rev: "test_table_save_rev".to_string(),
             table_version: "test_table_version".to_string(),
             author_website: "test_author_website".to_string(),

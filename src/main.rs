@@ -525,10 +525,12 @@ fn info(vpx_file_path: &str, json: bool) -> io::Result<()> {
         "{:>18} {}{}{}",
         "Author:".green(),
         Some(table_info.author_name)
+            .map(|s| s.unwrap_or("[not set]".to_string()))
             .filter(|s| !s.is_empty())
             .map(|s| format!("{} ", s))
             .unwrap_or_default(),
         Some(table_info.author_email)
+            .map(|s| s.unwrap_or("[not set]".to_string()))
             .filter(|s| !s.is_empty())
             .map(|s| format!("{} ", s))
             .unwrap_or_default(),
@@ -550,15 +552,23 @@ fn info(vpx_file_path: &str, json: bool) -> io::Result<()> {
     println!(
         "{:>18} {}",
         "Release Date:".green(),
-        table_info.release_date
+        table_info.release_date.unwrap_or("[not set]".to_string())
     );
     println!(
         "{:>18} {}",
         "Description:".green(),
         table_info.table_description
     );
-    println!("{:>18} {}", "Blurb:".green(), table_info.table_blurb);
-    println!("{:>18} {}", "Rules:".green(), table_info.table_rules);
+    println!(
+        "{:>18} {}",
+        "Blurb:".green(),
+        table_info.table_blurb.unwrap_or("[not set]".to_string())
+    );
+    println!(
+        "{:>18} {}",
+        "Rules:".green(),
+        table_info.table_rules.unwrap_or("[not set]".to_string())
+    );
     // other properties
     table_info.properties.iter().for_each(|(prop, value)| {
         println!("{:>18}: {}", prop.green(), value);

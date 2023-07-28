@@ -228,6 +228,7 @@ fn is_wav(path: &str) -> bool {
 }
 
 pub(crate) fn write(sound: &SoundData) -> Vec<u8> {
+    // TODO add support for the old format file version < 1031
     let mut writer = BiffWriter::new();
     writer.write_string(&sound.name);
     writer.write_string(&sound.path);

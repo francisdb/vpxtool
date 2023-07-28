@@ -279,7 +279,6 @@ mod test {
         };
 
         let bytes = write(&img);
-        dbg!(&bytes);
 
         let read = read(String::from("/tmp/test.vpx"), &bytes);
 

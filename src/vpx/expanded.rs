@@ -53,10 +53,16 @@ fn extract_info(comp: &mut CompoundFile<File>, root_dir_path: &Path) -> std::io:
     let json_path = root_dir_path.join("TableInfo.json");
     let mut json_file = std::fs::File::create(&json_path).unwrap();
     let table_info = tableinfo::read_tableinfo(comp)?;
-    if !table_info.screenshot.is_empty() {
+    // TODO can we avoid the clone?
+    let screenshot = table_info
+        .screenshot
+        .as_ref()
+        .unwrap_or(&Vec::new())
+        .clone();
+    if !screenshot.is_empty() {
         let screenshot_path = root_dir_path.join("screenshot.bin");
         let mut screenshot_file = std::fs::File::create(screenshot_path).unwrap();
-        screenshot_file.write_all(&table_info.screenshot).unwrap();
+        screenshot_file.write_all(&screenshot).unwrap();
     }
 
     let info = table_json(&table_info);
