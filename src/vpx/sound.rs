@@ -1,7 +1,6 @@
 use std::fmt;
 
 use bytes::{BufMut, BytesMut};
-use quick_xml::writer;
 
 use super::{
     biff::{BiffReader, BiffWriter},

@@ -2,8 +2,8 @@ use super::biff::{self, BiffReader, BiffWriter};
 
 pub type CustomInfoTags = Vec<String>;
 
-pub fn read_custominfotags(tags_data: &Vec<u8>) -> CustomInfoTags {
-    let mut reader = BiffReader::new(&tags_data);
+pub fn read_custominfotags(tags_data: &[u8]) -> CustomInfoTags {
+    let mut reader = BiffReader::new(tags_data);
     let mut tags = CustomInfoTags::new();
 
     loop {

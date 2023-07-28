@@ -1,4 +1,4 @@
-use crate::vpx::biff::{self, BiffRead, BiffReader, BiffWrite, BiffWriter};
+use crate::vpx::biff::{self, BiffRead, BiffReader, BiffWrite};
 
 use super::dragpoint::DragPoint;
 

@@ -82,7 +82,7 @@ mod test {
             size: 0,
             name: "Arial Black".to_string(),
         };
-        let mut writer = &mut BiffWriter::new();
+        let mut writer = BiffWriter::new();
         Font::biff_write(&font, &mut writer);
         let mut reader = BiffReader::new(writer.get_data());
         let font2 = Font::biff_read(&mut reader);

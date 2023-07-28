@@ -555,7 +555,7 @@ fn write_images<F: Read + Write + Seek>(
         let path = format!("GameStg/Image{}", index);
         let mut stream = comp.create_stream(&path)?;
         let mut writer = BiffWriter::new();
-        let data = image.biff_write(&mut writer);
+        image.biff_write(&mut writer);
         stream.write_all(writer.get_data())?;
     }
     Ok(())

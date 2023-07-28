@@ -134,9 +134,6 @@ impl BiffRead for Wall {
                 "HTBT" => {
                     height_bottom = reader.get_f32();
                 }
-                "HITO" => {
-                    height_top = reader.get_f32();
-                }
                 "NAME" => {
                     name = reader.get_wide_string();
                 }
@@ -235,9 +232,6 @@ impl BiffRead for Wall {
                 }
                 "SLMA" => {
                     slingshot_material = reader.get_string();
-                }
-                "HTBT" => {
-                    height_bottom = reader.get_f32();
                 }
                 "HTTP" => {
                     height_top = reader.get_f32();
