@@ -6,11 +6,8 @@ pub struct Vertex2D {
     y: f32,
 }
 impl Vertex2D {
-    pub(crate) fn new(x: f64, y: f64) -> Vertex2D {
-        Vertex2D {
-            x: x as f32,
-            y: y as f32,
-        }
+    pub fn new(x: f32, y: f32) -> Vertex2D {
+        Vertex2D { x, y }
     }
 }
 
