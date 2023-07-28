@@ -193,10 +193,10 @@ impl BiffWrite for Trigger {
         writer.write_tagged_f32("SCAY", self.scale_y);
         writer.write_tagged_bool("TMON", self.is_timer_enabled);
         writer.write_tagged_i32("TMIN", self.timer_interval);
-        writer.write_tagged_string("MATR", &self.material);
         writer.write_tagged_string("SURF", &self.surface);
-        writer.write_tagged_bool("VSBL", self.is_visible);
+        writer.write_tagged_string("MATR", &self.material);
         writer.write_tagged_bool("EBLD", self.is_enabled);
+        writer.write_tagged_bool("VSBL", self.is_visible);
         writer.write_tagged_f32("THOT", self.hit_height);
         writer.write_tagged_wide_string("NAME", &self.name);
         writer.write_tagged_u32("SHAP", self.shape);

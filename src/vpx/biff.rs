@@ -146,7 +146,7 @@ impl<'a> BiffReader<'a> {
         let data = &self.data[self.pos..self.pos + pos_0];
         let s = decode_latin1(data);
         self.pos += count;
-        self.bytes_in_record_remaining -= count;
+        self.sub_remaining(count);
         s.to_string()
     }
 
@@ -384,6 +384,17 @@ impl<'a> BiffReader<'a> {
             warn_remaining: false,
         }
     }
+
+    fn sub_remaining(&mut self, count: usize) {
+        if self.bytes_in_record_remaining < count {
+            panic!(
+                "WARN: {} bytes remaining in record {}, but {} bytes requested",
+                self.bytes_in_record_remaining, self.tag, count
+            );
+        } else {
+            self.bytes_in_record_remaining -= count;
+        }
+    }
 }
 
 pub struct BiffWriter {
@@ -504,7 +515,7 @@ impl BiffWriter {
 
     pub fn write_bool(&mut self, value: bool) {
         if value {
-            self.write_u32(0xFFFFFFFF);
+            self.write_u32(0x00000001);
         } else {
             self.write_u32(0x00000000);
         }

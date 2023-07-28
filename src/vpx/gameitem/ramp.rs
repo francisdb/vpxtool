@@ -301,15 +301,15 @@ impl BiffWrite for Ramp {
         writer.write_tagged_bool("REEN", self.is_reflection_enabled);
         writer.write_tagged_string("MAPH", &self.physics_material);
         writer.write_tagged_bool("OVPH", self.overwrite_physics);
-        writer.write_marker_tag("PNTS");
-        for point in &self.drag_points {
-            writer.write_tagged("DPNT", point)
-        }
         // shared
         writer.write_tagged_bool("LOCK", self.is_locked);
         writer.write_tagged_u32("LAYR", self.editor_layer);
         writer.write_tagged_string("LANR", &self.editor_layer_name);
         writer.write_tagged_bool("LVIS", self.editor_layer_visibility);
+        writer.write_marker_tag("PNTS");
+        for point in &self.drag_points {
+            writer.write_tagged("DPNT", point)
+        }
 
         writer.close(true);
     }

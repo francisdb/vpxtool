@@ -199,11 +199,6 @@ impl BiffWrite for Light {
 
         writer.write_tagged_string("SURF", &self.surface);
         writer.write_tagged_wide_string("NAME", &self.name);
-        // shared
-        writer.write_tagged_bool("LOCK", self.is_locked);
-        writer.write_tagged_u32("LAYR", self.editor_layer);
-        writer.write_tagged_string("LANR", &self.editor_layer_name);
-        writer.write_tagged_bool("LVIS", self.editor_layer_visibility);
 
         writer.write_tagged_bool("BGLS", self.is_backglass);
         writer.write_tagged_f32("LIDB", self.depth_bias);
@@ -217,6 +212,11 @@ impl BiffWrite for Light {
         writer.write_tagged_f32("BMSC", self.mesh_radius);
         writer.write_tagged_f32("BMVA", self.bulb_modulate_vs_add);
         writer.write_tagged_f32("BHHI", self.bulb_halo_height);
+        // shared
+        writer.write_tagged_bool("LOCK", self.is_locked);
+        writer.write_tagged_u32("LAYR", self.editor_layer);
+        writer.write_tagged_string("LANR", &self.editor_layer_name);
+        writer.write_tagged_bool("LVIS", self.editor_layer_visibility);
         // many of these
         for point in &self.drag_points {
             writer.write_tagged("DPNT", point);
