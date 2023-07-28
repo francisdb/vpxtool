@@ -6,11 +6,11 @@ use super::biff::{self, BiffRead, BiffReader, BiffWrite, BiffWriter};
 pub struct ImageDataJpeg {
     path: String,
     name: String,
-    /**
-     * Lowercased name?
-     */
-    inme: String,
-    alpha_test_value: f32,
+    // /**
+    //  * Lowercased name?
+    //  */
+    // inme: String,
+    // alpha_test_value: f32,
     pub data: Vec<u8>,
 }
 
@@ -20,6 +20,7 @@ impl fmt::Debug for ImageDataJpeg {
         f.debug_struct("ImageDataJpeg")
             .field("path", &self.path)
             .field("name", &self.name)
+            // .field("alpha_test_value", &self.alpha_test_value)
             .field("data", &self.data.len())
             .finish()
     }
@@ -45,10 +46,10 @@ impl fmt::Debug for ImageDataBits {
 #[derive(PartialEq, Debug)]
 pub struct ImageData {
     pub name: String,
-    /**
-     * Lowercased name?
-     */
-    inme: String,
+    // /**
+    //  * Lowercased name?
+    //  */
+    // inme: String,
     path: String,
     width: u32,
     height: u32,
@@ -82,7 +83,7 @@ impl BiffRead for ImageData {
 
 fn read(reader: &mut BiffReader) -> ImageData {
     let mut name: String = "".to_string();
-    let mut inme: String = "".to_string();
+    // let mut inme: String = "".to_string();
     let mut height: u32 = 0;
     let mut width: u32 = 0;
     let mut path: String = "".to_string();
@@ -100,17 +101,17 @@ fn read(reader: &mut BiffReader) -> ImageData {
             "NAME" => {
                 name = reader.get_string();
             }
-            "INME" => {
-                inme = reader.get_string();
+            "PATH" => {
+                path = reader.get_string();
             }
+            // "INME" => {
+            //     inme = reader.get_string();
+            // }
             "WDTH" => {
                 width = reader.get_u32();
             }
             "HGHT" => {
                 height = reader.get_u32();
-            }
-            "PATH" => {
-                path = reader.get_string();
             }
             "ALTV" => {
                 alpha_test_value = reader.get_f32();
@@ -146,7 +147,7 @@ fn read(reader: &mut BiffReader) -> ImageData {
     }
     ImageData {
         name,
-        inme,
+        // inme,
         path,
         width,
         height,
@@ -158,11 +159,10 @@ fn read(reader: &mut BiffReader) -> ImageData {
 
 fn write(data: &ImageData, writer: &mut BiffWriter) {
     writer.write_tagged_string("NAME", &data.name);
-    writer.write_tagged_string("INME", &data.inme);
+    writer.write_tagged_string("PATH", &data.path);
     writer.write_tagged_u32("WDTH", data.width);
     writer.write_tagged_u32("HGHT", data.height);
-    writer.write_tagged_string("PATH", &data.path);
-    writer.write_tagged_f32("ALTV", data.alpha_test_value);
+
     match &data.bits {
         Some(bits) => {
             writer.write_tagged_data("DATA", &bits.data);
@@ -176,7 +176,8 @@ fn write(data: &ImageData, writer: &mut BiffWriter) {
         }
         None => {}
     }
-    writer.write_tagged_u32("LINK", 0);
+    // writer.write_tagged_string("INME", &data.inme);
+    writer.write_tagged_f32("ALTV", data.alpha_test_value);
     writer.close(true);
 }
 
@@ -186,8 +187,8 @@ fn read_jpeg(reader: &mut BiffReader) -> ImageDataJpeg {
     let mut path: String = "".to_string();
     let mut name: String = "".to_string();
     let mut data: Vec<u8> = vec![];
-    let mut alpha_test_value: f32 = 0.0;
-    let mut inme: String = "".to_string();
+    // let mut alpha_test_value: f32 = 0.0;
+    // let mut inme: String = "".to_string();
     loop {
         reader.next(biff::WARN);
         if reader.is_eof() {
@@ -207,8 +208,8 @@ fn read_jpeg(reader: &mut BiffReader) -> ImageDataJpeg {
             },
             "NAME" => name = reader.get_string(),
             "PATH" => path = reader.get_string(),
-            "ALTV" => alpha_test_value = reader.get_f32(), // TODO why are these duplicated?
-            "INME" => inme = reader.get_string(),          // TODO why are these duplicated?
+            // "ALTV" => alpha_test_value = reader.get_f32(), // TODO why are these duplicated?
+            // "INME" => inme = reader.get_string(),          // TODO why are these duplicated?
             _ => {
                 // skip this record
                 println!("skipping tag inside JPEG {}", tag);
@@ -220,8 +221,8 @@ fn read_jpeg(reader: &mut BiffReader) -> ImageDataJpeg {
     ImageDataJpeg {
         path,
         name,
-        inme,
-        alpha_test_value,
+        // inme,
+        // alpha_test_value,
         data,
     }
 }
@@ -230,10 +231,9 @@ fn write_jpg(img: &ImageDataJpeg) -> Vec<u8> {
     let mut writer = BiffWriter::new();
     writer.write_tagged_string("NAME", &img.name);
     writer.write_tagged_string("PATH", &img.path);
-    writer.write_tagged_f32("ALTV", img.alpha_test_value);
-    writer.write_tagged_string("INME", &img.inme);
     writer.write_tagged_u32("SIZE", img.data.len().try_into().unwrap());
     writer.write_tagged_data("DATA", &img.data);
+    // writer.write_tagged_f32("ALTV", img.alpha_test_value);
     writer.close(true);
     writer.get_data().to_vec()
 }
@@ -249,8 +249,8 @@ mod test {
         let img = ImageDataJpeg {
             path: "path_value".to_string(),
             name: "name_value".to_string(),
-            inme: "inme_value".to_string(),
-            alpha_test_value: 1.0,
+            // inme: "inme_value".to_string(),
+            // alpha_test_value: 1.0,
             data: vec![1, 2, 3],
         };
 
@@ -265,7 +265,7 @@ mod test {
     fn test_write_read() {
         let image: ImageData = ImageData {
             name: "name_value".to_string(),
-            inme: "inme_value".to_string(),
+            // inme: "inme_value".to_string(),
             path: "path_value".to_string(),
             width: 1,
             height: 2,
@@ -273,8 +273,8 @@ mod test {
             jpeg: Some(ImageDataJpeg {
                 path: "path_value".to_string(),
                 name: "name_value".to_string(),
-                inme: "inme_value".to_string(),
-                alpha_test_value: 1.0,
+                // inme: "inme_value".to_string(),
+                // alpha_test_value: 1.0,
                 data: vec![1, 2, 3],
             }),
             bits: None,

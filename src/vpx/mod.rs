@@ -839,8 +839,8 @@ mod tests {
         let item_tags = tags_at(&mut comp, Path::new("/GameStg/GameItem38"), 4);
         let test_item_tags = tags_at(&mut comp2, Path::new("/GameStg/GameItem38"), 4);
         assert_eq!(item_tags, test_item_tags);
-        let item_tags = tags_at(&mut comp, Path::new("/GameStg/Image0"), 4);
-        let test_item_tags = tags_at(&mut comp2, Path::new("/GameStg/Image0"), 4);
+        let item_tags = tags_at(&mut comp, Path::new("/GameStg/Image0"), 0);
+        let test_item_tags = tags_at(&mut comp2, Path::new("/GameStg/Image0"), 0);
         assert_eq!(item_tags, test_item_tags);
 
         let original_paths = compound_file_paths(&path);
@@ -883,6 +883,7 @@ mod tests {
         let mut tags: Vec<(String, usize)> = Vec::new();
         while let Some(tag) = &reader.next(WARN) {
             let tag_str = tag.as_str();
+            // dbg!(tag_str);
             match tag_str {
                 "JPEG" => {
                     tags.push(("--JPEG--SUB--BEGIN--".to_string(), 0));
