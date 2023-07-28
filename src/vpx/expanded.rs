@@ -13,7 +13,8 @@ use super::sound;
 use super::sound::write_sound;
 use super::version;
 use crate::jsonmodel::{collections_json, table_json};
-use crate::vpx::biff::BiffReader;
+use crate::vpx::biff::{BiffRead, BiffReader};
+use crate::vpx::image::ImageData;
 
 pub fn extract(vpx_file_path: &Path, root_dir_path: &Path) -> std::io::Result<()> {
     let vbs_path = root_dir_path.join("script.vbs");
@@ -91,7 +92,8 @@ fn extract_images(comp: &mut CompoundFile<File>, gamedata: &GameData, root_dir_p
             .unwrap()
             .read_to_end(&mut input)
             .unwrap();
-        let img = image::read(path.to_owned(), &input);
+        let mut reader = BiffReader::new(&input);
+        let img = ImageData::biff_read(&mut reader);
         match &img.jpeg {
             Some(jpeg) => {
                 let ext = img.ext();

@@ -15,6 +15,7 @@ use crate::vpx::biff::BiffReader;
 use tableinfo::{write_tableinfo, TableInfo};
 use version::Version;
 
+use self::biff::{BiffRead, BiffWrite, BiffWriter};
 use self::collection::Collection;
 use self::custominfotags::CustomInfoTags;
 use self::font::FontData;
@@ -541,7 +542,8 @@ fn read_images<F: Read + Seek>(
             let mut input = Vec::new();
             let mut stream = comp.open_stream(&path)?;
             stream.read_to_end(&mut input)?;
-            Ok(image::read(path, &input))
+            let mut reader = BiffReader::new(&input);
+            Ok(ImageData::biff_read(&mut reader))
         })
         .collect()
 }
@@ -553,8 +555,9 @@ fn write_images<F: Read + Write + Seek>(
     for (index, image) in images.iter().enumerate() {
         let path = format!("GameStg/Image{}", index);
         let mut stream = comp.create_stream(&path)?;
-        let data = image::write(image);
-        stream.write_all(&data)?;
+        let mut writer = BiffWriter::new();
+        let data = image.biff_write(&mut writer);
+        stream.write_all(writer.get_data())?;
     }
     Ok(())
 }
@@ -701,7 +704,7 @@ mod tests {
     use std::io::Cursor;
     use testdir::testdir;
 
-    use super::*;
+    use super::{biff::WARN, *};
 
     #[test]
     fn test_write_read() {
@@ -826,6 +829,20 @@ mod tests {
         write_vpx(&mut comp2, &original).unwrap();
         comp2.flush().unwrap();
 
+        // we need to skip the first 32 bits because they are the type of gameitem
+        let item_tags = tags_at(&mut comp, Path::new("/GameStg/GameItem0"), 4);
+        let test_item_tags = tags_at(&mut comp2, Path::new("/GameStg/GameItem0"), 4);
+        assert_eq!(item_tags, test_item_tags);
+        let item_tags = tags_at(&mut comp, Path::new("/GameStg/GameItem9"), 4);
+        let test_item_tags = tags_at(&mut comp2, Path::new("/GameStg/GameItem9"), 4);
+        assert_eq!(item_tags, test_item_tags);
+        let item_tags = tags_at(&mut comp, Path::new("/GameStg/GameItem38"), 4);
+        let test_item_tags = tags_at(&mut comp2, Path::new("/GameStg/GameItem38"), 4);
+        assert_eq!(item_tags, test_item_tags);
+        let item_tags = tags_at(&mut comp, Path::new("/GameStg/Image0"), 4);
+        let test_item_tags = tags_at(&mut comp2, Path::new("/GameStg/Image0"), 4);
+        assert_eq!(item_tags, test_item_tags);
+
         let original_paths = compound_file_paths(&path);
         let test_paths = compound_file_paths(&test_vpx_path);
         assert_eq!(original_paths, test_paths);
@@ -836,14 +853,54 @@ mod tests {
         assert_eq!(original_bytes.len(), test_bytes.len());
     }
 
-    fn compound_file_paths(compound_file_path: &PathBuf) -> Vec<PathBuf> {
-        let mut comp3 = cfb::open(compound_file_path).unwrap();
+    fn compound_file_paths(compound_file_path: &PathBuf) -> Vec<(PathBuf, u64)> {
+        let comp3 = cfb::open(compound_file_path).unwrap();
         comp3
             .walk()
             .map(|entry| {
                 let path = entry.path();
-                path.to_path_buf()
+                let size = entry.len();
+                (path.to_path_buf(), size)
             })
             .collect()
+    }
+
+    fn tags_at<F: Seek + Read>(
+        comp: &mut CompoundFile<F>,
+        path: &Path,
+        skip: u32,
+    ) -> Vec<(String, usize)> {
+        let mut data = Vec::new();
+        let mut stream = comp.open_stream(path).unwrap();
+        stream.read_to_end(&mut data).unwrap();
+        // skip skip bytes from the data
+        let mut reader = BiffReader::new(&data[(skip as usize)..]);
+        reader.disable_warn_remaining();
+        biff_tags(&mut reader)
+    }
+
+    fn biff_tags(reader: &mut BiffReader) -> Vec<(String, usize)> {
+        let mut tags: Vec<(String, usize)> = Vec::new();
+        while let Some(tag) = &reader.next(WARN) {
+            let tag_str = tag.as_str();
+            match tag_str {
+                "JPEG" => {
+                    tags.push(("--JPEG--SUB--BEGIN--".to_string(), 0));
+                    let mut sub_reader = reader.child_reader();
+                    while let Some(tag) = &sub_reader.next(WARN) {
+                        let skipped = sub_reader.skip_tag();
+                        tags.push((tag.clone(), skipped));
+                    }
+                    tags.push(("--JPEG--SUB--END--".to_string(), 0));
+                    let pos = sub_reader.pos();
+                    reader.skip_end_tag(pos);
+                }
+                other => {
+                    let skipped = reader.skip_tag();
+                    tags.push((other.to_string(), skipped));
+                }
+            }
+        }
+        tags
     }
 }

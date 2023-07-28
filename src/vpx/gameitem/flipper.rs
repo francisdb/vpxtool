@@ -19,8 +19,11 @@ pub struct Flipper {
     material: String,
     name: String,
     rubber_material: String,
+    rthk: f32, // deprecated?
     rubber_thickness: f32,
+    rhgt: f32, // deprecated?
     rubber_height: f32,
+    rwdt: f32, // deprecated?
     rubber_width: f32,
     strength: f32,
     elasticity: f32,
@@ -67,8 +70,11 @@ impl BiffRead for Flipper {
         let mut material: String = Default::default();
         let mut name: String = Default::default();
         let mut rubber_material: String = Default::default();
+        let mut rthk: f32 = 0.0;
         let mut rubber_thickness: f32 = 7.0;
+        let mut rhgt: f32 = 0.0;
         let mut rubber_height: f32 = 19.0;
+        let mut rwdt: f32 = 0.0;
         let mut rubber_width: f32 = 24.0;
         let mut strength: f32 = 2200.0;
         let mut elasticity: f32 = 0.8;
@@ -145,19 +151,19 @@ impl BiffRead for Flipper {
                     rubber_material = reader.get_string();
                 }
                 "RTHK" => {
-                    rubber_thickness = reader.get_f32();
+                    rthk = reader.get_f32();
                 }
                 "RTHF" => {
                     rubber_thickness = reader.get_f32();
                 }
                 "RHGT" => {
-                    rubber_height = reader.get_f32();
+                    rhgt = reader.get_f32();
                 }
                 "RHGF" => {
                     rubber_height = reader.get_f32();
                 }
                 "RWDT" => {
-                    rubber_width = reader.get_f32();
+                    rwdt = reader.get_f32();
                 }
                 "RWDF" => {
                     rubber_width = reader.get_f32();
@@ -244,8 +250,11 @@ impl BiffRead for Flipper {
             material,
             name,
             rubber_material,
+            rthk,
             rubber_thickness,
+            rhgt,
             rubber_height,
+            rwdt,
             rubber_width,
             elasticity,
             friction,
@@ -286,9 +295,12 @@ impl BiffWrite for Flipper {
         writer.write_tagged_string("MATR", &self.material);
         writer.write_tagged_wide_string("NAME", &self.name);
         writer.write_tagged_string("RUMA", &self.rubber_material);
-        writer.write_tagged_f32("RTHK", self.rubber_thickness);
-        writer.write_tagged_f32("RHGT", self.rubber_height);
-        writer.write_tagged_f32("RWDT", self.rubber_width);
+        writer.write_tagged_f32("RTHK", self.rthk);
+        writer.write_tagged_f32("RTHF", self.rubber_thickness);
+        writer.write_tagged_f32("RHGT", self.rhgt);
+        writer.write_tagged_f32("RHGF", self.rubber_height);
+        writer.write_tagged_f32("RWDT", self.rwdt);
+        writer.write_tagged_f32("RWDF", self.rubber_width);
         writer.write_tagged_f32("STRG", self.strength);
         writer.write_tagged_f32("ELAS", self.elasticity);
         writer.write_tagged_f32("ELFO", self.elasticity_falloff);
@@ -338,8 +350,11 @@ mod tests {
             material: String::from("test material"),
             name: String::from("test name"),
             rubber_material: String::from("test rubber material"),
+            rwdt: 0.0,
             rubber_thickness: 7.0,
+            rhgt: 0.0,
             rubber_height: 19.0,
+            rthk: 0.0,
             rubber_width: 24.0,
             strength: 2200.0,
             elasticity: 0.8,

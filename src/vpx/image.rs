@@ -1,6 +1,6 @@
 use std::fmt;
 
-use super::biff::{self, BiffReader, BiffWriter};
+use super::biff::{self, BiffRead, BiffReader, BiffWrite, BiffWriter};
 
 #[derive(PartialEq)]
 pub struct ImageDataJpeg {
@@ -44,11 +44,6 @@ impl fmt::Debug for ImageDataBits {
 
 #[derive(PartialEq, Debug)]
 pub struct ImageData {
-    /**
-     * Original path of the image in the vpx file
-     * we could probably just keep the index?
-     */
-    fs_path: String,
     pub name: String,
     /**
      * Lowercased name?
@@ -73,8 +68,19 @@ impl ImageData {
     }
 }
 
-pub fn read(fs_path: String, input: &[u8]) -> ImageData {
-    let mut reader = BiffReader::new(input);
+impl BiffWrite for ImageData {
+    fn biff_write(&self, writer: &mut BiffWriter) {
+        write(self, writer);
+    }
+}
+
+impl BiffRead for ImageData {
+    fn biff_read(reader: &mut BiffReader<'_>) -> Self {
+        read(reader)
+    }
+}
+
+fn read(reader: &mut BiffReader) -> ImageData {
     let mut name: String = "".to_string();
     let mut inme: String = "".to_string();
     let mut height: u32 = 0;
@@ -111,7 +117,7 @@ pub fn read(fs_path: String, input: &[u8]) -> ImageData {
             }
             "BITS" => {
                 // these have zero as length
-                println!("{path}: Unsupported bmp image file (BITS)", path = fs_path);
+                println!("Unsupported bmp image file (BITS)");
                 // uncompressed = zlib.decompress(image_data.data[image_data.pos:]) #, wbits=9)
                 // reader.skip_end_tag(len.try_into().unwrap());
                 bits = Some(ImageDataBits { data: vec![] });
@@ -139,7 +145,6 @@ pub fn read(fs_path: String, input: &[u8]) -> ImageData {
         }
     }
     ImageData {
-        fs_path,
         name,
         inme,
         path,
@@ -151,8 +156,7 @@ pub fn read(fs_path: String, input: &[u8]) -> ImageData {
     }
 }
 
-pub fn write(data: &ImageData) -> Vec<u8> {
-    let mut writer = BiffWriter::new();
+fn write(data: &ImageData, writer: &mut BiffWriter) {
     writer.write_tagged_string("NAME", &data.name);
     writer.write_tagged_string("INME", &data.inme);
     writer.write_tagged_u32("WDTH", data.width);
@@ -174,7 +178,6 @@ pub fn write(data: &ImageData) -> Vec<u8> {
     }
     writer.write_tagged_u32("LINK", 0);
     writer.close(true);
-    writer.get_data().to_vec()
 }
 
 fn read_jpeg(reader: &mut BiffReader) -> ImageDataJpeg {
@@ -260,8 +263,7 @@ mod test {
 
     #[test]
     fn test_write_read() {
-        let img = ImageData {
-            fs_path: "/tmp/test.vpx".to_string(),
+        let image: ImageData = ImageData {
             name: "name_value".to_string(),
             inme: "inme_value".to_string(),
             path: "path_value".to_string(),
@@ -277,11 +279,9 @@ mod test {
             }),
             bits: None,
         };
-
-        let bytes = write(&img);
-
-        let read = read(String::from("/tmp/test.vpx"), &bytes);
-
-        assert_eq!(read, img);
+        let mut writer = BiffWriter::new();
+        ImageData::biff_write(&image, &mut writer);
+        let image_read = read(&mut BiffReader::new(writer.get_data()));
+        assert_eq!(image, image_read);
     }
 }

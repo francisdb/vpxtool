@@ -43,6 +43,13 @@ impl<'a> BiffReader<'a> {
         reader
     }
 
+    /**
+     * Useful if you just want to read a bunch of tags and don't care about the data
+     */
+    pub fn disable_warn_remaining(&mut self) {
+        self.warn_remaining = false;
+    }
+
     pub fn pos(&self) -> usize {
         self.pos
     }
@@ -329,12 +336,14 @@ impl<'a> BiffReader<'a> {
         self.bytes_in_record_remaining = 0;
     }
 
-    pub fn skip_tag(&mut self) {
-        self.pos += self.bytes_in_record_remaining;
+    pub fn skip_tag(&mut self) -> usize {
+        let remaining = self.bytes_in_record_remaining;
+        self.pos += remaining;
         self.bytes_in_record_remaining = 0;
+        remaining
     }
 
-    pub fn next(&mut self, warn: bool) {
+    pub fn next(&mut self, warn: bool) -> Option<String> {
         if self.bytes_in_record_remaining > 0 {
             if warn {
                 println!(
@@ -357,6 +366,11 @@ impl<'a> BiffReader<'a> {
         self.tag = tag;
         if self.warn_remaining && self.tag == "ENDB" && self.pos < self.data.len() {
             panic!("{} Remaining bytes after ENDB", self.data.len() - self.pos);
+        }
+        if self.is_eof() {
+            None
+        } else {
+            Some(self.tag.clone())
         }
     }
 

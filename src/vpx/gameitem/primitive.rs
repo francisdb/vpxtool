@@ -41,14 +41,14 @@ pub struct Primitive {
     pub mesh_file_name: String,          // 39 M3DN
     pub num_vertices: u32,               // 40 M3VN
     pub compressed_vertices: u32,        // 41 M3CY
-    //pub m3cx: (),                        // 42 M3CX
-    pub num_indices: u32,        // 42 M3FN
-    pub compressed_indices: u32, // 43 M3CJ
-    //pub m3ci: (),                        // 44 M3CI
-    pub depth_bias: f32, // 45 PIDB
-    pub add_blend: bool, // 46 ADDB
-    pub alpha: f32,      // 47 FALP
-    pub color: Color,    // 48 COLR
+    pub m3cx: Vec<u8>,                   // 42 M3CX
+    pub num_indices: u32,                // 42 M3FN
+    pub compressed_indices: u32,         // 43 M3CJ
+    pub m3ci: Vec<u8>,                   // 44 M3CI
+    pub depth_bias: f32,                 // 45 PIDB
+    pub add_blend: bool,                 // 46 ADDB
+    pub alpha: f32,                      // 47 FALP
+    pub color: Color,                    // 48 COLR
 
     // these are shared between all items
     pub is_locked: bool,
@@ -93,8 +93,10 @@ impl BiffRead for Primitive {
         let mut mesh_file_name: String = Default::default();
         let mut num_vertices: u32 = 0;
         let mut compressed_vertices: u32 = 0;
+        let mut m3cx: Vec<u8> = Default::default();
         let mut num_indices: u32 = 0;
         let mut compressed_indices: u32 = 0;
+        let mut m3ci: Vec<u8> = Default::default();
         let mut depth_bias: f32 = 0.0;
         let mut add_blend: bool = false;
         let mut alpha: f32 = 1.0;
@@ -256,7 +258,7 @@ impl BiffRead for Primitive {
                 // [BiffAnimation("M3AX", IsCompressed = true, Pos = 47 )]
                 // public Mesh Mesh = new Mesh();
                 "M3CX" => {
-                    reader.skip_tag();
+                    m3cx = reader.get_record_data(false);
                 }
                 "M3FN" => {
                     num_indices = reader.get_u32();
@@ -265,7 +267,7 @@ impl BiffRead for Primitive {
                     compressed_indices = reader.get_u32();
                 }
                 "M3CI" => {
-                    reader.skip_tag();
+                    m3ci = reader.get_record_data(false);
                 }
                 "M3AX" => {
                     reader.skip_tag();
@@ -341,8 +343,10 @@ impl BiffRead for Primitive {
             mesh_file_name,
             num_vertices,
             compressed_vertices,
+            m3cx,
             num_indices,
             compressed_indices,
+            m3ci,
             depth_bias,
             add_blend,
             alpha,
@@ -399,8 +403,10 @@ impl BiffWrite for Primitive {
         writer.write_tagged_string("M3DN", &self.mesh_file_name);
         writer.write_tagged_u32("M3VN", self.num_vertices);
         writer.write_tagged_u32("M3CY", self.compressed_vertices);
+        writer.write_tagged_data("M3CX", &self.m3cx);
         writer.write_tagged_u32("M3FN", self.num_indices);
         writer.write_tagged_u32("M3CJ", self.compressed_indices);
+        writer.write_tagged_data("M3CI", &self.m3ci);
         writer.write_tagged_f32("PIDB", self.depth_bias);
         writer.write_tagged_bool("ADDB", self.add_blend);
         writer.write_tagged_f32("FALP", self.alpha);
@@ -463,8 +469,10 @@ mod tests {
             mesh_file_name: "mesh_file_name".to_string(),
             num_vertices: 8,
             compressed_vertices: 9,
+            m3cx: vec![1, 2, 3, 4, 5, 6, 7, 8, 9],
             num_indices: 10,
             compressed_indices: 11,
+            m3ci: vec![2, 3, 4, 5, 6, 7, 8, 9, 10],
             depth_bias: 12.0,
             add_blend: rng.gen(),
             alpha: 13.0,
