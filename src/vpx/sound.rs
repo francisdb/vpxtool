@@ -1,8 +1,12 @@
 use std::fmt;
 
 use bytes::{BufMut, BytesMut};
+use quick_xml::writer;
 
-use super::{biff::BiffReader, Version};
+use super::{
+    biff::{BiffReader, BiffWriter},
+    Version,
+};
 
 const NEW_SOUND_FORMAT_VERSION: u32 = 1031;
 
@@ -127,7 +131,7 @@ impl SoundData {
     }
 }
 
-pub fn read(fs_path: String, file_version: Version, reader: &mut BiffReader) -> SoundData {
+pub(crate) fn read(fs_path: String, file_version: Version, reader: &mut BiffReader) -> SoundData {
     let mut name: String = "".to_string();
     let mut path: String = "".to_string();
     let mut internal_name: String = "".to_string();
@@ -221,4 +225,25 @@ pub fn read(fs_path: String, file_version: Version, reader: &mut BiffReader) -> 
 
 fn is_wav(path: &str) -> bool {
     path.to_lowercase().ends_with(".wav")
+}
+
+pub(crate) fn write(sound: &SoundData) -> Vec<u8> {
+    let mut writer = BiffWriter::new();
+    writer.write_string(&sound.name);
+    writer.write_string(&sound.path);
+    writer.write_string(&sound.internal_name);
+    writer.write_u32(sound.fade);
+    writer.write_u32(sound.volume);
+    writer.write_u32(sound.balance);
+    writer.write_u8(sound.output_target);
+    writer.write_u32(sound.volume);
+    writer.write_u16(sound.wave_form.format_tag);
+    writer.write_u16(sound.wave_form.channels);
+    writer.write_u32(sound.wave_form.samples_per_sec);
+    writer.write_u32(sound.wave_form.avg_bytes_per_sec);
+    writer.write_u16(sound.wave_form.block_align);
+    writer.write_u16(sound.wave_form.bits_per_sample);
+    writer.write_u16(sound.wave_form.cb_size);
+    writer.write_data(&sound.data);
+    writer.get_data().to_vec()
 }

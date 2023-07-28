@@ -199,7 +199,7 @@ fn main() {
             let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
             let path = path.unwrap_or("");
             let expanded_path = expand_path(path);
-            match vpx::diff(PathBuf::from(expanded_path)) {
+            match vpx::diff_script(PathBuf::from(expanded_path)) {
                 Ok(output) => {
                     println!("{}", output);
                 }

@@ -1,5 +1,5 @@
 use crate::vpx::{
-    biff::{self, BiffRead, BiffReader, BiffWrite, BiffWriter},
+    biff::{self, BiffRead, BiffReader, BiffWrite},
     color::Color,
 };
 

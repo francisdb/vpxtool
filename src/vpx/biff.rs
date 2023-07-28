@@ -11,6 +11,9 @@ pub trait BiffWrite {
     fn biff_write(&self, writer: &mut BiffWriter);
 }
 
+// TODO: can we improve this with:
+//   let mut buf = BytesMut::with_capacity(1024);
+
 pub struct BiffReader<'a> {
     data: &'a [u8],
     pos: usize,

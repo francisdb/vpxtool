@@ -20,6 +20,7 @@ use self::gamedata::GameData;
 use self::gameitem::GameItemEnum;
 use self::image::ImageData;
 use self::sound::SoundData;
+use self::version::write_version;
 
 pub mod biff;
 pub mod collection;
@@ -81,13 +82,18 @@ pub fn read_vpx<F: Read + Write + Seek>(comp: &mut CompoundFile<F>) -> io::Resul
     })
 }
 
-fn write_vpx(comp: &mut CompoundFile<File>, original: &VPX) -> io::Result<()> {
+pub fn write_vpx(comp: &mut CompoundFile<File>, original: &VPX) -> io::Result<()> {
     write_tableinfo(comp, &original.info)?;
     create_game_storage(comp)?;
-    version::write_version(comp, &original.version)?;
+    write_version(comp, &original.version)?;
     write_game_data(comp, &original.gamedata)?;
     write_game_items(comp, &original.gameitems)?;
-    Ok(())
+    write_images(comp, &original.images)?;
+    write_sounds(comp, &original.sounds)?;
+    write_fonts(comp, &original.fonts)?;
+    write_collections(comp, &original.collections)?;
+    let mac = generate_mac(comp)?;
+    write_mac(comp, &mac)
 }
 
 pub fn new_minimal_vpx<P: AsRef<Path>>(vpx_file_path: P) -> std::io::Result<()> {
@@ -470,19 +476,51 @@ fn read_sounds<F: Read + Seek>(
         .collect()
 }
 
+fn write_sounds<F: Read + Write + Seek>(
+    comp: &mut CompoundFile<F>,
+    sounds: &[SoundData],
+) -> io::Result<()> {
+    for (index, sound) in sounds.iter().enumerate() {
+        let path = Path::new(MAIN_SEPARATOR_STR)
+            .join("GameStg")
+            .join(format!("Sound{}", index));
+        let mut stream = comp.create_stream(&path)?;
+        let data = sound::write(sound);
+        stream.write_all(&data)?;
+    }
+    Ok(())
+}
+
 fn read_collections<F: Read + Seek>(
     comp: &mut CompoundFile<F>,
     gamedata: &GameData,
 ) -> io::Result<Vec<Collection>> {
     (0..gamedata.collections_size)
         .map(|index| {
-            let path = format!("GameStg/Collection{}", index);
+            let path = Path::new(MAIN_SEPARATOR_STR)
+                .join("GameStg")
+                .join(format!("Collection{}", index));
             let mut input = Vec::new();
             let mut stream = comp.open_stream(&path)?;
             stream.read_to_end(&mut input)?;
             Ok(collection::read(&input))
         })
         .collect()
+}
+
+fn write_collections<F: Read + Write + Seek>(
+    comp: &mut CompoundFile<F>,
+    collections: &[Collection],
+) -> io::Result<()> {
+    for (index, collection) in collections.iter().enumerate() {
+        let path = Path::new(MAIN_SEPARATOR_STR)
+            .join("GameStg")
+            .join(format!("Collection{}", index));
+        let mut stream = comp.create_stream(&path)?;
+        let data = collection::write(collection);
+        stream.write_all(&data)?;
+    }
+    Ok(())
 }
 
 fn read_images<F: Read + Seek>(
@@ -498,6 +536,19 @@ fn read_images<F: Read + Seek>(
             Ok(image::read(path, &input))
         })
         .collect()
+}
+
+fn write_images<F: Read + Write + Seek>(
+    comp: &mut CompoundFile<F>,
+    images: &[ImageData],
+) -> io::Result<()> {
+    for (index, image) in images.iter().enumerate() {
+        let path = format!("GameStg/Image{}", index);
+        let mut stream = comp.create_stream(&path)?;
+        let data = image::write(image);
+        stream.write_all(&data)?;
+    }
+    Ok(())
 }
 
 fn read_fonts<F: Read + Seek>(
@@ -517,7 +568,20 @@ fn read_fonts<F: Read + Seek>(
         .collect()
 }
 
-pub fn diff<P: AsRef<Path>>(vpx_file_path: P) -> io::Result<String> {
+fn write_fonts<F: Read + Write + Seek>(
+    comp: &mut CompoundFile<F>,
+    fonts: &[FontData],
+) -> io::Result<()> {
+    for (index, font) in fonts.iter().enumerate() {
+        let path = format!("GameStg/Font{}", index);
+        let mut stream = comp.create_stream(&path)?;
+        let data = font::write(font);
+        stream.write_all(&data)?;
+    }
+    Ok(())
+}
+
+pub fn diff_script<P: AsRef<Path>>(vpx_file_path: P) -> io::Result<String> {
     // set extension for PathBuf
     let vbs_path = vpx_file_path.as_ref().with_extension("vbs");
     let original_vbs_path = vpx_file_path.as_ref().with_extension("vbs.original.tmp");
