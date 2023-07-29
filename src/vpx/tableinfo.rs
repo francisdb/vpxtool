@@ -22,7 +22,7 @@ pub struct TableInfo {
     pub release_date: Option<String>,
     pub table_save_rev: String,
     pub table_version: String,
-    pub author_website: String,
+    pub author_website: Option<String>,
     pub table_save_date: String,
     pub table_description: String,
     // the keys (and ordering) for these are defined in "GameStg/CustomInfoTags"
@@ -42,7 +42,7 @@ impl TableInfo {
             release_date: None,
             table_save_rev: "".to_string(),
             table_version: "".to_string(),
-            author_website: "".to_string(),
+            author_website: None,
             table_save_date: "".to_string(),
             table_description: "".to_string(),
             properties: HashMap::new(),
@@ -138,11 +138,17 @@ pub fn write_tableinfo<F: Read + Write + Seek>(
         table_info_path.join("TableVersion").as_path(),
         &table_info.table_version,
     )?;
-    write_stream_string(
-        comp,
-        table_info_path.join("AuthorWebSite").as_path(),
-        &table_info.author_website,
-    )?;
+    table_info
+        .author_website
+        .as_ref()
+        .map(|author_website| {
+            write_stream_string(
+                comp,
+                table_info_path.join("AuthorWebSite").as_path(),
+                author_website,
+            )
+        })
+        .unwrap_or(Ok(()))?;
     write_stream_string(
         comp,
         table_info_path.join("TableSaveDate").as_path(),
@@ -215,7 +221,7 @@ pub fn read_tableinfo<F: Read + Write + Seek>(
                     read_stream_string(comp, path).map(|s| table_info.table_version = s)
                 }
                 "AuthorWebSite" => {
-                    read_stream_string(comp, path).map(|s| table_info.author_website = s)
+                    read_stream_string(comp, path).map(|s| table_info.author_website = Some(s))
                 }
                 "TableSaveDate" => {
                     read_stream_string(comp, path).map(|s| table_info.table_save_date = s)
@@ -304,7 +310,7 @@ mod tests {
             release_date: None,
             table_save_rev: "test_table_save_rev".to_string(),
             table_version: "test_table_version".to_string(),
-            author_website: "test_author_website".to_string(),
+            author_website: Some("test_author_website".to_string()),
             table_save_date: "test_table_save_date".to_string(),
             table_description: "test_table_description".to_string(),
             properties: HashMap::from([

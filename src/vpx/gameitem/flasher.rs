@@ -1,5 +1,7 @@
+use base64::write;
+
 use crate::vpx::{
-    biff::{self, BiffRead, BiffReader},
+    biff::{self, BiffRead, BiffReader, BiffWrite},
     color::Color,
 };
 
@@ -256,5 +258,91 @@ impl BiffRead for Flasher {
             editor_layer_visibility,
             drag_points,
         }
+    }
+}
+
+impl BiffWrite for Flasher {
+    fn biff_write(&self, writer: &mut biff::BiffWriter) {
+        writer.write_tagged_f32("FHEI", self.height);
+        writer.write_tagged_f32("FLAX", self.pos_x);
+        writer.write_tagged_f32("FLAY", self.pos_y);
+        writer.write_tagged_f32("FROX", self.rot_x);
+        writer.write_tagged_f32("FROY", self.rot_y);
+        writer.write_tagged_f32("FROZ", self.rot_z);
+        writer.write_tagged_with("COLR", &self.color, Color::biff_write_bgr);
+        writer.write_tagged_bool("TMON", self.is_timer_enabled);
+        writer.write_tagged_i32("TMIN", self.timer_interval);
+        writer.write_tagged_wide_string("NAME", &self.name);
+        writer.write_tagged_string("IMAG", &self.image_a);
+        writer.write_tagged_string("IMAB", &self.image_b);
+        writer.write_tagged_i32("FALP", self.alpha);
+        writer.write_tagged_f32("MOVA", self.modulate_vs_add);
+        writer.write_tagged_bool("FVIS", self.is_visible);
+        writer.write_tagged_bool("DSPT", self.display_texture);
+        writer.write_tagged_bool("ADDB", self.add_blend);
+        writer.write_tagged_bool("IDMD", self.is_dmd);
+        writer.write_tagged_f32("FLDB", self.depth_bias);
+        writer.write_tagged_u32("ALGN", self.image_alignment);
+        writer.write_tagged_u32("FILT", self.filter);
+        writer.write_tagged_u32("FIAM", self.filter_amount);
+        // shared
+        writer.write_tagged_bool("LOCK", self.is_locked);
+        writer.write_tagged_u32("LAYR", self.editor_layer);
+        writer.write_tagged_string("LANR", &self.editor_layer_name);
+        writer.write_tagged_bool("LVIS", self.editor_layer_visibility);
+
+        for drag_point in &self.drag_points {
+            writer.write_tagged("DPNT", drag_point);
+        }
+
+        writer.close(true);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::vpx::biff::BiffWriter;
+
+    use super::*;
+    use pretty_assertions::assert_eq;
+    use rand::Rng;
+
+    #[test]
+    fn test_write_read() {
+        let mut rng = rand::thread_rng();
+        // values not equal to the defaults
+        let flasher = Flasher {
+            height: rng.gen(),
+            pos_x: rng.gen(),
+            pos_y: rng.gen(),
+            rot_x: rng.gen(),
+            rot_y: rng.gen(),
+            rot_z: rng.gen(),
+            color: Color::new_bgr(rng.gen()),
+            is_timer_enabled: rng.gen(),
+            timer_interval: rng.gen(),
+            name: "test name".to_string(),
+            image_a: "test image a".to_string(),
+            image_b: "test image b".to_string(),
+            alpha: rng.gen(),
+            modulate_vs_add: rng.gen(),
+            is_visible: rng.gen(),
+            add_blend: rng.gen(),
+            is_dmd: rng.gen(),
+            display_texture: rng.gen(),
+            depth_bias: rng.gen(),
+            image_alignment: rng.gen(),
+            filter: rng.gen(),
+            filter_amount: rng.gen(),
+            is_locked: rng.gen(),
+            editor_layer: rng.gen(),
+            editor_layer_name: "test layer".to_string(),
+            editor_layer_visibility: rng.gen(),
+            drag_points: vec![DragPoint::default()],
+        };
+        let mut writer = BiffWriter::new();
+        Flasher::biff_write(&flasher, &mut writer);
+        let flasher_read = Flasher::biff_read(&mut BiffReader::new(writer.get_data()));
+        assert_eq!(flasher, flasher_read);
     }
 }

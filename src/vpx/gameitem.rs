@@ -248,7 +248,7 @@ pub(crate) fn write(gameitem: &GameItemEnum) -> Vec<u8> {
         GameItemEnum::Kicker(kicker) => write_with_type(ITEM_TYPE_KICKER, kicker),
         GameItemEnum::Decal(decal) => write_with_type(ITEM_TYPE_DECAL, decal),
         GameItemEnum::Gate(gate) => write_with_type(ITEM_TYPE_GATE, gate),
-        // GameItemEnum::Spinner(spinner) => write_with_type(ITEM_TYPE_SPINNER, spinner),
+        GameItemEnum::Spinner(spinner) => write_with_type(ITEM_TYPE_SPINNER, spinner),
         GameItemEnum::Ramp(ramp) => write_with_type(ITEM_TYPE_RAMP, ramp),
         // GameItemEnum::Table(table) => write_with_type(ITEM_TYPE_TABLE, table),
         // GameItemEnum::LightCenter(lightcenter) => {
@@ -256,18 +256,18 @@ pub(crate) fn write(gameitem: &GameItemEnum) -> Vec<u8> {
         // }
         // GameItemEnum::DragPoint(dragpoint) => write_with_type(ITEM_TYPE_DRAG_POINT, dragpoint),
         // GameItemEnum::Collection(collection) => write_with_type(ITEM_TYPE_COLLECTION, collection),
-        // GameItemEnum::Reel(reel) => write_with_type(ITEM_TYPE_REEL, reel),
-        // GameItemEnum::LightSequencer(lightsequencer) => {
-        //     write_with_type(ITEM_TYPE_LIGHT_SEQUENCER, lightsequencer)
-        // }
+        GameItemEnum::Reel(reel) => write_with_type(ITEM_TYPE_REEL, reel),
+        GameItemEnum::LightSequencer(lightsequencer) => {
+            write_with_type(ITEM_TYPE_LIGHT_SEQUENCER, lightsequencer)
+        }
         GameItemEnum::Primitive(primitive) => write_with_type(ITEM_TYPE_PRIMITIVE, primitive),
-        // GameItemEnum::Flasher(flasher) => write_with_type(ITEM_TYPE_FLASHER, flasher),
+        GameItemEnum::Flasher(flasher) => write_with_type(ITEM_TYPE_FLASHER, flasher),
         GameItemEnum::Rubber(rubber) => write_with_type(ITEM_TYPE_RUBBER, rubber),
-        // GameItemEnum::HitTarget(hittarget) => write_with_type(ITEM_TYPE_HIT_TARGET, hittarget),
+        GameItemEnum::HitTarget(hittarget) => write_with_type(ITEM_TYPE_HIT_TARGET, hittarget),
         // GameItemEnum::Generic(item_type, generic) => write_with_type(*item_type, generic),
         _ => {
-            println!("TODO: write gameitem {:?}", gameitem);
-            vec![]
+            unimplemented!("write gameitem {:?}", gameitem);
+            //vec![]
         }
     }
 }

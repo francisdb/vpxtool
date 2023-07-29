@@ -793,7 +793,7 @@ mod tests {
         expected_info.table_name = String::from("Visual Pinball Demo Table");
         expected_info.table_save_rev = String::from("10");
         expected_info.table_version = String::from("1.2");
-        expected_info.author_website = String::from("http://www.vpforums.org/");
+        expected_info.author_website = Some(String::from("http://www.vpforums.org/"));
         expected_info.table_save_date = String::from("Tue Jul 11 15:48:49 2023");
         expected_info.table_description =
             String::from("Press C to enable manual Ball Control via the arrow keys and B");

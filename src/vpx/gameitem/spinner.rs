@@ -1,4 +1,4 @@
-use crate::vpx::biff::{self, BiffRead, BiffReader};
+use crate::vpx::biff::{self, BiffRead, BiffReader, BiffWrite};
 
 use super::vertex2d::Vertex2D;
 
@@ -160,5 +160,76 @@ impl BiffRead for Spinner {
             editor_layer_name,
             editor_layer_visibility,
         }
+    }
+}
+
+impl BiffWrite for Spinner {
+    fn biff_write(&self, writer: &mut biff::BiffWriter) {
+        writer.write_tagged("VCEN", &self.center);
+        writer.write_tagged_f32("ROTA", self.rotation);
+        writer.write_tagged_bool("TMON", self.is_timer_enabled);
+        writer.write_tagged_u32("TMIN", self.timer_interval);
+        writer.write_tagged_f32("HIGH", self.height);
+        writer.write_tagged_f32("LGTH", self.length);
+        writer.write_tagged_f32("AFRC", self.damping);
+        writer.write_tagged_f32("SMAX", self.angle_max);
+        writer.write_tagged_f32("SMIN", self.angle_min);
+        writer.write_tagged_f32("SELA", self.elasticity);
+        writer.write_tagged_bool("SVIS", self.is_visible);
+        writer.write_tagged_bool("SSUP", self.show_bracket);
+        writer.write_tagged_string("MATR", &self.material);
+        writer.write_tagged_string("IMGF", &self.image);
+        writer.write_tagged_string("SURF", &self.surface);
+        writer.write_tagged_wide_string("NAME", &self.name);
+        writer.write_tagged_bool("REEN", self.is_reflection_enabled);
+        // shared
+        writer.write_tagged_bool("LOCK", self.is_locked);
+        writer.write_tagged_u32("LAYR", self.editor_layer);
+        writer.write_tagged_string("LANR", &self.editor_layer_name);
+        writer.write_tagged_bool("LVIS", self.editor_layer_visibility);
+
+        writer.close(true);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::vpx::biff::BiffWriter;
+
+    use super::*;
+    use pretty_assertions::assert_eq;
+    use rand::Rng;
+
+    #[test]
+    fn test_write_read() {
+        let mut rng = rand::thread_rng();
+        // values not equal to the defaults
+        let spinner = Spinner {
+            center: Vertex2D::new(rng.gen(), rng.gen()),
+            rotation: rng.gen(),
+            is_timer_enabled: rng.gen(),
+            timer_interval: rng.gen(),
+            height: rng.gen(),
+            length: rng.gen(),
+            damping: rng.gen(),
+            angle_max: rng.gen(),
+            angle_min: rng.gen(),
+            elasticity: rng.gen(),
+            is_visible: rng.gen(),
+            show_bracket: rng.gen(),
+            material: "test material".to_string(),
+            image: "test image".to_string(),
+            surface: "test surface".to_string(),
+            name: "test name".to_string(),
+            is_reflection_enabled: rng.gen(),
+            is_locked: rng.gen(),
+            editor_layer: rng.gen(),
+            editor_layer_name: "test layer name".to_string(),
+            editor_layer_visibility: rng.gen(),
+        };
+        let mut writer = BiffWriter::new();
+        Spinner::biff_write(&spinner, &mut writer);
+        let spinner_read = Spinner::biff_read(&mut BiffReader::new(writer.get_data()));
+        assert_eq!(spinner, spinner_read);
     }
 }

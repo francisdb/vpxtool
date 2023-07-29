@@ -9,7 +9,7 @@ pub struct ImageDataJpeg {
     // /**
     //  * Lowercased name?
     //  */
-    // inme: String,
+    inme: Option<String>,
     // alpha_test_value: f32,
     pub data: Vec<u8>,
 }
@@ -49,7 +49,7 @@ pub struct ImageData {
     // /**
     //  * Lowercased name?
     //  */
-    // inme: String,
+    inme: Option<String>,
     path: String,
     width: u32,
     height: u32,
@@ -83,7 +83,7 @@ impl BiffRead for ImageData {
 
 fn read(reader: &mut BiffReader) -> ImageData {
     let mut name: String = "".to_string();
-    // let mut inme: String = "".to_string();
+    let mut inme: Option<String> = None;
     let mut height: u32 = 0;
     let mut width: u32 = 0;
     let mut path: String = "".to_string();
@@ -104,9 +104,9 @@ fn read(reader: &mut BiffReader) -> ImageData {
             "PATH" => {
                 path = reader.get_string();
             }
-            // "INME" => {
-            //     inme = reader.get_string();
-            // }
+            "INME" => {
+                inme = Some(reader.get_string());
+            }
             "WDTH" => {
                 width = reader.get_u32();
             }
@@ -147,7 +147,7 @@ fn read(reader: &mut BiffReader) -> ImageData {
     }
     ImageData {
         name,
-        // inme,
+        inme,
         path,
         width,
         height,
@@ -163,20 +163,16 @@ fn write(data: &ImageData, writer: &mut BiffWriter) {
     writer.write_tagged_u32("WDTH", data.width);
     writer.write_tagged_u32("HGHT", data.height);
 
-    match &data.bits {
-        Some(bits) => {
-            writer.write_tagged_data("DATA", &bits.data);
-        }
-        None => {}
+    if let Some(bits) = &data.bits {
+        writer.write_tagged_data("DATA", &bits.data);
     }
-    match &data.jpeg {
-        Some(jpeg) => {
-            let bits = write_jpg(jpeg);
-            writer.write_tagged_data("JPEG", &bits);
-        }
-        None => {}
+    if let Some(jpeg) = &data.jpeg {
+        let bits = write_jpg(jpeg);
+        writer.write_tagged_data("JPEG", &bits);
     }
-    // writer.write_tagged_string("INME", &data.inme);
+    if let Some(inme) = &data.inme {
+        writer.write_tagged_string("INME", inme);
+    }
     writer.write_tagged_f32("ALTV", data.alpha_test_value);
     writer.close(true);
 }
@@ -188,7 +184,7 @@ fn read_jpeg(reader: &mut BiffReader) -> ImageDataJpeg {
     let mut name: String = "".to_string();
     let mut data: Vec<u8> = vec![];
     // let mut alpha_test_value: f32 = 0.0;
-    // let mut inme: String = "".to_string();
+    let mut inme: Option<String> = None;
     loop {
         reader.next(biff::WARN);
         if reader.is_eof() {
@@ -209,7 +205,7 @@ fn read_jpeg(reader: &mut BiffReader) -> ImageDataJpeg {
             "NAME" => name = reader.get_string(),
             "PATH" => path = reader.get_string(),
             // "ALTV" => alpha_test_value = reader.get_f32(), // TODO why are these duplicated?
-            // "INME" => inme = reader.get_string(),          // TODO why are these duplicated?
+            "INME" => inme = Some(reader.get_string()),
             _ => {
                 // skip this record
                 println!("skipping tag inside JPEG {}", tag);
@@ -221,7 +217,7 @@ fn read_jpeg(reader: &mut BiffReader) -> ImageDataJpeg {
     ImageDataJpeg {
         path,
         name,
-        // inme,
+        inme,
         // alpha_test_value,
         data,
     }
@@ -234,6 +230,9 @@ fn write_jpg(img: &ImageDataJpeg) -> Vec<u8> {
     writer.write_tagged_u32("SIZE", img.data.len().try_into().unwrap());
     writer.write_tagged_data("DATA", &img.data);
     // writer.write_tagged_f32("ALTV", img.alpha_test_value);
+    if let Some(inme) = &img.inme {
+        writer.write_tagged_string("INME", inme);
+    }
     writer.close(true);
     writer.get_data().to_vec()
 }
@@ -249,7 +248,7 @@ mod test {
         let img = ImageDataJpeg {
             path: "path_value".to_string(),
             name: "name_value".to_string(),
-            // inme: "inme_value".to_string(),
+            inme: Some("inme_value".to_string()),
             // alpha_test_value: 1.0,
             data: vec![1, 2, 3],
         };
@@ -265,7 +264,7 @@ mod test {
     fn test_write_read() {
         let image: ImageData = ImageData {
             name: "name_value".to_string(),
-            // inme: "inme_value".to_string(),
+            inme: Some("inme_value".to_string()),
             path: "path_value".to_string(),
             width: 1,
             height: 2,
@@ -273,7 +272,7 @@ mod test {
             jpeg: Some(ImageDataJpeg {
                 path: "path_value".to_string(),
                 name: "name_value".to_string(),
-                // inme: "inme_value".to_string(),
+                inme: Some("inme_value".to_string()),
                 // alpha_test_value: 1.0,
                 data: vec![1, 2, 3],
             }),

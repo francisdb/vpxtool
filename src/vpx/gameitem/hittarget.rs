@@ -1,4 +1,4 @@
-use crate::vpx::biff::{self, BiffRead, BiffReader};
+use crate::vpx::biff::{self, BiffRead, BiffReader, BiffWrite};
 
 use super::vertex3d::Vertex3D;
 
@@ -231,5 +231,96 @@ impl BiffRead for HitTarget {
             editor_layer_name,
             editor_layer_visibility,
         }
+    }
+}
+
+impl BiffWrite for HitTarget {
+    fn biff_write(&self, writer: &mut biff::BiffWriter) {
+        writer.write_tagged("VPOS", &self.position);
+        writer.write_tagged("VSIZ", &self.size);
+        writer.write_tagged_f32("ROTZ", self.rot_z);
+        writer.write_tagged_string("IMAG", &self.image);
+        writer.write_tagged_i32("TRTY", self.target_type);
+        writer.write_tagged_wide_string("NAME", &self.name);
+        writer.write_tagged_string("MATR", &self.material);
+        writer.write_tagged_bool("TVIS", self.is_visible);
+        writer.write_tagged_bool("LEMO", self.is_legacy);
+        writer.write_tagged_bool("HTEV", self.use_hit_event);
+        writer.write_tagged_f32("THRS", self.threshold);
+        writer.write_tagged_f32("ELAS", self.elasticity);
+        writer.write_tagged_f32("ELFO", self.elasticity_falloff);
+        writer.write_tagged_f32("RFCT", self.friction);
+        writer.write_tagged_f32("RSCT", self.scatter);
+        writer.write_tagged_bool("CLDR", self.is_collidable);
+        writer.write_tagged_f32("DILI", self.disable_lighting_top);
+        writer.write_tagged_f32("DILB", self.disable_lighting_below);
+        writer.write_tagged_bool("REEN", self.is_reflection_enabled);
+        writer.write_tagged_f32("PIDB", self.depth_bias);
+        writer.write_tagged_bool("ISDR", self.is_dropped);
+        writer.write_tagged_f32("DRSP", self.drop_speed);
+        writer.write_tagged_bool("TMON", self.is_timer_enabled);
+        writer.write_tagged_u32("TMIN", self.timer_interval);
+        writer.write_tagged_u32("RADE", self.raise_delay);
+        writer.write_tagged_string("MAPH", &self.physics_material);
+        writer.write_tagged_bool("OVPH", self.overwrite_physics);
+        // shared
+        writer.write_tagged_bool("LOCK", self.is_locked);
+        writer.write_tagged_u32("LAYR", self.editor_layer);
+        writer.write_tagged_string("LANR", &self.editor_layer_name);
+        writer.write_tagged_bool("LVIS", self.editor_layer_visibility);
+
+        writer.close(true);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::vpx::biff::BiffWriter;
+
+    use super::*;
+    use pretty_assertions::assert_eq;
+    use rand::Rng;
+
+    #[test]
+    fn test_write_read() {
+        let mut rng = rand::thread_rng();
+        // values not equal to the defaults
+        let hittarget = HitTarget {
+            position: Vertex3D::new(rng.gen(), rng.gen(), rng.gen()),
+            size: Vertex3D::new(rng.gen(), rng.gen(), rng.gen()),
+            rot_z: rng.gen(),
+            image: "test image".to_string(),
+            target_type: rng.gen(),
+            name: "test name".to_string(),
+            material: "test material".to_string(),
+            is_visible: rng.gen(),
+            is_legacy: rng.gen(),
+            use_hit_event: rng.gen(),
+            threshold: rng.gen(),
+            elasticity: rng.gen(),
+            elasticity_falloff: rng.gen(),
+            friction: rng.gen(),
+            scatter: rng.gen(),
+            is_collidable: rng.gen(),
+            disable_lighting_top: rng.gen(),
+            disable_lighting_below: rng.gen(),
+            is_reflection_enabled: rng.gen(),
+            depth_bias: rng.gen(),
+            is_dropped: rng.gen(),
+            drop_speed: rng.gen(),
+            is_timer_enabled: rng.gen(),
+            timer_interval: rng.gen(),
+            raise_delay: rng.gen(),
+            physics_material: "test physics material".to_string(),
+            overwrite_physics: rng.gen(),
+            is_locked: rng.gen(),
+            editor_layer: rng.gen(),
+            editor_layer_name: "test layer name".to_string(),
+            editor_layer_visibility: rng.gen(),
+        };
+        let mut writer = BiffWriter::new();
+        HitTarget::biff_write(&hittarget, &mut writer);
+        let hittarget_read = HitTarget::biff_read(&mut BiffReader::new(writer.get_data()));
+        assert_eq!(hittarget, hittarget_read);
     }
 }

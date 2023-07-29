@@ -7,48 +7,50 @@ use super::vertex3d::Vertex3D;
 
 #[derive(Debug, PartialEq)]
 pub struct Primitive {
-    pub position: Vertex3D,              // 0 VPOS
-    pub size: Vertex3D,                  // 1 VSIZ
-    pub rot_and_tra: [f32; 9],           // 2-11 RTV0-RTV8
-    pub image: String,                   // 12 IMAG
-    pub normal_map: String,              // 13 NRMA
-    pub sides: u32,                      // 14
-    pub name: String,                    // 15
-    pub material: String,                // 16
-    pub side_color: Color,               // 17
-    pub is_visible: bool,                // 18
-    pub draw_textures_inside: bool,      // 19
-    pub hit_event: bool,                 // 20
-    pub threshold: f32,                  // 21
-    pub elasticity: f32,                 // 22
-    pub elasticity_falloff: f32,         // 23
-    pub friction: f32,                   // 24
-    pub scatter: f32,                    // 25
-    pub edge_factor_ui: f32,             // 26
-    pub collision_reduction_factor: f32, // 27
-    pub is_collidable: bool,             // 28
-    pub is_toy: bool,                    // 29
-    pub use_3d_mesh: bool,               // 30
-    pub static_rendering: bool,          // 31
-    pub disable_lighting_top: bool,      // 32
-    pub disable_lighting_below: bool,    // 33
-    pub is_reflection_enabled: bool,     // 34
-    pub backfaces_enabled: bool,         // 35
-    pub physics_material: String,        // 36 MAPH
-    pub overwrite_physics: bool,         // 37 OVPH
-    pub display_texture: bool,           // 38 DIPT
-    pub object_space_normal_map: bool,   // 38.5 OSNM
-    pub mesh_file_name: String,          // 39 M3DN
-    pub num_vertices: u32,               // 40 M3VN
-    pub compressed_vertices: u32,        // 41 M3CY
-    pub m3cx: Vec<u8>,                   // 42 M3CX
-    pub num_indices: u32,                // 42 M3FN
-    pub compressed_indices: u32,         // 43 M3CJ
-    pub m3ci: Vec<u8>,                   // 44 M3CI
-    pub depth_bias: f32,                 // 45 PIDB
-    pub add_blend: bool,                 // 46 ADDB
-    pub alpha: f32,                      // 47 FALP
-    pub color: Color,                    // 48 COLR
+    pub position: Vertex3D,               // 0 VPOS
+    pub size: Vertex3D,                   // 1 VSIZ
+    pub rot_and_tra: [f32; 9],            // 2-11 RTV0-RTV8
+    pub image: String,                    // 12 IMAG
+    pub normal_map: String,               // 13 NRMA
+    pub sides: u32,                       // 14
+    pub name: String,                     // 15
+    pub material: String,                 // 16
+    pub side_color: Color,                // 17
+    pub is_visible: bool,                 // 18
+    pub draw_textures_inside: bool,       // 19
+    pub hit_event: bool,                  // 20
+    pub threshold: f32,                   // 21
+    pub elasticity: f32,                  // 22
+    pub elasticity_falloff: f32,          // 23
+    pub friction: f32,                    // 24
+    pub scatter: f32,                     // 25
+    pub edge_factor_ui: f32,              // 26
+    pub collision_reduction_factor: f32,  // 27
+    pub is_collidable: bool,              // 28
+    pub is_toy: bool,                     // 29
+    pub use_3d_mesh: bool,                // 30
+    pub static_rendering: bool,           // 31
+    pub disable_lighting_top: f32,        // 32
+    pub disable_lighting_below: f32,      // 33
+    pub is_reflection_enabled: bool,      // 34
+    pub backfaces_enabled: bool,          // 35
+    pub physics_material: String,         // 36 MAPH
+    pub overwrite_physics: bool,          // 37 OVPH
+    pub display_texture: bool,            // 38 DIPT
+    pub object_space_normal_map: bool,    // 38.5 OSNM
+    pub mesh_file_name: Option<String>,   // 39 M3DN
+    pub num_vertices: Option<u32>,        // 40 M3VN
+    pub compressed_vertices: Option<u32>, // 41 M3CY
+    pub m3cx: Option<Vec<u8>>,            // 42 M3CX
+    pub num_indices: Option<u32>,         // 43 M3FN
+    pub compressed_indices: Option<u32>,  // 44 M3CJ
+    pub m3ci: Option<Vec<u8>>,            // 45 M3CI
+    pub m3ay: Option<Vec<Vec<u8>>>,       // 46 M3AY multiple
+    pub m3ax: Option<Vec<Vec<u8>>>,       // 47 M3AX multiple
+    pub depth_bias: f32,                  // 45 PIDB
+    pub add_blend: bool,                  // 46 ADDB
+    pub alpha: f32,                       // 47 FALP
+    pub color: Color,                     // 48 COLR
 
     // these are shared between all items
     pub is_locked: bool,
@@ -82,21 +84,25 @@ impl BiffRead for Primitive {
         let mut is_toy: bool = false;
         let mut use_3d_mesh: bool = false;
         let mut static_rendering: bool = false;
-        let mut disable_lighting_top: bool = false;
-        let mut disable_lighting_below: bool = false;
+        let mut disable_lighting_top: f32 = 0.0;
+        let mut disable_lighting_below: f32 = 0.0;
         let mut is_reflection_enabled: bool = true;
         let mut backfaces_enabled: bool = false;
         let mut physics_material: String = Default::default();
         let mut overwrite_physics: bool = true;
         let mut display_texture: bool = true;
         let mut object_space_normal_map: bool = false;
-        let mut mesh_file_name: String = Default::default();
-        let mut num_vertices: u32 = 0;
-        let mut compressed_vertices: u32 = 0;
-        let mut m3cx: Vec<u8> = Default::default();
-        let mut num_indices: u32 = 0;
-        let mut compressed_indices: u32 = 0;
-        let mut m3ci: Vec<u8> = Default::default();
+
+        let mut mesh_file_name: Option<String> = None;
+        let mut num_vertices: Option<u32> = None;
+        let mut compressed_vertices: Option<u32> = None;
+        let mut m3cx: Option<Vec<u8>> = None;
+        let mut num_indices: Option<u32> = None;
+        let mut compressed_indices: Option<u32> = None;
+        let mut m3ci: Option<Vec<u8>> = None;
+        let mut m3ay: Option<Vec<Vec<u8>>> = None;
+        let mut m3ax: Option<Vec<Vec<u8>>> = None;
+
         let mut depth_bias: f32 = 0.0;
         let mut add_blend: bool = false;
         let mut alpha: f32 = 1.0;
@@ -218,10 +224,10 @@ impl BiffRead for Primitive {
                 //[BiffFloat("DILI", QuantizedUnsignedBits = 8, Pos = 32)]
                 //public float DisableLightingTop; // m_d.m_fDisableLightingTop = (tmp == 1) ? 1.f : dequantizeUnsigned<8>(tmp); // backwards compatible hacky loading!
                 "DILI" => {
-                    disable_lighting_top = reader.get_bool();
+                    disable_lighting_top = reader.get_f32();
                 }
                 "DILB" => {
-                    disable_lighting_below = reader.get_bool();
+                    disable_lighting_below = reader.get_f32();
                 }
                 "REEN" => {
                     is_reflection_enabled = reader.get_bool();
@@ -242,13 +248,13 @@ impl BiffRead for Primitive {
                     object_space_normal_map = reader.get_bool();
                 }
                 "M3DN" => {
-                    mesh_file_name = reader.get_string();
+                    mesh_file_name = Some(reader.get_string());
                 }
                 "M3VN" => {
-                    num_vertices = reader.get_u32();
+                    num_vertices = Some(reader.get_u32());
                 }
                 "M3CY" => {
-                    compressed_vertices = reader.get_u32();
+                    compressed_vertices = Some(reader.get_u32());
                 }
 
                 // [BiffVertices("M3DX", SkipWrite = true)]
@@ -258,19 +264,34 @@ impl BiffRead for Primitive {
                 // [BiffAnimation("M3AX", IsCompressed = true, Pos = 47 )]
                 // public Mesh Mesh = new Mesh();
                 "M3CX" => {
-                    m3cx = reader.get_record_data(false);
+                    m3cx = Some(reader.get_record_data(false));
                 }
                 "M3FN" => {
-                    num_indices = reader.get_u32();
+                    num_indices = Some(reader.get_u32());
                 }
                 "M3CJ" => {
-                    compressed_indices = reader.get_u32();
+                    compressed_indices = Some(reader.get_u32());
                 }
                 "M3CI" => {
-                    m3ci = reader.get_record_data(false);
+                    m3ci = Some(reader.get_record_data(false));
+                }
+                "M3AY" => {
+                    match m3ay {
+                        Some(ref mut m3ay) => {
+                            m3ay.push(reader.get_record_data(false));
+                        }
+                        None => m3ay = Some(vec![reader.get_record_data(false)]),
+                    };
                 }
                 "M3AX" => {
-                    reader.skip_tag();
+                    match m3ax {
+                        Some(ref mut m3ax) => {
+                            m3ax.push(reader.get_record_data(false));
+                        }
+                        None => {
+                            m3ax = Some(vec![reader.get_record_data(false)]);
+                        }
+                    };
                 }
                 "PIDB" => {
                     depth_bias = reader.get_f32();
@@ -347,6 +368,8 @@ impl BiffRead for Primitive {
             num_indices,
             compressed_indices,
             m3ci,
+            m3ay,
+            m3ax,
             depth_bias,
             add_blend,
             alpha,
@@ -392,21 +415,47 @@ impl BiffWrite for Primitive {
         writer.write_tagged_bool("ISTO", self.is_toy);
         writer.write_tagged_bool("U3DM", self.use_3d_mesh);
         writer.write_tagged_bool("STRE", self.static_rendering);
-        writer.write_tagged_bool("DILI", self.disable_lighting_top);
-        writer.write_tagged_bool("DILB", self.disable_lighting_below);
+        writer.write_tagged_f32("DILI", self.disable_lighting_top);
+        writer.write_tagged_f32("DILB", self.disable_lighting_below);
         writer.write_tagged_bool("REEN", self.is_reflection_enabled);
         writer.write_tagged_bool("EBFC", self.backfaces_enabled);
         writer.write_tagged_string("MAPH", &self.physics_material);
         writer.write_tagged_bool("OVPH", self.overwrite_physics);
         writer.write_tagged_bool("DIPT", self.display_texture);
         writer.write_tagged_bool("OSNM", self.object_space_normal_map);
-        writer.write_tagged_string("M3DN", &self.mesh_file_name);
-        writer.write_tagged_u32("M3VN", self.num_vertices);
-        writer.write_tagged_u32("M3CY", self.compressed_vertices);
-        writer.write_tagged_data("M3CX", &self.m3cx);
-        writer.write_tagged_u32("M3FN", self.num_indices);
-        writer.write_tagged_u32("M3CJ", self.compressed_indices);
-        writer.write_tagged_data("M3CI", &self.m3ci);
+
+        if let Some(mesh_file_name) = &self.mesh_file_name {
+            writer.write_tagged_string("M3DN", mesh_file_name);
+        }
+        if let Some(num_vertices) = &self.num_vertices {
+            writer.write_tagged_u32("M3VN", *num_vertices);
+        }
+        if let Some(compressed_vertices) = &self.compressed_vertices {
+            writer.write_tagged_u32("M3CY", *compressed_vertices);
+        }
+        if let Some(m3cx) = &self.m3cx {
+            writer.write_tagged_data("M3CX", m3cx);
+        }
+        if let Some(num_indices) = &self.num_indices {
+            writer.write_tagged_u32("M3FN", *num_indices);
+        }
+        if let Some(compressed_indices) = &self.compressed_indices {
+            writer.write_tagged_u32("M3CJ", *compressed_indices);
+        }
+        if let Some(m3ci) = &self.m3ci {
+            writer.write_tagged_data("M3CI", m3ci);
+        }
+
+        // these should come in pairs
+        // TODO rework in a better way
+        // if both are present, write them in pairs
+        if let (Some(m3ays), Some(m3axs)) = (&self.m3ay, &self.m3ax) {
+            for (m3ay, m3ax) in m3ays.iter().zip(m3axs.iter()) {
+                writer.write_tagged_data("M3AY", m3ay);
+                writer.write_tagged_data("M3AX", m3ax);
+            }
+        }
+
         writer.write_tagged_f32("PIDB", self.depth_bias);
         writer.write_tagged_bool("ADDB", self.add_blend);
         writer.write_tagged_f32("FALP", self.alpha);
@@ -466,13 +515,21 @@ mod tests {
             overwrite_physics: rng.gen(),
             display_texture: rng.gen(),
             object_space_normal_map: rng.gen(),
-            mesh_file_name: "mesh_file_name".to_string(),
-            num_vertices: 8,
-            compressed_vertices: 9,
-            m3cx: vec![1, 2, 3, 4, 5, 6, 7, 8, 9],
-            num_indices: 10,
-            compressed_indices: 11,
-            m3ci: vec![2, 3, 4, 5, 6, 7, 8, 9, 10],
+            mesh_file_name: Some("mesh_file_name".to_string()),
+            num_vertices: Some(8),
+            compressed_vertices: Some(9),
+            m3cx: Some(vec![1, 2, 3, 4, 5, 6, 7, 8, 9]),
+            num_indices: Some(10),
+            compressed_indices: Some(11),
+            m3ci: Some(vec![2, 3, 4, 5, 6, 7, 8, 9, 10]),
+            m3ay: Some(vec![
+                vec![3, 4, 5, 6, 7, 8, 9, 10, 11],
+                vec![4, 5, 6, 7, 8, 9, 10, 11, 12],
+            ]),
+            m3ax: Some(vec![
+                vec![4, 5, 6, 7, 8, 9, 10, 11, 12],
+                vec![5, 6, 7, 8, 9, 10, 11, 12, 13],
+            ]),
             depth_bias: 12.0,
             add_blend: rng.gen(),
             alpha: 13.0,

@@ -535,6 +535,7 @@ fn info(vpx_file_path: &str, json: bool) -> io::Result<()> {
             .map(|s| format!("{} ", s))
             .unwrap_or_default(),
         Some(table_info.author_website)
+            .map(|s| s.unwrap_or("[not set]".to_string()))
             .filter(|s| !s.is_empty())
             .map(|s| format!("{} ", s))
             .unwrap_or_default(),
