@@ -184,7 +184,7 @@ pub(crate) fn read(fs_path: String, file_version: Version, reader: &mut BiffRead
                 }
             }
             4 => {
-                data = reader.get_record_data(false);
+                data = reader.get_data_no_remaining_update();
             }
             5 => {
                 output_target = reader.get_u8_no_remaining_update();
