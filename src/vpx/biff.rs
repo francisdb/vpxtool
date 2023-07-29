@@ -14,6 +14,8 @@ pub trait BiffWrite {
 // TODO: can we improve this with:
 //   let mut buf = BytesMut::with_capacity(1024);
 
+// TODO find a better solution for the _no_remaining_update methods
+
 pub struct BiffReader<'a> {
     data: &'a [u8],
     pos: usize,
@@ -171,6 +173,11 @@ impl<'a> BiffReader<'a> {
         self.get_str(size)
     }
 
+    pub fn get_string_no_remaining_update(&mut self) -> String {
+        let size = self.get_u32_no_remaining_update().to_usize();
+        self.get_str_no_remaining_update(size)
+    }
+
     pub fn get_wide_string(&mut self) -> String {
         let count = self.get_u32().to_usize();
         let data = &self.data[self.pos..self.pos + count];
@@ -317,6 +324,15 @@ impl<'a> BiffReader<'a> {
         self.pos += self.bytes_in_record_remaining;
         self.bytes_in_record_remaining = 0;
         d.to_vec()
+    }
+
+    pub fn get_data_no_remaining_update(&mut self) -> Vec<u8> {
+        let len = self.get_u32_no_remaining_update() as usize;
+        let data = &self.data[self.pos..self.pos + len];
+
+        self.pos += len;
+        self.bytes_in_record_remaining = 0;
+        data.to_vec()
     }
 
     pub fn get_data(&mut self, count: usize) -> &[u8] {

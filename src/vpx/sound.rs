@@ -153,23 +153,23 @@ pub(crate) fn read(fs_path: String, file_version: Version, reader: &mut BiffRead
     for i in 0..num_values {
         match i {
             0 => {
-                name = reader.get_string();
+                name = reader.get_string_no_remaining_update();
             }
             1 => {
-                path = reader.get_string();
+                path = reader.get_string_no_remaining_update();
             }
             2 => {
-                internal_name = reader.get_string();
+                internal_name = reader.get_string_no_remaining_update();
             }
             3 => {
                 if is_wav(&path.to_owned()) {
-                    let format_tag = reader.get_u16();
-                    let channels = reader.get_u16();
-                    let samples_per_sec = reader.get_u32();
-                    let avg_bytes_per_sec = reader.get_u32();
-                    let block_align = reader.get_u16();
-                    let bits_per_sample = reader.get_u16();
-                    let cb_size = reader.get_u16();
+                    let format_tag = reader.get_u16_no_remaining_update();
+                    let channels = reader.get_u16_no_remaining_update();
+                    let samples_per_sec = reader.get_u32_no_remaining_update();
+                    let avg_bytes_per_sec = reader.get_u32_no_remaining_update();
+                    let block_align = reader.get_u16_no_remaining_update();
+                    let bits_per_sample = reader.get_u16_no_remaining_update();
+                    let cb_size = reader.get_u16_no_remaining_update();
                     wave_form = WaveForm {
                         format_tag,
                         channels,
@@ -187,20 +187,20 @@ pub(crate) fn read(fs_path: String, file_version: Version, reader: &mut BiffRead
                 data = reader.get_record_data(false);
             }
             5 => {
-                output_target = reader.get_u8();
+                output_target = reader.get_u8_no_remaining_update();
             }
             6 => {
-                volume = reader.get_u32();
+                volume = reader.get_u32_no_remaining_update();
             }
             7 => {
-                balance = reader.get_u32();
+                balance = reader.get_u32_no_remaining_update();
             }
             8 => {
-                fade = reader.get_u32();
+                fade = reader.get_u32_no_remaining_update();
             }
             9 => {
                 // TODO why do we have the volume twice?
-                volume = reader.get_u32();
+                volume = reader.get_u32_no_remaining_update();
             }
             unexpected => {
                 panic!("unexpected value {}", unexpected);
