@@ -474,11 +474,7 @@ fn read_sounds<F: Read + Seek>(
             let mut stream = comp.open_stream(&path)?;
             stream.read_to_end(&mut input)?;
             let mut reader = BiffReader::new(&input);
-            let sound = sound::read(
-                path.display().to_string(),
-                file_version.clone(),
-                &mut reader,
-            );
+            let sound = sound::read(file_version.clone(), &mut reader);
             Ok(sound)
         })
         .collect()
@@ -493,8 +489,9 @@ fn write_sounds<F: Read + Write + Seek>(
             .join("GameStg")
             .join(format!("Sound{}", index));
         let mut stream = comp.create_stream(&path)?;
-        let data = sound::write(sound);
-        stream.write_all(&data)?;
+        let mut writer = BiffWriter::new();
+        let data = sound::write(sound, &mut writer);
+        stream.write_all(&writer.get_data())?;
     }
     Ok(())
 }
@@ -828,22 +825,33 @@ mod tests {
         write_vpx(&mut test_comp, &original).unwrap();
         test_comp.flush().unwrap();
 
+        assert_equal_vpx(path, test_vpx_path);
+    }
+
+    fn assert_equal_vpx(vpx_path: PathBuf, test_vpx_path: PathBuf) {
+        let mut comp = cfb::open(&vpx_path).unwrap();
+        let mut test_comp = cfb::open(&test_vpx_path).unwrap();
+
+        let original_paths = compound_file_paths_and_lengths(&vpx_path);
+        let test_paths = compound_file_paths_and_lengths(&test_vpx_path);
+
         let gamestg_path = Path::new(MAIN_SEPARATOR_STR).join("GameStg");
         let mac_path = gamestg_path.join("MAC");
         let version_path = gamestg_path.join("Version");
         let tableinfo_path = Path::new(MAIN_SEPARATOR_STR).join("TableInfo");
 
-        // make sure we have the same paths and lengths
-        let original_paths = compound_file_paths_and_lengths(&path);
-        let test_paths = compound_file_paths_and_lengths(&test_vpx_path);
-        assert_eq!(original_paths, test_paths);
-
         // check all streams
-        for (path, _) in original_paths {
-            if comp.is_stream(&path) {
+        for (path, _) in &original_paths {
+            if comp.is_stream(path) {
                 println!("path: {:?}", path);
 
-                if path == mac_path || path == version_path || path.starts_with(&tableinfo_path) {
+                // TODO more precise sound path check
+
+                if *path == mac_path
+                    || *path == version_path
+                    || path.starts_with(&tableinfo_path)
+                    || path.to_string_lossy().contains("Sound")
+                {
                     let mut original_data = Vec::new();
                     let mut test_data = Vec::new();
                     let mut original_stream = comp.open_stream(&path).unwrap();
@@ -864,6 +872,9 @@ mod tests {
                 }
             }
         }
+
+        // make sure we have the same paths and lengths
+        assert_eq!(original_paths, test_paths);
     }
 
     fn compound_file_paths_and_lengths(compound_file_path: &Path) -> Vec<(PathBuf, u64)> {

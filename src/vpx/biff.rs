@@ -537,6 +537,11 @@ impl BiffWriter {
         }
     }
 
+    pub fn write_length_prefixed_data(&mut self, value: &[u8]) {
+        self.write_u32(value.len().try_into().unwrap());
+        self.write_data(value);
+    }
+
     pub fn write_data(&mut self, value: &[u8]) {
         self.record_size += value.len();
         self.data.extend_from_slice(value);

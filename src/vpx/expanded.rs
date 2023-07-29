@@ -162,7 +162,7 @@ fn extract_sounds(
             .read_to_end(&mut input)
             .unwrap();
         let mut reader = BiffReader::new(&input);
-        let sound = sound::read(path.to_owned(), file_version.clone(), &mut reader);
+        let sound = sound::read(file_version.clone(), &mut reader);
 
         let ext = sound.ext();
         let mut sound_path = sounds_path.clone();
