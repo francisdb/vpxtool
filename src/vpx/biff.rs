@@ -319,6 +319,9 @@ impl<'a> BiffReader<'a> {
         let d = if with_tag {
             &self.data[self.pos - 4..self.pos + self.bytes_in_record_remaining]
         } else {
+            if self.pos + self.bytes_in_record_remaining >= self.data.len() {
+                panic!("range is too big for {}", self.tag);
+            }
             &self.data[self.pos..self.pos + self.bytes_in_record_remaining]
         };
         self.pos += self.bytes_in_record_remaining;
@@ -379,6 +382,9 @@ impl<'a> BiffReader<'a> {
         }
         self.bytes_in_record_remaining = self.get_u32_no_remaining_update().to_usize();
         let tag = self.get_str(RECORD_TAG_LEN.try_into().unwrap());
+        if tag.is_empty() {
+            panic!("Empty tag at {}/{}", self.pos(), self.data.len());
+        }
         self.tag = tag;
         if self.warn_remaining && self.tag == "ENDB" && self.pos < self.data.len() {
             panic!("{} Remaining bytes after ENDB", self.data.len() - self.pos);
@@ -410,6 +416,28 @@ impl<'a> BiffReader<'a> {
         } else {
             self.bytes_in_record_remaining -= count;
         }
+    }
+
+    pub(crate) fn data_until(&mut self, tag: &[u8]) -> Vec<u8> {
+        // read bytes until we see tag and return it, put pos to the beginning of the tag
+        let mut pos = self.pos;
+        let mut found = false;
+        while pos < self.data.len() {
+            if &self.data[pos..pos + tag.len()] == tag {
+                found = true;
+                break;
+            }
+            pos += 1;
+        }
+        if !found {
+            panic!("Tag {:?} not found", tag);
+        }
+        // go back one u32 to the tag size
+        pos -= 4;
+        let data = &self.data[self.pos..pos];
+        self.pos = pos;
+        self.bytes_in_record_remaining = 0;
+        data.to_vec()
     }
 }
 

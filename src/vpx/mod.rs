@@ -490,8 +490,8 @@ fn write_sounds<F: Read + Write + Seek>(
             .join(format!("Sound{}", index));
         let mut stream = comp.create_stream(&path)?;
         let mut writer = BiffWriter::new();
-        let data = sound::write(sound, &mut writer);
-        stream.write_all(&writer.get_data())?;
+        sound::write(sound, &mut writer);
+        stream.write_all(writer.get_data())?;
     }
     Ok(())
 }
@@ -854,8 +854,8 @@ mod tests {
                 {
                     let mut original_data = Vec::new();
                     let mut test_data = Vec::new();
-                    let mut original_stream = comp.open_stream(&path).unwrap();
-                    let mut test_stream = test_comp.open_stream(&path).unwrap();
+                    let mut original_stream = comp.open_stream(path).unwrap();
+                    let mut test_stream = test_comp.open_stream(path).unwrap();
                     original_stream.read_to_end(&mut original_data).unwrap();
                     test_stream.read_to_end(&mut test_data).unwrap();
                     assert!(original_data == test_data);
@@ -866,8 +866,8 @@ mod tests {
                     } else {
                         0
                     };
-                    let item_tags = tags_and_hashes(&mut comp, &path, skip);
-                    let test_item_tags = tags_and_hashes(&mut test_comp, &path, skip);
+                    let item_tags = tags_and_hashes(&mut comp, path, skip);
+                    let test_item_tags = tags_and_hashes(&mut test_comp, path, skip);
                     assert_eq!(item_tags, test_item_tags);
                 }
             }
@@ -929,6 +929,13 @@ mod tests {
                     tags.push(("--JPEG--SUB--END--".to_string(), 0, 0));
                     let pos = sub_reader.pos();
                     reader.skip_end_tag(pos);
+                }
+                "BITS" => {
+                    let data = reader.data_until("ALTV".as_bytes());
+                    let mut hasher = DefaultHasher::new();
+                    Hash::hash_slice(&data, &mut hasher);
+                    let hash = hasher.finish();
+                    tags.push(("BITS".to_string(), data.len(), hash));
                 }
                 other => {
                     let data = reader.get_record_data(false);

@@ -118,11 +118,13 @@ fn read(reader: &mut BiffReader) -> ImageData {
             }
             "BITS" => {
                 // these have zero as length
-                println!("Unsupported bmp image file (BITS)");
+                // read all the data until the next expected tag
+                let data = reader.data_until("ALTV".as_bytes());
+                //let reader = std::io::Cursor::new(data);
+
                 // uncompressed = zlib.decompress(image_data.data[image_data.pos:]) #, wbits=9)
                 // reader.skip_end_tag(len.try_into().unwrap());
-                bits = Some(ImageDataBits { data: vec![] });
-                break;
+                bits = Some(ImageDataBits { data });
             }
             "JPEG" => {
                 // these have zero as length
@@ -164,7 +166,7 @@ fn write(data: &ImageData, writer: &mut BiffWriter) {
     writer.write_tagged_u32("HGHT", data.height);
 
     if let Some(bits) = &data.bits {
-        writer.write_tagged_data("DATA", &bits.data);
+        writer.write_tagged_data("BITS", &bits.data);
     }
     if let Some(jpeg) = &data.jpeg {
         let bits = write_jpg(jpeg);
