@@ -1,11 +1,9 @@
-use base64::write;
-
 use crate::vpx::{
     biff::{self, BiffRead, BiffReader, BiffWrite},
     color::Color,
 };
 
-use super::{dragpoint::DragPoint, FILTER_OVERLAY, IMAGE_ALIGN_CENTER, IMAGE_ALIGN_TOP_LEFT};
+use super::{dragpoint::DragPoint, FILTER_OVERLAY, IMAGE_ALIGN_TOP_LEFT};
 
 // [BiffString("NAME", IsWideString = true, Pos = 10)]
 // public string Name = string.Empty;
