@@ -543,12 +543,14 @@ fn info(vpx_file_path: &str, json: bool) -> io::Result<()> {
     println!(
         "{:>18} {}",
         "Save revision:".green(),
-        table_info.table_save_rev
+        table_info.table_save_rev.unwrap_or("[not set]".to_string())
     );
     println!(
         "{:>18} {}",
         "Save date:".green(),
-        table_info.table_save_date
+        table_info
+            .table_save_date
+            .unwrap_or("[not set]".to_string())
     );
     println!(
         "{:>18} {}",

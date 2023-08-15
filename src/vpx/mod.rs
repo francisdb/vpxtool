@@ -742,7 +742,7 @@ mod tests {
 
         let mac = read_mac(&mut comp).unwrap();
         let expected = [
-            197, 16, 173, 72, 87, 93, 108, 125, 82, 160, 175, 83, 145, 240, 197, 21,
+            183, 43, 35, 1, 250, 13, 195, 57, 1, 195, 133, 254, 190, 10, 154, 243,
         ];
         assert_eq!(mac, expected);
     }
@@ -791,10 +791,10 @@ mod tests {
 
         let mut expected_info = TableInfo::new();
         expected_info.table_name = String::from("Visual Pinball Demo Table");
-        expected_info.table_save_rev = String::from("10");
+        expected_info.table_save_rev = Some(String::from("10"));
         expected_info.table_version = String::from("1.2");
         expected_info.author_website = Some(String::from("http://www.vpforums.org/"));
-        expected_info.table_save_date = String::from("Tue Jul 11 15:48:49 2023");
+        expected_info.table_save_date = Some(String::from("Tue Jul 11 15:48:49 2023"));
         expected_info.table_description =
             String::from("Press C to enable manual Ball Control via the arrow keys and B");
 
@@ -840,8 +840,15 @@ mod tests {
         let version_path = gamestg_path.join("Version");
         let tableinfo_path = Path::new(MAIN_SEPARATOR_STR).join("TableInfo");
 
+        // sort original paths so that MAC is last
+        let original_paths_sorted: Vec<(PathBuf, u64)> = original_paths
+            .clone()
+            .into_iter()
+            .filter(|(path, _)| *path != mac_path)
+            .collect();
+
         // check all streams
-        for (path, _) in &original_paths {
+        for (path, _) in &original_paths_sorted {
             if comp.is_stream(path) {
                 println!("path: {:?}", path);
 

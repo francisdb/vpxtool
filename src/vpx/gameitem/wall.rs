@@ -27,7 +27,7 @@ pub struct Wall {
     pub slingshot_force: f32,
     pub slingshot_threshold: f32,
     pub elasticity: f32,
-    pub elasticity_falloff: f32,
+    pub elasticity_falloff: Option<f32>,
     pub friction: f32,
     pub scatter: f32,
     pub is_top_bottom_visible: bool,
@@ -42,8 +42,8 @@ pub struct Wall {
     // these are shared between all items
     pub is_locked: bool,
     pub editor_layer: u32,
-    pub editor_layer_name: String, // default "Layer_{editor_layer + 1}"
-    pub editor_layer_visibility: bool,
+    pub editor_layer_name: Option<String>, // default "Layer_{editor_layer + 1}"
+    pub editor_layer_visibility: Option<bool>,
 
     drag_points: Vec<DragPoint>,
 }
@@ -69,7 +69,7 @@ impl BiffRead for Wall {
         let mut slingshot_threshold: f32 = 0.0;
         let mut slingshot_animation: bool = true;
         let mut elasticity: f32 = 0.3;
-        let mut elasticity_falloff: f32 = Default::default();
+        let mut elasticity_falloff: Option<f32> = None; // added in ?
         let mut friction: f32 = 0.3;
         let mut scatter: f32 = Default::default();
         let mut is_top_bottom_visible: bool = true;
@@ -85,8 +85,8 @@ impl BiffRead for Wall {
         // these are shared between all items
         let mut is_locked: bool = false;
         let mut editor_layer: u32 = Default::default();
-        let mut editor_layer_name: String = Default::default();
-        let mut editor_layer_visibility: bool = true;
+        let mut editor_layer_name: Option<String> = None;
+        let mut editor_layer_visibility: Option<bool> = None;
 
         let mut drag_points: Vec<DragPoint> = Default::default();
 
@@ -153,7 +153,7 @@ impl BiffRead for Wall {
                     elasticity = reader.get_f32();
                 }
                 "ELFO" => {
-                    elasticity_falloff = reader.get_f32();
+                    elasticity_falloff = Some(reader.get_f32());
                 }
                 "FRIC" => {
                     friction = reader.get_f32();
@@ -257,10 +257,10 @@ impl BiffRead for Wall {
                     editor_layer = reader.get_u32();
                 }
                 "LANR" => {
-                    editor_layer_name = reader.get_string();
+                    editor_layer_name = Some(reader.get_string());
                 }
                 "LVIS" => {
-                    editor_layer_visibility = reader.get_bool();
+                    editor_layer_visibility = Some(reader.get_bool());
                 }
                 "PNTS" => {
                     // this is just a tag with no data
@@ -343,7 +343,9 @@ impl BiffWrite for Wall {
         writer.write_tagged_f32("SLGF", self.slingshot_force);
         writer.write_tagged_f32("SLTH", self.slingshot_threshold);
         writer.write_tagged_f32("ELAS", self.elasticity);
-        writer.write_tagged_f32("ELFO", self.elasticity_falloff);
+        if let Some(elasticity_falloff) = self.elasticity_falloff {
+            writer.write_tagged_f32("ELFO", elasticity_falloff);
+        }
         writer.write_tagged_f32("WFCT", self.friction);
         writer.write_tagged_f32("WSCT", self.scatter);
         writer.write_tagged_bool("VSBL", self.is_top_bottom_visible);
@@ -358,8 +360,12 @@ impl BiffWrite for Wall {
         // shared
         writer.write_tagged_bool("LOCK", self.is_locked);
         writer.write_tagged_u32("LAYR", self.editor_layer);
-        writer.write_tagged_string("LANR", &self.editor_layer_name);
-        writer.write_tagged_bool("LVIS", self.editor_layer_visibility);
+        if let Some(editor_layer_name) = &self.editor_layer_name {
+            writer.write_tagged_string("LANR", editor_layer_name);
+        }
+        if let Some(editor_layer_visibility) = self.editor_layer_visibility {
+            writer.write_tagged_bool("LVIS", editor_layer_visibility);
+        }
 
         writer.write_marker_tag("PNTS");
         for point in &self.drag_points {
@@ -398,7 +404,7 @@ mod tests {
             slingshot_force: 5.0,
             slingshot_threshold: 6.0,
             elasticity: 7.0,
-            elasticity_falloff: 8.0,
+            elasticity_falloff: Some(8.0),
             friction: 9.0,
             scatter: 10.0,
             is_top_bottom_visible: true,
@@ -411,8 +417,8 @@ mod tests {
             overwrite_physics: true,
             is_locked: true,
             editor_layer: 13,
-            editor_layer_name: "editor_layer_name".to_string(),
-            editor_layer_visibility: true,
+            editor_layer_name: Some("editor_layer_name".to_string()),
+            editor_layer_visibility: Some(true),
             drag_points: vec![DragPoint::default()],
         };
         let mut writer = BiffWriter::new();

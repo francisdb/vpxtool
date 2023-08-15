@@ -48,15 +48,15 @@ pub struct Primitive {
     pub m3ay: Option<Vec<Vec<u8>>>,       // 46 M3AY multiple
     pub m3ax: Option<Vec<Vec<u8>>>,       // 47 M3AX multiple
     pub depth_bias: f32,                  // 45 PIDB
-    pub add_blend: bool,                  // 46 ADDB
-    pub alpha: f32,                       // 47 FALP
-    pub color: Color,                     // 48 COLR
+    pub add_blend: Option<bool>,          // 46 ADDB - added in ?
+    pub alpha: Option<f32>,               // 47 FALP - added in ?
+    pub color: Option<Color>,             // 48 COLR - added in ?
 
     // these are shared between all items
     pub is_locked: bool,
     pub editor_layer: u32,
-    pub editor_layer_name: String, // default "Layer_{editor_layer + 1}"
-    pub editor_layer_visibility: bool,
+    pub editor_layer_name: Option<String>, // default "Layer_{editor_layer + 1}"
+    pub editor_layer_visibility: Option<bool>,
 }
 
 impl BiffRead for Primitive {
@@ -104,15 +104,15 @@ impl BiffRead for Primitive {
         let mut m3ax: Option<Vec<Vec<u8>>> = None;
 
         let mut depth_bias: f32 = 0.0;
-        let mut add_blend: bool = false;
-        let mut alpha: f32 = 1.0;
-        let mut color = Color::new_bgr(0x0);
+        let mut add_blend: Option<bool> = None; // false;
+        let mut alpha: Option<f32> = None; //1.0;
+        let mut color: Option<Color> = None; //Color::new_bgr(0x0);
 
         // these are shared between all items
         let mut is_locked: bool = false;
         let mut editor_layer: u32 = Default::default();
-        let mut editor_layer_name: String = Default::default();
-        let mut editor_layer_visibility: bool = true;
+        let mut editor_layer_name: Option<String> = None;
+        let mut editor_layer_visibility: Option<bool> = None;
 
         loop {
             reader.next(biff::WARN);
@@ -297,13 +297,13 @@ impl BiffRead for Primitive {
                     depth_bias = reader.get_f32();
                 }
                 "ADDB" => {
-                    add_blend = reader.get_bool();
+                    add_blend = Some(reader.get_bool());
                 }
                 "FALP" => {
-                    alpha = reader.get_f32();
+                    alpha = Some(reader.get_f32());
                 }
                 "COLR" => {
-                    color = Color::biff_read_bgr(reader);
+                    color = Some(Color::biff_read_bgr(reader));
                 }
 
                 // shared
@@ -314,10 +314,10 @@ impl BiffRead for Primitive {
                     editor_layer = reader.get_u32();
                 }
                 "LANR" => {
-                    editor_layer_name = reader.get_string();
+                    editor_layer_name = Some(reader.get_string());
                 }
                 "LVIS" => {
-                    editor_layer_visibility = reader.get_bool();
+                    editor_layer_visibility = Some(reader.get_bool());
                 }
                 _ => {
                     println!(
@@ -457,14 +457,26 @@ impl BiffWrite for Primitive {
         }
 
         writer.write_tagged_f32("PIDB", self.depth_bias);
-        writer.write_tagged_bool("ADDB", self.add_blend);
-        writer.write_tagged_f32("FALP", self.alpha);
-        writer.write_tagged_with("COLR", &self.color, Color::biff_write_bgr);
+
+        if let Some(add_blend) = self.add_blend {
+            writer.write_tagged_bool("ADDB", add_blend);
+        }
+        if let Some(alpha) = self.alpha {
+            writer.write_tagged_f32("FALP", alpha);
+        }
+        if let Some(color) = &self.color {
+            writer.write_tagged_with("COLR", color, Color::biff_write_bgr);
+        }
+
         // shared
         writer.write_tagged_bool("LOCK", self.is_locked);
         writer.write_tagged_u32("LAYR", self.editor_layer);
-        writer.write_tagged_string("LANR", &self.editor_layer_name);
-        writer.write_tagged_bool("LVIS", self.editor_layer_visibility);
+        if let Some(editor_layer_name) = &self.editor_layer_name {
+            writer.write_tagged_string("LANR", editor_layer_name);
+        }
+        if let Some(editor_layer_visibility) = self.editor_layer_visibility {
+            writer.write_tagged_bool("LVIS", editor_layer_visibility);
+        }
 
         writer.close(true);
     }
@@ -532,11 +544,11 @@ mod tests {
             ]),
             depth_bias: 12.0,
             add_blend: rng.gen(),
-            alpha: 13.0,
-            color: Color::new_bgr(0x23456789),
+            alpha: Some(13.0),
+            color: Some(Color::new_bgr(0x23456789)),
             is_locked: rng.gen(),
             editor_layer: 17,
-            editor_layer_name: "editor_layer_name".to_string(),
+            editor_layer_name: Some("editor_layer_name".to_string()),
             editor_layer_visibility: rng.gen(),
         };
         let mut writer = BiffWriter::new();

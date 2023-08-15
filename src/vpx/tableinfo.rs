@@ -20,10 +20,10 @@ pub struct TableInfo {
     pub table_rules: Option<String>,
     pub author_email: Option<String>,
     pub release_date: Option<String>,
-    pub table_save_rev: String,
+    pub table_save_rev: Option<String>,
     pub table_version: String,
     pub author_website: Option<String>,
-    pub table_save_date: String,
+    pub table_save_date: Option<String>,
     pub table_description: String,
     // the keys (and ordering) for these are defined in "GameStg/CustomInfoTags"
     pub properties: HashMap<String, String>,
@@ -40,10 +40,10 @@ impl TableInfo {
             table_rules: None,
             author_email: None,
             release_date: None,
-            table_save_rev: "".to_string(),
+            table_save_rev: None, // added in ?
             table_version: "".to_string(),
             author_website: None,
-            table_save_date: "".to_string(),
+            table_save_date: None, // added in ?
             table_description: "".to_string(),
             properties: HashMap::new(),
         }
@@ -128,11 +128,17 @@ pub fn write_tableinfo<F: Read + Write + Seek>(
             )
         })
         .unwrap_or(Ok(()))?;
-    write_stream_string(
-        comp,
-        table_info_path.join("TableSaveRev").as_path(),
-        &table_info.table_save_rev,
-    )?;
+    table_info
+        .table_save_rev
+        .as_ref()
+        .map(|table_save_rev| {
+            write_stream_string(
+                comp,
+                table_info_path.join("TableSaveRev").as_path(),
+                table_save_rev,
+            )
+        })
+        .unwrap_or(Ok(()))?;
     write_stream_string(
         comp,
         table_info_path.join("TableVersion").as_path(),
@@ -149,11 +155,17 @@ pub fn write_tableinfo<F: Read + Write + Seek>(
             )
         })
         .unwrap_or(Ok(()))?;
-    write_stream_string(
-        comp,
-        table_info_path.join("TableSaveDate").as_path(),
-        &table_info.table_save_date,
-    )?;
+    table_info
+        .table_save_date
+        .as_ref()
+        .map(|table_save_date| {
+            write_stream_string(
+                comp,
+                table_info_path.join("TableSaveDate").as_path(),
+                table_save_date,
+            )
+        })
+        .unwrap_or(Ok(()))?;
     write_stream_string(
         comp,
         table_info_path.join("TableDescription").as_path(),
@@ -215,7 +227,7 @@ pub fn read_tableinfo<F: Read + Write + Seek>(
                     read_stream_string(comp, path).map(|s| table_info.release_date = Some(s))
                 }
                 "TableSaveRev" => {
-                    read_stream_string(comp, path).map(|s| table_info.table_save_rev = s)
+                    read_stream_string(comp, path).map(|s| table_info.table_save_rev = Some(s))
                 }
                 "TableVersion" => {
                     read_stream_string(comp, path).map(|s| table_info.table_version = s)
@@ -224,7 +236,7 @@ pub fn read_tableinfo<F: Read + Write + Seek>(
                     read_stream_string(comp, path).map(|s| table_info.author_website = Some(s))
                 }
                 "TableSaveDate" => {
-                    read_stream_string(comp, path).map(|s| table_info.table_save_date = s)
+                    read_stream_string(comp, path).map(|s| table_info.table_save_date = Some(s))
                 }
                 "TableDescription" => {
                     read_stream_string(comp, path).map(|s| table_info.table_description = s)
@@ -308,10 +320,10 @@ mod tests {
             table_rules: Some("test_table_rules".to_string()),
             author_email: Some("test_author_email".to_string()),
             release_date: None,
-            table_save_rev: "test_table_save_rev".to_string(),
+            table_save_rev: Some("test_table_save_rev".to_string()),
             table_version: "test_table_version".to_string(),
             author_website: Some("test_author_website".to_string()),
-            table_save_date: "test_table_save_date".to_string(),
+            table_save_date: Some("test_table_save_date".to_string()),
             table_description: "test_table_description".to_string(),
             properties: HashMap::from([
                 ("prop1".to_string(), "value1".to_string()),

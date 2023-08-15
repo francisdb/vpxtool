@@ -32,8 +32,8 @@ pub struct Bumper {
     // these are shared between all items
     pub is_locked: bool,
     pub editor_layer: u32,
-    pub editor_layer_name: String, // default "Layer_{editor_layer + 1}"
-    pub editor_layer_visibility: bool,
+    pub editor_layer_name: Option<String>, // default "Layer_{editor_layer + 1}"
+    pub editor_layer_visibility: Option<bool>,
 }
 impl GameItem for Bumper {
     fn name(&self) -> &str {
@@ -71,8 +71,8 @@ impl BiffRead for Bumper {
         // these are shared between all items
         let mut is_locked: bool = false;
         let mut editor_layer: u32 = Default::default();
-        let mut editor_layer_name: String = Default::default();
-        let mut editor_layer_visibility: bool = true;
+        let mut editor_layer_name: Option<String> = None;
+        let mut editor_layer_visibility: Option<bool> = None;
 
         loop {
             reader.next(biff::WARN);
@@ -163,10 +163,10 @@ impl BiffRead for Bumper {
                     editor_layer = reader.get_u32();
                 }
                 "LANR" => {
-                    editor_layer_name = reader.get_string();
+                    editor_layer_name = Some(reader.get_string());
                 }
                 "LVIS" => {
-                    editor_layer_visibility = reader.get_bool();
+                    editor_layer_visibility = Some(reader.get_bool());
                 }
                 _ => {
                     println!(
@@ -240,8 +240,12 @@ impl BiffWrite for Bumper {
         // shared
         writer.write_tagged_bool("LOCK", self.is_locked);
         writer.write_tagged_u32("LAYR", self.editor_layer);
-        writer.write_tagged_string("LANR", &self.editor_layer_name);
-        writer.write_tagged_bool("LVIS", self.editor_layer_visibility);
+        if let Some(editor_layer_name) = &self.editor_layer_name {
+            writer.write_tagged_string("LANR", editor_layer_name);
+        }
+        if let Some(editor_layer_visibility) = self.editor_layer_visibility {
+            writer.write_tagged_bool("LVIS", editor_layer_visibility);
+        }
 
         writer.close(true);
     }
@@ -284,8 +288,8 @@ mod tests {
             is_reflection_enabled: true,
             is_locked: true,
             editor_layer: 5,
-            editor_layer_name: "layer".to_string(),
-            editor_layer_visibility: true,
+            editor_layer_name: Some("layer".to_string()),
+            editor_layer_visibility: Some(true),
         };
         let mut writer = BiffWriter::new();
         Bumper::biff_write(&bumper, &mut writer);

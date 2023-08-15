@@ -37,8 +37,8 @@ pub struct Light {
     // these are shared between all items
     pub is_locked: bool,
     pub editor_layer: u32,
-    pub editor_layer_name: String, // default "Layer_{editor_layer + 1}"
-    pub editor_layer_visibility: bool,
+    pub editor_layer_name: Option<String>, // default "Layer_{editor_layer + 1}"
+    pub editor_layer_visibility: Option<bool>,
     // last
     pub drag_points: Vec<DragPoint>,
 }
@@ -78,8 +78,8 @@ impl Light {
         // these are shared between all items
         let is_locked: bool = false;
         let editor_layer: u32 = Default::default();
-        let editor_layer_name: String = Default::default();
-        let editor_layer_visibility: bool = true;
+        let editor_layer_name: Option<String> = None;
+        let editor_layer_visibility: Option<bool> = None;
         Self {
             center,
             falloff_radius,
@@ -146,8 +146,8 @@ impl BiffRead for Light {
                 // shared
                 "LOCK" => light.is_locked = reader.get_bool(),
                 "LAYR" => light.editor_layer = reader.get_u32(),
-                "LANR" => light.editor_layer_name = reader.get_string(),
-                "LVIS" => light.editor_layer_visibility = reader.get_bool(),
+                "LANR" => light.editor_layer_name = Some(reader.get_string()),
+                "LVIS" => light.editor_layer_visibility = Some(reader.get_bool()),
 
                 "BGLS" => light.is_backglass = reader.get_bool(),
                 "LIDB" => light.depth_bias = reader.get_f32(),
@@ -215,8 +215,12 @@ impl BiffWrite for Light {
         // shared
         writer.write_tagged_bool("LOCK", self.is_locked);
         writer.write_tagged_u32("LAYR", self.editor_layer);
-        writer.write_tagged_string("LANR", &self.editor_layer_name);
-        writer.write_tagged_bool("LVIS", self.editor_layer_visibility);
+        if let Some(editor_layer_name) = &self.editor_layer_name {
+            writer.write_tagged_string("LANR", editor_layer_name);
+        }
+        if let Some(editor_layer_visibility) = self.editor_layer_visibility {
+            writer.write_tagged_bool("LVIS", editor_layer_visibility);
+        }
         // many of these
         for point in &self.drag_points {
             writer.write_tagged("DPNT", point);
@@ -265,8 +269,8 @@ mod tests {
             bulb_halo_height: 16.0,
             is_locked: false,
             editor_layer: 17,
-            editor_layer_name: "test layer".to_string(),
-            editor_layer_visibility: true,
+            editor_layer_name: Some("test layer".to_string()),
+            editor_layer_visibility: Some(true),
             drag_points: vec![DragPoint::default()],
         };
         let mut writer = BiffWriter::new();

@@ -16,8 +16,8 @@ pub struct DragPoint {
     // these are shared between all items
     pub is_locked: bool,
     pub editor_layer: u32,
-    pub editor_layer_name: String, // default "Layer_{editor_layer + 1}"
-    pub editor_layer_visibility: bool,
+    pub editor_layer_name: Option<String>, // default "Layer_{editor_layer + 1}"
+    pub editor_layer_visibility: Option<bool>,
 }
 
 impl DragPoint {
@@ -33,8 +33,8 @@ impl DragPoint {
         // these are shared between all items
         let is_locked: bool = false;
         let editor_layer: u32 = Default::default();
-        let editor_layer_name: String = Default::default();
-        let editor_layer_visibility: bool = true;
+        let editor_layer_name: Option<String> = None;
+        let editor_layer_visibility: Option<bool> = None;
         Self {
             x,
             y,
@@ -98,10 +98,10 @@ impl BiffRead for DragPoint {
                     dragpoint.editor_layer = sub_data.get_u32();
                 }
                 "LANR" => {
-                    dragpoint.editor_layer_name = sub_data.get_string();
+                    dragpoint.editor_layer_name = Some(sub_data.get_string());
                 }
                 "LVIS" => {
-                    dragpoint.editor_layer_visibility = sub_data.get_bool();
+                    dragpoint.editor_layer_visibility = Some(sub_data.get_bool());
                 }
                 other => {
                     println!(
@@ -135,8 +135,12 @@ impl BiffWrite for DragPoint {
         // shared
         writer.write_tagged_bool("LOCK", self.is_locked);
         writer.write_tagged_u32("LAYR", self.editor_layer);
-        writer.write_tagged_string("LANR", &self.editor_layer_name);
-        writer.write_tagged_bool("LVIS", self.editor_layer_visibility);
+        if let Some(editor_layer_name) = &self.editor_layer_name {
+            writer.write_tagged_string("LANR", editor_layer_name);
+        }
+        if let Some(editor_layer_visibility) = self.editor_layer_visibility {
+            writer.write_tagged_bool("LVIS", editor_layer_visibility);
+        }
         writer.close(true);
     }
 }
@@ -161,8 +165,8 @@ mod tests {
             tex_coord: 4.0,
             is_locked: true,
             editor_layer: 1,
-            editor_layer_name: "test layer".to_string(),
-            editor_layer_visibility: true,
+            editor_layer_name: Some("test layer".to_string()),
+            editor_layer_visibility: Some(true),
         };
         let mut writer = BiffWriter::new();
         DragPoint::biff_write(&dragpoint, &mut writer);

@@ -71,7 +71,7 @@ pub struct GameData {
     pub ball_image: String,                         // BLIM 65
     pub ball_image_front: String,                   // BLIF 66
     pub env_image: String,                          // EIMG 67
-    pub notes: String,                              // NOTX 67.5 (added in 10.7)
+    pub notes: Option<String>,                      // NOTX 67.5 (added in 10.7)
     pub screen_shot: String,                        // SSHT 68
     pub display_backdrop: bool,                     // FBCK 69
     pub glass_height: f32,                          // GLAS 70
@@ -197,7 +197,7 @@ impl Default for GameData {
             ball_image: String::new(),
             ball_image_front: String::new(),
             env_image: String::new(),
-            notes: String::new(),
+            notes: None,
             screen_shot: String::new(),
             display_backdrop: false,
             glass_height: 400.0,
@@ -326,7 +326,9 @@ pub fn write_all_gamedata_records(gamedata: &GameData) -> Vec<u8> {
     writer.write_tagged_string("BLIM", &gamedata.ball_image);
     writer.write_tagged_string("BLIF", &gamedata.ball_image_front);
     writer.write_tagged_string("EIMG", &gamedata.env_image);
-    writer.write_tagged_string("NOTX", &gamedata.notes);
+    if let Some(notes) = &gamedata.notes {
+        writer.write_tagged_string("NOTX", notes);
+    }
     writer.write_tagged_string("SSHT", &gamedata.screen_shot);
     writer.write_tagged_bool("FBCK", gamedata.display_backdrop);
     writer.write_tagged_f32("GLAS", gamedata.glass_height);
@@ -462,7 +464,7 @@ pub fn read_all_gamedata_records(input: &[u8]) -> GameData {
             "BLIM" => gamedata.ball_image = reader.get_string(),
             "BLIF" => gamedata.ball_image_front = reader.get_string(),
             "EIMG" => gamedata.env_image = reader.get_string(),
-            "NOTX" => gamedata.notes = reader.get_string(),
+            "NOTX" => gamedata.notes = Some(reader.get_string()),
             "SSHT" => gamedata.screen_shot = reader.get_string(),
             "FBCK" => gamedata.display_backdrop = reader.get_bool(),
             "GLAS" => gamedata.glass_height = reader.get_f32(),
@@ -610,7 +612,7 @@ mod tests {
             ball_image: String::from("test ball image"),
             ball_image_front: String::from("test ball image"),
             env_image: String::from("test env image"),
-            notes: String::from("test notes"),
+            notes: Some(String::from("test notes")),
             screen_shot: String::from("test screenshot"),
             display_backdrop: true,
             glass_height: 234.0,

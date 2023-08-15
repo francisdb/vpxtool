@@ -161,19 +161,18 @@ fn read(reader: &mut BiffReader) -> ImageData {
 
 fn write(data: &ImageData, writer: &mut BiffWriter) {
     writer.write_tagged_string("NAME", &data.name);
+    if let Some(inme) = &data.inme {
+        writer.write_tagged_string("INME", inme);
+    }
     writer.write_tagged_string("PATH", &data.path);
     writer.write_tagged_u32("WDTH", data.width);
     writer.write_tagged_u32("HGHT", data.height);
-
     if let Some(bits) = &data.bits {
         writer.write_tagged_data("BITS", &bits.data);
     }
     if let Some(jpeg) = &data.jpeg {
         let bits = write_jpg(jpeg);
         writer.write_tagged_data("JPEG", &bits);
-    }
-    if let Some(inme) = &data.inme {
-        writer.write_tagged_string("INME", inme);
     }
     writer.write_tagged_f32("ALTV", data.alpha_test_value);
     writer.close(true);
@@ -228,13 +227,13 @@ fn read_jpeg(reader: &mut BiffReader) -> ImageDataJpeg {
 fn write_jpg(img: &ImageDataJpeg) -> Vec<u8> {
     let mut writer = BiffWriter::new();
     writer.write_tagged_string("NAME", &img.name);
+    if let Some(inme) = &img.inme {
+        writer.write_tagged_string("INME", inme);
+    }
     writer.write_tagged_string("PATH", &img.path);
     writer.write_tagged_u32("SIZE", img.data.len().try_into().unwrap());
     writer.write_tagged_data("DATA", &img.data);
     // writer.write_tagged_f32("ALTV", img.alpha_test_value);
-    if let Some(inme) = &img.inme {
-        writer.write_tagged_string("INME", inme);
-    }
     writer.close(true);
     writer.get_data().to_vec()
 }
