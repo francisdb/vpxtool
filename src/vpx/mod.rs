@@ -630,7 +630,7 @@ pub fn diff_script<P: AsRef<Path>>(vpx_file_path: P) -> io::Result<String> {
             Ok(mut comp) => {
                 let gamedata = read_gamedata(&mut comp)?;
                 let script = gamedata.code;
-                std::fs::write(&original_vbs_path, script).unwrap();
+                std::fs::write(&original_vbs_path, script)?;
                 let diff_color = if colored::control::SHOULD_COLORIZE.should_colorize() {
                     DiffColor::Always
                 } else {
@@ -639,7 +639,7 @@ pub fn diff_script<P: AsRef<Path>>(vpx_file_path: P) -> io::Result<String> {
                 let output = run_diff(&original_vbs_path, &vbs_path, diff_color)?;
 
                 if original_vbs_path.exists() {
-                    std::fs::remove_file(original_vbs_path).unwrap();
+                    std::fs::remove_file(original_vbs_path)?;
                 }
                 Ok(String::from_utf8_lossy(&output).to_string())
             }
@@ -707,52 +707,55 @@ mod tests {
     use super::{biff::WARN, *};
 
     #[test]
-    fn test_write_read() {
+    fn test_write_read() -> io::Result<()> {
         let buff = Cursor::new(vec![0; 15]);
-        let mut comp = CompoundFile::create(buff).unwrap();
-        write_minimal_vpx(&mut comp).unwrap();
+        let mut comp = CompoundFile::create(buff)?;
+        write_minimal_vpx(&mut comp)?;
 
-        let version = version::read_version(&mut comp).unwrap();
-        let tableinfo = tableinfo::read_tableinfo(&mut comp).unwrap();
-        let game_data = read_gamedata(&mut comp).unwrap();
+        let version = version::read_version(&mut comp)?;
+        let tableinfo = tableinfo::read_tableinfo(&mut comp)?;
+        let game_data = read_gamedata(&mut comp)?;
 
         assert_eq!(tableinfo, TableInfo::new());
         assert_eq!(version, Version::new(1072));
         let expected = GameData::default();
         assert_eq!(game_data, expected);
+        Ok(())
     }
 
     #[test]
-    fn test_mac_generation() {
+    fn test_mac_generation() -> io::Result<()> {
         let path = PathBuf::from("testdata/completely_blank_table_10_7_4.vpx");
-        let mut comp = cfb::open(path).unwrap();
+        let mut comp = cfb::open(path)?;
 
         let expected = [
             231, 121, 242, 251, 174, 227, 247, 90, 58, 105, 13, 92, 13, 73, 151, 86,
         ];
 
-        let mac = read_mac(&mut comp).unwrap();
+        let mac = read_mac(&mut comp)?;
         assert_eq!(mac, expected);
 
-        let generated_mac = generate_mac(&mut comp).unwrap();
+        let generated_mac = generate_mac(&mut comp)?;
         assert_eq!(mac, generated_mac);
+        Ok(())
     }
 
     #[test]
-    fn test_minimal_mac() {
+    fn test_minimal_mac() -> io::Result<()> {
         let buff = Cursor::new(vec![0; 15]);
-        let mut comp = CompoundFile::create(buff).unwrap();
-        write_minimal_vpx(&mut comp).unwrap();
+        let mut comp = CompoundFile::create(buff)?;
+        write_minimal_vpx(&mut comp)?;
 
-        let mac = read_mac(&mut comp).unwrap();
+        let mac = read_mac(&mut comp)?;
         let expected = [
             162, 87, 146, 17, 177, 126, 27, 1, 88, 117, 121, 155, 8, 111, 172, 22,
         ];
         assert_eq!(mac, expected);
+        Ok(())
     }
 
     #[test]
-    fn read_write_gamedata() -> std::io::Result<()> {
+    fn read_write_gamedata() -> io::Result<()> {
         let path = PathBuf::from("testdata/completely_blank_table_10_7_4.vpx");
         let mut comp = cfb::open(path)?;
         let version = version::read_version(&mut comp)?;
@@ -769,30 +772,31 @@ mod tests {
     }
 
     #[test]
-    fn read_write_gameitems() {
+    fn read_write_gameitems() -> io::Result<()> {
         let path = PathBuf::from("testdata/completely_blank_table_10_7_4.vpx");
-        let mut comp = cfb::open(path).unwrap();
+        let mut comp = cfb::open(path)?;
 
-        let gamedata = read_gamedata(&mut comp).unwrap();
-        let original = read_gameitems(&mut comp, &gamedata).unwrap();
+        let gamedata = read_gamedata(&mut comp)?;
+        let original = read_gameitems(&mut comp, &gamedata)?;
 
         let buff = Cursor::new(vec![0; 15]);
-        let mut comp = CompoundFile::create(buff).unwrap();
-        create_game_storage(&mut comp).unwrap();
-        write_game_items(&mut comp, &original).unwrap();
+        let mut comp = CompoundFile::create(buff)?;
+        create_game_storage(&mut comp)?;
+        write_game_items(&mut comp, &original)?;
 
-        let read = read_gameitems(&mut comp, &gamedata).unwrap();
+        let read = read_gameitems(&mut comp, &gamedata)?;
 
         assert_eq!(original.len(), read.len());
         assert_eq!(original, read);
         // TODO match original bytes and written bytes for each item
+        Ok(())
     }
 
     #[test]
-    fn read() {
+    fn read() -> io::Result<()> {
         let path = PathBuf::from("testdata/completely_blank_table_10_7_4.vpx");
-        let mut comp = cfb::open(path).unwrap();
-        let original = read_vpx(&mut comp).unwrap();
+        let mut comp = cfb::open(path)?;
+        let original = read_vpx(&mut comp)?;
 
         let mut expected_info = TableInfo::new();
         expected_info.table_name = String::from("Visual Pinball Demo Table");
@@ -815,22 +819,24 @@ mod tests {
         assert_eq!(original.sounds.len(), 0);
         assert_eq!(original.fonts.len(), 0);
         assert_eq!(original.collections.len(), 9);
+        Ok(())
     }
 
     #[test]
-    fn read_and_write() {
+    fn read_and_write() -> io::Result<()> {
         let path = PathBuf::from("testdata/completely_blank_table_10_7_4.vpx");
-        let mut comp = cfb::open(&path).unwrap();
-        let original = read_vpx(&mut comp).unwrap();
+        let mut comp = cfb::open(&path)?;
+        let original = read_vpx(&mut comp)?;
 
         // create temp file and write the vpx to it
         let dir: PathBuf = testdir!();
         let test_vpx_path = dir.join("test.vpx");
-        let mut test_comp = cfb::create(&test_vpx_path).unwrap();
-        write_vpx(&mut test_comp, &original).unwrap();
-        test_comp.flush().unwrap();
+        let mut test_comp = cfb::create(&test_vpx_path)?;
+        write_vpx(&mut test_comp, &original)?;
+        test_comp.flush()?;
 
         assert_equal_vpx(path, test_vpx_path);
+        Ok(())
     }
 
     fn assert_equal_vpx(vpx_path: PathBuf, test_vpx_path: PathBuf) {
