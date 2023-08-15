@@ -94,7 +94,7 @@ pub fn write_vpx(comp: &mut CompoundFile<File>, original: &VPX) -> io::Result<()
     write_custominfotags(comp, &original.custominfotags)?;
     write_tableinfo(comp, &original.info)?;
     write_version(comp, &original.version)?;
-    write_game_data(comp, &original.gamedata)?;
+    write_game_data(comp, &original.gamedata, &original.version)?;
     write_game_items(comp, &original.gameitems)?;
     write_images(comp, &original.images)?;
     write_sounds(comp, &original.sounds)?;
@@ -116,8 +116,9 @@ pub fn write_minimal_vpx<F: Read + Write + Seek>(
     let table_info = TableInfo::new();
     write_tableinfo(comp, &table_info)?;
     create_game_storage(comp)?;
-    version::write_version(comp, &Version::new(1072))?;
-    write_game_data(comp, &GameData::default())?;
+    let version = Version::new(1072);
+    version::write_version(comp, &version)?;
+    write_game_data(comp, &GameData::default(), &version)?;
     // to be more efficient we could generate the mac while writing the different parts
     let mac = generate_mac(comp)?;
     write_mac(comp, &mac)
@@ -162,9 +163,10 @@ pub fn importvbs(vpx_file_path: &PathBuf, extension: Option<&str>) -> std::io::R
     }
     let mut comp = cfb::open_rw(vpx_file_path)?;
     let mut gamedata = read_gamedata(&mut comp)?;
+    let version = version::read_version(&mut comp)?;
     let script = std::fs::read_to_string(&script_path)?;
     gamedata.set_code(script);
-    write_game_data(&mut comp, &gamedata)?;
+    write_game_data(&mut comp, &gamedata, &version)?;
     let mac = generate_mac(&mut comp)?;
     write_mac(&mut comp, &mac)?;
     comp.flush()?;
@@ -417,13 +419,14 @@ pub fn read_gamedata<F: Seek + Read>(comp: &mut CompoundFile<F>) -> std::io::Res
 fn write_game_data<F: Read + Write + Seek>(
     comp: &mut CompoundFile<F>,
     gamedata: &GameData,
+    version: &Version,
 ) -> Result<(), io::Error> {
     let game_data_path = Path::new(MAIN_SEPARATOR_STR)
         .join("GameStg")
         .join("GameData");
     // we expect GameStg to exist
     let mut game_data_stream = comp.create_stream(&game_data_path)?;
-    let data = gamedata::write_all_gamedata_records(gamedata);
+    let data = gamedata::write_all_gamedata_records(gamedata, version);
     game_data_stream.write_all(&data)
     // this flush was required before but now it's working without
     // game_data_stream.flush()
@@ -748,19 +751,20 @@ mod tests {
     }
 
     #[test]
-    fn read_write_gamedata() {
+    fn read_write_gamedata() -> std::io::Result<()> {
         let path = PathBuf::from("testdata/completely_blank_table_10_7_4.vpx");
-        let mut comp = cfb::open(path).unwrap();
-        let original = read_gamedata(&mut comp).unwrap();
+        let mut comp = cfb::open(path)?;
+        let version = version::read_version(&mut comp)?;
+        let original = read_gamedata(&mut comp)?;
 
         let buff = Cursor::new(vec![0; 15]);
-        let mut comp = CompoundFile::create(buff).unwrap();
-        create_game_storage(&mut comp).unwrap();
-        write_game_data(&mut comp, &original).unwrap();
+        let mut comp2 = CompoundFile::create(buff)?;
+        create_game_storage(&mut comp2)?;
+        write_game_data(&mut comp2, &original, &version)?;
 
-        let read = read_gamedata(&mut comp).unwrap();
+        let read = read_gamedata(&mut comp2)?;
 
-        assert_eq!(original, read);
+        Ok(assert_eq!(original, read))
     }
 
     #[test]

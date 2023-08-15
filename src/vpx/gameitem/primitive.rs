@@ -7,50 +7,58 @@ use super::vertex3d::Vertex3D;
 
 #[derive(Debug, PartialEq)]
 pub struct Primitive {
-    pub position: Vertex3D,               // 0 VPOS
-    pub size: Vertex3D,                   // 1 VSIZ
-    pub rot_and_tra: [f32; 9],            // 2-11 RTV0-RTV8
-    pub image: String,                    // 12 IMAG
-    pub normal_map: String,               // 13 NRMA
-    pub sides: u32,                       // 14
-    pub name: String,                     // 15
-    pub material: String,                 // 16
-    pub side_color: Color,                // 17
-    pub is_visible: bool,                 // 18
-    pub draw_textures_inside: bool,       // 19
-    pub hit_event: bool,                  // 20
-    pub threshold: f32,                   // 21
-    pub elasticity: f32,                  // 22
-    pub elasticity_falloff: f32,          // 23
-    pub friction: f32,                    // 24
-    pub scatter: f32,                     // 25
-    pub edge_factor_ui: f32,              // 26
-    pub collision_reduction_factor: f32,  // 27
-    pub is_collidable: bool,              // 28
-    pub is_toy: bool,                     // 29
-    pub use_3d_mesh: bool,                // 30
-    pub static_rendering: bool,           // 31
-    pub disable_lighting_top: f32,        // 32
-    pub disable_lighting_below: f32,      // 33
-    pub is_reflection_enabled: bool,      // 34
-    pub backfaces_enabled: bool,          // 35
-    pub physics_material: String,         // 36 MAPH
-    pub overwrite_physics: bool,          // 37 OVPH
-    pub display_texture: bool,            // 38 DIPT
-    pub object_space_normal_map: bool,    // 38.5 OSNM
-    pub mesh_file_name: Option<String>,   // 39 M3DN
-    pub num_vertices: Option<u32>,        // 40 M3VN
-    pub compressed_vertices: Option<u32>, // 41 M3CY
-    pub m3cx: Option<Vec<u8>>,            // 42 M3CX
-    pub num_indices: Option<u32>,         // 43 M3FN
-    pub compressed_indices: Option<u32>,  // 44 M3CJ
-    pub m3ci: Option<Vec<u8>>,            // 45 M3CI
-    pub m3ay: Option<Vec<Vec<u8>>>,       // 46 M3AY multiple
-    pub m3ax: Option<Vec<Vec<u8>>>,       // 47 M3AX multiple
-    pub depth_bias: f32,                  // 45 PIDB
-    pub add_blend: Option<bool>,          // 46 ADDB - added in ?
-    pub alpha: Option<f32>,               // 47 FALP - added in ?
-    pub color: Option<Color>,             // 48 COLR - added in ?
+    pub position: Vertex3D,                // 0 VPOS
+    pub size: Vertex3D,                    // 1 VSIZ
+    pub rot_and_tra: [f32; 9],             // 2-11 RTV0-RTV8
+    pub image: String,                     // 12 IMAG
+    pub normal_map: String,                // 13 NRMA
+    pub sides: u32,                        // 14
+    pub name: String,                      // 15
+    pub material: String,                  // 16
+    pub side_color: Color,                 // 17
+    pub is_visible: bool,                  // 18
+    pub draw_textures_inside: bool,        // 19
+    pub hit_event: bool,                   // 20
+    pub threshold: f32,                    // 21
+    pub elasticity: f32,                   // 22
+    pub elasticity_falloff: f32,           // 23
+    pub friction: f32,                     // 24
+    pub scatter: f32,                      // 25
+    pub edge_factor_ui: f32,               // 26
+    pub collision_reduction_factor: f32,   // 27
+    pub is_collidable: bool,               // 28
+    pub is_toy: bool,                      // 29
+    pub use_3d_mesh: bool,                 // 30
+    pub static_rendering: bool,            // 31
+    pub disable_lighting_top: f32,         // 32
+    pub disable_lighting_below: f32,       // 33
+    pub is_reflection_enabled: bool,       // 34
+    pub backfaces_enabled: bool,           // 35
+    pub physics_material: String,          // 36 MAPH
+    pub overwrite_physics: bool,           // 37 OVPH
+    pub display_texture: bool,             // 38 DIPT
+    pub object_space_normal_map: bool,     // 38.5 OSNM
+    pub min_aa_bound: Option<Vec<u8>>,     // BMIN added in 10.8 ( TODO Vector3D)
+    pub max_aa_bound: Option<Vec<u8>>,     // BMAX added in 10.8( TODO Vector3D)
+    pub mesh_file_name: Option<String>,    // 39 M3DN
+    pub num_vertices: Option<u32>,         // 40 M3VN
+    pub compressed_vertices: Option<u32>,  // 41 M3CY
+    pub m3cx: Option<Vec<u8>>,             // 42 M3CX
+    pub num_indices: Option<u32>,          // 43 M3FN
+    pub compressed_indices: Option<u32>,   // 44 M3CJ
+    pub m3ci: Option<Vec<u8>>,             // 45 M3CI
+    pub m3ay: Option<Vec<Vec<u8>>>,        // 46 M3AY multiple
+    pub m3ax: Option<Vec<Vec<u8>>>,        // 47 M3AX multiple
+    pub depth_bias: f32,                   // 45 PIDB
+    pub add_blend: Option<bool>,           // 46 ADDB - added in ?
+    pub use_depth_mask: Option<bool>,      // ZMSK added in 10.8
+    pub alpha: Option<f32>,                // 47 FALP - added in ?
+    pub color: Option<Color>,              // 48 COLR - added in ?
+    pub light_map: Option<String>,         // LMAP - added in 10.8
+    pub reflection_probe: Option<String>,  // REFL - added in 10.8
+    pub reflection_strength: Option<f32>,  // RSTR - added in 10.8
+    pub refraction_probe: Option<String>,  // REFR - added in 10.8
+    pub refraction_thickness: Option<f32>, // RTHI - added in 10.8
 
     // these are shared between all items
     pub is_locked: bool,
@@ -92,6 +100,8 @@ impl BiffRead for Primitive {
         let mut overwrite_physics: bool = true;
         let mut display_texture: bool = true;
         let mut object_space_normal_map: bool = false;
+        let mut min_aa_bound: Option<Vec<u8>> = None;
+        let mut max_aa_bound: Option<Vec<u8>> = None;
 
         let mut mesh_file_name: Option<String> = None;
         let mut num_vertices: Option<u32> = None;
@@ -105,8 +115,14 @@ impl BiffRead for Primitive {
 
         let mut depth_bias: f32 = 0.0;
         let mut add_blend: Option<bool> = None; // false;
+        let mut use_depth_mask: Option<bool> = None; // false;
         let mut alpha: Option<f32> = None; //1.0;
         let mut color: Option<Color> = None; //Color::new_bgr(0x0);
+        let mut light_map: Option<String> = None;
+        let mut reflection_probe: Option<String> = None;
+        let mut reflection_strength: Option<f32> = None;
+        let mut refraction_probe: Option<String> = None;
+        let mut refraction_thickness: Option<f32> = None;
 
         // these are shared between all items
         let mut is_locked: bool = false;
@@ -247,6 +263,12 @@ impl BiffRead for Primitive {
                 "OSNM" => {
                     object_space_normal_map = reader.get_bool();
                 }
+                "BMIN" => {
+                    min_aa_bound = Some(reader.get_record_data(false));
+                }
+                "BMAX" => {
+                    max_aa_bound = Some(reader.get_record_data(false));
+                }
                 "M3DN" => {
                     mesh_file_name = Some(reader.get_string());
                 }
@@ -299,11 +321,29 @@ impl BiffRead for Primitive {
                 "ADDB" => {
                     add_blend = Some(reader.get_bool());
                 }
+                "ZMSK" => {
+                    use_depth_mask = Some(reader.get_bool());
+                }
                 "FALP" => {
                     alpha = Some(reader.get_f32());
                 }
                 "COLR" => {
                     color = Some(Color::biff_read_bgr(reader));
+                }
+                "LMAP" => {
+                    light_map = Some(reader.get_string());
+                }
+                "REFL" => {
+                    reflection_probe = Some(reader.get_string());
+                }
+                "RSTR" => {
+                    reflection_strength = Some(reader.get_f32());
+                }
+                "REFR" => {
+                    refraction_probe = Some(reader.get_string());
+                }
+                "RTHI" => {
+                    refraction_thickness = Some(reader.get_f32());
                 }
 
                 // shared
@@ -361,6 +401,8 @@ impl BiffRead for Primitive {
             overwrite_physics,
             display_texture,
             object_space_normal_map,
+            min_aa_bound,
+            max_aa_bound,
             mesh_file_name,
             num_vertices,
             compressed_vertices,
@@ -372,8 +414,14 @@ impl BiffRead for Primitive {
             m3ax,
             depth_bias,
             add_blend,
+            use_depth_mask,
             alpha,
             color,
+            light_map,
+            reflection_probe,
+            reflection_strength,
+            refraction_probe,
+            refraction_thickness,
             is_locked,
             editor_layer,
             editor_layer_name,
@@ -424,6 +472,12 @@ impl BiffWrite for Primitive {
         writer.write_tagged_bool("DIPT", self.display_texture);
         writer.write_tagged_bool("OSNM", self.object_space_normal_map);
 
+        if let Some(min_aa_bound) = &self.min_aa_bound {
+            writer.write_tagged_data("BMIN", min_aa_bound);
+        }
+        if let Some(max_aa_bound) = &self.max_aa_bound {
+            writer.write_tagged_data("BMAX", max_aa_bound);
+        }
         if let Some(mesh_file_name) = &self.mesh_file_name {
             writer.write_tagged_string("M3DN", mesh_file_name);
         }
@@ -461,11 +515,29 @@ impl BiffWrite for Primitive {
         if let Some(add_blend) = self.add_blend {
             writer.write_tagged_bool("ADDB", add_blend);
         }
+        if let Some(use_depth_mask) = self.use_depth_mask {
+            writer.write_tagged_bool("ZMSK", use_depth_mask);
+        }
         if let Some(alpha) = self.alpha {
             writer.write_tagged_f32("FALP", alpha);
         }
         if let Some(color) = &self.color {
             writer.write_tagged_with("COLR", color, Color::biff_write_bgr);
+        }
+        if let Some(light_map) = &self.light_map {
+            writer.write_tagged_string("LMAP", light_map);
+        }
+        if let Some(reflection_probe) = &self.reflection_probe {
+            writer.write_tagged_string("REFL", reflection_probe);
+        }
+        if let Some(reflection_strength) = &self.reflection_strength {
+            writer.write_tagged_f32("RSTR", *reflection_strength);
+        }
+        if let Some(refraction_probe) = &self.refraction_probe {
+            writer.write_tagged_string("REFR", refraction_probe);
+        }
+        if let Some(refraction_thickness) = &self.refraction_thickness {
+            writer.write_tagged_f32("RTHI", *refraction_thickness);
         }
 
         // shared
@@ -527,6 +599,8 @@ mod tests {
             overwrite_physics: rng.gen(),
             display_texture: rng.gen(),
             object_space_normal_map: rng.gen(),
+            min_aa_bound: Some(vec![0, 1, 2, 3, 4, 5, 6, 7, 8]),
+            max_aa_bound: Some(vec![1, 2, 3, 4, 5, 6, 7, 8, 9]),
             mesh_file_name: Some("mesh_file_name".to_string()),
             num_vertices: Some(8),
             compressed_vertices: Some(9),
@@ -544,8 +618,14 @@ mod tests {
             ]),
             depth_bias: 12.0,
             add_blend: rng.gen(),
+            use_depth_mask: rng.gen(),
             alpha: Some(13.0),
             color: Some(Color::new_bgr(0x23456789)),
+            light_map: Some("light_map".to_string()),
+            reflection_probe: Some("reflection_probe".to_string()),
+            reflection_strength: Some(14.0),
+            refraction_probe: Some("refraction_probe".to_string()),
+            refraction_thickness: Some(15.0),
             is_locked: rng.gen(),
             editor_layer: 17,
             editor_layer_name: Some("editor_layer_name".to_string()),

@@ -83,7 +83,8 @@ pub struct Flasher {
     pub depth_bias: f32,
     pub image_alignment: u32,
     pub filter: u32,
-    pub filter_amount: u32,
+    pub filter_amount: u32,        // FIAM
+    pub light_map: Option<String>, // LMAP added in 10.8
     pub drag_points: Vec<DragPoint>,
     // these are shared between all items
     pub is_locked: bool,
@@ -116,6 +117,7 @@ impl BiffRead for Flasher {
         let mut image_alignment = IMAGE_ALIGN_TOP_LEFT;
         let mut filter = FILTER_OVERLAY;
         let mut filter_amount: u32 = 100;
+        let mut light_map: Option<String> = None;
 
         // these are shared between all items
         let mut is_locked: bool = false;
@@ -199,6 +201,9 @@ impl BiffRead for Flasher {
                 "FIAM" => {
                     filter_amount = reader.get_u32();
                 }
+                "LMAP" => {
+                    light_map = Some(reader.get_string());
+                }
                 // shared
                 "LOCK" => {
                     is_locked = reader.get_bool();
@@ -250,6 +255,7 @@ impl BiffRead for Flasher {
             image_alignment,
             filter,
             filter_amount,
+            light_map,
             is_locked,
             editor_layer,
             editor_layer_name,
@@ -283,6 +289,9 @@ impl BiffWrite for Flasher {
         writer.write_tagged_u32("ALGN", self.image_alignment);
         writer.write_tagged_u32("FILT", self.filter);
         writer.write_tagged_u32("FIAM", self.filter_amount);
+        if let Some(light_map) = &self.light_map {
+            writer.write_tagged_string("LMAP", light_map);
+        }
         // shared
         writer.write_tagged_bool("LOCK", self.is_locked);
         writer.write_tagged_u32("LAYR", self.editor_layer);
@@ -336,6 +345,7 @@ mod tests {
             image_alignment: rng.gen(),
             filter: rng.gen(),
             filter_amount: rng.gen(),
+            light_map: Some("test light map".to_string()),
             is_locked: rng.gen(),
             editor_layer: rng.gen(),
             editor_layer_name: Some("test layer".to_string()),

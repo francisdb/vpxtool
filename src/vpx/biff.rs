@@ -547,6 +547,16 @@ impl BiffWriter {
         self.write_data(&d);
     }
 
+    pub fn write_string_empty_zero(&mut self, value: &str) {
+        if value.is_empty() {
+            // sound files encode empty string like this
+            self.write_u32(1);
+            self.write_u8(0);
+        } else {
+            self.write_string(value);
+        }
+    }
+
     pub fn write_wide_string(&mut self, value: &str) {
         // utf-16-le encode as u8
         let d = value

@@ -7,33 +7,39 @@ use super::{dragpoint::DragPoint, vertex2d::Vertex2D};
 
 #[derive(Debug, PartialEq)]
 pub struct Light {
-    pub center: Vertex2D,
-    pub falloff_radius: f32,
-    pub falloff_power: f32,
-    pub status: u32,
-    pub color: Color,
-    pub color2: Color,
-    pub is_timer_enabled: bool,
-    pub timer_interval: u32,
-    pub blink_pattern: String,
-    pub off_image: String,
-    pub blink_interval: u32,
-    pub intensity: f32,
-    pub transmission_scale: f32,
-    pub surface: String,
-    pub name: String,
-    pub is_backglass: bool,
-    pub depth_bias: f32,
-    pub fade_speed_up: f32,
-    pub fade_speed_down: f32,
-    pub is_bulb_light: bool,
-    pub is_image_mode: bool,
-    pub show_bulb_mesh: bool,
-    pub has_static_bulb_mesh: bool,
-    pub show_reflection_on_ball: bool,
-    pub mesh_radius: f32,
-    pub bulb_modulate_vs_add: f32,
-    pub bulb_halo_height: f32,
+    pub center: Vertex2D,              // VCEN
+    pub height: Option<f32>,           // HGHT added in 10.8
+    pub falloff_radius: f32,           // RADI
+    pub falloff_power: f32,            // FAPO
+    pub status: u32,                   // STAT
+    pub state: Option<f32>,            // STTF added in 10.8
+    pub color: Color,                  // COLR
+    pub color2: Color,                 // COL2
+    pub is_timer_enabled: bool,        // TMON
+    pub timer_interval: u32,           // TMIN
+    pub blink_pattern: String,         // BPAT
+    pub off_image: String,             // IMG1
+    pub blink_interval: u32,           // BINT
+    pub intensity: f32,                // BWTH
+    pub transmission_scale: f32,       // TRMS
+    pub surface: String,               // SURF
+    pub name: String,                  // NAME
+    pub is_backglass: bool,            // BGLS
+    pub depth_bias: f32,               // LIDB
+    pub fade_speed_up: f32,            // FASP
+    pub fade_speed_down: f32,          // FASD
+    pub is_bulb_light: bool,           // BULT
+    pub is_image_mode: bool,           // IMMO
+    pub show_bulb_mesh: bool,          // SHBM
+    pub has_static_bulb_mesh: bool,    // STBM
+    pub show_reflection_on_ball: bool, // SHRB
+    pub mesh_radius: f32,              // BMSC
+    pub bulb_modulate_vs_add: f32,     // BMVA
+    pub bulb_halo_height: f32,         // BHHI
+    pub shadows: Option<u32>,          // SHDW added in 10.8
+    pub fader: Option<u32>,            // FADE added in 10.8
+    pub visible: Option<bool>,         // VSBL added in 10.8
+
     // these are shared between all items
     pub is_locked: bool,
     pub editor_layer: u32,
@@ -47,10 +53,12 @@ impl Light {
     // default
     pub fn default() -> Self {
         let name = Default::default();
+        let height: Option<f32> = None;
         let center: Vertex2D = Default::default();
         let falloff_radius: f32 = Default::default();
         let falloff_power: f32 = Default::default();
         let status: u32 = Default::default();
+        let state: Option<f32> = None;
         // should these not have alpha ff?
         let color: Color = Color::new_argb(0xffff00);
         let color2: Color = Color::new_argb(0xffffff);
@@ -74,6 +82,9 @@ impl Light {
         let mesh_radius: f32 = 20.0;
         let bulb_modulate_vs_add: f32 = 0.9;
         let bulb_halo_height: f32 = 28.0;
+        let shadows: Option<u32> = None;
+        let fader: Option<u32> = None;
+        let visible: Option<bool> = None;
 
         // these are shared between all items
         let is_locked: bool = false;
@@ -82,9 +93,11 @@ impl Light {
         let editor_layer_visibility: Option<bool> = None;
         Self {
             center,
+            height,
             falloff_radius,
             falloff_power,
             status,
+            state,
             color,
             color2,
             is_timer_enabled,
@@ -108,6 +121,9 @@ impl Light {
             mesh_radius,
             bulb_modulate_vs_add,
             bulb_halo_height,
+            shadows,
+            fader,
+            visible,
             is_locked,
             editor_layer,
             editor_layer_name,
@@ -129,9 +145,11 @@ impl BiffRead for Light {
             let tag_str = tag.as_str();
             match tag_str {
                 "VCEN" => light.center = Vertex2D::biff_read(reader),
+                "HGHT" => light.height = Some(reader.get_f32()),
                 "RADI" => light.falloff_radius = reader.get_f32(),
                 "FAPO" => light.falloff_power = reader.get_f32(),
                 "STAT" => light.status = reader.get_u32(),
+                "STTF" => light.state = Some(reader.get_f32()),
                 "COLR" => light.color = Color::biff_read_bgr(reader),
                 "COL2" => light.color2 = Color::biff_read_bgr(reader),
                 "TMON" => light.is_timer_enabled = reader.get_bool(),
@@ -161,6 +179,9 @@ impl BiffRead for Light {
                 "BMSC" => light.mesh_radius = reader.get_f32(),
                 "BMVA" => light.bulb_modulate_vs_add = reader.get_f32(),
                 "BHHI" => light.bulb_halo_height = reader.get_f32(),
+                "SHDW" => light.shadows = Some(reader.get_u32()),
+                "FADE" => light.fader = Some(reader.get_u32()),
+                "VSBL" => light.visible = Some(reader.get_bool()),
                 // many of these
                 "DPNT" => {
                     let point = DragPoint::biff_read(reader);
@@ -184,9 +205,15 @@ impl BiffWrite for Light {
     fn biff_write(&self, writer: &mut biff::BiffWriter) {
         // write all fields like n the read
         writer.write_tagged("VCEN", &self.center);
+        if let Some(height) = self.height {
+            writer.write_tagged_f32("HGHT", height);
+        }
         writer.write_tagged_f32("RADI", self.falloff_radius);
         writer.write_tagged_f32("FAPO", self.falloff_power);
         writer.write_tagged_u32("STAT", self.status);
+        if let Some(state) = self.state {
+            writer.write_tagged_f32("STTF", state);
+        }
         writer.write_tagged_with("COLR", &self.color, Color::biff_write_bgr);
         writer.write_tagged_with("COL2", &self.color2, Color::biff_write_bgr);
         writer.write_tagged_bool("TMON", self.is_timer_enabled);
@@ -212,6 +239,15 @@ impl BiffWrite for Light {
         writer.write_tagged_f32("BMSC", self.mesh_radius);
         writer.write_tagged_f32("BMVA", self.bulb_modulate_vs_add);
         writer.write_tagged_f32("BHHI", self.bulb_halo_height);
+        if let Some(shadows) = self.shadows {
+            writer.write_tagged_u32("SHDW", shadows);
+        }
+        if let Some(fader) = self.fader {
+            writer.write_tagged_u32("FADE", fader);
+        }
+        if let Some(visible) = self.visible {
+            writer.write_tagged_bool("VSBL", visible);
+        }
         // shared
         writer.write_tagged_bool("LOCK", self.is_locked);
         writer.write_tagged_u32("LAYR", self.editor_layer);
@@ -241,9 +277,11 @@ mod tests {
         // values not equal to the defaults
         let light = Light {
             center: Vertex2D::new(1.0, 2.0),
+            height: Some(3.0),
             falloff_radius: 25.0,
             falloff_power: 3.0,
             status: 4,
+            state: Some(5.0),
             color: Color::new_argb(0x123456),
             color2: Color::new_argb(0x654321),
             is_timer_enabled: true,
@@ -267,6 +305,9 @@ mod tests {
             mesh_radius: 14.0,
             bulb_modulate_vs_add: 15.0,
             bulb_halo_height: 16.0,
+            shadows: Some(18),
+            fader: Some(19),
+            visible: Some(true),
             is_locked: false,
             editor_layer: 17,
             editor_layer_name: Some("test layer".to_string()),

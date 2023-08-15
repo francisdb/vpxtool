@@ -215,7 +215,7 @@ pub(crate) fn write(sound: &SoundData, writer: &mut BiffWriter) {
     // TODO add support for the old format file version < 1031
     writer.write_string(&sound.name);
     writer.write_string(&sound.path);
-    writer.write_string(&sound.internal_name);
+    writer.write_string_empty_zero(&sound.internal_name);
 
     if is_wav(&sound.path.to_owned()) {
         write_wave_form(writer, &sound.wave_form);
