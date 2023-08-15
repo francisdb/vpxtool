@@ -7,58 +7,58 @@ use super::vertex3d::Vertex3D;
 
 #[derive(Debug, PartialEq)]
 pub struct Primitive {
-    pub position: Vertex3D,                // 0 VPOS
-    pub size: Vertex3D,                    // 1 VSIZ
-    pub rot_and_tra: [f32; 9],             // 2-11 RTV0-RTV8
-    pub image: String,                     // 12 IMAG
-    pub normal_map: String,                // 13 NRMA
-    pub sides: u32,                        // 14
-    pub name: String,                      // 15
-    pub material: String,                  // 16
-    pub side_color: Color,                 // 17
-    pub is_visible: bool,                  // 18
-    pub draw_textures_inside: bool,        // 19
-    pub hit_event: bool,                   // 20
-    pub threshold: f32,                    // 21
-    pub elasticity: f32,                   // 22
-    pub elasticity_falloff: f32,           // 23
-    pub friction: f32,                     // 24
-    pub scatter: f32,                      // 25
-    pub edge_factor_ui: f32,               // 26
-    pub collision_reduction_factor: f32,   // 27
-    pub is_collidable: bool,               // 28
-    pub is_toy: bool,                      // 29
-    pub use_3d_mesh: bool,                 // 30
-    pub static_rendering: bool,            // 31
-    pub disable_lighting_top: f32,         // 32
-    pub disable_lighting_below: f32,       // 33
-    pub is_reflection_enabled: bool,       // 34
-    pub backfaces_enabled: bool,           // 35
-    pub physics_material: String,          // 36 MAPH
-    pub overwrite_physics: bool,           // 37 OVPH
-    pub display_texture: bool,             // 38 DIPT
-    pub object_space_normal_map: bool,     // 38.5 OSNM
-    pub min_aa_bound: Option<Vec<u8>>,     // BMIN added in 10.8 ( TODO Vector3D)
-    pub max_aa_bound: Option<Vec<u8>>,     // BMAX added in 10.8( TODO Vector3D)
-    pub mesh_file_name: Option<String>,    // 39 M3DN
-    pub num_vertices: Option<u32>,         // 40 M3VN
-    pub compressed_vertices: Option<u32>,  // 41 M3CY
-    pub m3cx: Option<Vec<u8>>,             // 42 M3CX
-    pub num_indices: Option<u32>,          // 43 M3FN
-    pub compressed_indices: Option<u32>,   // 44 M3CJ
-    pub m3ci: Option<Vec<u8>>,             // 45 M3CI
-    pub m3ay: Option<Vec<Vec<u8>>>,        // 46 M3AY multiple
-    pub m3ax: Option<Vec<Vec<u8>>>,        // 47 M3AX multiple
-    pub depth_bias: f32,                   // 45 PIDB
-    pub add_blend: Option<bool>,           // 46 ADDB - added in ?
-    pub use_depth_mask: Option<bool>,      // ZMSK added in 10.8
-    pub alpha: Option<f32>,                // 47 FALP - added in ?
-    pub color: Option<Color>,              // 48 COLR - added in ?
-    pub light_map: Option<String>,         // LMAP - added in 10.8
-    pub reflection_probe: Option<String>,  // REFL - added in 10.8
-    pub reflection_strength: Option<f32>,  // RSTR - added in 10.8
-    pub refraction_probe: Option<String>,  // REFR - added in 10.8
-    pub refraction_thickness: Option<f32>, // RTHI - added in 10.8
+    pub position: Vertex3D,                    // 0 VPOS
+    pub size: Vertex3D,                        // 1 VSIZ
+    pub rot_and_tra: [f32; 9],                 // 2-11 RTV0-RTV8
+    pub image: String,                         // 12 IMAG
+    pub normal_map: Option<String>,            // 13 NRMA (added in 10.?)
+    pub sides: u32,                            // 14
+    pub name: String,                          // 15
+    pub material: String,                      // 16
+    pub side_color: Color,                     // 17
+    pub is_visible: bool,                      // 18
+    pub draw_textures_inside: bool,            // 19
+    pub hit_event: bool,                       // 20
+    pub threshold: f32,                        // 21
+    pub elasticity: f32,                       // 22
+    pub elasticity_falloff: f32,               // 23
+    pub friction: f32,                         // 24
+    pub scatter: f32,                          // 25
+    pub edge_factor_ui: f32,                   // 26
+    pub collision_reduction_factor: f32,       // 27
+    pub is_collidable: bool,                   // 28
+    pub is_toy: bool,                          // 29
+    pub use_3d_mesh: bool,                     // 30
+    pub static_rendering: bool,                // 31
+    pub disable_lighting_top: f32,             // 32
+    pub disable_lighting_below: Option<f32>,   // 33 DILB (added in 10.?)
+    pub is_reflection_enabled: bool,           // 34
+    pub backfaces_enabled: Option<bool>,       // 35 EBFC (added in 10.?)
+    pub physics_material: Option<String>,      // 36 MAPH (added in 10.?)
+    pub overwrite_physics: Option<bool>,       // 37 OVPH (added in 10.?)
+    pub display_texture: Option<bool>,         // 38 DIPT (added in ?)
+    pub object_space_normal_map: Option<bool>, // 38.5 OSNM (added in ?)
+    pub min_aa_bound: Option<Vec<u8>>,         // BMIN added in 10.8 ( TODO Vector3D)
+    pub max_aa_bound: Option<Vec<u8>>,         // BMAX added in 10.8( TODO Vector3D)
+    pub mesh_file_name: Option<String>,        // 39 M3DN
+    pub num_vertices: Option<u32>,             // 40 M3VN
+    pub compressed_vertices: Option<u32>,      // 41 M3CY
+    pub m3cx: Option<Vec<u8>>,                 // 42 M3CX
+    pub num_indices: Option<u32>,              // 43 M3FN
+    pub compressed_indices: Option<u32>,       // 44 M3CJ
+    pub m3ci: Option<Vec<u8>>,                 // 45 M3CI
+    pub m3ay: Option<Vec<Vec<u8>>>,            // 46 M3AY multiple
+    pub m3ax: Option<Vec<Vec<u8>>>,            // 47 M3AX multiple
+    pub depth_bias: f32,                       // 45 PIDB
+    pub add_blend: Option<bool>,               // 46 ADDB - added in ?
+    pub use_depth_mask: Option<bool>,          // ZMSK added in 10.8
+    pub alpha: Option<f32>,                    // 47 FALP - added in ?
+    pub color: Option<Color>,                  // 48 COLR - added in ?
+    pub light_map: Option<String>,             // LMAP - added in 10.8
+    pub reflection_probe: Option<String>,      // REFL - added in 10.8
+    pub reflection_strength: Option<f32>,      // RSTR - added in 10.8
+    pub refraction_probe: Option<String>,      // REFR - added in 10.8
+    pub refraction_thickness: Option<f32>,     // RTHI - added in 10.8
 
     // these are shared between all items
     pub is_locked: bool,
@@ -73,7 +73,7 @@ impl BiffRead for Primitive {
         let mut size = Vertex3D::new(100.0, 100.0, 100.0);
         let mut rot_and_tra: [f32; 9] = [0.0; 9];
         let mut image = Default::default();
-        let mut normal_map = Default::default();
+        let mut normal_map: Option<String> = None;
         let mut sides: u32 = 4;
         let mut name = Default::default();
         let mut material = Default::default();
@@ -93,13 +93,13 @@ impl BiffRead for Primitive {
         let mut use_3d_mesh: bool = false;
         let mut static_rendering: bool = false;
         let mut disable_lighting_top: f32 = 0.0;
-        let mut disable_lighting_below: f32 = 0.0;
+        let mut disable_lighting_below: Option<f32> = None; //0.0;
         let mut is_reflection_enabled: bool = true;
-        let mut backfaces_enabled: bool = false;
-        let mut physics_material: String = Default::default();
-        let mut overwrite_physics: bool = true;
-        let mut display_texture: bool = true;
-        let mut object_space_normal_map: bool = false;
+        let mut backfaces_enabled: Option<bool> = None; //false;
+        let mut physics_material: Option<String> = None;
+        let mut overwrite_physics: Option<bool> = None; //true;
+        let mut display_texture: Option<bool> = None; //true;
+        let mut object_space_normal_map: Option<bool> = None; //false;
         let mut min_aa_bound: Option<Vec<u8>> = None;
         let mut max_aa_bound: Option<Vec<u8>> = None;
 
@@ -181,7 +181,7 @@ impl BiffRead for Primitive {
                     image = reader.get_string();
                 }
                 "NRMA" => {
-                    normal_map = reader.get_string();
+                    normal_map = Some(reader.get_string());
                 }
                 "SIDS" => {
                     sides = reader.get_u32();
@@ -243,25 +243,25 @@ impl BiffRead for Primitive {
                     disable_lighting_top = reader.get_f32();
                 }
                 "DILB" => {
-                    disable_lighting_below = reader.get_f32();
+                    disable_lighting_below = Some(reader.get_f32());
                 }
                 "REEN" => {
                     is_reflection_enabled = reader.get_bool();
                 }
                 "EBFC" => {
-                    backfaces_enabled = reader.get_bool();
+                    backfaces_enabled = Some(reader.get_bool());
                 }
                 "MAPH" => {
-                    physics_material = reader.get_string();
+                    physics_material = Some(reader.get_string());
                 }
                 "OVPH" => {
-                    overwrite_physics = reader.get_bool();
+                    overwrite_physics = Some(reader.get_bool());
                 }
                 "DIPT" => {
-                    display_texture = reader.get_bool();
+                    display_texture = Some(reader.get_bool());
                 }
                 "OSNM" => {
-                    object_space_normal_map = reader.get_bool();
+                    object_space_normal_map = Some(reader.get_bool());
                 }
                 "BMIN" => {
                     min_aa_bound = Some(reader.get_record_data(false));
@@ -444,7 +444,9 @@ impl BiffWrite for Primitive {
         writer.write_tagged_f32("RTV7", self.rot_and_tra[7]);
         writer.write_tagged_f32("RTV8", self.rot_and_tra[8]);
         writer.write_tagged_string("IMAG", &self.image);
-        writer.write_tagged_string("NRMA", &self.normal_map);
+        if let Some(normal_map) = &self.normal_map {
+            writer.write_tagged_string("NRMA", normal_map);
+        }
         writer.write_tagged_u32("SIDS", self.sides);
         writer.write_tagged_wide_string("NAME", &self.name);
         writer.write_tagged_string("MATR", &self.material);
@@ -464,13 +466,25 @@ impl BiffWrite for Primitive {
         writer.write_tagged_bool("U3DM", self.use_3d_mesh);
         writer.write_tagged_bool("STRE", self.static_rendering);
         writer.write_tagged_f32("DILI", self.disable_lighting_top);
-        writer.write_tagged_f32("DILB", self.disable_lighting_below);
+        if let Some(disable_lighting_below) = self.disable_lighting_below {
+            writer.write_tagged_f32("DILB", disable_lighting_below);
+        }
         writer.write_tagged_bool("REEN", self.is_reflection_enabled);
-        writer.write_tagged_bool("EBFC", self.backfaces_enabled);
-        writer.write_tagged_string("MAPH", &self.physics_material);
-        writer.write_tagged_bool("OVPH", self.overwrite_physics);
-        writer.write_tagged_bool("DIPT", self.display_texture);
-        writer.write_tagged_bool("OSNM", self.object_space_normal_map);
+        if let Some(backfaces_enabled) = self.backfaces_enabled {
+            writer.write_tagged_bool("EBFC", backfaces_enabled);
+        }
+        if let Some(physics_material) = &self.physics_material {
+            writer.write_tagged_string("MAPH", physics_material);
+        }
+        if let Some(overwrite_physics) = self.overwrite_physics {
+            writer.write_tagged_bool("OVPH", overwrite_physics);
+        }
+        if let Some(display_texture) = self.display_texture {
+            writer.write_tagged_bool("DIPT", display_texture);
+        }
+        if let Some(object_space_normal_map) = self.object_space_normal_map {
+            writer.write_tagged_bool("OSNM", object_space_normal_map);
+        }
 
         if let Some(min_aa_bound) = &self.min_aa_bound {
             writer.write_tagged_data("BMIN", min_aa_bound);
@@ -565,13 +579,12 @@ mod tests {
     #[test]
     fn test_write_read() {
         let mut rng = rand::thread_rng();
-        // values not equal to the defaults
         let primitive: Primitive = Primitive {
             position: Vertex3D::new(1.0, 2.0, 3.0),
             size: Vertex3D::new(4.0, 5.0, 6.0),
             rot_and_tra: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
             image: "image".to_string(),
-            normal_map: "normal_map".to_string(),
+            normal_map: Some("normal_map".to_string()),
             sides: 1,
             name: "name".to_string(),
             material: "material".to_string(),
@@ -595,7 +608,7 @@ mod tests {
             disable_lighting_below: rng.gen(),
             is_reflection_enabled: rng.gen(),
             backfaces_enabled: rng.gen(),
-            physics_material: "physics_material".to_string(),
+            physics_material: Some("physics_material".to_string()),
             overwrite_physics: rng.gen(),
             display_texture: rng.gen(),
             object_space_normal_map: rng.gen(),

@@ -97,7 +97,7 @@ pub fn write_vpx(comp: &mut CompoundFile<File>, original: &VPX) -> io::Result<()
     write_game_data(comp, &original.gamedata, &original.version)?;
     write_game_items(comp, &original.gameitems)?;
     write_images(comp, &original.images)?;
-    write_sounds(comp, &original.sounds)?;
+    write_sounds(comp, &original.sounds, &original.version)?;
     write_fonts(comp, &original.fonts)?;
     write_collections(comp, &original.collections)?;
     let mac = generate_mac(comp)?;
@@ -477,7 +477,7 @@ fn read_sounds<F: Read + Seek>(
             let mut stream = comp.open_stream(&path)?;
             stream.read_to_end(&mut input)?;
             let mut reader = BiffReader::new(&input);
-            let sound = sound::read(file_version.clone(), &mut reader);
+            let sound = sound::read(file_version, &mut reader);
             Ok(sound)
         })
         .collect()
@@ -486,6 +486,7 @@ fn read_sounds<F: Read + Seek>(
 fn write_sounds<F: Read + Write + Seek>(
     comp: &mut CompoundFile<F>,
     sounds: &[SoundData],
+    file_version: &Version,
 ) -> io::Result<()> {
     for (index, sound) in sounds.iter().enumerate() {
         let path = Path::new(MAIN_SEPARATOR_STR)
@@ -493,7 +494,7 @@ fn write_sounds<F: Read + Write + Seek>(
             .join(format!("Sound{}", index));
         let mut stream = comp.create_stream(&path)?;
         let mut writer = BiffWriter::new();
-        sound::write(sound, &mut writer);
+        sound::write(file_version, sound, &mut writer);
         stream.write_all(writer.get_data())?;
     }
     Ok(())
@@ -745,7 +746,7 @@ mod tests {
 
         let mac = read_mac(&mut comp).unwrap();
         let expected = [
-            183, 43, 35, 1, 250, 13, 195, 57, 1, 195, 133, 254, 190, 10, 154, 243,
+            162, 87, 146, 17, 177, 126, 27, 1, 88, 117, 121, 155, 8, 111, 172, 22,
         ];
         assert_eq!(mac, expected);
     }
@@ -835,6 +836,9 @@ mod tests {
     fn assert_equal_vpx(vpx_path: PathBuf, test_vpx_path: PathBuf) {
         let mut comp = cfb::open(&vpx_path).unwrap();
         let mut test_comp = cfb::open(&test_vpx_path).unwrap();
+
+        let version = version::read_version(&mut comp).unwrap();
+        println!("version: {:?}", version);
 
         let original_paths = compound_file_paths_and_lengths(&vpx_path);
         let test_paths = compound_file_paths_and_lengths(&test_vpx_path);

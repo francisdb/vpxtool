@@ -34,10 +34,10 @@ pub struct Wall {
     pub slingshot_animation: bool,
     pub is_side_visible: bool,
     pub disable_lighting_top: f32,
-    pub disable_lighting_below: f32,
+    pub disable_lighting_below: Option<f32>, // DILB (added in 10.?)
     pub is_reflection_enabled: bool,
-    pub physics_material: String,
-    pub overwrite_physics: bool,
+    pub physics_material: Option<String>, // MAPH (added in 10.?)
+    pub overwrite_physics: Option<bool>,  // OVPH (added in 10.?)
 
     // these are shared between all items
     pub is_locked: bool,
@@ -73,14 +73,14 @@ impl BiffRead for Wall {
         let mut friction: f32 = 0.3;
         let mut scatter: f32 = Default::default();
         let mut is_top_bottom_visible: bool = true;
-        let mut overwrite_physics: bool = true;
+        let mut overwrite_physics: Option<bool> = None; //true;
         let mut disable_lighting_top: f32 = Default::default();
-        let mut disable_lighting_below: f32 = Default::default();
+        let mut disable_lighting_below: Option<f32> = None;
         let mut is_side_visible: bool = true;
         let mut is_reflection_enabled: bool = true;
         let mut is_timer_enabled: bool = false;
         let mut timer_interval: u32 = Default::default();
-        let mut physics_material: String = Default::default();
+        let mut physics_material: Option<String> = None;
 
         // these are shared between all items
         let mut is_locked: bool = false;
@@ -165,13 +165,13 @@ impl BiffRead for Wall {
                     is_top_bottom_visible = reader.get_bool();
                 }
                 "OVPH" => {
-                    overwrite_physics = reader.get_bool();
+                    overwrite_physics = Some(reader.get_bool());
                 }
                 "DLTO" => {
                     disable_lighting_top = reader.get_f32();
                 }
                 "DLBE" => {
-                    disable_lighting_below = reader.get_f32();
+                    disable_lighting_below = Some(reader.get_f32());
                 }
                 "SIVI" => {
                     is_side_visible = reader.get_bool();
@@ -186,7 +186,7 @@ impl BiffRead for Wall {
                     timer_interval = reader.get_u32();
                 }
                 "PMAT" => {
-                    physics_material = reader.get_string();
+                    physics_material = Some(reader.get_string());
                 }
                 "ISBS" => {
                     is_bottom_solid = reader.get_bool();
@@ -210,10 +210,10 @@ impl BiffRead for Wall {
                     disable_lighting_top = reader.get_f32();
                 }
                 "DILB" => {
-                    disable_lighting_below = reader.get_f32();
+                    disable_lighting_below = Some(reader.get_f32());
                 }
                 "MAPH" => {
-                    physics_material = reader.get_string();
+                    physics_material = Some(reader.get_string());
                 }
                 "REEN" => {
                     is_reflection_enabled = reader.get_bool();
@@ -352,10 +352,16 @@ impl BiffWrite for Wall {
         writer.write_tagged_bool("SLGA", self.slingshot_animation);
         writer.write_tagged_bool("SVBL", self.is_side_visible);
         writer.write_tagged_f32("DILI", self.disable_lighting_top);
-        writer.write_tagged_f32("DILB", self.disable_lighting_below);
+        if let Some(disable_lighting_below) = self.disable_lighting_below {
+            writer.write_tagged_f32("DILB", disable_lighting_below);
+        }
         writer.write_tagged_bool("REEN", self.is_reflection_enabled);
-        writer.write_tagged_string("MAPH", &self.physics_material);
-        writer.write_tagged_bool("OVPH", self.overwrite_physics);
+        if let Some(physics_material) = &self.physics_material {
+            writer.write_tagged_string("MAPH", physics_material);
+        }
+        if let Some(overwrite_physics) = self.overwrite_physics {
+            writer.write_tagged_bool("OVPH", overwrite_physics);
+        }
 
         // shared
         writer.write_tagged_bool("LOCK", self.is_locked);
@@ -411,10 +417,10 @@ mod tests {
             slingshot_animation: true,
             is_side_visible: true,
             disable_lighting_top: 11.0,
-            disable_lighting_below: 12.0,
+            disable_lighting_below: Some(12.0),
             is_reflection_enabled: true,
-            physics_material: "physics_material".to_string(),
-            overwrite_physics: true,
+            physics_material: Some("physics_material".to_string()),
+            overwrite_physics: Some(true),
             is_locked: true,
             editor_layer: 13,
             editor_layer_name: Some("editor_layer_name".to_string()),

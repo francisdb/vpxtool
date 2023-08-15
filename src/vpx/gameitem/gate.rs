@@ -4,27 +4,27 @@ use super::vertex2d::Vertex2D;
 
 #[derive(Debug, PartialEq)]
 pub struct Gate {
-    pub center: Vertex2D,            // 1
-    pub length: f32,                 // 2
-    pub height: f32,                 // 3
-    pub rotation: f32,               // 4
-    pub material: String,            // 5
-    pub is_timer_enabled: bool,      // 6
-    pub show_bracket: bool,          // 7
-    pub is_collidable: bool,         // 8
-    pub timer_interval: f32,         // 9
-    pub surface: String,             // 10
-    pub elasticity: f32,             // 11
-    pub angle_max: f32,              // 12
-    pub angle_min: f32,              // 13
-    pub friction: f32,               // 14
-    pub damping: f32,                // 15
-    pub gravity_factor: f32,         // 16
-    pub is_visible: bool,            // 17
-    pub name: String,                // 18
-    pub two_way: bool,               // 19
-    pub is_reflection_enabled: bool, // 20
-    pub gate_type: u32,              // 21
+    pub center: Vertex2D,            // 1 VCEN
+    pub length: f32,                 // 2 LGTH
+    pub height: f32,                 // 3 HGTH
+    pub rotation: f32,               // 4 ROTA
+    pub material: String,            // 5 MATR
+    pub is_timer_enabled: bool,      // 6 TMON
+    pub show_bracket: bool,          // 7 GSUP
+    pub is_collidable: bool,         // 8 GCOL
+    pub timer_interval: f32,         // 9 TMIN
+    pub surface: String,             // 10 SURF
+    pub elasticity: f32,             // 11 ELAS
+    pub angle_max: f32,              // 12 GAMA
+    pub angle_min: f32,              // 13 GAMI
+    pub friction: f32,               // 14 GFRC
+    pub damping: Option<f32>,        // 15 AFRC (added in 10.?)
+    pub gravity_factor: Option<f32>, // 16 GGFC (added in 10.?)
+    pub is_visible: bool,            // 17 GVSB
+    pub name: String,                // 18 NAME
+    pub two_way: bool,               // 19 TWWA
+    pub is_reflection_enabled: bool, // 20 REEN
+    pub gate_type: u32,              // 21 GATY
 
     // these are shared between all items
     pub is_locked: bool,
@@ -49,13 +49,13 @@ impl BiffRead for Gate {
         let mut angle_max: f32 = std::f32::consts::PI / 2.0;
         let mut angle_min: f32 = Default::default();
         let mut friction: f32 = 0.02;
-        let mut damping: f32 = 0.985;
+        let mut damping: Option<f32> = None; //0.985;
         let mut is_visible: bool = true;
         let mut name: String = Default::default();
         let mut two_way: bool = false;
         let mut is_reflection_enabled: bool = true;
         let mut gate_type: u32 = Default::default();
-        let mut gravity_factor: f32 = 0.25;
+        let mut gravity_factor: Option<f32> = None; //0.25;
 
         // these are shared between all items
         let mut is_locked: bool = false;
@@ -114,10 +114,10 @@ impl BiffRead for Gate {
                     friction = reader.get_f32();
                 }
                 "AFRC" => {
-                    damping = reader.get_f32();
+                    damping = Some(reader.get_f32());
                 }
                 "GGFC" => {
-                    gravity_factor = reader.get_f32();
+                    gravity_factor = Some(reader.get_f32());
                 }
                 "GVSB" => {
                     is_visible = reader.get_bool();
@@ -205,8 +205,12 @@ impl BiffWrite for Gate {
         writer.write_tagged_f32("GAMA", self.angle_max);
         writer.write_tagged_f32("GAMI", self.angle_min);
         writer.write_tagged_f32("GFRC", self.friction);
-        writer.write_tagged_f32("AFRC", self.damping);
-        writer.write_tagged_f32("GGFC", self.gravity_factor);
+        if let Some(damping) = self.damping {
+            writer.write_tagged_f32("AFRC", damping);
+        }
+        if let Some(gravity_factor) = self.gravity_factor {
+            writer.write_tagged_f32("GGFC", gravity_factor);
+        }
         writer.write_tagged_bool("GVSB", self.is_visible);
         writer.write_tagged_wide_string("NAME", &self.name);
         writer.write_tagged_bool("TWWA", self.two_way);
@@ -252,8 +256,8 @@ mod tests {
             angle_max: 8.0,
             angle_min: 9.0,
             friction: 10.0,
-            damping: 11.0,
-            gravity_factor: 12.0,
+            damping: Some(11.0),
+            gravity_factor: Some(12.0),
             is_visible: false,
             name: "name".to_string(),
             two_way: true,

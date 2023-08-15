@@ -19,20 +19,20 @@ pub struct Flipper {
     material: String,
     name: String,
     rubber_material: String,
-    rthk: f32, // deprecated?
-    rubber_thickness: f32,
-    rhgt: f32, // deprecated?
-    rubber_height: f32,
-    rwdt: f32, // deprecated?
-    rubber_width: f32,
+    rthk: f32,                     // RTHK deprecated?
+    rubber_thickness: Option<f32>, // RTHF (added in 10.?)
+    rhgt: f32,                     // RHGT deprecated?
+    rubber_height: Option<f32>,    // RHGF (added in 10.?)
+    rwdt: f32,                     // RWDT deprecated?
+    rubber_width: Option<f32>,     // RHGF (added in 10.?)
     strength: f32,
     elasticity: f32,
     elasticity_falloff: f32,
     friction: f32,
     ramp_up: f32,
-    scatter: f32,
-    torque_damping: f32,
-    torque_damping_angle: f32,
+    scatter: Option<f32>,              // SCTR (added in 10.?)
+    torque_damping: Option<f32>,       // TODA (added in 10.?)
+    torque_damping_angle: Option<f32>, // TDAA (added in 10.?)
     flipper_radius_min: f32,
     is_visible: bool,
     is_enabled: bool,
@@ -71,19 +71,19 @@ impl BiffRead for Flipper {
         let mut name: String = Default::default();
         let mut rubber_material: String = Default::default();
         let mut rthk: f32 = 0.0;
-        let mut rubber_thickness: f32 = 7.0;
+        let mut rubber_thickness: Option<f32> = None; //7.0;
         let mut rhgt: f32 = 0.0;
-        let mut rubber_height: f32 = 19.0;
+        let mut rubber_height: Option<f32> = None; //19.0;
         let mut rwdt: f32 = 0.0;
-        let mut rubber_width: f32 = 24.0;
+        let mut rubber_width: Option<f32> = None; //24.0;
         let mut strength: f32 = 2200.0;
         let mut elasticity: f32 = 0.8;
         let mut elasticity_falloff: f32 = 0.43;
         let mut friction: f32 = 0.6;
         let mut ramp_up: f32 = 3.0;
-        let mut scatter: f32 = 0.0;
-        let mut torque_damping: f32 = 0.75;
-        let mut torque_damping_angle: f32 = 6.0;
+        let mut scatter: Option<f32> = None; //0.0;
+        let mut torque_damping: Option<f32> = None; //0.75;
+        let mut torque_damping_angle: Option<f32> = None; //6.0;
         let mut flipper_radius_min: f32 = 0.0;
         let mut is_visible: bool = true;
         let mut is_enabled: bool = true;
@@ -154,19 +154,19 @@ impl BiffRead for Flipper {
                     rthk = reader.get_f32();
                 }
                 "RTHF" => {
-                    rubber_thickness = reader.get_f32();
+                    rubber_thickness = Some(reader.get_f32());
                 }
                 "RHGT" => {
                     rhgt = reader.get_f32();
                 }
                 "RHGF" => {
-                    rubber_height = reader.get_f32();
+                    rubber_height = Some(reader.get_f32());
                 }
                 "RWDT" => {
                     rwdt = reader.get_f32();
                 }
                 "RWDF" => {
-                    rubber_width = reader.get_f32();
+                    rubber_width = Some(reader.get_f32());
                 }
                 "STRG" => {
                     strength = reader.get_f32();
@@ -184,13 +184,13 @@ impl BiffRead for Flipper {
                     ramp_up = reader.get_f32();
                 }
                 "SCTR" => {
-                    scatter = reader.get_f32();
+                    scatter = Some(reader.get_f32());
                 }
                 "TODA" => {
-                    torque_damping = reader.get_f32();
+                    torque_damping = Some(reader.get_f32());
                 }
                 "TDAA" => {
-                    torque_damping_angle = reader.get_f32();
+                    torque_damping_angle = Some(reader.get_f32());
                 }
                 "VSBL" => {
                     is_visible = reader.get_bool();
@@ -296,19 +296,31 @@ impl BiffWrite for Flipper {
         writer.write_tagged_wide_string("NAME", &self.name);
         writer.write_tagged_string("RUMA", &self.rubber_material);
         writer.write_tagged_f32("RTHK", self.rthk);
-        writer.write_tagged_f32("RTHF", self.rubber_thickness);
+        if let Some(rubber_thickness) = self.rubber_thickness {
+            writer.write_tagged_f32("RTHF", rubber_thickness);
+        }
         writer.write_tagged_f32("RHGT", self.rhgt);
-        writer.write_tagged_f32("RHGF", self.rubber_height);
+        if let Some(rubber_height) = self.rubber_height {
+            writer.write_tagged_f32("RHGF", rubber_height);
+        }
         writer.write_tagged_f32("RWDT", self.rwdt);
-        writer.write_tagged_f32("RWDF", self.rubber_width);
+        if let Some(rubber_width) = self.rubber_width {
+            writer.write_tagged_f32("RWDF", rubber_width);
+        }
         writer.write_tagged_f32("STRG", self.strength);
         writer.write_tagged_f32("ELAS", self.elasticity);
         writer.write_tagged_f32("ELFO", self.elasticity_falloff);
         writer.write_tagged_f32("FRIC", self.friction);
         writer.write_tagged_f32("RPUP", self.ramp_up);
-        writer.write_tagged_f32("SCTR", self.scatter);
-        writer.write_tagged_f32("TODA", self.torque_damping);
-        writer.write_tagged_f32("TDAA", self.torque_damping_angle);
+        if let Some(sctr) = self.scatter {
+            writer.write_tagged_f32("SCTR", sctr);
+        }
+        if let Some(toda) = self.torque_damping {
+            writer.write_tagged_f32("TODA", toda);
+        }
+        if let Some(tdaa) = self.torque_damping_angle {
+            writer.write_tagged_f32("TDAA", tdaa);
+        }
         writer.write_tagged_bool("VSBL", self.is_visible);
         writer.write_tagged_bool("ENBL", self.is_enabled);
         writer.write_tagged_f32("FRMN", self.flipper_radius_min);
@@ -355,19 +367,19 @@ mod tests {
             name: String::from("test name"),
             rubber_material: String::from("test rubber material"),
             rwdt: 0.0,
-            rubber_thickness: 7.0,
+            rubber_thickness: Some(7.0),
             rhgt: 0.0,
-            rubber_height: 19.0,
+            rubber_height: Some(19.0),
             rthk: 0.0,
-            rubber_width: 24.0,
+            rubber_width: Some(24.0),
             strength: 2200.0,
             elasticity: 0.8,
             elasticity_falloff: 0.43,
             friction: 0.6,
             ramp_up: 3.0,
-            scatter: 0.0,
-            torque_damping: 0.75,
-            torque_damping_angle: 6.0,
+            scatter: Some(0.0),
+            torque_damping: Some(0.75),
+            torque_damping_angle: Some(6.0),
             flipper_radius_min: 0.0,
             is_visible: true,
             is_enabled: true,

@@ -20,17 +20,17 @@ pub struct HitTarget {
     pub friction: f32,
     pub scatter: f32,
     pub is_collidable: bool,
-    pub disable_lighting_top: f32,
-    pub disable_lighting_below: f32,
+    pub disable_lighting_top: f32,           // DILI
+    pub disable_lighting_below: Option<f32>, // DILB (added in 10.?)
     pub depth_bias: f32,
     pub is_reflection_enabled: bool,
     pub is_dropped: bool,
     pub drop_speed: f32,
     pub is_timer_enabled: bool,
     pub timer_interval: u32,
-    pub raise_delay: u32,
-    pub physics_material: String,
-    pub overwrite_physics: bool,
+    pub raise_delay: Option<u32>,         // RADE (added in 10.?)
+    pub physics_material: Option<String>, // MAPH (added in 10.?)
+    pub overwrite_physics: Option<bool>,  // OVPH (added in 10.?)
 
     // these are shared between all items
     pub is_locked: bool,
@@ -70,16 +70,16 @@ impl BiffRead for HitTarget {
         let mut scatter: f32 = 0.0;
         let mut is_collidable: bool = true;
         let mut disable_lighting_top: f32 = 0.0;
-        let mut disable_lighting_below: f32 = 0.0;
+        let mut disable_lighting_below: Option<f32> = None; //0.0;
         let mut depth_bias: f32 = 0.0;
         let mut is_reflection_enabled: bool = true;
         let mut is_dropped: bool = false;
         let mut drop_speed: f32 = 0.5;
         let mut is_timer_enabled: bool = false;
         let mut timer_interval: u32 = 0;
-        let mut raise_delay: u32 = 100;
-        let mut physics_material: String = Default::default();
-        let mut overwrite_physics: bool = false;
+        let mut raise_delay: Option<u32> = None; //100;
+        let mut physics_material: Option<String> = None;
+        let mut overwrite_physics: Option<bool> = None; //false;
 
         // these are shared between all items
         let mut is_locked: bool = false;
@@ -147,7 +147,7 @@ impl BiffRead for HitTarget {
                     disable_lighting_top = reader.get_f32();
                 }
                 "DILB" => {
-                    disable_lighting_below = reader.get_f32();
+                    disable_lighting_below = Some(reader.get_f32());
                 }
                 "REEN" => {
                     is_reflection_enabled = reader.get_bool();
@@ -165,15 +165,9 @@ impl BiffRead for HitTarget {
                     is_timer_enabled = reader.get_bool();
                 }
                 "TMIN" => timer_interval = reader.get_u32(),
-                "RADE" => {
-                    raise_delay = reader.get_u32();
-                }
-                "MAPH" => {
-                    physics_material = reader.get_string();
-                }
-                "OVPH" => {
-                    overwrite_physics = reader.get_bool();
-                }
+                "RADE" => raise_delay = Some(reader.get_u32()),
+                "MAPH" => physics_material = Some(reader.get_string()),
+                "OVPH" => overwrite_physics = Some(reader.get_bool()),
 
                 // shared
                 "LOCK" => {
@@ -253,16 +247,24 @@ impl BiffWrite for HitTarget {
         writer.write_tagged_f32("RSCT", self.scatter);
         writer.write_tagged_bool("CLDR", self.is_collidable);
         writer.write_tagged_f32("DILI", self.disable_lighting_top);
-        writer.write_tagged_f32("DILB", self.disable_lighting_below);
+        if let Some(disable_lighting_below) = self.disable_lighting_below {
+            writer.write_tagged_f32("DILB", disable_lighting_below);
+        }
         writer.write_tagged_bool("REEN", self.is_reflection_enabled);
         writer.write_tagged_f32("PIDB", self.depth_bias);
         writer.write_tagged_bool("ISDR", self.is_dropped);
         writer.write_tagged_f32("DRSP", self.drop_speed);
         writer.write_tagged_bool("TMON", self.is_timer_enabled);
         writer.write_tagged_u32("TMIN", self.timer_interval);
-        writer.write_tagged_u32("RADE", self.raise_delay);
-        writer.write_tagged_string("MAPH", &self.physics_material);
-        writer.write_tagged_bool("OVPH", self.overwrite_physics);
+        if let Some(raise_delay) = self.raise_delay {
+            writer.write_tagged_u32("RADE", raise_delay);
+        }
+        if let Some(physics_material) = &self.physics_material {
+            writer.write_tagged_string("MAPH", physics_material);
+        }
+        if let Some(overwrite_physics) = self.overwrite_physics {
+            writer.write_tagged_bool("OVPH", overwrite_physics);
+        }
         // shared
         writer.write_tagged_bool("LOCK", self.is_locked);
         writer.write_tagged_u32("LAYR", self.editor_layer);
@@ -315,7 +317,7 @@ mod tests {
             is_timer_enabled: rng.gen(),
             timer_interval: rng.gen(),
             raise_delay: rng.gen(),
-            physics_material: "test physics material".to_string(),
+            physics_material: Some("test physics material".to_string()),
             overwrite_physics: rng.gen(),
             is_locked: rng.gen(),
             editor_layer: rng.gen(),

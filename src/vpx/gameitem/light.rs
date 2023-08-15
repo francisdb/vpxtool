@@ -7,38 +7,38 @@ use super::{dragpoint::DragPoint, vertex2d::Vertex2D};
 
 #[derive(Debug, PartialEq)]
 pub struct Light {
-    pub center: Vertex2D,              // VCEN
-    pub height: Option<f32>,           // HGHT added in 10.8
-    pub falloff_radius: f32,           // RADI
-    pub falloff_power: f32,            // FAPO
-    pub status: u32,                   // STAT
-    pub state: Option<f32>,            // STTF added in 10.8
-    pub color: Color,                  // COLR
-    pub color2: Color,                 // COL2
-    pub is_timer_enabled: bool,        // TMON
-    pub timer_interval: u32,           // TMIN
-    pub blink_pattern: String,         // BPAT
-    pub off_image: String,             // IMG1
-    pub blink_interval: u32,           // BINT
-    pub intensity: f32,                // BWTH
-    pub transmission_scale: f32,       // TRMS
-    pub surface: String,               // SURF
-    pub name: String,                  // NAME
-    pub is_backglass: bool,            // BGLS
-    pub depth_bias: f32,               // LIDB
-    pub fade_speed_up: f32,            // FASP
-    pub fade_speed_down: f32,          // FASD
-    pub is_bulb_light: bool,           // BULT
-    pub is_image_mode: bool,           // IMMO
-    pub show_bulb_mesh: bool,          // SHBM
-    pub has_static_bulb_mesh: bool,    // STBM
-    pub show_reflection_on_ball: bool, // SHRB
-    pub mesh_radius: f32,              // BMSC
-    pub bulb_modulate_vs_add: f32,     // BMVA
-    pub bulb_halo_height: f32,         // BHHI
-    pub shadows: Option<u32>,          // SHDW added in 10.8
-    pub fader: Option<u32>,            // FADE added in 10.8
-    pub visible: Option<bool>,         // VSBL added in 10.8
+    pub center: Vertex2D,                   // VCEN
+    pub height: Option<f32>,                // HGHT added in 10.8
+    pub falloff_radius: f32,                // RADI
+    pub falloff_power: f32,                 // FAPO
+    pub status: u32,                        // STAT
+    pub state: Option<f32>,                 // STTF added in 10.8
+    pub color: Color,                       // COLR
+    pub color2: Color,                      // COL2
+    pub is_timer_enabled: bool,             // TMON
+    pub timer_interval: u32,                // TMIN
+    pub blink_pattern: String,              // BPAT
+    pub off_image: String,                  // IMG1
+    pub blink_interval: u32,                // BINT
+    pub intensity: f32,                     // BWTH
+    pub transmission_scale: f32,            // TRMS
+    pub surface: String,                    // SURF
+    pub name: String,                       // NAME
+    pub is_backglass: bool,                 // BGLS
+    pub depth_bias: f32,                    // LIDB
+    pub fade_speed_up: f32,                 // FASP
+    pub fade_speed_down: f32,               // FASD
+    pub is_bulb_light: bool,                // BULT
+    pub is_image_mode: bool,                // IMMO
+    pub show_bulb_mesh: bool,               // SHBM
+    pub has_static_bulb_mesh: Option<bool>, // STBM (added in 10.?)
+    pub show_reflection_on_ball: bool,      // SHRB
+    pub mesh_radius: f32,                   // BMSC
+    pub bulb_modulate_vs_add: f32,          // BMVA
+    pub bulb_halo_height: f32,              // BHHI
+    pub shadows: Option<u32>,               // SHDW added in 10.8
+    pub fader: Option<u32>,                 // FADE added in 10.8
+    pub visible: Option<bool>,              // VSBL added in 10.8
 
     // these are shared between all items
     pub is_locked: bool,
@@ -77,7 +77,7 @@ impl Light {
         let is_bulb_light: bool = false;
         let is_image_mode: bool = false;
         let show_bulb_mesh: bool = false;
-        let has_static_bulb_mesh: bool = true;
+        let has_static_bulb_mesh: Option<bool> = None; //true;
         let show_reflection_on_ball: bool = true;
         let mesh_radius: f32 = 20.0;
         let bulb_modulate_vs_add: f32 = 0.9;
@@ -174,7 +174,7 @@ impl BiffRead for Light {
                 "BULT" => light.is_bulb_light = reader.get_bool(),
                 "IMMO" => light.is_image_mode = reader.get_bool(),
                 "SHBM" => light.show_bulb_mesh = reader.get_bool(),
-                "STBM" => light.has_static_bulb_mesh = reader.get_bool(),
+                "STBM" => light.has_static_bulb_mesh = Some(reader.get_bool()),
                 "SHRB" => light.show_reflection_on_ball = reader.get_bool(),
                 "BMSC" => light.mesh_radius = reader.get_f32(),
                 "BMVA" => light.bulb_modulate_vs_add = reader.get_f32(),
@@ -234,7 +234,9 @@ impl BiffWrite for Light {
         writer.write_tagged_bool("BULT", self.is_bulb_light);
         writer.write_tagged_bool("IMMO", self.is_image_mode);
         writer.write_tagged_bool("SHBM", self.show_bulb_mesh);
-        writer.write_tagged_bool("STBM", self.has_static_bulb_mesh);
+        if let Some(stbm) = self.has_static_bulb_mesh {
+            writer.write_tagged_bool("STBM", stbm);
+        }
         writer.write_tagged_bool("SHRB", self.show_reflection_on_ball);
         writer.write_tagged_f32("BMSC", self.mesh_radius);
         writer.write_tagged_f32("BMVA", self.bulb_modulate_vs_add);
@@ -300,7 +302,7 @@ mod tests {
             is_bulb_light: true,
             is_image_mode: true,
             show_bulb_mesh: false,
-            has_static_bulb_mesh: false,
+            has_static_bulb_mesh: Some(false),
             show_reflection_on_ball: false,
             mesh_radius: 14.0,
             bulb_modulate_vs_add: 15.0,

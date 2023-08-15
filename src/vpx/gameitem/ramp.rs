@@ -4,36 +4,36 @@ use super::dragpoint::DragPoint;
 
 #[derive(Debug, PartialEq)]
 pub struct Ramp {
-    pub height_bottom: f32,             // 1
-    pub height_top: f32,                // 2
-    pub width_bottom: f32,              // 3
-    pub width_top: f32,                 // 4
-    pub material: String,               // 5
-    pub is_timer_enabled: bool,         // 6
-    pub timer_interval: u32,            // 7
-    pub ramp_type: u32,                 // 8
-    pub name: String,                   // 9
-    pub image: String,                  // 10
-    pub image_alignment: u32,           // 11
-    pub image_walls: bool,              // 12
-    pub left_wall_height: f32,          // 13
-    pub right_wall_height: f32,         // 14
-    pub left_wall_height_visible: f32,  // 15
-    pub right_wall_height_visible: f32, // 16
-    pub hit_event: bool,                // 17
-    pub threshold: f32,                 // 18
-    pub elasticity: f32,                // 19
-    pub friction: f32,                  // 20
-    pub scatter: f32,                   // 21
-    pub is_collidable: bool,            // 22
-    pub is_visible: bool,               // 23
-    pub depth_bias: f32,                // 24
-    pub wire_diameter: f32,             // 25
-    pub wire_distance_x: f32,           // 26
-    pub wire_distance_y: f32,           // 27
-    pub is_reflection_enabled: bool,    // 28
-    pub physics_material: String,       // 29
-    pub overwrite_physics: bool,        // 30
+    pub height_bottom: f32,               // 1
+    pub height_top: f32,                  // 2
+    pub width_bottom: f32,                // 3
+    pub width_top: f32,                   // 4
+    pub material: String,                 // 5
+    pub is_timer_enabled: bool,           // 6
+    pub timer_interval: u32,              // 7
+    pub ramp_type: u32,                   // 8
+    pub name: String,                     // 9
+    pub image: String,                    // 10
+    pub image_alignment: u32,             // 11
+    pub image_walls: bool,                // 12
+    pub left_wall_height: f32,            // 13
+    pub right_wall_height: f32,           // 14
+    pub left_wall_height_visible: f32,    // 15
+    pub right_wall_height_visible: f32,   // 16
+    pub hit_event: Option<bool>,          // HTEV 17 (added in 10.?)
+    pub threshold: Option<f32>,           // THRS 18 (added in 10.?)
+    pub elasticity: f32,                  // 19
+    pub friction: f32,                    // 20
+    pub scatter: f32,                     // 21
+    pub is_collidable: bool,              // 22
+    pub is_visible: bool,                 // 23
+    pub depth_bias: f32,                  // 24
+    pub wire_diameter: f32,               // 25
+    pub wire_distance_x: f32,             // 26
+    pub wire_distance_y: f32,             // 27
+    pub is_reflection_enabled: bool,      // 28
+    pub physics_material: Option<String>, // MAPH 29 (added in 10.?)
+    pub overwrite_physics: Option<bool>,  // OVPH 30 (added in 10.?)
 
     drag_points: Vec<DragPoint>,
 
@@ -74,8 +74,8 @@ impl BiffRead for Ramp {
         let mut right_wall_height: f32 = 62.0;
         let mut left_wall_height_visible: f32 = 30.0;
         let mut right_wall_height_visible: f32 = 30.0;
-        let mut hit_event: bool = Default::default();
-        let mut threshold: f32 = Default::default();
+        let mut hit_event: Option<bool> = None;
+        let mut threshold: Option<f32> = None;
         let mut elasticity: f32 = Default::default();
         let mut friction: f32 = Default::default();
         let mut scatter: f32 = Default::default();
@@ -86,8 +86,8 @@ impl BiffRead for Ramp {
         let mut wire_distance_x: f32 = 38.0;
         let mut wire_distance_y: f32 = 88.0;
         let mut is_reflection_enabled: bool = true;
-        let mut physics_material: String = Default::default();
-        let mut overwrite_physics: bool = true;
+        let mut physics_material: Option<String> = None;
+        let mut overwrite_physics: Option<bool> = None; // true;
 
         let mut drag_points: Vec<DragPoint> = Default::default();
 
@@ -154,10 +154,10 @@ impl BiffRead for Ramp {
                     right_wall_height_visible = reader.get_f32();
                 }
                 "HTEV" => {
-                    hit_event = reader.get_bool();
+                    hit_event = Some(reader.get_bool());
                 }
                 "THRS" => {
-                    threshold = reader.get_f32();
+                    threshold = Some(reader.get_f32());
                 }
                 "ELAS" => {
                     elasticity = reader.get_f32();
@@ -193,10 +193,10 @@ impl BiffRead for Ramp {
                     is_reflection_enabled = reader.get_bool();
                 }
                 "MAPH" => {
-                    physics_material = reader.get_string();
+                    physics_material = Some(reader.get_string());
                 }
                 "OVPH" => {
-                    overwrite_physics = reader.get_bool();
+                    overwrite_physics = Some(reader.get_bool());
                 }
                 "PNTS" => {
                     // this is just a tag with no data
@@ -287,8 +287,12 @@ impl BiffWrite for Ramp {
         writer.write_tagged_f32("WLHR", self.right_wall_height);
         writer.write_tagged_f32("WVHL", self.left_wall_height_visible);
         writer.write_tagged_f32("WVHR", self.right_wall_height_visible);
-        writer.write_tagged_bool("HTEV", self.hit_event);
-        writer.write_tagged_f32("THRS", self.threshold);
+        if let Some(hit_event) = self.hit_event {
+            writer.write_tagged_bool("HTEV", hit_event);
+        }
+        if let Some(threshold) = self.threshold {
+            writer.write_tagged_f32("THRS", threshold);
+        }
         writer.write_tagged_f32("ELAS", self.elasticity);
         writer.write_tagged_f32("RFCT", self.friction);
         writer.write_tagged_f32("RSCT", self.scatter);
@@ -299,8 +303,12 @@ impl BiffWrite for Ramp {
         writer.write_tagged_f32("RADX", self.wire_distance_x);
         writer.write_tagged_f32("RADY", self.wire_distance_y);
         writer.write_tagged_bool("REEN", self.is_reflection_enabled);
-        writer.write_tagged_string("MAPH", &self.physics_material);
-        writer.write_tagged_bool("OVPH", self.overwrite_physics);
+        if let Some(physics_material) = &self.physics_material {
+            writer.write_tagged_string("MAPH", physics_material);
+        }
+        if let Some(overwrite_physics) = self.overwrite_physics {
+            writer.write_tagged_bool("OVPH", overwrite_physics);
+        }
         // shared
         writer.write_tagged_bool("LOCK", self.is_locked);
         writer.write_tagged_u32("LAYR", self.editor_layer);
@@ -330,7 +338,6 @@ mod tests {
     #[test]
     fn test_write_read() {
         let mut rng = rand::thread_rng();
-        // values not equal to the defaults
         let ramp = Ramp {
             height_bottom: 1.0,
             height_top: 2.0,
@@ -349,7 +356,7 @@ mod tests {
             left_wall_height_visible: 10.0,
             right_wall_height_visible: 11.0,
             hit_event: rng.gen(),
-            threshold: 12.0,
+            threshold: rng.gen(),
             elasticity: 13.0,
             friction: 14.0,
             scatter: 15.0,
@@ -360,7 +367,7 @@ mod tests {
             wire_distance_x: 18.0,
             wire_distance_y: 19.0,
             is_reflection_enabled: rng.gen(),
-            physics_material: "physics_material".to_string(),
+            physics_material: Some("physics_material".to_string()),
             overwrite_physics: rng.gen(),
             drag_points: vec![DragPoint::default()],
             is_locked: true,

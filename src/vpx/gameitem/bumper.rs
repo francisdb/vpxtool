@@ -10,23 +10,23 @@ pub struct Bumper {
     timer_interval: i32,
     threshold: f32,
     force: f32,
-    scatter: f32,
+    scatter: Option<f32>, // BSCT (added in ?)
     height_scale: f32,
     ring_speed: f32,
     orientation: f32,
-    ring_drop_offset: f32,
+    ring_drop_offset: Option<f32>, // RDLI (added in ?)
     cap_material: String,
     base_material: String,
     socket_material: String,
-    ring_material: String,
+    ring_material: Option<String>, // RIMA (added in ?)
     surface: String,
     name: String,
     is_cap_visible: bool,
     is_base_visible: bool,
-    is_ring_visible: bool,
-    is_socket_visible: bool,
-    hit_event: bool,
-    is_collidable: bool,
+    is_ring_visible: Option<bool>,   // RIVS (added in ?)
+    is_socket_visible: Option<bool>, // SKVS (added in ?)
+    hit_event: Option<bool>,         // HAHE (added in ?)
+    is_collidable: Option<bool>,     // COLI (added in ?)
     is_reflection_enabled: bool,
 
     // these are shared between all items
@@ -49,23 +49,23 @@ impl BiffRead for Bumper {
         let mut timer_interval: i32 = 0;
         let mut threshold: f32 = 1.0;
         let mut force: f32 = 15.0;
-        let mut scatter: f32 = 0.0;
+        let mut scatter: Option<f32> = None; //0.0;
         let mut height_scale: f32 = 90.0;
         let mut ring_speed: f32 = 0.5;
         let mut orientation: f32 = 0.0;
-        let mut ring_drop_offset: f32 = 0.0;
+        let mut ring_drop_offset: Option<f32> = None; //0.0;
         let mut cap_material: String = Default::default();
         let mut base_material: String = Default::default();
         let mut socket_material: String = Default::default();
-        let mut ring_material: String = Default::default();
+        let mut ring_material: Option<String> = None;
         let mut surface: String = Default::default();
         let mut name = Default::default();
         let mut is_cap_visible: bool = true;
         let mut is_base_visible: bool = true;
-        let mut is_ring_visible: bool = true;
-        let mut is_socket_visible: bool = true;
-        let mut hit_event: bool = true;
-        let mut is_collidable: bool = true;
+        let mut is_ring_visible: Option<bool> = None; //true;
+        let mut is_socket_visible: Option<bool> = None; //true;
+        let mut hit_event: Option<bool> = None; //true;
+        let mut is_collidable: Option<bool> = None; //true;
         let mut is_reflection_enabled: bool = true;
 
         // these are shared between all items
@@ -101,7 +101,7 @@ impl BiffRead for Bumper {
                     force = reader.get_f32();
                 }
                 "BSCT" => {
-                    scatter = reader.get_f32();
+                    scatter = Some(reader.get_f32());
                 }
                 "HISC" => {
                     height_scale = reader.get_f32();
@@ -113,7 +113,7 @@ impl BiffRead for Bumper {
                     orientation = reader.get_f32();
                 }
                 "RDLI" => {
-                    ring_drop_offset = reader.get_f32();
+                    ring_drop_offset = Some(reader.get_f32());
                 }
                 "MATR" => {
                     cap_material = reader.get_string();
@@ -125,7 +125,7 @@ impl BiffRead for Bumper {
                     socket_material = reader.get_string();
                 }
                 "RIMA" => {
-                    ring_material = reader.get_string();
+                    ring_material = Some(reader.get_string());
                 }
                 "SURF" => {
                     surface = reader.get_string();
@@ -140,16 +140,16 @@ impl BiffRead for Bumper {
                     is_base_visible = reader.get_bool();
                 }
                 "RIVS" => {
-                    is_ring_visible = reader.get_bool();
+                    is_ring_visible = Some(reader.get_bool());
                 }
                 "SKVS" => {
-                    is_socket_visible = reader.get_bool();
+                    is_socket_visible = Some(reader.get_bool());
                 }
                 "HAHE" => {
-                    hit_event = reader.get_bool();
+                    hit_event = Some(reader.get_bool());
                 }
                 "COLI" => {
-                    is_collidable = reader.get_bool();
+                    is_collidable = Some(reader.get_bool());
                 }
                 "REEN" => {
                     is_reflection_enabled = reader.get_bool();
@@ -219,23 +219,37 @@ impl BiffWrite for Bumper {
         writer.write_tagged_i32("TMIN", self.timer_interval);
         writer.write_tagged_f32("THRS", self.threshold);
         writer.write_tagged_f32("FORC", self.force);
-        writer.write_tagged_f32("BSCT", self.scatter);
+        if let Some(scatter) = self.scatter {
+            writer.write_tagged_f32("BSCT", scatter);
+        }
         writer.write_tagged_f32("HISC", self.height_scale);
         writer.write_tagged_f32("RISP", self.ring_speed);
         writer.write_tagged_f32("ORIN", self.orientation);
-        writer.write_tagged_f32("RDLI", self.ring_drop_offset);
+        if let Some(ring_drop_offset) = self.ring_drop_offset {
+            writer.write_tagged_f32("RDLI", ring_drop_offset);
+        }
         writer.write_tagged_string("MATR", &self.cap_material);
         writer.write_tagged_string("BAMA", &self.base_material);
         writer.write_tagged_string("SKMA", &self.socket_material);
-        writer.write_tagged_string("RIMA", &self.ring_material);
+        if let Some(ring_material) = &self.ring_material {
+            writer.write_tagged_string("RIMA", ring_material);
+        }
         writer.write_tagged_string("SURF", &self.surface);
         writer.write_tagged_wide_string("NAME", &self.name);
         writer.write_tagged_bool("CAVI", self.is_cap_visible);
         writer.write_tagged_bool("BSVS", self.is_base_visible);
-        writer.write_tagged_bool("RIVS", self.is_ring_visible);
-        writer.write_tagged_bool("SKVS", self.is_socket_visible);
-        writer.write_tagged_bool("HAHE", self.hit_event);
-        writer.write_tagged_bool("COLI", self.is_collidable);
+        if let Some(is_ring_visible) = self.is_ring_visible {
+            writer.write_tagged_bool("RIVS", is_ring_visible);
+        }
+        if let Some(is_socket_visible) = self.is_socket_visible {
+            writer.write_tagged_bool("SKVS", is_socket_visible);
+        }
+        if let Some(hit_event) = self.hit_event {
+            writer.write_tagged_bool("HAHE", hit_event);
+        }
+        if let Some(is_collidable) = self.is_collidable {
+            writer.write_tagged_bool("COLI", is_collidable);
+        }
         writer.write_tagged_bool("REEN", self.is_reflection_enabled);
         // shared
         writer.write_tagged_bool("LOCK", self.is_locked);
@@ -268,23 +282,23 @@ mod tests {
             timer_interval: 3,
             threshold: 1.0,
             force: 15.0,
-            scatter: 0.0,
+            scatter: Some(0.0),
             height_scale: 90.0,
             ring_speed: 0.5,
             orientation: 0.0,
-            ring_drop_offset: 0.0,
+            ring_drop_offset: Some(0.0),
             cap_material: "ctest cap material".to_string(),
             base_material: "test base material".to_string(),
             socket_material: "test socket material".to_string(),
-            ring_material: "test ring material".to_string(),
+            ring_material: Some("test ring material".to_string()),
             surface: "test surface".to_string(),
             name: "test bumper".to_string(),
             is_cap_visible: true,
             is_base_visible: true,
-            is_ring_visible: true,
-            is_socket_visible: true,
-            hit_event: true,
-            is_collidable: true,
+            is_ring_visible: Some(true),
+            is_socket_visible: Some(true),
+            hit_event: Some(true),
+            is_collidable: Some(true),
             is_reflection_enabled: true,
             is_locked: true,
             editor_layer: 5,

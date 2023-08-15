@@ -131,7 +131,7 @@ impl SoundData {
     }
 }
 
-pub(crate) fn read(file_version: Version, reader: &mut BiffReader) -> SoundData {
+pub(crate) fn read(file_version: &Version, reader: &mut BiffReader) -> SoundData {
     let mut name: String = "".to_string();
     let mut path: String = "".to_string();
     let mut internal_name: String = "".to_string();
@@ -211,8 +211,7 @@ fn is_wav(path: &str) -> bool {
     path.to_lowercase().ends_with(".wav")
 }
 
-pub(crate) fn write(sound: &SoundData, writer: &mut BiffWriter) {
-    // TODO add support for the old format file version < 1031
+pub(crate) fn write(file_version: &Version, sound: &SoundData, writer: &mut BiffWriter) {
     writer.write_string(&sound.name);
     writer.write_string(&sound.path);
     writer.write_string_empty_zero(&sound.internal_name);
@@ -225,10 +224,12 @@ pub(crate) fn write(sound: &SoundData, writer: &mut BiffWriter) {
 
     writer.write_length_prefixed_data(&sound.data);
     writer.write_u8(sound.output_target);
-    writer.write_u32(sound.volume);
-    writer.write_u32(sound.balance);
-    writer.write_u32(sound.fade);
-    writer.write_u32(sound.volume);
+    if file_version.u32() >= NEW_SOUND_FORMAT_VERSION {
+        writer.write_u32(sound.volume);
+        writer.write_u32(sound.balance);
+        writer.write_u32(sound.fade);
+        writer.write_u32(sound.volume);
+    }
 }
 
 fn read_wave_form(reader: &mut BiffReader<'_>) -> WaveForm {
@@ -290,8 +291,8 @@ mod test {
             output_target: 4,
         };
         let mut writer = BiffWriter::new();
-        write(&sound, &mut writer);
-        let sound_read = read(Version::new(1083), &mut BiffReader::new(writer.get_data()));
+        write(&Version::new(1074), &sound, &mut writer);
+        let sound_read = read(&Version::new(1074), &mut BiffReader::new(writer.get_data()));
         assert_eq!(sound, sound_read);
     }
 
@@ -309,8 +310,8 @@ mod test {
             output_target: 4,
         };
         let mut writer = BiffWriter::new();
-        write(&sound, &mut writer);
-        let sound_read = read(Version::new(1083), &mut BiffReader::new(writer.get_data()));
+        write(&Version::new(1083), &sound, &mut writer);
+        let sound_read = read(&Version::new(1083), &mut BiffReader::new(writer.get_data()));
         assert_eq!(sound, sound_read);
     }
 }

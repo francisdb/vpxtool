@@ -5,7 +5,7 @@ use super::dragpoint::DragPoint;
 #[derive(Debug, PartialEq)]
 pub struct Rubber {
     pub height: f32,
-    pub hit_height: f32,
+    pub hit_height: Option<f32>, // HTHI (added in 10.?)
     pub thickness: i32,
     pub hit_event: bool,
     pub material: String,
@@ -25,8 +25,8 @@ pub struct Rubber {
     pub rot_y: f32,
     pub rot_z: f32,
     pub is_reflection_enabled: bool,
-    pub physics_material: String,
-    pub overwrite_physics: bool,
+    pub physics_material: Option<String>, // MAPH (added in 10.?)
+    pub overwrite_physics: Option<bool>,  // OVPH (added in 10.?)
 
     // these are shared between all items
     pub is_locked: bool,
@@ -40,7 +40,7 @@ pub struct Rubber {
 impl BiffRead for Rubber {
     fn biff_read(reader: &mut BiffReader<'_>) -> Self {
         let mut height: f32 = 25.0;
-        let mut hit_height: f32 = 25.0;
+        let mut hit_height: Option<f32> = None; //25.0;
         let mut thickness: i32 = 8;
         let mut hit_event: bool = false;
         let mut material: String = Default::default();
@@ -60,8 +60,8 @@ impl BiffRead for Rubber {
         let mut rot_y: f32 = 0.0;
         let mut rot_z: f32 = 0.0;
         let mut is_reflection_enabled: bool = true;
-        let mut physics_material: String = Default::default();
-        let mut overwrite_physics: bool = false;
+        let mut physics_material: Option<String> = None;
+        let mut overwrite_physics: Option<bool> = None; //false;
 
         // these are shared between all items
         let mut is_locked: bool = false;
@@ -83,7 +83,7 @@ impl BiffRead for Rubber {
                     height = reader.get_f32();
                 }
                 "HTHI" => {
-                    hit_height = reader.get_f32();
+                    hit_height = Some(reader.get_f32());
                 }
                 "WDTP" => {
                     thickness = reader.get_i32();
@@ -143,10 +143,10 @@ impl BiffRead for Rubber {
                     is_reflection_enabled = reader.get_bool();
                 }
                 "MAPH" => {
-                    physics_material = reader.get_string();
+                    physics_material = Some(reader.get_string());
                 }
                 "OVPH" => {
-                    overwrite_physics = reader.get_bool();
+                    overwrite_physics = Some(reader.get_bool());
                 }
 
                 // shared
@@ -216,7 +216,9 @@ impl BiffRead for Rubber {
 impl BiffWrite for Rubber {
     fn biff_write(&self, writer: &mut biff::BiffWriter) {
         writer.write_tagged_f32("HTTP", self.height);
-        writer.write_tagged_f32("HTHI", self.hit_height);
+        if let Some(hthi) = self.hit_height {
+            writer.write_tagged_f32("HTHI", hthi);
+        }
         writer.write_tagged_i32("WDTP", self.thickness);
         writer.write_tagged_bool("HTEV", self.hit_event);
         writer.write_tagged_string("MATR", &self.material);
@@ -236,8 +238,12 @@ impl BiffWrite for Rubber {
         writer.write_tagged_f32("ROTY", self.rot_y);
         writer.write_tagged_f32("ROTZ", self.rot_z);
         writer.write_tagged_bool("REEN", self.is_reflection_enabled);
-        writer.write_tagged_string("MAPH", &self.physics_material);
-        writer.write_tagged_bool("OVPH", self.overwrite_physics);
+        if let Some(physics_material) = &self.physics_material {
+            writer.write_tagged_string("MAPH", physics_material);
+        }
+        if let Some(overwrite_physics) = self.overwrite_physics {
+            writer.write_tagged_bool("OVPH", overwrite_physics);
+        }
 
         // shared
         writer.write_tagged_bool("LOCK", self.is_locked);
@@ -273,7 +279,7 @@ mod tests {
         // values not equal to the defaults
         let rubber: Rubber = Rubber {
             height: 1.0,
-            hit_height: 2.0,
+            hit_height: Some(2.0),
             thickness: 3,
             hit_event: rng.gen(),
             material: "material".to_string(),
@@ -293,7 +299,7 @@ mod tests {
             rot_y: 10.0,
             rot_z: 11.0,
             is_reflection_enabled: rng.gen(),
-            physics_material: "physics_material".to_string(),
+            physics_material: Some("physics_material".to_string()),
             overwrite_physics: rng.gen(),
             is_locked: rng.gen(),
             editor_layer: 12,

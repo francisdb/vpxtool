@@ -33,7 +33,7 @@ pub fn extract(vpx_file_path: &Path, root_dir_path: &Path) -> std::io::Result<()
     println!("VBScript file written to\n  {}", &vbs_path.display());
     extract_binaries(&mut comp, root_dir_path);
     extract_images(&mut comp, &gamedata, root_dir_path);
-    extract_sounds(&mut comp, &gamedata, root_dir_path, version);
+    extract_sounds(&mut comp, &gamedata, root_dir_path, &version);
     extract_fonts(&mut comp, &gamedata, root_dir_path);
     extract_gameitems(&mut comp, &gamedata, root_dir_path);
     extract_collections(&mut comp, &gamedata, root_dir_path);
@@ -142,7 +142,7 @@ fn extract_sounds(
     comp: &mut CompoundFile<File>,
     gamedata: &GameData,
     root_dir_path: &Path,
-    file_version: Version,
+    file_version: &Version,
 ) {
     let sounds_size = gamedata.sounds_size;
     let sounds_path = root_dir_path.join("sounds");
@@ -162,7 +162,7 @@ fn extract_sounds(
             .read_to_end(&mut input)
             .unwrap();
         let mut reader = BiffReader::new(&input);
-        let sound = sound::read(file_version.clone(), &mut reader);
+        let sound = sound::read(file_version, &mut reader);
 
         let ext = sound.ext();
         let mut sound_path = sounds_path.clone();
