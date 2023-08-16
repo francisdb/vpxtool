@@ -804,8 +804,9 @@ mod tests {
         expected_info.table_version = String::from("1.2");
         expected_info.author_website = Some(String::from("http://www.vpforums.org/"));
         expected_info.table_save_date = Some(String::from("Tue Jul 11 15:48:49 2023"));
-        expected_info.table_description =
-            String::from("Press C to enable manual Ball Control via the arrow keys and B");
+        expected_info.table_description = Some(String::from(
+            "Press C to enable manual Ball Control via the arrow keys and B",
+        ));
 
         assert_eq!(original.version, Version::new(1072));
         assert_eq!(original.info, expected_info);
