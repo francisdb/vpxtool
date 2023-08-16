@@ -199,7 +199,7 @@ fn main() {
             let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
             let path = path.unwrap_or("");
             let expanded_path = expand_path(path);
-            match vpx::diff(PathBuf::from(expanded_path)) {
+            match vpx::diff_script(PathBuf::from(expanded_path)) {
                 Ok(output) => {
                     println!("{}", output);
                 }
@@ -525,14 +525,17 @@ fn info(vpx_file_path: &str, json: bool) -> io::Result<()> {
         "{:>18} {}{}{}",
         "Author:".green(),
         Some(table_info.author_name)
+            .map(|s| s.unwrap_or("[not set]".to_string()))
             .filter(|s| !s.is_empty())
             .map(|s| format!("{} ", s))
             .unwrap_or_default(),
         Some(table_info.author_email)
+            .map(|s| s.unwrap_or("[not set]".to_string()))
             .filter(|s| !s.is_empty())
             .map(|s| format!("{} ", s))
             .unwrap_or_default(),
         Some(table_info.author_website)
+            .map(|s| s.unwrap_or("[not set]".to_string()))
             .filter(|s| !s.is_empty())
             .map(|s| format!("{} ", s))
             .unwrap_or_default(),
@@ -540,25 +543,35 @@ fn info(vpx_file_path: &str, json: bool) -> io::Result<()> {
     println!(
         "{:>18} {}",
         "Save revision:".green(),
-        table_info.table_save_rev
+        table_info.table_save_rev.unwrap_or("[not set]".to_string())
     );
     println!(
         "{:>18} {}",
         "Save date:".green(),
-        table_info.table_save_date
+        table_info
+            .table_save_date
+            .unwrap_or("[not set]".to_string())
     );
     println!(
         "{:>18} {}",
         "Release Date:".green(),
-        table_info.release_date
+        table_info.release_date.unwrap_or("[not set]".to_string())
     );
     println!(
         "{:>18} {}",
         "Description:".green(),
         table_info.table_description
     );
-    println!("{:>18} {}", "Blurb:".green(), table_info.table_blurb);
-    println!("{:>18} {}", "Rules:".green(), table_info.table_rules);
+    println!(
+        "{:>18} {}",
+        "Blurb:".green(),
+        table_info.table_blurb.unwrap_or("[not set]".to_string())
+    );
+    println!(
+        "{:>18} {}",
+        "Rules:".green(),
+        table_info.table_rules.unwrap_or("[not set]".to_string())
+    );
     // other properties
     table_info.properties.iter().for_each(|(prop, value)| {
         println!("{:>18}: {}", prop.green(), value);
@@ -570,7 +583,6 @@ fn info(vpx_file_path: &str, json: bool) -> io::Result<()> {
 pub fn extract(vpx_file_path: &Path, yes: bool) {
     let root_dir_path_str = vpx_file_path.with_extension("");
     let root_dir_path = Path::new(&root_dir_path_str);
-    let vbs_path = root_dir_path.join("script.vbs");
 
     let mut root_dir = std::fs::DirBuilder::new();
     root_dir.recursive(true);

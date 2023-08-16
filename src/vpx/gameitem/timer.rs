@@ -1,4 +1,4 @@
-use crate::vpx::biff::{self, BiffRead, BiffReader};
+use crate::vpx::biff::{self, BiffRead, BiffReader, BiffWrite};
 
 use super::vertex2d::Vertex2D;
 
@@ -13,8 +13,8 @@ pub struct Timer {
     // these are shared between all items
     pub is_locked: bool,
     pub editor_layer: u32,
-    pub editor_layer_name: String, // default "Layer_{editor_layer + 1}"
-    pub editor_layer_visibility: bool,
+    pub editor_layer_name: Option<String>, // default "Layer_{editor_layer + 1}"
+    pub editor_layer_visibility: Option<bool>,
 }
 
 impl BiffRead for Timer {
@@ -28,8 +28,8 @@ impl BiffRead for Timer {
         // these are shared between all items
         let mut is_locked: bool = false;
         let mut editor_layer: u32 = Default::default();
-        let mut editor_layer_name: String = Default::default();
-        let mut editor_layer_visibility: bool = true;
+        let mut editor_layer_name: Option<String> = None;
+        let mut editor_layer_visibility: Option<bool> = None;
 
         loop {
             reader.next(biff::WARN);
@@ -62,10 +62,10 @@ impl BiffRead for Timer {
                     editor_layer = reader.get_u32();
                 }
                 "LANR" => {
-                    editor_layer_name = reader.get_string();
+                    editor_layer_name = Some(reader.get_string());
                 }
                 "LVIS" => {
-                    editor_layer_visibility = reader.get_bool();
+                    editor_layer_visibility = Some(reader.get_bool());
                 }
                 _ => {
                     println!(
@@ -88,5 +88,54 @@ impl BiffRead for Timer {
             editor_layer_name,
             editor_layer_visibility,
         }
+    }
+}
+
+impl BiffWrite for Timer {
+    fn biff_write(&self, writer: &mut biff::BiffWriter) {
+        writer.write_tagged("VCEN", &self.center);
+        writer.write_tagged_bool("TMON", self.is_timer_enabled);
+        writer.write_tagged_i32("TMIN", self.timer_interval);
+        writer.write_tagged_wide_string("NAME", &self.name);
+        writer.write_tagged_bool("BGLS", self.backglass);
+        // shared
+        writer.write_tagged_bool("LOCK", self.is_locked);
+        writer.write_tagged_u32("LAYR", self.editor_layer);
+        if let Some(editor_layer_name) = &self.editor_layer_name {
+            writer.write_tagged_string("LANR", editor_layer_name);
+        }
+        if let Some(editor_layer_visibility) = self.editor_layer_visibility {
+            writer.write_tagged_bool("LVIS", editor_layer_visibility);
+        }
+
+        writer.close(true);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::vpx::biff::BiffWriter;
+
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_write_read() {
+        // values not equal to the defaults
+        let timer = Timer {
+            center: Vertex2D::new(1.0, 2.0),
+            is_timer_enabled: true,
+            timer_interval: 3,
+            name: "test timer".to_string(),
+            backglass: false,
+            is_locked: true,
+            editor_layer: 5,
+            editor_layer_name: Some("test layer".to_string()),
+            editor_layer_visibility: Some(false),
+        };
+        let mut writer = BiffWriter::new();
+        Timer::biff_write(&timer, &mut writer);
+        let timer_read = Timer::biff_read(&mut BiffReader::new(writer.get_data()));
+        assert_eq!(timer, timer_read);
     }
 }

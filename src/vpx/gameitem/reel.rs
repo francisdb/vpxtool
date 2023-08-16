@@ -1,5 +1,5 @@
 use crate::vpx::{
-    biff::{self, BiffRead, BiffReader},
+    biff::{self, BiffRead, BiffReader, BiffWrite},
     color::Color,
 };
 
@@ -177,5 +177,85 @@ impl BiffRead for Reel {
             editor_layer_name,
             editor_layer_visibility,
         }
+    }
+}
+
+impl BiffWrite for Reel {
+    fn biff_write(&self, writer: &mut biff::BiffWriter) {
+        writer.write_tagged("VER1", &self.ver1);
+        writer.write_tagged("VER2", &self.ver2);
+        writer.write_tagged_with("CLRB", &self.back_color, Color::biff_write_bgr);
+        writer.write_tagged_bool("TMON", self.is_timer_enabled);
+        writer.write_tagged_u32("TMIN", self.timer_interval);
+        writer.write_tagged_bool("TRNS", self.is_transparent);
+        writer.write_tagged_string("IMAG", &self.image);
+        writer.write_tagged_string("SOUN", &self.sound);
+        writer.write_tagged_wide_string("NAME", &self.name);
+        writer.write_tagged_f32("WDTH", self.width);
+        writer.write_tagged_f32("HIGH", self.height);
+        writer.write_tagged_u32("RCNT", self.reel_count);
+        writer.write_tagged_f32("RSPC", self.reel_spacing);
+        writer.write_tagged_u32("MSTP", self.motor_steps);
+        writer.write_tagged_u32("RANG", self.digit_range);
+        writer.write_tagged_u32("UPTM", self.update_interval);
+        writer.write_tagged_bool("UGRD", self.use_image_grid);
+        writer.write_tagged_bool("VISI", self.is_visible);
+        writer.write_tagged_u32("GIPR", self.images_per_grid_row);
+        // shared
+        writer.write_tagged_bool("LOCK", self.is_locked);
+        writer.write_tagged_u32("LAYR", self.editor_layer);
+
+        if let Some(name) = self.editor_layer_name.as_ref() {
+            writer.write_tagged_string("LANR", name);
+        }
+        if let Some(visibility) = self.editor_layer_visibility.as_ref() {
+            writer.write_tagged_bool("LVIS", *visibility);
+        }
+
+        writer.close(true);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::vpx::biff::BiffWriter;
+
+    use super::*;
+    use pretty_assertions::assert_eq;
+    use rand::Rng;
+
+    #[test]
+    fn test_write_read() {
+        let mut rng = rand::thread_rng();
+        // values not equal to the defaults
+        let reel = Reel {
+            ver1: Vertex2D::new(rng.gen(), rng.gen()),
+            ver2: Vertex2D::new(rng.gen(), rng.gen()),
+            back_color: Color::new_bgr(rng.gen()),
+            is_timer_enabled: rng.gen(),
+            timer_interval: rng.gen(),
+            is_transparent: rng.gen(),
+            image: "test image".to_string(),
+            sound: "test sound".to_string(),
+            name: "test name".to_string(),
+            width: rng.gen(),
+            height: rng.gen(),
+            reel_count: rng.gen(),
+            reel_spacing: rng.gen(),
+            motor_steps: rng.gen(),
+            digit_range: rng.gen(),
+            update_interval: rng.gen(),
+            use_image_grid: rng.gen(),
+            is_visible: rng.gen(),
+            images_per_grid_row: rng.gen(),
+            is_locked: rng.gen(),
+            editor_layer: rng.gen(),
+            editor_layer_name: Some("test layer name".to_string()),
+            editor_layer_visibility: rng.gen(),
+        };
+        let mut writer = BiffWriter::new();
+        Reel::biff_write(&reel, &mut writer);
+        let reel_read = Reel::biff_read(&mut BiffReader::new(writer.get_data()));
+        assert_eq!(reel, reel_read);
     }
 }

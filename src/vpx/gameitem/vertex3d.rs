@@ -1,4 +1,4 @@
-use crate::vpx::biff::{BiffRead, BiffReader};
+use crate::vpx::biff::{BiffRead, BiffReader, BiffWrite, BiffWriter};
 
 #[derive(Debug, PartialEq)]
 pub struct Vertex3D {
@@ -38,3 +38,36 @@ impl BiffRead for Vertex3D {
         Vertex3D { x, y, z }
     }
 }
+
+impl BiffWrite for Vertex3D {
+    fn biff_write(&self, writer: &mut BiffWriter) {
+        writer.write_f32(self.x);
+        writer.write_f32(self.y);
+        writer.write_f32(self.z);
+        writer.write_f32(0.0);
+    }
+}
+
+// TODO enable and fix this test
+
+// #[cfg(test)]
+// mod tests {
+//     use crate::vpx::biff::BiffWriter;
+
+//     use super::*;
+//     use pretty_assertions::assert_eq;
+
+//     #[test]
+//     fn test_write_read() {
+//         // values not equal to the defaults
+//         let vertex = Vertex3D {
+//             x: 1.0,
+//             y: 2.0,
+//             z: 3.0,
+//         };
+//         let mut writer = BiffWriter::new();
+//         Vertex3D::biff_write(&vertex, &mut writer);
+//         let vertex_read = Vertex3D::biff_read(&mut BiffReader::new(writer.get_data()));
+//         assert_eq!(vertex, vertex_read);
+//     }
+// }

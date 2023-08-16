@@ -13,6 +13,8 @@ use super::sound;
 use super::sound::write_sound;
 use super::version;
 use crate::jsonmodel::{collections_json, table_json};
+use crate::vpx::biff::{BiffRead, BiffReader};
+use crate::vpx::image::ImageData;
 
 pub fn extract(vpx_file_path: &Path, root_dir_path: &Path) -> std::io::Result<()> {
     let vbs_path = root_dir_path.join("script.vbs");
@@ -31,7 +33,7 @@ pub fn extract(vpx_file_path: &Path, root_dir_path: &Path) -> std::io::Result<()
     println!("VBScript file written to\n  {}", &vbs_path.display());
     extract_binaries(&mut comp, root_dir_path);
     extract_images(&mut comp, &gamedata, root_dir_path);
-    extract_sounds(&mut comp, &gamedata, root_dir_path, version);
+    extract_sounds(&mut comp, &gamedata, root_dir_path, &version);
     extract_fonts(&mut comp, &gamedata, root_dir_path);
     extract_gameitems(&mut comp, &gamedata, root_dir_path);
     extract_collections(&mut comp, &gamedata, root_dir_path);
@@ -52,10 +54,16 @@ fn extract_info(comp: &mut CompoundFile<File>, root_dir_path: &Path) -> std::io:
     let json_path = root_dir_path.join("TableInfo.json");
     let mut json_file = std::fs::File::create(&json_path).unwrap();
     let table_info = tableinfo::read_tableinfo(comp)?;
-    if !table_info.screenshot.is_empty() {
+    // TODO can we avoid the clone?
+    let screenshot = table_info
+        .screenshot
+        .as_ref()
+        .unwrap_or(&Vec::new())
+        .clone();
+    if !screenshot.is_empty() {
         let screenshot_path = root_dir_path.join("screenshot.bin");
         let mut screenshot_file = std::fs::File::create(screenshot_path).unwrap();
-        screenshot_file.write_all(&table_info.screenshot).unwrap();
+        screenshot_file.write_all(&screenshot).unwrap();
     }
 
     let info = table_json(&table_info);
@@ -84,7 +92,8 @@ fn extract_images(comp: &mut CompoundFile<File>, gamedata: &GameData, root_dir_p
             .unwrap()
             .read_to_end(&mut input)
             .unwrap();
-        let img = image::read(path.to_owned(), &input);
+        let mut reader = BiffReader::new(&input);
+        let img = ImageData::biff_read(&mut reader);
         match &img.jpeg {
             Some(jpeg) => {
                 let ext = img.ext();
@@ -133,7 +142,7 @@ fn extract_sounds(
     comp: &mut CompoundFile<File>,
     gamedata: &GameData,
     root_dir_path: &Path,
-    file_version: Version,
+    file_version: &Version,
 ) {
     let sounds_size = gamedata.sounds_size;
     let sounds_path = root_dir_path.join("sounds");
@@ -152,7 +161,8 @@ fn extract_sounds(
             .unwrap()
             .read_to_end(&mut input)
             .unwrap();
-        let (_, sound) = sound::read(path.to_owned(), file_version.clone(), &input).unwrap();
+        let mut reader = BiffReader::new(&input);
+        let sound = sound::read(file_version, &mut reader);
 
         let ext = sound.ext();
         let mut sound_path = sounds_path.clone();

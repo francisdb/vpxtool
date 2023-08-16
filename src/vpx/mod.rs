@@ -14,16 +14,21 @@ use crate::vpx::biff::BiffReader;
 use tableinfo::{write_tableinfo, TableInfo};
 use version::Version;
 
+use self::biff::{BiffRead, BiffWrite, BiffWriter};
 use self::collection::Collection;
+use self::custominfotags::CustomInfoTags;
 use self::font::FontData;
 use self::gamedata::GameData;
 use self::gameitem::GameItemEnum;
 use self::image::ImageData;
 use self::sound::SoundData;
+use self::tableinfo::read_tableinfo;
+use self::version::{read_version, write_version};
 
 pub mod biff;
 pub mod collection;
 pub mod color;
+pub mod custominfotags;
 pub mod expanded;
 pub mod font;
 pub mod gamedata;
@@ -34,6 +39,7 @@ pub mod tableinfo;
 pub mod version;
 
 pub struct VPX {
+    custominfotags: custominfotags::CustomInfoTags, // this is a bit redundant
     info: TableInfo,
     version: Version,
     gamedata: GameData,
@@ -61,8 +67,9 @@ pub fn read(path: &PathBuf) -> io::Result<VPX> {
 }
 
 pub fn read_vpx<F: Read + Write + Seek>(comp: &mut CompoundFile<F>) -> io::Result<VPX> {
-    let info = tableinfo::read_tableinfo(comp)?;
-    let version = version::read_version(comp)?;
+    let custominfotags = read_custominfotags(comp)?;
+    let info = read_tableinfo(comp)?;
+    let version = read_version(comp)?;
     let gamedata = read_gamedata(comp)?;
     let gameitems = read_gameitems(comp, &gamedata)?;
     let images = read_images(comp, &gamedata)?;
@@ -70,6 +77,7 @@ pub fn read_vpx<F: Read + Write + Seek>(comp: &mut CompoundFile<F>) -> io::Resul
     let fonts = read_fonts(comp, &gamedata)?;
     let collections = read_collections(comp, &gamedata)?;
     Ok(VPX {
+        custominfotags,
         info,
         version,
         gamedata,
@@ -79,6 +87,21 @@ pub fn read_vpx<F: Read + Write + Seek>(comp: &mut CompoundFile<F>) -> io::Resul
         fonts,
         collections,
     })
+}
+
+pub fn write_vpx(comp: &mut CompoundFile<File>, original: &VPX) -> io::Result<()> {
+    create_game_storage(comp)?;
+    write_custominfotags(comp, &original.custominfotags)?;
+    write_tableinfo(comp, &original.info)?;
+    write_version(comp, &original.version)?;
+    write_game_data(comp, &original.gamedata, &original.version)?;
+    write_game_items(comp, &original.gameitems)?;
+    write_images(comp, &original.images)?;
+    write_sounds(comp, &original.sounds, &original.version)?;
+    write_fonts(comp, &original.fonts)?;
+    write_collections(comp, &original.collections)?;
+    let mac = generate_mac(comp)?;
+    write_mac(comp, &mac)
 }
 
 pub fn new_minimal_vpx<P: AsRef<Path>>(vpx_file_path: P) -> std::io::Result<()> {
@@ -93,8 +116,9 @@ pub fn write_minimal_vpx<F: Read + Write + Seek>(
     let table_info = TableInfo::new();
     write_tableinfo(comp, &table_info)?;
     create_game_storage(comp)?;
-    version::write_version(comp, Version::new(1072))?;
-    write_game_data(comp, &GameData::default())?;
+    let version = Version::new(1072);
+    version::write_version(comp, &version)?;
+    write_game_data(comp, &GameData::default(), &version)?;
     // to be more efficient we could generate the mac while writing the different parts
     let mac = generate_mac(comp)?;
     write_mac(comp, &mac)
@@ -139,9 +163,10 @@ pub fn importvbs(vpx_file_path: &PathBuf, extension: Option<&str>) -> std::io::R
     }
     let mut comp = cfb::open_rw(vpx_file_path)?;
     let mut gamedata = read_gamedata(&mut comp)?;
+    let version = version::read_version(&mut comp)?;
     let script = std::fs::read_to_string(&script_path)?;
     gamedata.set_code(script);
-    write_game_data(&mut comp, &gamedata)?;
+    write_game_data(&mut comp, &gamedata, &version)?;
     let mac = generate_mac(&mut comp)?;
     write_mac(&mut comp, &mac)?;
     comp.flush()?;
@@ -394,12 +419,14 @@ pub fn read_gamedata<F: Seek + Read>(comp: &mut CompoundFile<F>) -> std::io::Res
 fn write_game_data<F: Read + Write + Seek>(
     comp: &mut CompoundFile<F>,
     gamedata: &GameData,
+    version: &Version,
 ) -> Result<(), io::Error> {
     let game_data_path = Path::new(MAIN_SEPARATOR_STR)
         .join("GameStg")
         .join("GameData");
+    // we expect GameStg to exist
     let mut game_data_stream = comp.create_stream(&game_data_path)?;
-    let data = gamedata::write_all_gamedata_records(&gamedata);
+    let data = gamedata::write_all_gamedata_records(gamedata, version);
     game_data_stream.write_all(&data)
     // this flush was required before but now it's working without
     // game_data_stream.flush()
@@ -409,9 +436,10 @@ fn read_gameitems<F: Read + Seek>(
     comp: &mut CompoundFile<F>,
     gamedata: &GameData,
 ) -> io::Result<Vec<GameItemEnum>> {
+    let gamestg = Path::new(MAIN_SEPARATOR_STR).join("GameStg");
     (0..gamedata.gameitems_size)
         .map(|index| {
-            let path = format!("GameStg/GameItem{}", index);
+            let path = gamestg.join(format!("GameItem{}", index));
             let mut input = Vec::new();
             let mut stream = comp.open_stream(&path)?;
             stream.read_to_end(&mut input)?;
@@ -419,6 +447,20 @@ fn read_gameitems<F: Read + Seek>(
             Ok(game_item)
         })
         .collect()
+}
+
+fn write_game_items<F: Read + Write + Seek>(
+    comp: &mut CompoundFile<F>,
+    gameitems: &[GameItemEnum],
+) -> io::Result<()> {
+    let gamestg = Path::new(MAIN_SEPARATOR_STR).join("GameStg");
+    for (index, gameitem) in gameitems.iter().enumerate() {
+        let path = gamestg.join(format!("GameItem{}", index));
+        let mut stream = comp.create_stream(&path)?;
+        let data = gameitem::write(gameitem);
+        stream.write_all(&data)?;
+    }
+    Ok(())
 }
 
 fn read_sounds<F: Read + Seek>(
@@ -434,11 +476,28 @@ fn read_sounds<F: Read + Seek>(
             let mut input = Vec::new();
             let mut stream = comp.open_stream(&path)?;
             stream.read_to_end(&mut input)?;
-            let (_, sound) =
-                sound::read(path.display().to_string(), file_version.clone(), &input).unwrap();
+            let mut reader = BiffReader::new(&input);
+            let sound = sound::read(file_version, &mut reader);
             Ok(sound)
         })
         .collect()
+}
+
+fn write_sounds<F: Read + Write + Seek>(
+    comp: &mut CompoundFile<F>,
+    sounds: &[SoundData],
+    file_version: &Version,
+) -> io::Result<()> {
+    for (index, sound) in sounds.iter().enumerate() {
+        let path = Path::new(MAIN_SEPARATOR_STR)
+            .join("GameStg")
+            .join(format!("Sound{}", index));
+        let mut stream = comp.create_stream(&path)?;
+        let mut writer = BiffWriter::new();
+        sound::write(file_version, sound, &mut writer);
+        stream.write_all(writer.get_data())?;
+    }
+    Ok(())
 }
 
 fn read_collections<F: Read + Seek>(
@@ -447,13 +506,30 @@ fn read_collections<F: Read + Seek>(
 ) -> io::Result<Vec<Collection>> {
     (0..gamedata.collections_size)
         .map(|index| {
-            let path = format!("GameStg/Collection{}", index);
+            let path = Path::new(MAIN_SEPARATOR_STR)
+                .join("GameStg")
+                .join(format!("Collection{}", index));
             let mut input = Vec::new();
             let mut stream = comp.open_stream(&path)?;
             stream.read_to_end(&mut input)?;
             Ok(collection::read(&input))
         })
         .collect()
+}
+
+fn write_collections<F: Read + Write + Seek>(
+    comp: &mut CompoundFile<F>,
+    collections: &[Collection],
+) -> io::Result<()> {
+    for (index, collection) in collections.iter().enumerate() {
+        let path = Path::new(MAIN_SEPARATOR_STR)
+            .join("GameStg")
+            .join(format!("Collection{}", index));
+        let mut stream = comp.create_stream(&path)?;
+        let data = collection::write(collection);
+        stream.write_all(&data)?;
+    }
+    Ok(())
 }
 
 fn read_images<F: Read + Seek>(
@@ -466,9 +542,24 @@ fn read_images<F: Read + Seek>(
             let mut input = Vec::new();
             let mut stream = comp.open_stream(&path)?;
             stream.read_to_end(&mut input)?;
-            Ok(image::read(path, &input))
+            let mut reader = BiffReader::new(&input);
+            Ok(ImageData::biff_read(&mut reader))
         })
         .collect()
+}
+
+fn write_images<F: Read + Write + Seek>(
+    comp: &mut CompoundFile<F>,
+    images: &[ImageData],
+) -> io::Result<()> {
+    for (index, image) in images.iter().enumerate() {
+        let path = format!("GameStg/Image{}", index);
+        let mut stream = comp.create_stream(&path)?;
+        let mut writer = BiffWriter::new();
+        image.biff_write(&mut writer);
+        stream.write_all(writer.get_data())?;
+    }
+    Ok(())
 }
 
 fn read_fonts<F: Read + Seek>(
@@ -488,7 +579,48 @@ fn read_fonts<F: Read + Seek>(
         .collect()
 }
 
-pub fn diff<P: AsRef<Path>>(vpx_file_path: P) -> io::Result<String> {
+fn write_fonts<F: Read + Write + Seek>(
+    comp: &mut CompoundFile<F>,
+    fonts: &[FontData],
+) -> io::Result<()> {
+    for (index, font) in fonts.iter().enumerate() {
+        let path = format!("GameStg/Font{}", index);
+        let mut stream = comp.create_stream(&path)?;
+        let data = font::write(font);
+        stream.write_all(&data)?;
+    }
+    Ok(())
+}
+
+fn read_custominfotags<F: Read + Write + Seek>(
+    comp: &mut CompoundFile<F>,
+) -> io::Result<CustomInfoTags> {
+    let path = Path::new(MAIN_SEPARATOR_STR)
+        .join("GameStg")
+        .join("CustomInfoTags");
+    let mut tags_data = Vec::new();
+    let mut stream = comp.open_stream(path)?;
+    stream.read_to_end(&mut tags_data)?;
+
+    let tags = custominfotags::read_custominfotags(&tags_data);
+    Ok(tags)
+}
+
+fn write_custominfotags<F: Read + Write + Seek>(
+    comp: &mut CompoundFile<F>,
+    tags: &CustomInfoTags,
+) -> io::Result<()> {
+    let path = Path::new(MAIN_SEPARATOR_STR)
+        .join("GameStg")
+        .join("CustomInfoTags");
+
+    let data = custominfotags::write_custominfotags(tags);
+
+    let mut stream = comp.create_stream(path)?;
+    stream.write_all(&data)
+}
+
+pub fn diff_script<P: AsRef<Path>>(vpx_file_path: P) -> io::Result<String> {
     // set extension for PathBuf
     let vbs_path = vpx_file_path.as_ref().with_extension("vbs");
     let original_vbs_path = vpx_file_path.as_ref().with_extension("vbs.original.tmp");
@@ -498,7 +630,7 @@ pub fn diff<P: AsRef<Path>>(vpx_file_path: P) -> io::Result<String> {
             Ok(mut comp) => {
                 let gamedata = read_gamedata(&mut comp)?;
                 let script = gamedata.code;
-                std::fs::write(&original_vbs_path, script).unwrap();
+                std::fs::write(&original_vbs_path, script)?;
                 let diff_color = if colored::control::SHOULD_COLORIZE.should_colorize() {
                     DiffColor::Always
                 } else {
@@ -507,7 +639,7 @@ pub fn diff<P: AsRef<Path>>(vpx_file_path: P) -> io::Result<String> {
                 let output = run_diff(&original_vbs_path, &vbs_path, diff_color)?;
 
                 if original_vbs_path.exists() {
-                    std::fs::remove_file(original_vbs_path).unwrap();
+                    std::fs::remove_file(original_vbs_path)?;
                 }
                 Ok(String::from_utf8_lossy(&output).to_string())
             }
@@ -569,83 +701,109 @@ pub fn run_diff(
 #[cfg(test)]
 mod tests {
     use pretty_assertions::assert_eq;
-    use std::io::Cursor;
+    use std::{collections::hash_map::DefaultHasher, hash::Hash, hash::Hasher, io::Cursor};
+    use testdir::testdir;
 
-    use super::*;
+    use super::{biff::WARN, *};
 
     #[test]
-    fn test_write_read() {
+    fn test_write_read() -> io::Result<()> {
         let buff = Cursor::new(vec![0; 15]);
-        let mut comp = CompoundFile::create(buff).unwrap();
-        write_minimal_vpx(&mut comp).unwrap();
+        let mut comp = CompoundFile::create(buff)?;
+        write_minimal_vpx(&mut comp)?;
 
-        let version = version::read_version(&mut comp).unwrap();
-        let tableinfo = tableinfo::read_tableinfo(&mut comp).unwrap();
-        let game_data = read_gamedata(&mut comp).unwrap();
+        let version = version::read_version(&mut comp)?;
+        let tableinfo = tableinfo::read_tableinfo(&mut comp)?;
+        let game_data = read_gamedata(&mut comp)?;
 
         assert_eq!(tableinfo, TableInfo::new());
         assert_eq!(version, Version::new(1072));
         let expected = GameData::default();
         assert_eq!(game_data, expected);
+        Ok(())
     }
 
     #[test]
-    fn test_mac_generation() {
+    fn test_mac_generation() -> io::Result<()> {
         let path = PathBuf::from("testdata/completely_blank_table_10_7_4.vpx");
-        let mut comp = cfb::open(path).unwrap();
+        let mut comp = cfb::open(path)?;
 
         let expected = [
             231, 121, 242, 251, 174, 227, 247, 90, 58, 105, 13, 92, 13, 73, 151, 86,
         ];
 
-        let mac = read_mac(&mut comp).unwrap();
+        let mac = read_mac(&mut comp)?;
         assert_eq!(mac, expected);
 
-        let generated_mac = generate_mac(&mut comp).unwrap();
+        let generated_mac = generate_mac(&mut comp)?;
         assert_eq!(mac, generated_mac);
+        Ok(())
     }
 
     #[test]
-    fn test_minimal_mac() {
+    fn test_minimal_mac() -> io::Result<()> {
         let buff = Cursor::new(vec![0; 15]);
-        let mut comp = CompoundFile::create(buff).unwrap();
-        write_minimal_vpx(&mut comp).unwrap();
+        let mut comp = CompoundFile::create(buff)?;
+        write_minimal_vpx(&mut comp)?;
 
-        let mac = read_mac(&mut comp).unwrap();
+        let mac = read_mac(&mut comp)?;
         let expected = [
-            222, 168, 237, 142, 40, 215, 175, 9, 116, 236, 50, 181, 130, 164, 254, 17,
+            162, 87, 146, 17, 177, 126, 27, 1, 88, 117, 121, 155, 8, 111, 172, 22,
         ];
         assert_eq!(mac, expected);
+        Ok(())
     }
 
     #[test]
-    fn read_write_gamedata() {
+    fn read_write_gamedata() -> io::Result<()> {
         let path = PathBuf::from("testdata/completely_blank_table_10_7_4.vpx");
-        let mut comp = cfb::open(path).unwrap();
-        let original = read_gamedata(&mut comp).unwrap();
+        let mut comp = cfb::open(path)?;
+        let version = version::read_version(&mut comp)?;
+        let original = read_gamedata(&mut comp)?;
 
         let buff = Cursor::new(vec![0; 15]);
-        let mut comp = CompoundFile::create(buff).unwrap();
-        create_game_storage(&mut comp).unwrap();
-        write_game_data(&mut comp, &original).unwrap();
+        let mut comp2 = CompoundFile::create(buff)?;
+        create_game_storage(&mut comp2)?;
+        write_game_data(&mut comp2, &original, &version)?;
 
-        let read = read_gamedata(&mut comp).unwrap();
+        let read = read_gamedata(&mut comp2)?;
 
-        assert_eq!(original, read);
+        Ok(assert_eq!(original, read))
     }
 
     #[test]
-    fn read() {
+    fn read_write_gameitems() -> io::Result<()> {
         let path = PathBuf::from("testdata/completely_blank_table_10_7_4.vpx");
-        let mut comp = cfb::open(path).unwrap();
-        let original = read_vpx(&mut comp).unwrap();
+        let mut comp = cfb::open(path)?;
+
+        let gamedata = read_gamedata(&mut comp)?;
+        let original = read_gameitems(&mut comp, &gamedata)?;
+
+        let buff = Cursor::new(vec![0; 15]);
+        let mut comp = CompoundFile::create(buff)?;
+        create_game_storage(&mut comp)?;
+        write_game_items(&mut comp, &original)?;
+
+        let read = read_gameitems(&mut comp, &gamedata)?;
+
+        assert_eq!(original.len(), read.len());
+        assert_eq!(original, read);
+        // TODO match original bytes and written bytes for each item
+        Ok(())
+    }
+
+    #[test]
+    fn read() -> io::Result<()> {
+        let path = PathBuf::from("testdata/completely_blank_table_10_7_4.vpx");
+        let mut comp = cfb::open(path)?;
+        let original = read_vpx(&mut comp)?;
 
         let mut expected_info = TableInfo::new();
         expected_info.table_name = String::from("Visual Pinball Demo Table");
-        expected_info.table_save_rev = String::from("10");
+        expected_info.table_save_rev = Some(String::from("10"));
         expected_info.table_version = String::from("1.2");
-        expected_info.author_website = String::from("http://www.vpforums.org/");
-        expected_info.table_save_date = String::from("Tue Jul 11 15:48:49 2023");
+        expected_info.author_website = Some(String::from("http://www.vpforums.org/"));
+        expected_info.table_save_date = Some(String::from("Tue Jul 11 15:48:49 2023"));
         expected_info.table_description =
             String::from("Press C to enable manual Ball Control via the arrow keys and B");
 
@@ -661,5 +819,154 @@ mod tests {
         assert_eq!(original.sounds.len(), 0);
         assert_eq!(original.fonts.len(), 0);
         assert_eq!(original.collections.len(), 9);
+        Ok(())
+    }
+
+    #[test]
+    fn read_and_write() -> io::Result<()> {
+        let path = PathBuf::from("testdata/completely_blank_table_10_7_4.vpx");
+        let mut comp = cfb::open(&path)?;
+        let original = read_vpx(&mut comp)?;
+
+        // create temp file and write the vpx to it
+        let dir: PathBuf = testdir!();
+        let test_vpx_path = dir.join("test.vpx");
+        let mut test_comp = cfb::create(&test_vpx_path)?;
+        write_vpx(&mut test_comp, &original)?;
+        test_comp.flush()?;
+
+        assert_equal_vpx(path, test_vpx_path);
+        Ok(())
+    }
+
+    fn assert_equal_vpx(vpx_path: PathBuf, test_vpx_path: PathBuf) {
+        let mut comp = cfb::open(&vpx_path).unwrap();
+        let mut test_comp = cfb::open(&test_vpx_path).unwrap();
+
+        let version = version::read_version(&mut comp).unwrap();
+        println!("version: {:?}", version);
+
+        let original_paths = compound_file_paths_and_lengths(&vpx_path);
+        let test_paths = compound_file_paths_and_lengths(&test_vpx_path);
+
+        let gamestg_path = Path::new(MAIN_SEPARATOR_STR).join("GameStg");
+        let mac_path = gamestg_path.join("MAC");
+        let version_path = gamestg_path.join("Version");
+        let tableinfo_path = Path::new(MAIN_SEPARATOR_STR).join("TableInfo");
+
+        // sort original paths so that MAC is last
+        let original_paths_sorted: Vec<(PathBuf, u64)> = original_paths
+            .clone()
+            .into_iter()
+            .filter(|(path, _)| *path != mac_path)
+            .collect();
+
+        // check all streams
+        for (path, _) in &original_paths_sorted {
+            if comp.is_stream(path) {
+                println!("path: {:?}", path);
+
+                // TODO more precise sound path check
+
+                if *path == mac_path
+                    || *path == version_path
+                    || path.starts_with(&tableinfo_path)
+                    || path.to_string_lossy().contains("Sound")
+                {
+                    let mut original_data = Vec::new();
+                    let mut test_data = Vec::new();
+                    let mut original_stream = comp.open_stream(path).unwrap();
+                    let mut test_stream = test_comp.open_stream(path).unwrap();
+                    original_stream.read_to_end(&mut original_data).unwrap();
+                    test_stream.read_to_end(&mut test_data).unwrap();
+                    assert!(original_data == test_data);
+                } else {
+                    let skip = if path.to_string_lossy().contains("GameItem") {
+                        // we need to skip the first 32 bits because they are the type of gameitem
+                        4
+                    } else {
+                        0
+                    };
+                    let item_tags = tags_and_hashes(&mut comp, path, skip);
+                    let test_item_tags = tags_and_hashes(&mut test_comp, path, skip);
+                    assert_eq!(item_tags, test_item_tags);
+                }
+            }
+        }
+
+        // make sure we have the same paths and lengths
+        assert_eq!(original_paths, test_paths);
+    }
+
+    fn compound_file_paths_and_lengths(compound_file_path: &Path) -> Vec<(PathBuf, u64)> {
+        let comp3 = cfb::open(compound_file_path).unwrap();
+        comp3
+            .walk()
+            .map(|entry| {
+                let path = entry.path();
+                let size = entry.len();
+                (path.to_path_buf(), size)
+            })
+            .collect()
+    }
+
+    fn tags_and_hashes<F: Seek + Read>(
+        comp: &mut CompoundFile<F>,
+        path: &Path,
+        skip: u32,
+    ) -> Vec<(String, usize, u64)> {
+        let mut data = Vec::new();
+        let mut stream = comp.open_stream(path).unwrap();
+        stream.read_to_end(&mut data).unwrap();
+        // skip skip bytes from the data
+        let mut reader = BiffReader::new(&data[(skip as usize)..]);
+        reader.disable_warn_remaining();
+        biff_tags_and_hashes(&mut reader)
+    }
+
+    fn biff_tags_and_hashes(reader: &mut BiffReader) -> Vec<(String, usize, u64)> {
+        let mut tags: Vec<(String, usize, u64)> = Vec::new();
+        while let Some(tag) = &reader.next(WARN) {
+            let tag_str = tag.as_str();
+            match tag_str {
+                "FONT" => {
+                    let _header = reader.get_data(3); // always? 0x01, 0x0, 0x0
+                    let _style = reader.get_u8_no_remaining_update();
+                    let _weight = reader.get_u16_no_remaining_update();
+                    let _size = reader.get_u32_no_remaining_update();
+                    let name_len = reader.get_u8_no_remaining_update();
+                    let _name = reader.get_str_no_remaining_update(name_len as usize);
+                }
+                "JPEG" => {
+                    tags.push(("--JPEG--SUB--BEGIN--".to_string(), 0, 0));
+                    let mut sub_reader = reader.child_reader();
+                    while let Some(tag) = &sub_reader.next(WARN) {
+                        let data = sub_reader.get_record_data(false);
+                        let mut hasher = DefaultHasher::new();
+                        Hash::hash_slice(&data, &mut hasher);
+                        let hash = hasher.finish();
+                        tags.push((tag.clone(), data.len(), hash));
+                    }
+                    tags.push(("--JPEG--SUB--END--".to_string(), 0, 0));
+                    let pos = sub_reader.pos();
+                    reader.skip_end_tag(pos);
+                }
+                "BITS" => {
+                    let data = reader.data_until("ALTV".as_bytes());
+                    let mut hasher = DefaultHasher::new();
+                    Hash::hash_slice(&data, &mut hasher);
+                    let hash = hasher.finish();
+                    tags.push(("BITS".to_string(), data.len(), hash));
+                }
+                other => {
+                    let data = reader.get_record_data(false);
+                    let mut hasher = DefaultHasher::new();
+                    Hash::hash_slice(&data, &mut hasher);
+                    let hash = hasher.finish();
+                    tags.push((other.to_string(), data.len(), hash));
+                }
+            }
+        }
+        tags
     }
 }

@@ -1,5 +1,7 @@
 use crate::vpx::biff::BiffReader;
 
+use super::biff::BiffWriter;
+
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct Color {
     a: u8,
@@ -76,6 +78,20 @@ impl Color {
         let g = reader.get_u8();
         let r = reader.get_u8();
         Color { a, r, g, b }
+    }
+
+    pub fn biff_write_argb(&self, writer: &mut BiffWriter) {
+        writer.write_u8(self.a);
+        writer.write_u8(self.r);
+        writer.write_u8(self.g);
+        writer.write_u8(self.b);
+    }
+
+    pub fn biff_write_bgr(&self, writer: &mut BiffWriter) {
+        writer.write_u8(self.a);
+        writer.write_u8(self.b);
+        writer.write_u8(self.g);
+        writer.write_u8(self.r);
     }
 }
 

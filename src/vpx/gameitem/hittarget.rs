@@ -1,4 +1,4 @@
-use crate::vpx::biff::{self, BiffRead, BiffReader};
+use crate::vpx::biff::{self, BiffRead, BiffReader, BiffWrite};
 
 use super::vertex3d::Vertex3D;
 
@@ -20,23 +20,23 @@ pub struct HitTarget {
     pub friction: f32,
     pub scatter: f32,
     pub is_collidable: bool,
-    pub disable_lighting_top: f32,
-    pub disable_lighting_below: f32,
+    pub disable_lighting_top: f32,           // DILI
+    pub disable_lighting_below: Option<f32>, // DILB (added in 10.?)
     pub depth_bias: f32,
     pub is_reflection_enabled: bool,
     pub is_dropped: bool,
     pub drop_speed: f32,
     pub is_timer_enabled: bool,
     pub timer_interval: u32,
-    pub raise_delay: u32,
-    pub physics_material: String,
-    pub overwrite_physics: bool,
+    pub raise_delay: Option<u32>,         // RADE (added in 10.?)
+    pub physics_material: Option<String>, // MAPH (added in 10.?)
+    pub overwrite_physics: Option<bool>,  // OVPH (added in 10.?)
 
     // these are shared between all items
     pub is_locked: bool,
     pub editor_layer: u32,
-    pub editor_layer_name: String, // default "Layer_{editor_layer + 1}"
-    pub editor_layer_visibility: bool,
+    pub editor_layer_name: Option<String>, // default "Layer_{editor_layer + 1}"
+    pub editor_layer_visibility: Option<bool>,
 }
 
 impl HitTarget {
@@ -70,22 +70,22 @@ impl BiffRead for HitTarget {
         let mut scatter: f32 = 0.0;
         let mut is_collidable: bool = true;
         let mut disable_lighting_top: f32 = 0.0;
-        let mut disable_lighting_below: f32 = 0.0;
+        let mut disable_lighting_below: Option<f32> = None; //0.0;
         let mut depth_bias: f32 = 0.0;
         let mut is_reflection_enabled: bool = true;
         let mut is_dropped: bool = false;
         let mut drop_speed: f32 = 0.5;
         let mut is_timer_enabled: bool = false;
         let mut timer_interval: u32 = 0;
-        let mut raise_delay: u32 = 100;
-        let mut physics_material: String = Default::default();
-        let mut overwrite_physics: bool = false;
+        let mut raise_delay: Option<u32> = None; //100;
+        let mut physics_material: Option<String> = None;
+        let mut overwrite_physics: Option<bool> = None; //false;
 
         // these are shared between all items
         let mut is_locked: bool = false;
         let mut editor_layer: u32 = Default::default();
-        let mut editor_layer_name: String = Default::default();
-        let mut editor_layer_visibility: bool = true;
+        let mut editor_layer_name: Option<String> = None;
+        let mut editor_layer_visibility: Option<bool> = None;
 
         loop {
             reader.next(biff::WARN);
@@ -147,7 +147,7 @@ impl BiffRead for HitTarget {
                     disable_lighting_top = reader.get_f32();
                 }
                 "DILB" => {
-                    disable_lighting_below = reader.get_f32();
+                    disable_lighting_below = Some(reader.get_f32());
                 }
                 "REEN" => {
                     is_reflection_enabled = reader.get_bool();
@@ -165,15 +165,9 @@ impl BiffRead for HitTarget {
                     is_timer_enabled = reader.get_bool();
                 }
                 "TMIN" => timer_interval = reader.get_u32(),
-                "RADE" => {
-                    raise_delay = reader.get_u32();
-                }
-                "MAPH" => {
-                    physics_material = reader.get_string();
-                }
-                "OVPH" => {
-                    overwrite_physics = reader.get_bool();
-                }
+                "RADE" => raise_delay = Some(reader.get_u32()),
+                "MAPH" => physics_material = Some(reader.get_string()),
+                "OVPH" => overwrite_physics = Some(reader.get_bool()),
 
                 // shared
                 "LOCK" => {
@@ -183,10 +177,10 @@ impl BiffRead for HitTarget {
                     editor_layer = reader.get_u32();
                 }
                 "LANR" => {
-                    editor_layer_name = reader.get_string();
+                    editor_layer_name = Some(reader.get_string());
                 }
                 "LVIS" => {
-                    editor_layer_visibility = reader.get_bool();
+                    editor_layer_visibility = Some(reader.get_bool());
                 }
                 _ => {
                     println!(
@@ -231,5 +225,108 @@ impl BiffRead for HitTarget {
             editor_layer_name,
             editor_layer_visibility,
         }
+    }
+}
+
+impl BiffWrite for HitTarget {
+    fn biff_write(&self, writer: &mut biff::BiffWriter) {
+        writer.write_tagged("VPOS", &self.position);
+        writer.write_tagged("VSIZ", &self.size);
+        writer.write_tagged_f32("ROTZ", self.rot_z);
+        writer.write_tagged_string("IMAG", &self.image);
+        writer.write_tagged_i32("TRTY", self.target_type);
+        writer.write_tagged_wide_string("NAME", &self.name);
+        writer.write_tagged_string("MATR", &self.material);
+        writer.write_tagged_bool("TVIS", self.is_visible);
+        writer.write_tagged_bool("LEMO", self.is_legacy);
+        writer.write_tagged_bool("HTEV", self.use_hit_event);
+        writer.write_tagged_f32("THRS", self.threshold);
+        writer.write_tagged_f32("ELAS", self.elasticity);
+        writer.write_tagged_f32("ELFO", self.elasticity_falloff);
+        writer.write_tagged_f32("RFCT", self.friction);
+        writer.write_tagged_f32("RSCT", self.scatter);
+        writer.write_tagged_bool("CLDR", self.is_collidable);
+        writer.write_tagged_f32("DILI", self.disable_lighting_top);
+        if let Some(disable_lighting_below) = self.disable_lighting_below {
+            writer.write_tagged_f32("DILB", disable_lighting_below);
+        }
+        writer.write_tagged_bool("REEN", self.is_reflection_enabled);
+        writer.write_tagged_f32("PIDB", self.depth_bias);
+        writer.write_tagged_bool("ISDR", self.is_dropped);
+        writer.write_tagged_f32("DRSP", self.drop_speed);
+        writer.write_tagged_bool("TMON", self.is_timer_enabled);
+        writer.write_tagged_u32("TMIN", self.timer_interval);
+        if let Some(raise_delay) = self.raise_delay {
+            writer.write_tagged_u32("RADE", raise_delay);
+        }
+        if let Some(physics_material) = &self.physics_material {
+            writer.write_tagged_string("MAPH", physics_material);
+        }
+        if let Some(overwrite_physics) = self.overwrite_physics {
+            writer.write_tagged_bool("OVPH", overwrite_physics);
+        }
+        // shared
+        writer.write_tagged_bool("LOCK", self.is_locked);
+        writer.write_tagged_u32("LAYR", self.editor_layer);
+        if let Some(editor_layer_name) = &self.editor_layer_name {
+            writer.write_tagged_string("LANR", editor_layer_name);
+        }
+        if let Some(editor_layer_visibility) = self.editor_layer_visibility {
+            writer.write_tagged_bool("LVIS", editor_layer_visibility);
+        }
+
+        writer.close(true);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::vpx::biff::BiffWriter;
+
+    use super::*;
+    use pretty_assertions::assert_eq;
+    use rand::Rng;
+
+    #[test]
+    fn test_write_read() {
+        let mut rng = rand::thread_rng();
+        // values not equal to the defaults
+        let hittarget = HitTarget {
+            position: Vertex3D::new(rng.gen(), rng.gen(), rng.gen()),
+            size: Vertex3D::new(rng.gen(), rng.gen(), rng.gen()),
+            rot_z: rng.gen(),
+            image: "test image".to_string(),
+            target_type: rng.gen(),
+            name: "test name".to_string(),
+            material: "test material".to_string(),
+            is_visible: rng.gen(),
+            is_legacy: rng.gen(),
+            use_hit_event: rng.gen(),
+            threshold: rng.gen(),
+            elasticity: rng.gen(),
+            elasticity_falloff: rng.gen(),
+            friction: rng.gen(),
+            scatter: rng.gen(),
+            is_collidable: rng.gen(),
+            disable_lighting_top: rng.gen(),
+            disable_lighting_below: rng.gen(),
+            is_reflection_enabled: rng.gen(),
+            depth_bias: rng.gen(),
+            is_dropped: rng.gen(),
+            drop_speed: rng.gen(),
+            is_timer_enabled: rng.gen(),
+            timer_interval: rng.gen(),
+            raise_delay: rng.gen(),
+            physics_material: Some("test physics material".to_string()),
+            overwrite_physics: rng.gen(),
+            is_locked: rng.gen(),
+            editor_layer: rng.gen(),
+            editor_layer_name: Some("test layer name".to_string()),
+            editor_layer_visibility: rng.gen(),
+        };
+        let mut writer = BiffWriter::new();
+        HitTarget::biff_write(&hittarget, &mut writer);
+        let hittarget_read = HitTarget::biff_read(&mut BiffReader::new(writer.get_data()));
+        assert_eq!(hittarget, hittarget_read);
     }
 }

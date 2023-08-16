@@ -144,7 +144,7 @@ pub fn frontend(
                             prompt(msg.truecolor(255, 125, 0).to_string());
                         }
                     },
-                    Some(TableOption::ShowVBSDiff) => match vpx::diff(selected_path) {
+                    Some(TableOption::ShowVBSDiff) => match vpx::diff_script(selected_path) {
                         Ok(diff) => {
                             prompt(diff);
                         }

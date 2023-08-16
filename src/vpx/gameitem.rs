@@ -28,7 +28,7 @@ mod wall;
 
 use crate::vpx::biff::BiffRead;
 
-use super::biff::BiffReader;
+use super::biff::{BiffReader, BiffWrite, BiffWriter};
 
 // TODO we might come up with a macro that generates the biff reading from the struct annotations
 //   like VPE
@@ -193,17 +193,7 @@ pub const TRIGGER_SHAPE_WIRE_D: u32 = 6;
 pub fn read(input: &[u8]) -> GameItemEnum {
     let mut reader = BiffReader::new(input);
     let item_type = reader.get_u32_no_remaining_update();
-    // if item_type != ITEM_TYPE_TRIGGER {
-    //     return GameItem::Other {
-    //         item_type,
-    //         name: "skipped".to_owned(),
-    //     };
-    // }
-    // println!(
-    //     "  Item type: {} {}",
-    //     item_type, TYPE_NAMES[item_type as usize]
-    // );
-    let item = match item_type {
+    match item_type {
         ITEM_TYPE_WALL => GameItemEnum::Wall(wall::Wall::biff_read(&mut reader)),
         ITEM_TYPE_FLIPPER => GameItemEnum::Flipper(flipper::Flipper::biff_read(&mut reader)),
         ITEM_TYPE_TIMER => GameItemEnum::Timer(timer::Timer::biff_read(&mut reader)),
@@ -242,13 +232,49 @@ pub fn read(input: &[u8]) -> GameItemEnum {
         other_item_type => {
             GameItemEnum::Generic(other_item_type, generic::Generic::biff_read(&mut reader))
         }
-    };
-    // println!(
-    //     "  Item {}, type {} {}",
-    //     item.name(),
-    //     item_type,
-    //     TYPE_NAMES[item_type as usize]
-    // );
-    //dbg!(&item);
-    item
+    }
+}
+
+pub(crate) fn write(gameitem: &GameItemEnum) -> Vec<u8> {
+    match gameitem {
+        GameItemEnum::Wall(wall) => write_with_type(ITEM_TYPE_WALL, wall),
+        GameItemEnum::Flipper(flipper) => write_with_type(ITEM_TYPE_FLIPPER, flipper),
+        GameItemEnum::Timer(timer) => write_with_type(ITEM_TYPE_TIMER, timer),
+        GameItemEnum::Plunger(plunger) => write_with_type(ITEM_TYPE_PLUNGER, plunger),
+        GameItemEnum::TextBox(textbox) => write_with_type(ITEM_TYPE_TEXT_BOX, textbox),
+        GameItemEnum::Bumper(bumper) => write_with_type(ITEM_TYPE_BUMPER, bumper),
+        GameItemEnum::Trigger(trigger) => write_with_type(ITEM_TYPE_TRIGGER, trigger),
+        GameItemEnum::Light(light) => write_with_type(ITEM_TYPE_LIGHT, light),
+        GameItemEnum::Kicker(kicker) => write_with_type(ITEM_TYPE_KICKER, kicker),
+        GameItemEnum::Decal(decal) => write_with_type(ITEM_TYPE_DECAL, decal),
+        GameItemEnum::Gate(gate) => write_with_type(ITEM_TYPE_GATE, gate),
+        GameItemEnum::Spinner(spinner) => write_with_type(ITEM_TYPE_SPINNER, spinner),
+        GameItemEnum::Ramp(ramp) => write_with_type(ITEM_TYPE_RAMP, ramp),
+        // GameItemEnum::Table(table) => write_with_type(ITEM_TYPE_TABLE, table),
+        // GameItemEnum::LightCenter(lightcenter) => {
+        //     write_with_type(ITEM_TYPE_LIGHT_CENTER, lightcenter)
+        // }
+        // GameItemEnum::DragPoint(dragpoint) => write_with_type(ITEM_TYPE_DRAG_POINT, dragpoint),
+        // GameItemEnum::Collection(collection) => write_with_type(ITEM_TYPE_COLLECTION, collection),
+        GameItemEnum::Reel(reel) => write_with_type(ITEM_TYPE_REEL, reel),
+        GameItemEnum::LightSequencer(lightsequencer) => {
+            write_with_type(ITEM_TYPE_LIGHT_SEQUENCER, lightsequencer)
+        }
+        GameItemEnum::Primitive(primitive) => write_with_type(ITEM_TYPE_PRIMITIVE, primitive),
+        GameItemEnum::Flasher(flasher) => write_with_type(ITEM_TYPE_FLASHER, flasher),
+        GameItemEnum::Rubber(rubber) => write_with_type(ITEM_TYPE_RUBBER, rubber),
+        GameItemEnum::HitTarget(hittarget) => write_with_type(ITEM_TYPE_HIT_TARGET, hittarget),
+        // GameItemEnum::Generic(item_type, generic) => write_with_type(*item_type, generic),
+        _ => {
+            unimplemented!("write gameitem {:?}", gameitem);
+            //vec![]
+        }
+    }
+}
+
+fn write_with_type<T: BiffWrite>(item_type: u32, item: &T) -> Vec<u8> {
+    let mut writer = BiffWriter::new();
+    writer.write_u32(item_type);
+    item.biff_write(&mut writer);
+    writer.get_data().to_vec()
 }

@@ -63,7 +63,7 @@ pub fn read_version<F: Read + Write + Seek>(
 
 pub fn write_version<F: Read + Write + Seek>(
     comp: &mut CompoundFile<F>,
-    version: Version,
+    version: &Version,
 ) -> std::io::Result<()> {
     // we expect GameStg to exist
     let version_path = Path::new(MAIN_SEPARATOR_STR)

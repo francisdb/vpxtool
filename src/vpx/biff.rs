@@ -1,9 +1,6 @@
 use encoding_rs::mem::{decode_latin1, encode_latin1_lossy};
-use nom::bytes::streaming::take;
-use nom::number::complete::{
-    le_f32, le_f64, le_i16, le_i32, le_i64, le_u16, le_u32, le_u64, le_u8,
-};
-use nom::{IResult, ToUsize};
+use nom::number::complete::{le_f32, le_f64, le_i16, le_i32, le_i64, le_u16, le_u32, le_u64};
+use nom::ToUsize;
 use utf16string::WStr;
 
 pub trait BiffRead {
@@ -11,8 +8,13 @@ pub trait BiffRead {
 }
 
 pub trait BiffWrite {
-    fn biff_write(font: &Self) -> Vec<u8>;
+    fn biff_write(&self, writer: &mut BiffWriter);
 }
+
+// TODO: can we improve this with:
+//   let mut buf = BytesMut::with_capacity(1024);
+
+// TODO find a better solution for the _no_remaining_update methods
 
 pub struct BiffReader<'a> {
     data: &'a [u8],
@@ -41,6 +43,13 @@ impl<'a> BiffReader<'a> {
             warn_remaining: true,
         };
         reader
+    }
+
+    /**
+     * Useful if you just want to read a bunch of tags and don't care about the data
+     */
+    pub fn disable_warn_remaining(&mut self) {
+        self.warn_remaining = false;
     }
 
     pub fn pos(&self) -> usize {
@@ -139,7 +148,7 @@ impl<'a> BiffReader<'a> {
         let data = &self.data[self.pos..self.pos + pos_0];
         let s = decode_latin1(data);
         self.pos += count;
-        self.bytes_in_record_remaining -= count;
+        self.sub_remaining(count);
         s.to_string()
     }
 
@@ -162,6 +171,11 @@ impl<'a> BiffReader<'a> {
     pub fn get_string(&mut self) -> String {
         let size = self.get_u32().to_usize();
         self.get_str(size)
+    }
+
+    pub fn get_string_no_remaining_update(&mut self) -> String {
+        let size = self.get_u32_no_remaining_update().to_usize();
+        self.get_str_no_remaining_update(size)
     }
 
     pub fn get_wide_string(&mut self) -> String {
@@ -301,15 +315,27 @@ impl<'a> BiffReader<'a> {
         v
     }
 
-    pub fn get_record_data(&mut self, with_tag: bool) -> &[u8] {
+    pub fn get_record_data(&mut self, with_tag: bool) -> Vec<u8> {
         let d = if with_tag {
             &self.data[self.pos - 4..self.pos + self.bytes_in_record_remaining]
         } else {
+            if self.pos + self.bytes_in_record_remaining >= self.data.len() {
+                panic!("range is too big for {}", self.tag);
+            }
             &self.data[self.pos..self.pos + self.bytes_in_record_remaining]
         };
         self.pos += self.bytes_in_record_remaining;
         self.bytes_in_record_remaining = 0;
-        d
+        d.to_vec()
+    }
+
+    pub fn get_data_no_remaining_update(&mut self) -> Vec<u8> {
+        let len = self.get_u32_no_remaining_update() as usize;
+        let data = &self.data[self.pos..self.pos + len];
+
+        self.pos += len;
+        self.bytes_in_record_remaining = 0;
+        data.to_vec()
     }
 
     pub fn get_data(&mut self, count: usize) -> &[u8] {
@@ -329,12 +355,14 @@ impl<'a> BiffReader<'a> {
         self.bytes_in_record_remaining = 0;
     }
 
-    pub fn skip_tag(&mut self) {
-        self.pos += self.bytes_in_record_remaining;
+    pub fn skip_tag(&mut self) -> usize {
+        let remaining = self.bytes_in_record_remaining;
+        self.pos += remaining;
         self.bytes_in_record_remaining = 0;
+        remaining
     }
 
-    pub fn next(&mut self, warn: bool) {
+    pub fn next(&mut self, warn: bool) -> Option<String> {
         if self.bytes_in_record_remaining > 0 {
             if warn {
                 println!(
@@ -345,11 +373,26 @@ impl<'a> BiffReader<'a> {
             self.skip(self.bytes_in_record_remaining);
         }
         self.record_start = self.pos;
+        if self.pos >= self.data.len() {
+            panic!(
+                "Unexpected end of biff stream at {}/{} while reading next tag. Missing ENDB?",
+                self.pos(),
+                self.data.len()
+            );
+        }
         self.bytes_in_record_remaining = self.get_u32_no_remaining_update().to_usize();
         let tag = self.get_str(RECORD_TAG_LEN.try_into().unwrap());
+        if tag.is_empty() {
+            panic!("Empty tag at {}/{}", self.pos(), self.data.len());
+        }
         self.tag = tag;
         if self.warn_remaining && self.tag == "ENDB" && self.pos < self.data.len() {
             panic!("{} Remaining bytes after ENDB", self.data.len() - self.pos);
+        }
+        if self.is_eof() {
+            None
+        } else {
+            Some(self.tag.clone())
         }
     }
 
@@ -362,6 +405,39 @@ impl<'a> BiffReader<'a> {
             tag: "".to_string(),
             warn_remaining: false,
         }
+    }
+
+    fn sub_remaining(&mut self, count: usize) {
+        if self.bytes_in_record_remaining < count {
+            panic!(
+                "WARN: {} bytes remaining in record {}, but {} bytes requested",
+                self.bytes_in_record_remaining, self.tag, count
+            );
+        } else {
+            self.bytes_in_record_remaining -= count;
+        }
+    }
+
+    pub(crate) fn data_until(&mut self, tag: &[u8]) -> Vec<u8> {
+        // read bytes until we see tag and return it, put pos to the beginning of the tag
+        let mut pos = self.pos;
+        let mut found = false;
+        while pos < self.data.len() {
+            if &self.data[pos..pos + tag.len()] == tag {
+                found = true;
+                break;
+            }
+            pos += 1;
+        }
+        if !found {
+            panic!("Tag {:?} not found", tag);
+        }
+        // go back one u32 to the tag size
+        pos -= 4;
+        let data = &self.data[self.pos..pos];
+        self.pos = pos;
+        self.bytes_in_record_remaining = 0;
+        data.to_vec()
     }
 }
 
@@ -454,7 +530,7 @@ impl BiffWriter {
         self.data.extend_from_slice(&value.to_le_bytes());
     }
 
-    pub fn write_float(&mut self, value: f32) {
+    pub fn write_f32(&mut self, value: f32) {
         self.record_size += 4;
         self.data.extend_from_slice(&value.to_le_bytes());
     }
@@ -471,6 +547,16 @@ impl BiffWriter {
         self.write_data(&d);
     }
 
+    pub fn write_string_empty_zero(&mut self, value: &str) {
+        if value.is_empty() {
+            // sound files encode empty string like this
+            self.write_u32(1);
+            self.write_u8(0);
+        } else {
+            self.write_string(value);
+        }
+    }
+
     pub fn write_wide_string(&mut self, value: &str) {
         // utf-16-le encode as u8
         let d = value
@@ -483,10 +569,15 @@ impl BiffWriter {
 
     pub fn write_bool(&mut self, value: bool) {
         if value {
-            self.write_u32(0xFFFFFFFF);
+            self.write_u32(0x00000001);
         } else {
             self.write_u32(0x00000000);
         }
+    }
+
+    pub fn write_length_prefixed_data(&mut self, value: &[u8]) {
+        self.write_u32(value.len().try_into().unwrap());
+        self.write_data(value);
     }
 
     pub fn write_data(&mut self, value: &[u8]) {
@@ -507,7 +598,7 @@ impl BiffWriter {
 
     pub fn write_tagged_f32(&mut self, tag: &str, value: f32) {
         self.new_tag(tag);
-        self.write_float(value);
+        self.write_f32(value);
         self.end_tag();
     }
 
@@ -543,17 +634,17 @@ impl BiffWriter {
 
     pub fn write_tagged_vec2(&mut self, tag: &str, x: f32, y: f32) {
         self.new_tag(tag);
-        self.write_float(x);
-        self.write_float(y);
+        self.write_f32(x);
+        self.write_f32(y);
         self.end_tag();
     }
 
     pub fn write_tagged_padded_vector(&mut self, tag: &str, x: f32, y: f32, z: f32) {
         self.new_tag(tag);
-        self.write_float(x);
-        self.write_float(y);
-        self.write_float(z);
-        self.write_float(0.0);
+        self.write_f32(x);
+        self.write_f32(y);
+        self.write_f32(z);
+        self.write_f32(0.0);
         self.end_tag();
     }
 
@@ -563,43 +654,27 @@ impl BiffWriter {
         self.end_tag();
     }
 
+    pub fn write_tagged<T: BiffWrite>(&mut self, tag: &str, value: &T) {
+        self.new_tag(tag);
+        BiffWrite::biff_write(value, self);
+        self.end_tag();
+    }
+
+    pub fn write_tagged_with<T>(&mut self, tag: &str, value: &T, f: fn(&T, &mut BiffWriter) -> ()) {
+        self.new_tag(tag);
+        f(value, self);
+        self.end_tag();
+    }
+
     pub fn close(&mut self, write_endb: bool) {
         if write_endb {
             self.new_tag("ENDB");
         }
         self.end_tag();
     }
-}
 
-#[deprecated]
-pub fn read_string_record(input: &[u8]) -> IResult<&[u8], String> {
-    let (input, len) = le_u32(input)?;
-    let (input, data) = take(len)(input)?;
-    // should probably use latin_1?
-    // use encoding_rs::WINDOWS_1252;
-    // TODO this fails for "Spider-Man Classic_VPWmod_V1.0.1.vpx"
-    // let string = from_utf8(data).unwrap();
-    let string = String::from_utf8_lossy(data);
-    Ok((input, string.to_string()))
-}
-
-#[deprecated]
-pub fn read_bytes_record(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let (input, len) = le_u32(input)?;
-    take(len)(input)
-}
-
-#[deprecated]
-pub fn read_byte(input: &[u8]) -> IResult<&[u8], u8> {
-    le_u8(input)
-}
-
-#[deprecated]
-pub fn read_u32(input: &[u8]) -> IResult<&[u8], u32> {
-    le_u32(input)
-}
-
-#[deprecated]
-pub fn read_u16(input: &[u8]) -> IResult<&[u8], u16> {
-    le_u16(input)
+    pub(crate) fn write_marker_tag(&mut self, tag: &str) {
+        self.new_tag(tag);
+        self.end_tag();
+    }
 }

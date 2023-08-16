@@ -1,4 +1,4 @@
-use crate::vpx::biff::{self, BiffRead, BiffReader};
+use crate::vpx::biff::{self, BiffRead, BiffReader, BiffWrite};
 
 use super::vertex2d::Vertex2D;
 
@@ -51,7 +51,7 @@ impl BiffRead for LightSequencer {
                     center = Vertex2D::biff_read(reader);
                 }
                 "COLC" => {
-                    collection = reader.get_string();
+                    collection = reader.get_wide_string();
                 }
                 "CTRX" => {
                     pos_x = reader.get_f32();
@@ -113,5 +113,60 @@ impl BiffRead for LightSequencer {
             editor_layer_name,
             editor_layer_visibility,
         }
+    }
+}
+
+impl BiffWrite for LightSequencer {
+    fn biff_write(&self, writer: &mut biff::BiffWriter) {
+        writer.write_tagged("VCEN", &self.center);
+        writer.write_tagged_wide_string("COLC", &self.collection);
+        writer.write_tagged_f32("CTRX", self.pos_x);
+        writer.write_tagged_f32("CTRY", self.pos_y);
+        writer.write_tagged_u32("UPTM", self.update_interval);
+        writer.write_tagged_bool("TMON", self.is_timer_enabled);
+        writer.write_tagged_u32("TMIN", self.timer_interval);
+        writer.write_tagged_wide_string("NAME", &self.name);
+        writer.write_tagged_bool("BGLS", self.backglass);
+        // shared
+        writer.write_tagged_bool("LOCK", self.is_locked);
+        writer.write_tagged_u32("LAYR", self.editor_layer);
+        writer.write_tagged_string("LANR", &self.editor_layer_name);
+        writer.write_tagged_bool("LVIS", self.editor_layer_visibility);
+
+        writer.close(true);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::vpx::biff::BiffWriter;
+
+    use super::*;
+    use pretty_assertions::assert_eq;
+    use rand::Rng;
+
+    #[test]
+    fn test_write_read() {
+        let mut rng = rand::thread_rng();
+        // values not equal to the defaults
+        let spinner = LightSequencer {
+            center: Vertex2D::new(rng.gen(), rng.gen()),
+            collection: "test collection".to_string(),
+            pos_x: rng.gen(),
+            pos_y: rng.gen(),
+            update_interval: rng.gen(),
+            is_timer_enabled: rng.gen(),
+            timer_interval: rng.gen(),
+            name: "test name".to_string(),
+            backglass: rng.gen(),
+            is_locked: rng.gen(),
+            editor_layer: rng.gen(),
+            editor_layer_name: "test layer name".to_string(),
+            editor_layer_visibility: rng.gen(),
+        };
+        let mut writer = BiffWriter::new();
+        LightSequencer::biff_write(&spinner, &mut writer);
+        let spinner_read = LightSequencer::biff_read(&mut BiffReader::new(writer.get_data()));
+        assert_eq!(spinner, spinner_read);
     }
 }
