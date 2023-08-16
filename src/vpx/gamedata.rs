@@ -2,7 +2,7 @@
 
 use super::{
     biff::{self, BiffReader, BiffWriter},
-    version::{self, Version},
+    version::Version,
 };
 
 pub const VIEW_LAYOUT_MODE_LEGACY: u32 = 0; // All tables before 10.8 used a viewer position relative to a fitting of a set of bounding vertices (not all parts) with a standard perspective projection skewed by a layback angle

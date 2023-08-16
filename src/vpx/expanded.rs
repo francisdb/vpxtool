@@ -3,7 +3,7 @@ use std::{fs::File, path::Path};
 
 use cfb::CompoundFile;
 
-use super::{extract_script, image, read_gamedata, tableinfo, Version};
+use super::{extract_script, read_gamedata, tableinfo, Version};
 
 use super::collection::{self, Collection};
 use super::font;

@@ -24,7 +24,7 @@ pub struct TableInfo {
     pub table_version: String,
     pub author_website: Option<String>,
     pub table_save_date: Option<String>,
-    pub table_description: String,
+    pub table_description: Option<String>,
     // the keys (and ordering) for these are defined in "GameStg/CustomInfoTags"
     pub properties: HashMap<String, String>,
 }
@@ -44,7 +44,7 @@ impl TableInfo {
             table_version: "".to_string(),
             author_website: None,
             table_save_date: None, // added in ?
-            table_description: "".to_string(),
+            table_description: None,
             properties: HashMap::new(),
         }
     }
@@ -166,11 +166,18 @@ pub fn write_tableinfo<F: Read + Write + Seek>(
             )
         })
         .unwrap_or(Ok(()))?;
-    write_stream_string(
-        comp,
-        table_info_path.join("TableDescription").as_path(),
-        &table_info.table_description,
-    )?;
+    table_info
+        .table_description
+        .as_ref()
+        .map(|table_description| {
+            write_stream_string(
+                comp,
+                table_info_path.join("TableDescription").as_path(),
+                table_description,
+            )
+        })
+        .unwrap_or(Ok(()))?;
+
 
     // write properties
     for (key, value) in &table_info.properties {
@@ -239,7 +246,7 @@ pub fn read_tableinfo<F: Read + Write + Seek>(
                     read_stream_string(comp, path).map(|s| table_info.table_save_date = Some(s))
                 }
                 "TableDescription" => {
-                    read_stream_string(comp, path).map(|s| table_info.table_description = s)
+                    read_stream_string(comp, path).map(|s| table_info.table_description = Some(s))
                 }
                 other => {
                     let str = read_stream_string(comp, path)?;
@@ -324,7 +331,7 @@ mod tests {
             table_version: "test_table_version".to_string(),
             author_website: Some("test_author_website".to_string()),
             table_save_date: Some("test_table_save_date".to_string()),
-            table_description: "test_table_description".to_string(),
+            table_description: Some("test_table_description".to_string()),
             properties: HashMap::from([
                 ("prop1".to_string(), "value1".to_string()),
                 ("prop2".to_string(), "value2".to_string()),

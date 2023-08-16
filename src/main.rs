@@ -560,7 +560,7 @@ fn info(vpx_file_path: &str, json: bool) -> io::Result<()> {
     println!(
         "{:>18} {}",
         "Description:".green(),
-        table_info.table_description
+        table_info.table_description.unwrap_or("[not set]".to_string())
     );
     println!(
         "{:>18} {}",
