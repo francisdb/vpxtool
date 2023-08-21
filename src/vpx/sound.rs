@@ -146,7 +146,7 @@ pub(crate) fn read(file_version: &Version, reader: &mut BiffReader) -> SoundData
     // https://github.com/freezy/VisualPinball.Engine/blob/ec1e9765cd4832c134e889d6e6d03320bc404bd5/VisualPinball.Engine/VPT/Sound/SoundData.cs#L98
 
     let num_values = if file_version.u32() < NEW_SOUND_FORMAT_VERSION {
-        5
+        6
     } else {
         10
     };

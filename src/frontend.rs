@@ -75,7 +75,7 @@ pub fn frontend_index(
     recursive: bool,
 ) -> Vec<(PathBuf, tableinfo::TableInfo)> {
     println!("Indexing {}", tables_path);
-    let vpx_files = indexer::find_vpx_files(recursive, &tables_path);
+    let vpx_files = indexer::find_vpx_files(recursive, &tables_path).unwrap();
     let pb = ProgressBar::new(vpx_files.len() as u64);
     pb.set_style(
         ProgressStyle::with_template(
@@ -277,11 +277,11 @@ fn launch_table(
 fn display_table_line(path: &Path, info: &tableinfo::TableInfo) -> String {
     let file_name = path.file_stem().unwrap().to_str().unwrap().to_string();
     Some(info.table_name.to_owned())
-        .filter(|s| !s.is_empty())
+        .filter(|s| !s.clone().unwrap_or_default().is_empty())
         .map(|s| {
             format!(
                 "{} {}",
-                capitalize_first_letter(s.as_str()),
+                capitalize_first_letter(s.unwrap_or_default().as_str()),
                 (format!("({})", file_name)).dimmed()
             )
         })

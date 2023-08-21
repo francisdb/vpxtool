@@ -8,25 +8,25 @@ use super::vertex2d::Vertex2D;
 
 #[derive(Debug, PartialEq)]
 pub struct TextBox {
-    ver1: Vertex2D,
-    ver2: Vertex2D,
-    back_color: Color,
-    font_color: Color,
-    intensity_scale: f32,
-    text: String,
-    is_timer_enabled: bool,
-    timer_interval: u32,
-    pub name: String,
-    align: u32,
-    is_transparent: bool,
-    is_dmd: bool,
-    font: Font,
+    ver1: Vertex2D,         // VER1
+    ver2: Vertex2D,         // VER2
+    back_color: Color,      // CLRB
+    font_color: Color,      // CLRF
+    intensity_scale: f32,   // INSC
+    text: String,           // TEXT
+    is_timer_enabled: bool, // TMON
+    timer_interval: u32,    // TMIN
+    pub name: String,       // NAME
+    align: u32,             // ALGN
+    is_transparent: bool,   // TRNS
+    is_dmd: Option<bool>,   // IDMD added in 10.2?
+    font: Font,             // FONT
 
     // these are shared between all items
-    pub is_locked: bool,
-    pub editor_layer: u32,
-    pub editor_layer_name: Option<String>, // default "Layer_{editor_layer + 1}"
-    pub editor_layer_visibility: Option<bool>,
+    pub is_locked: bool,                       // LOCK
+    pub editor_layer: u32,                     // LAYR
+    pub editor_layer_name: Option<String>,     // LANR default "Layer_{editor_layer + 1}"
+    pub editor_layer_visibility: Option<bool>, // LVIS
 }
 
 impl BiffRead for TextBox {
@@ -42,7 +42,7 @@ impl BiffRead for TextBox {
         let mut name = Default::default();
         let mut align: u32 = Default::default();
         let mut is_transparent: bool = false;
-        let mut is_dmd: bool = false;
+        let mut is_dmd: Option<bool> = None;
 
         let mut font = Default::default();
 
@@ -94,7 +94,7 @@ impl BiffRead for TextBox {
                     is_transparent = reader.get_bool();
                 }
                 "IDMD" => {
-                    is_dmd = reader.get_bool();
+                    is_dmd = Some(reader.get_bool());
                 }
 
                 "FONT" => {
@@ -158,7 +158,9 @@ impl BiffWrite for TextBox {
         writer.write_tagged_wide_string("NAME", &self.name);
         writer.write_tagged_u32("ALGN", self.align);
         writer.write_tagged_bool("TRNS", self.is_transparent);
-        writer.write_tagged_bool("IDMD", self.is_dmd);
+        if let Some(is_dmd) = self.is_dmd {
+            writer.write_tagged_bool("IDMD", is_dmd);
+        }
         writer.write_tagged("FONT", &self.font);
         // shared
         writer.write_tagged_bool("LOCK", self.is_locked);
@@ -195,7 +197,7 @@ mod tests {
             name: "test timer".to_string(),
             align: 0,
             is_transparent: false,
-            is_dmd: false,
+            is_dmd: Some(false),
             font: Font::new(2, 123, 456, "test font".to_string()),
             is_locked: false,
             editor_layer: 1,

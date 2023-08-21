@@ -6,6 +6,7 @@ use std::{
 };
 
 use cfb::CompoundFile;
+use logging_timer::time;
 
 use md2::{Digest, Md2};
 
@@ -66,11 +67,12 @@ pub fn read(path: &PathBuf) -> io::Result<VPX> {
     read_vpx(&mut comp)
 }
 
+#[time]
 pub fn read_vpx<F: Read + Write + Seek>(comp: &mut CompoundFile<F>) -> io::Result<VPX> {
     let custominfotags = read_custominfotags(comp)?;
     let info = read_tableinfo(comp)?;
     let version = read_version(comp)?;
-    let gamedata = read_gamedata(comp)?;
+    let gamedata = read_gamedata(comp, &version)?;
     let gameitems = read_gameitems(comp, &gamedata)?;
     let images = read_images(comp, &gamedata)?;
     let sounds = read_sounds(comp, &gamedata, &version)?;
@@ -89,7 +91,11 @@ pub fn read_vpx<F: Read + Write + Seek>(comp: &mut CompoundFile<F>) -> io::Resul
     })
 }
 
-pub fn write_vpx(comp: &mut CompoundFile<File>, original: &VPX) -> io::Result<()> {
+#[time]
+pub fn write_vpx<F: Read + Write + Seek>(
+    comp: &mut CompoundFile<F>,
+    original: &VPX,
+) -> io::Result<()> {
     create_game_storage(comp)?;
     write_custominfotags(comp, &original.custominfotags)?;
     write_tableinfo(comp, &original.info)?;
@@ -124,6 +130,7 @@ pub fn write_minimal_vpx<F: Read + Write + Seek>(
     write_mac(comp, &mac)
 }
 
+#[time]
 fn create_game_storage<F: Read + Write + Seek>(comp: &mut CompoundFile<F>) -> io::Result<()> {
     let game_stg_path = Path::new(MAIN_SEPARATOR_STR).join("GameStg");
     comp.create_storage(&game_stg_path)
@@ -141,8 +148,8 @@ pub fn extractvbs(
 
     if !script_path.exists() || (script_path.exists() && overwrite) {
         let mut comp = cfb::open(vpx_file_path).unwrap();
-        let _version = version::read_version(&mut comp);
-        let gamedata = read_gamedata(&mut comp).unwrap();
+        let version = version::read_version(&mut comp).unwrap();
+        let gamedata = read_gamedata(&mut comp, &version).unwrap();
         extract_script(&gamedata, &script_path).unwrap();
         ExtractResult::Extracted(script_path)
     } else {
@@ -162,8 +169,8 @@ pub fn importvbs(vpx_file_path: &PathBuf, extension: Option<&str>) -> std::io::R
         ));
     }
     let mut comp = cfb::open_rw(vpx_file_path)?;
-    let mut gamedata = read_gamedata(&mut comp)?;
-    let version = version::read_version(&mut comp)?;
+    let version = read_version(&mut comp)?;
+    let mut gamedata = read_gamedata(&mut comp, &version)?;
     let script = std::fs::read_to_string(&script_path)?;
     gamedata.set_code(script);
     write_game_data(&mut comp, &gamedata, &version)?;
@@ -252,6 +259,7 @@ impl FileStructureItem {
     }
 }
 
+#[time]
 pub fn generate_mac<F: Read + Seek>(comp: &mut CompoundFile<F>) -> Result<Vec<u8>, io::Error> {
     // Regarding mac generation, see
     //  https://github.com/freezy/VisualPinball.Engine/blob/ec1e9765cd4832c134e889d6e6d03320bc404bd5/VisualPinball.Engine/VPT/Table/TableWriter.cs#L42
@@ -405,17 +413,21 @@ pub fn extract_script<P: AsRef<Path>>(gamedata: &GameData, vbs_path: &P) -> Resu
     std::fs::write(vbs_path, script)
 }
 
-pub fn read_gamedata<F: Seek + Read>(comp: &mut CompoundFile<F>) -> std::io::Result<GameData> {
+pub fn read_gamedata<F: Seek + Read>(
+    comp: &mut CompoundFile<F>,
+    version: &Version,
+) -> std::io::Result<GameData> {
     let mut game_data_vec = Vec::new();
     let game_data_path = Path::new(MAIN_SEPARATOR_STR)
         .join("GameStg")
         .join("GameData");
     let mut stream = comp.open_stream(game_data_path)?;
     stream.read_to_end(&mut game_data_vec)?;
-    let gamedata = gamedata::read_all_gamedata_records(&game_data_vec[..]);
+    let gamedata = gamedata::read_all_gamedata_records(&game_data_vec[..], &version);
     Ok(gamedata)
 }
 
+#[time]
 fn write_game_data<F: Read + Write + Seek>(
     comp: &mut CompoundFile<F>,
     gamedata: &GameData,
@@ -449,6 +461,7 @@ fn read_gameitems<F: Read + Seek>(
         .collect()
 }
 
+#[time]
 fn write_game_items<F: Read + Write + Seek>(
     comp: &mut CompoundFile<F>,
     gameitems: &[GameItemEnum],
@@ -483,6 +496,7 @@ fn read_sounds<F: Read + Seek>(
         .collect()
 }
 
+#[time]
 fn write_sounds<F: Read + Write + Seek>(
     comp: &mut CompoundFile<F>,
     sounds: &[SoundData],
@@ -517,6 +531,7 @@ fn read_collections<F: Read + Seek>(
         .collect()
 }
 
+#[time]
 fn write_collections<F: Read + Write + Seek>(
     comp: &mut CompoundFile<F>,
     collections: &[Collection],
@@ -548,6 +563,7 @@ fn read_images<F: Read + Seek>(
         .collect()
 }
 
+#[time]
 fn write_images<F: Read + Write + Seek>(
     comp: &mut CompoundFile<F>,
     images: &[ImageData],
@@ -579,6 +595,7 @@ fn read_fonts<F: Read + Seek>(
         .collect()
 }
 
+#[time]
 fn write_fonts<F: Read + Write + Seek>(
     comp: &mut CompoundFile<F>,
     fonts: &[FontData],
@@ -628,7 +645,8 @@ pub fn diff_script<P: AsRef<Path>>(vpx_file_path: P) -> io::Result<String> {
     if vbs_path.exists() {
         match cfb::open(&vpx_file_path) {
             Ok(mut comp) => {
-                let gamedata = read_gamedata(&mut comp)?;
+                let version = read_version(&mut comp)?;
+                let gamedata = read_gamedata(&mut comp, &version)?;
                 let script = gamedata.code;
                 std::fs::write(&original_vbs_path, script)?;
                 let diff_color = if colored::control::SHOULD_COLORIZE.should_colorize() {
@@ -700,11 +718,21 @@ pub fn run_diff(
 
 #[cfg(test)]
 mod tests {
+    use logging_timer::time;
     use pretty_assertions::assert_eq;
-    use std::{collections::hash_map::DefaultHasher, hash::Hash, hash::Hasher, io::Cursor};
+    use pretty_env_logger::env_logger;
+    use std::{
+        collections::hash_map::DefaultHasher, ffi::OsStr, hash::Hash, hash::Hasher, io::Cursor,
+    };
     use testdir::testdir;
 
+    use crate::indexer::find_vpx_files;
+
     use super::{biff::WARN, *};
+
+    fn init() {
+        let _ = env_logger::builder().is_test(true).try_init();
+    }
 
     #[test]
     fn test_write_read() -> io::Result<()> {
@@ -714,7 +742,7 @@ mod tests {
 
         let version = version::read_version(&mut comp)?;
         let tableinfo = tableinfo::read_tableinfo(&mut comp)?;
-        let game_data = read_gamedata(&mut comp)?;
+        let game_data = read_gamedata(&mut comp, &version)?;
 
         assert_eq!(tableinfo, TableInfo::new());
         assert_eq!(version, Version::new(1072));
@@ -759,14 +787,15 @@ mod tests {
         let path = PathBuf::from("testdata/completely_blank_table_10_7_4.vpx");
         let mut comp = cfb::open(path)?;
         let version = version::read_version(&mut comp)?;
-        let original = read_gamedata(&mut comp)?;
+        let original = read_gamedata(&mut comp, &version)?;
 
         let buff = Cursor::new(vec![0; 15]);
         let mut comp2 = CompoundFile::create(buff)?;
         create_game_storage(&mut comp2)?;
+        write_version(&mut comp2, &version);
         write_game_data(&mut comp2, &original, &version)?;
 
-        let read = read_gamedata(&mut comp2)?;
+        let read = read_gamedata(&mut comp2, &version)?;
 
         Ok(assert_eq!(original, read))
     }
@@ -775,8 +804,8 @@ mod tests {
     fn read_write_gameitems() -> io::Result<()> {
         let path = PathBuf::from("testdata/completely_blank_table_10_7_4.vpx");
         let mut comp = cfb::open(path)?;
-
-        let gamedata = read_gamedata(&mut comp)?;
+        let version = version::read_version(&mut comp)?;
+        let gamedata = read_gamedata(&mut comp, &version)?;
         let original = read_gameitems(&mut comp, &gamedata)?;
 
         let buff = Cursor::new(vec![0; 15]);
@@ -799,9 +828,9 @@ mod tests {
         let original = read_vpx(&mut comp)?;
 
         let mut expected_info = TableInfo::new();
-        expected_info.table_name = String::from("Visual Pinball Demo Table");
+        expected_info.table_name = Some(String::from("Visual Pinball Demo Table"));
         expected_info.table_save_rev = Some(String::from("10"));
-        expected_info.table_version = String::from("1.2");
+        expected_info.table_version = Some(String::from("1.2"));
         expected_info.author_website = Some(String::from("http://www.vpforums.org/"));
         expected_info.table_save_date = Some(String::from("Tue Jul 11 15:48:49 2023"));
         expected_info.table_description = Some(String::from(
@@ -838,6 +867,48 @@ mod tests {
 
         assert_equal_vpx(path, test_vpx_path);
         Ok(())
+    }
+
+    #[test]
+    #[ignore = "slow integration test that only runs on correctly set up machines"]
+    fn read_and_write_all() -> io::Result<()> {
+        init();
+
+        let home = dirs::home_dir().expect("no home dir");
+        let folder = home.join("vpinball").join("tables");
+        if !folder.exists() {
+            panic!("folder does not exist: {:?}", folder);
+        }
+        let paths = find_vpx_files(true, &folder)?;
+
+        paths.iter().try_for_each(|path_str| {
+            let path = PathBuf::from(path_str);
+            println!("testing: {:?}", path);
+            let test_vpx_path = read_and_write_vpx(&path)?;
+
+            assert_equal_vpx(path, test_vpx_path);
+            Ok(())
+        })
+    }
+
+    #[time]
+    fn read_and_write_vpx(path: &Path) -> io::Result<PathBuf> {
+        let mut comp = cfb::open(path)?;
+        let original = read_vpx(&mut comp)?;
+
+        // create temp file and write the vpx to it
+        let dir: PathBuf = testdir!();
+        let test_vpx_path = dir.join("test.vpx");
+        // let mut test_comp = cfb::create(&test_vpx_path)?;
+        // as above is slow we create an in memory compound file
+        let mut buff = Vec::new();
+        let mut test_comp = CompoundFile::create(Cursor::new(&mut buff))?;
+        write_vpx(&mut test_comp, &original)?;
+        test_comp.flush()?;
+        // write buff to file
+        let mut file = std::fs::File::create(&test_vpx_path)?;
+        file.write_all(&buff)?;
+        Ok(test_vpx_path)
     }
 
     fn assert_equal_vpx(vpx_path: PathBuf, test_vpx_path: PathBuf) {
@@ -880,6 +951,13 @@ mod tests {
                     let mut test_stream = test_comp.open_stream(path).unwrap();
                     original_stream.read_to_end(&mut original_data).unwrap();
                     test_stream.read_to_end(&mut test_data).unwrap();
+
+                    // let mut file = std::fs::File::create("original.bin").unwrap();
+                    // file.write_all(&original_data).unwrap();
+
+                    // let mut file = std::fs::File::create("test.bin").unwrap();
+                    // file.write_all(&test_data).unwrap();
+
                     assert!(original_data == test_data);
                 } else {
                     let skip = if path.to_string_lossy().contains("GameItem") {
@@ -896,7 +974,7 @@ mod tests {
         }
 
         // make sure we have the same paths and lengths
-        assert_eq!(original_paths, test_paths);
+        assert_eq!(original_paths, test_paths, "non equal {:?}", vpx_path);
     }
 
     fn compound_file_paths_and_lengths(compound_file_path: &Path) -> Vec<(PathBuf, u64)> {

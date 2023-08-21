@@ -15,6 +15,7 @@ pub struct GameData {
     pub top: f32,                                                  // TOPX 2
     pub right: f32,                                                // RGHT 3
     pub bottom: f32,                                               // BOTM 4
+    pub clmo: Option<u32>,                                         // CLMO added in 10.8.0?
     pub bg_view_mode_desktop: Option<u32>,                         // VSM0 added in 10.8.x
     pub bg_rotation_desktop: f32,                                  // ROTA 5
     pub bg_inclination_desktop: f32,                               // INCL 6
@@ -157,6 +158,11 @@ pub struct GameData {
     pub custom_colors: Vec<u8>,                                    //[Color; 16], // CCUS 113
     pub protection_data: Option<Vec<u8>>,                          // SECB (removed in ?)
     pub code: String,                                              // CODE 114
+    // This is a bit of a hack because we want reproducible builds.
+    // 10.8.0 beta 1-4 had EFSS at the old location, but it was moved to the new location in beta 5
+    // Some tables were released with these old betas, so we need to support both locations to be 100% reproducing the orignal table
+    // and it's MAC hash.
+    pub is_10_8_0_beta1_to_beta4: bool,
 }
 
 impl GameData {
@@ -172,6 +178,7 @@ impl Default for GameData {
             top: 0.0,
             right: 952.0,
             bottom: 2162.0,
+            clmo: None,
             bg_view_mode_desktop: None,
             bg_rotation_desktop: 0.0,
             bg_inclination_desktop: 0.0,
@@ -184,6 +191,7 @@ impl Default for GameData {
             bg_scale_y_desktop: 1.0,
             bg_scale_z_desktop: 1.0,
             bg_enable_fss: None, //false,
+            is_10_8_0_beta1_to_beta4: false,
             bg_rotation_fullscreen: 0.0,
             bg_inclination_fullscreen: 0.0,
             bg_layback_fullscreen: 0.0,
@@ -331,8 +339,11 @@ pub fn write_all_gamedata_records(gamedata: &GameData, version: &Version) -> Vec
     writer.write_tagged_f32("TOPX", gamedata.top);
     writer.write_tagged_f32("RGHT", gamedata.right);
     writer.write_tagged_f32("BOTM", gamedata.bottom);
+    if let Some(clmo) = gamedata.clmo {
+        writer.write_tagged_u32("CLMO", clmo);
+    }
 
-    if version.u32() >= 1080 {
+    if version.u32() >= 1080 && !gamedata.is_10_8_0_beta1_to_beta4 {
         if let Some(efss) = gamedata.bg_enable_fss {
             writer.write_tagged_bool("EFSS", efss);
         }
@@ -380,7 +391,7 @@ pub fn write_all_gamedata_records(gamedata: &GameData, version: &Version) -> Vec
         writer.write_tagged_u32("VSM1", vsm1);
     }
 
-    if version.u32() < 1080 {
+    if version.u32() < 1080 || gamedata.is_10_8_0_beta1_to_beta4 {
         if let Some(efss) = gamedata.bg_enable_fss {
             writer.write_tagged_bool("EFSS", efss);
         }
@@ -598,24 +609,25 @@ pub fn write_all_gamedata_records(gamedata: &GameData, version: &Version) -> Vec
     writer.get_data().to_vec()
 }
 
-pub fn read_all_gamedata_records(input: &[u8]) -> GameData {
+pub fn read_all_gamedata_records(input: &[u8], version: &Version) -> GameData {
     let mut reader = BiffReader::new(input);
     let mut gamedata = GameData::default();
+    let mut previous_tag = String::new();
     loop {
         reader.next(biff::WARN);
         if reader.is_eof() {
             break;
         }
         let tag = reader.tag();
-        let tag_str = tag.as_str();
 
         let reader: &mut BiffReader<'_> = &mut reader;
 
-        match tag_str {
+        match tag.as_str() {
             "LEFT" => gamedata.left = reader.get_f32(),
             "TOPX" => gamedata.top = reader.get_f32(),
             "RGHT" => gamedata.right = reader.get_f32(),
             "BOTM" => gamedata.bottom = reader.get_f32(),
+            "CLMO" => gamedata.clmo = Some(reader.get_u32()),
             "VSM0" => gamedata.bg_view_mode_desktop = Some(reader.get_u32()),
             "ROTA" => gamedata.bg_rotation_desktop = reader.get_f32(),
             "INCL" => gamedata.bg_inclination_desktop = reader.get_f32(),
@@ -627,7 +639,12 @@ pub fn read_all_gamedata_records(input: &[u8]) -> GameData {
             "SCLX" => gamedata.bg_scale_x_desktop = reader.get_f32(),
             "SCLY" => gamedata.bg_scale_y_desktop = reader.get_f32(),
             "SCLZ" => gamedata.bg_scale_z_desktop = reader.get_f32(),
-            "EFSS" => gamedata.bg_enable_fss = Some(reader.get_bool()),
+            "EFSS" => {
+                if version.u32() == 1080 && previous_tag != "BOTM" {
+                    gamedata.is_10_8_0_beta1_to_beta4 = true;
+                }
+                gamedata.bg_enable_fss = Some(reader.get_bool())
+            }
             "HOF0" => gamedata.bg_view_horizontal_offset_desktop = Some(reader.get_f32()),
             "VOF0" => gamedata.bg_view_vertical_offset_desktop = Some(reader.get_f32()),
             "WTX0" => gamedata.bg_window_top_x_offset_desktop = Some(reader.get_f32()),
@@ -790,6 +807,7 @@ pub fn read_all_gamedata_records(input: &[u8]) -> GameData {
                 println!("unhandled tag {} {} bytes", other, data.len());
             }
         };
+        previous_tag = tag;
     }
     gamedata
 }
@@ -805,7 +823,7 @@ mod tests {
         let game_data = GameData::default();
         let version: Version = Version::new(1074);
         let bytes = write_all_gamedata_records(&game_data, &version);
-        let read_game_data = read_all_gamedata_records(&bytes);
+        let read_game_data = read_all_gamedata_records(&bytes, &version);
 
         assert_eq!(game_data, read_game_data);
     }
@@ -817,6 +835,7 @@ mod tests {
             right: 2.0,
             top: 3.0,
             bottom: 4.0,
+            clmo: None,
             bg_view_mode_desktop: Some(1),
             bg_rotation_desktop: 1.0,
             bg_inclination_desktop: 2.0,
@@ -959,10 +978,11 @@ mod tests {
             bg_window_bottom_x_offset_full_single_screen: None,
             bg_window_bottom_y_offset_full_single_screen: None,
             bg_window_bottom_z_offset_full_single_screen: None,
+            is_10_8_0_beta1_to_beta4: false,
         };
         let version = Version::new(1074);
         let bytes = write_all_gamedata_records(&gamedata, &version);
-        let read_game_data = read_all_gamedata_records(&bytes);
+        let read_game_data = read_all_gamedata_records(&bytes, &version);
 
         assert_eq!(gamedata, read_game_data);
     }

@@ -13,7 +13,7 @@ use utf16string::{LittleEndian, WStr, WString};
 
 #[derive(PartialEq, Debug)]
 pub struct TableInfo {
-    pub table_name: String,
+    pub table_name: Option<String>,
     pub author_name: Option<String>,
     pub screenshot: Option<Vec<u8>>,
     pub table_blurb: Option<String>,
@@ -21,7 +21,7 @@ pub struct TableInfo {
     pub author_email: Option<String>,
     pub release_date: Option<String>,
     pub table_save_rev: Option<String>,
-    pub table_version: String,
+    pub table_version: Option<String>,
     pub author_website: Option<String>,
     pub table_save_date: Option<String>,
     pub table_description: Option<String>,
@@ -33,7 +33,7 @@ impl TableInfo {
         // current data as ISO string
         //let now: String = chrono::Local::now().to_rfc3339();
         TableInfo {
-            table_name: "".to_string(),
+            table_name: None,
             author_name: None,
             screenshot: None,
             table_blurb: None,
@@ -41,7 +41,7 @@ impl TableInfo {
             author_email: None,
             release_date: None,
             table_save_rev: None, // added in ?
-            table_version: "".to_string(),
+            table_version: None,
             author_website: None,
             table_save_date: None, // added in ?
             table_description: None,
@@ -56,11 +56,18 @@ pub fn write_tableinfo<F: Read + Write + Seek>(
 ) -> std::io::Result<()> {
     let table_info_path = Path::new(MAIN_SEPARATOR_STR).join("TableInfo");
     comp.create_storage(&table_info_path)?;
-    write_stream_string(
-        comp,
-        table_info_path.join("TableName").as_path(),
-        &table_info.table_name,
-    )?;
+
+    table_info
+        .table_name
+        .as_ref()
+        .map(|table_name| {
+            write_stream_string(
+                comp,
+                table_info_path.join("TableName").as_path(),
+                table_name,
+            )
+        })
+        .unwrap_or(Ok(()))?;
     table_info
         .author_name
         .as_ref()
@@ -139,11 +146,17 @@ pub fn write_tableinfo<F: Read + Write + Seek>(
             )
         })
         .unwrap_or(Ok(()))?;
-    write_stream_string(
-        comp,
-        table_info_path.join("TableVersion").as_path(),
-        &table_info.table_version,
-    )?;
+    table_info
+        .table_version
+        .as_ref()
+        .map(|table_version| {
+            write_stream_string(
+                comp,
+                table_info_path.join("TableVersion").as_path(),
+                table_version,
+            )
+        })
+        .unwrap_or(Ok(()))?;
     table_info
         .author_website
         .as_ref()
@@ -178,7 +191,6 @@ pub fn write_tableinfo<F: Read + Write + Seek>(
         })
         .unwrap_or(Ok(()))?;
 
-
     // write properties
     for (key, value) in &table_info.properties {
         write_stream_string(comp, table_info_path.join(key).as_path(), value)?;
@@ -212,7 +224,9 @@ pub fn read_tableinfo<F: Read + Write + Seek>(
                 .map(|s| s.to_str().unwrap_or("[not unicode]"))
                 .unwrap_or("..");
             match file_name {
-                "TableName" => read_stream_string(comp, path).map(|s| table_info.table_name = s),
+                "TableName" => {
+                    read_stream_string(comp, path).map(|s| table_info.table_name = Some(s))
+                }
                 "AuthorName" => {
                     read_stream_string(comp, path).map(|s| table_info.author_name = Some(s))
                 }
@@ -237,7 +251,7 @@ pub fn read_tableinfo<F: Read + Write + Seek>(
                     read_stream_string(comp, path).map(|s| table_info.table_save_rev = Some(s))
                 }
                 "TableVersion" => {
-                    read_stream_string(comp, path).map(|s| table_info.table_version = s)
+                    read_stream_string(comp, path).map(|s| table_info.table_version = Some(s))
                 }
                 "AuthorWebSite" => {
                     read_stream_string(comp, path).map(|s| table_info.author_website = Some(s))
@@ -320,7 +334,7 @@ mod tests {
         let buff = Cursor::new(vec![0; 15]);
         let mut comp = CompoundFile::create(buff).unwrap();
         let table_info = TableInfo {
-            table_name: "test_table_name".to_string(),
+            table_name: Some("test_table_name".to_string()),
             author_name: Some("test_author_name".to_string()),
             screenshot: Some(vec![1, 2, 3]),
             table_blurb: Some("test_table_blurb".to_string()),
@@ -328,7 +342,7 @@ mod tests {
             author_email: Some("test_author_email".to_string()),
             release_date: None,
             table_save_rev: Some("test_table_save_rev".to_string()),
-            table_version: "test_table_version".to_string(),
+            table_version: Some("test_table_version".to_string()),
             author_website: Some("test_author_website".to_string()),
             table_save_date: Some("test_table_save_date".to_string()),
             table_description: Some("test_table_description".to_string()),

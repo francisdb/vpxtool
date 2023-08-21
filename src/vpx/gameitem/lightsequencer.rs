@@ -15,10 +15,10 @@ pub struct LightSequencer {
     backglass: bool,
 
     // these are shared between all items
-    pub is_locked: bool,
-    pub editor_layer: u32,
-    pub editor_layer_name: String, // default "Layer_{editor_layer + 1}"
-    pub editor_layer_visibility: bool,
+    pub is_locked: Option<bool>,               // LOCK (added in 10.7?)
+    pub editor_layer: Option<u32>,             // LAYR (added in 10.7?)
+    pub editor_layer_name: Option<String>, // LANR (added in 10.7?) default "Layer_{editor_layer + 1}"
+    pub editor_layer_visibility: Option<bool>, // LVIS (added in 10.7?)
 }
 
 impl BiffRead for LightSequencer {
@@ -34,10 +34,10 @@ impl BiffRead for LightSequencer {
         let mut backglass: bool = false;
 
         // these are shared between all items
-        let mut is_locked: bool = false;
-        let mut editor_layer: u32 = Default::default();
-        let mut editor_layer_name: String = Default::default();
-        let mut editor_layer_visibility: bool = true;
+        let mut is_locked: Option<bool> = None; //false;
+        let mut editor_layer: Option<u32> = None;
+        let mut editor_layer_name: Option<String> = None;
+        let mut editor_layer_visibility: Option<bool> = None;
 
         loop {
             reader.next(biff::WARN);
@@ -77,16 +77,16 @@ impl BiffRead for LightSequencer {
 
                 // shared
                 "LOCK" => {
-                    is_locked = reader.get_bool();
+                    is_locked = Some(reader.get_bool());
                 }
                 "LAYR" => {
-                    editor_layer = reader.get_u32();
+                    editor_layer = Some(reader.get_u32());
                 }
                 "LANR" => {
-                    editor_layer_name = reader.get_string();
+                    editor_layer_name = Some(reader.get_string());
                 }
                 "LVIS" => {
-                    editor_layer_visibility = reader.get_bool();
+                    editor_layer_visibility = Some(reader.get_bool());
                 }
                 _ => {
                     println!(
@@ -127,11 +127,20 @@ impl BiffWrite for LightSequencer {
         writer.write_tagged_u32("TMIN", self.timer_interval);
         writer.write_tagged_wide_string("NAME", &self.name);
         writer.write_tagged_bool("BGLS", self.backglass);
+
         // shared
-        writer.write_tagged_bool("LOCK", self.is_locked);
-        writer.write_tagged_u32("LAYR", self.editor_layer);
-        writer.write_tagged_string("LANR", &self.editor_layer_name);
-        writer.write_tagged_bool("LVIS", self.editor_layer_visibility);
+        if let Some(is_locked) = self.is_locked {
+            writer.write_tagged_bool("LOCK", is_locked);
+        }
+        if let Some(editor_layer) = self.editor_layer {
+            writer.write_tagged_u32("LAYR", editor_layer);
+        }
+        if let Some(editor_layer_name) = &self.editor_layer_name {
+            writer.write_tagged_string("LANR", editor_layer_name);
+        }
+        if let Some(editor_layer_visibility) = self.editor_layer_visibility {
+            writer.write_tagged_bool("LVIS", editor_layer_visibility);
+        }
 
         writer.close(true);
     }
@@ -161,7 +170,7 @@ mod tests {
             backglass: rng.gen(),
             is_locked: rng.gen(),
             editor_layer: rng.gen(),
-            editor_layer_name: "test layer name".to_string(),
+            editor_layer_name: Some("test layer name".to_string()),
             editor_layer_visibility: rng.gen(),
         };
         let mut writer = BiffWriter::new();
