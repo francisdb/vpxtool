@@ -25,7 +25,7 @@ pub fn extract(vpx_file_path: &Path, root_dir_path: &Path) -> std::io::Result<()
 
     let mut comp = cfb::open(vpx_file_path).unwrap();
     let version = version::read_version(&mut comp).unwrap();
-    let gamedata = read_gamedata(&mut comp).unwrap();
+    let gamedata = read_gamedata(&mut comp, &version).unwrap();
 
     extract_info(&mut comp, root_dir_path)?;
 

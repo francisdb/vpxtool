@@ -45,15 +45,19 @@ impl fmt::Debug for ImageDataBits {
 
 #[derive(PartialEq, Debug)]
 pub struct ImageData {
-    pub name: String,
+    pub name: String, // NAME
     // /**
     //  * Lowercased name?
     //  */
     inme: Option<String>,
-    path: String,
-    width: u32,
-    height: u32,
-    alpha_test_value: f32,
+    path: String, // PATH
+    width: u32,   // WDTH
+    height: u32,  // HGHT
+    // TODO seems to be 1 for some kind of link type img, related to screenshots.
+    // we only see this where a screenshot is set on the table info.
+    // https://github.com/vpinball/vpinball/blob/1a70aa35eb57ec7b5fbbb9727f6735e8ef3183e0/Texture.cpp#L588
+    link: Option<u32>,     // LINK
+    alpha_test_value: f32, // ALTV
     // TODO we can probably only have one of these so we can make an enum
     pub jpeg: Option<ImageDataJpeg>,
     pub bits: Option<ImageDataBits>,
@@ -90,6 +94,7 @@ fn read(reader: &mut BiffReader) -> ImageData {
     let mut alpha_test_value: f32 = 0.0;
     let mut jpeg: Option<ImageDataJpeg> = None;
     let mut bits: Option<ImageDataBits> = None;
+    let mut link: Option<u32> = None;
     loop {
         reader.next(biff::WARN);
         if reader.is_eof() {
@@ -139,7 +144,7 @@ fn read(reader: &mut BiffReader) -> ImageData {
                 // TODO seems to be 1 for some kind of link type img, related to screenshots.
                 // we only see this where a screenshot is set on the table info.
                 // https://github.com/vpinball/vpinball/blob/1a70aa35eb57ec7b5fbbb9727f6735e8ef3183e0/Texture.cpp#L588
-                let _link = reader.get_u32();
+                link = Some(reader.get_u32());
             }
             _ => {
                 println!("Skipping image tag: {}", tag);
@@ -153,6 +158,7 @@ fn read(reader: &mut BiffReader) -> ImageData {
         path,
         width,
         height,
+        link,
         alpha_test_value,
         jpeg,
         bits,
@@ -167,6 +173,9 @@ fn write(data: &ImageData, writer: &mut BiffWriter) {
     writer.write_tagged_string("PATH", &data.path);
     writer.write_tagged_u32("WDTH", data.width);
     writer.write_tagged_u32("HGHT", data.height);
+    if let Some(link) = data.link {
+        writer.write_tagged_u32("LINK", link);
+    }
     if let Some(bits) = &data.bits {
         writer.write_tagged_data("BITS", &bits.data);
     }
@@ -269,6 +278,7 @@ mod test {
             path: "path_value".to_string(),
             width: 1,
             height: 2,
+            link: None,
             alpha_test_value: 1.0,
             jpeg: Some(ImageDataJpeg {
                 path: "path_value".to_string(),

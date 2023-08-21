@@ -1,7 +1,7 @@
 use std::{
     cmp,
     fmt::Display,
-    io::{Read, Seek, Write},
+    io::{Read, Seek, Write, self},
     path::{Path, MAIN_SEPARATOR_STR},
 };
 
@@ -43,9 +43,7 @@ impl cmp::PartialOrd for Version {
 
 // Read version
 // https://github.com/vbousquet/vpx_lightmapper/blob/331a8576bb7b86668a023b304e7dd04261487106/addons/vpx_lightmapper/vlm_import.py#L328
-pub fn read_version<F: Read + Write + Seek>(
-    comp: &mut cfb::CompoundFile<F>,
-) -> std::io::Result<Version> {
+pub fn read_version<F: Read + Seek>(comp: &mut CompoundFile<F>) -> io::Result<Version> {
     let mut file_version = Vec::new();
     let version_path = Path::new(MAIN_SEPARATOR_STR)
         .join("GameStg")

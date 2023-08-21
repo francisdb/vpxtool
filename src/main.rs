@@ -230,7 +230,7 @@ fn main() {
             let path = path.unwrap_or("");
             let expanded_path = expand_path(path);
             println!("Indexing {}", expanded_path);
-            let vpx_files = indexer::find_vpx_files(recursive, expanded_path.as_ref());
+            let vpx_files = indexer::find_vpx_files(recursive, &expanded_path).unwrap();
             let pb = ProgressBar::new(vpx_files.len() as u64);
             pb.set_style(
                 ProgressStyle::with_template(
@@ -519,8 +519,16 @@ fn info(vpx_file_path: &str, json: bool) -> io::Result<()> {
     // TODO check the json flag
 
     println!("{:>18} {}", "VPX Version:".green(), version);
-    println!("{:>18} {}", "Table Name:".green(), table_info.table_name);
-    println!("{:>18} {}", "Version:".green(), table_info.table_version);
+    println!(
+        "{:>18} {}",
+        "Table Name:".green(),
+        table_info.table_name.unwrap_or("[not set]".to_string())
+    );
+    println!(
+        "{:>18} {}",
+        "Version:".green(),
+        table_info.table_version.unwrap_or("[not set]".to_string())
+    );
     println!(
         "{:>18} {}{}{}",
         "Author:".green(),
@@ -560,7 +568,9 @@ fn info(vpx_file_path: &str, json: bool) -> io::Result<()> {
     println!(
         "{:>18} {}",
         "Description:".green(),
-        table_info.table_description.unwrap_or("[not set]".to_string())
+        table_info
+            .table_description
+            .unwrap_or("[not set]".to_string())
     );
     println!(
         "{:>18} {}",

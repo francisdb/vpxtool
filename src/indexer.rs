@@ -1,7 +1,8 @@
 use std::{
     ffi::OsStr,
     fs::{self, File},
-    path::PathBuf,
+    io,
+    path::{Path, PathBuf},
 };
 
 use colored::Colorize;
@@ -13,7 +14,7 @@ use crate::{
     tableinfo::{read_tableinfo, TableInfo},
 };
 
-pub fn find_vpx_files(recursive: bool, tables_path: &str) -> Vec<PathBuf> {
+pub fn find_vpx_files<P: AsRef<Path>>(recursive: bool, tables_path: P) -> io::Result<Vec<PathBuf>> {
     let mut vpx_files = Vec::new();
     if recursive {
         for entry in WalkDir::new(tables_path).into_iter().filter_map(|e| e.ok()) {
@@ -24,17 +25,20 @@ pub fn find_vpx_files(recursive: bool, tables_path: &str) -> Vec<PathBuf> {
             }
         }
     } else {
-        for entry in fs::read_dir(tables_path).unwrap() {
-            let entry = entry.unwrap();
-            let path = entry.path();
+        let dirs = fs::read_dir(tables_path)?;
+        dirs.map(|entry| {
+            let dir_entry = entry?;
+            let path = dir_entry.path();
             if path.is_file() {
                 if let Some("vpx") = path.extension().and_then(OsStr::to_str) {
                     vpx_files.push(path);
                 }
             }
-        }
+            Ok(())
+        })
+        .collect::<io::Result<()>>()?;
     }
-    vpx_files
+    Ok(vpx_files)
 }
 
 pub fn index_vpx_files(vpx_files: &[PathBuf], progress: impl Fn(u64)) -> Vec<(PathBuf, TableInfo)> {
@@ -63,9 +67,18 @@ pub fn index_vpx_files(vpx_files: &[PathBuf], progress: impl Fn(u64)) -> Vec<(Pa
 
     // sort by name
     vpx_files_with_tableinfo.sort_by(|(_, a), (_, b)| {
-        a.table_name
-            .to_lowercase()
-            .cmp(&b.table_name.to_lowercase())
+        // TODO get rid of clone() here
+        let a_lower = a
+            .table_name
+            .clone()
+            .unwrap_or("".to_string())
+            .to_lowercase();
+        let b_lower = b
+            .table_name
+            .clone()
+            .unwrap_or("".to_string())
+            .to_lowercase();
+        a_lower.cmp(&b_lower)
     });
     vpx_files_with_tableinfo
 }
