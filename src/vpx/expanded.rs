@@ -16,27 +16,27 @@ use crate::jsonmodel::{collections_json, table_json};
 use crate::vpx::biff::{BiffRead, BiffReader};
 use crate::vpx::image::ImageData;
 
-pub fn extract(vpx_file_path: &Path, root_dir_path: &Path) -> std::io::Result<()> {
-    let vbs_path = root_dir_path.join("script.vbs");
+pub fn extract(vpx_file_path: &Path, expanded_path: &Path) -> std::io::Result<()> {
+    let vbs_path = expanded_path.join("script.vbs");
 
     let mut root_dir = std::fs::DirBuilder::new();
     root_dir.recursive(true);
-    root_dir.create(root_dir_path).unwrap();
+    root_dir.create(expanded_path).unwrap();
 
     let mut comp = cfb::open(vpx_file_path).unwrap();
     let version = version::read_version(&mut comp).unwrap();
     let gamedata = read_gamedata(&mut comp, &version).unwrap();
 
-    extract_info(&mut comp, root_dir_path)?;
+    extract_info(&mut comp, expanded_path)?;
 
     extract_script(&gamedata, &vbs_path)?;
     println!("VBScript file written to\n  {}", &vbs_path.display());
-    extract_binaries(&mut comp, root_dir_path);
-    extract_images(&mut comp, &gamedata, root_dir_path);
-    extract_sounds(&mut comp, &gamedata, root_dir_path, &version);
-    extract_fonts(&mut comp, &gamedata, root_dir_path);
-    extract_gameitems(&mut comp, &gamedata, root_dir_path);
-    extract_collections(&mut comp, &gamedata, root_dir_path);
+    extract_binaries(&mut comp, expanded_path);
+    extract_images(&mut comp, &gamedata, expanded_path);
+    extract_sounds(&mut comp, &gamedata, expanded_path, &version);
+    extract_fonts(&mut comp, &gamedata, expanded_path);
+    extract_gameitems(&mut comp, &gamedata, expanded_path);
+    extract_collections(&mut comp, &gamedata, expanded_path);
 
     // let mut file_version = String::new();
     // comp.open_stream("/GameStg/Version")
@@ -283,3 +283,34 @@ fn extract_binaries(comp: &mut CompoundFile<std::fs::File>, root_dir_path: &Path
 }
 
 // TODO write test that extracts testdata table, reassambles it and compares it to the original
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+    use testdir::testdir;
+
+    #[test]
+
+    fn vpx_to_expanded_to_vpx() -> io::Result<()> {
+        // let home = dirs::home_dir().expect("no home dir");
+        // let folder = home.join("vpinball").join("tables");
+        // if !folder.exists() {
+        //     panic!("folder does not exist: {:?}", folder);
+        // }
+        // let paths = find_vpx_files(true, &folder)?;
+
+        let paths = ["testdata/completely_blank_table_10_7_4.vpx"];
+
+        let dir: PathBuf = testdir!();
+
+        paths.iter().try_for_each(|path_str| {
+            let path = PathBuf::from(path_str);
+            println!("testing: {:?}", path);
+            extract(&path, &dir)?;
+
+            //assert_equal_vpx(path, test_vpx_path);
+            Ok(())
+        })
+    }
+}
