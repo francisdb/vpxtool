@@ -40,8 +40,6 @@ impl cmp::PartialOrd for Version {
     }
 }
 
-// Read version
-// https://github.com/vbousquet/vpx_lightmapper/blob/331a8576bb7b86668a023b304e7dd04261487106/addons/vpx_lightmapper/vlm_import.py#L328
 pub fn read_version<F: Read + Seek>(comp: &mut CompoundFile<F>) -> io::Result<Version> {
     let version_path = Path::new(MAIN_SEPARATOR_STR)
         .join("GameStg")
