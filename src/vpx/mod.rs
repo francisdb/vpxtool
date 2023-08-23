@@ -792,7 +792,7 @@ mod tests {
         let buff = Cursor::new(vec![0; 15]);
         let mut comp2 = CompoundFile::create(buff)?;
         create_game_storage(&mut comp2)?;
-        write_version(&mut comp2, &version);
+        write_version(&mut comp2, &version)?;
         write_game_data(&mut comp2, &original, &version)?;
 
         let read = read_gamedata(&mut comp2, &version)?;

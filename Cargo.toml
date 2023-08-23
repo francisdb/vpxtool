@@ -11,7 +11,8 @@ base64 = "0.21.2"
 byteorder = "1.4.3"
 bytes = "1.4.0"
 cfb = "0.8.1"
-chrono = "0.4.26"
+#see https://github.com/chronotope/chrono/issues/602#issuecomment-1242149249
+chrono = { version = "0.4.26", default-features = false, features = ["clock"] }
 clap = { version = "4.3.23", features = ["derive", "string"] }
 colored = "2.0.4"
 console = "0.15.7"
