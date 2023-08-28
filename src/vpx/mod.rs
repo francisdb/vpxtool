@@ -423,7 +423,7 @@ pub fn read_gamedata<F: Seek + Read>(
         .join("GameData");
     let mut stream = comp.open_stream(game_data_path)?;
     stream.read_to_end(&mut game_data_vec)?;
-    let gamedata = gamedata::read_all_gamedata_records(&game_data_vec[..], &version);
+    let gamedata = gamedata::read_all_gamedata_records(&game_data_vec[..], version);
     Ok(gamedata)
 }
 
@@ -722,7 +722,7 @@ mod tests {
     use pretty_assertions::assert_eq;
     use pretty_env_logger::env_logger;
     use std::{
-        collections::hash_map::DefaultHasher, ffi::OsStr, hash::Hash, hash::Hasher, io::Cursor,
+        collections::hash_map::DefaultHasher, hash::Hash, hash::Hasher, io::Cursor,
     };
     use testdir::testdir;
 

@@ -2,7 +2,7 @@ use std::{
     fs::File,
     io::{Result, Write},
     path::{Path, PathBuf},
-    process::ExitStatus,
+    process::{exit, ExitStatus},
 };
 
 use colored::Colorize;
@@ -250,9 +250,21 @@ fn launch(selected_path: &PathBuf, vpinball_executable: &Path, fullscreen: bool)
             }
         },
         Err(e) => {
-            println!("Error launching table: {:?}", e);
+            if e.kind() == std::io::ErrorKind::NotFound {
+                report_and_exit(format!(
+                    "Unable to launch table, vpinball executable not found at {}",
+                    vpinball_executable.display()
+                ));
+            } else {
+                report_and_exit(format!("Unable to launch table: {:?}", e));
+            }
         }
     }
+}
+
+fn report_and_exit(msg: String) -> ! {
+    println!("{CRASH} {}", msg);
+    exit(1);
 }
 
 fn launch_table(
@@ -260,8 +272,6 @@ fn launch_table(
     vpinball_executable: &Path,
     fullscreen: bool,
 ) -> Result<ExitStatus> {
-    println!("{} {}", LAUNCH, vpinball_executable.display());
-
     // start process ./VPinballX_GL -play [table path]
     let mut cmd = std::process::Command::new(vpinball_executable);
     if !fullscreen {
