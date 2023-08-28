@@ -19,7 +19,7 @@ console = "0.15.7"
 dialoguer = "0.10.4"
 # dialoguer = { path = "../dialoguer" }
 dirs = "5.0.1"
-encoding_rs = "0.8.32"
+encoding_rs = "0.8.33"
 git-version = "0.3.5"
 indicatif = "0.17.6"
 log = "0.4.20"
