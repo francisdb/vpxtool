@@ -15,18 +15,25 @@ use crate::{
 };
 
 pub fn find_vpx_files<P: AsRef<Path>>(recursive: bool, tables_path: P) -> io::Result<Vec<PathBuf>> {
-    let mut vpx_files = Vec::new();
     if recursive {
-        for entry in WalkDir::new(tables_path).into_iter().filter_map(|e| e.ok()) {
-            if entry.file_type().is_file() {
-                if let Some("vpx") = entry.path().extension().and_then(OsStr::to_str) {
-                    vpx_files.push(entry.path().to_owned());
+        let mut vpx_files = Vec::new();
+        let mut entries = WalkDir::new(tables_path).into_iter();
+        entries.try_for_each(|entry| {
+            let dir_entry = entry?;
+            let path = dir_entry.path();
+            if path.is_file() {
+                if let Some("vpx") = path.extension().and_then(OsStr::to_str) {
+                    vpx_files.push(path.to_path_buf());
                 }
             }
-        }
+            Ok::<(), io::Error>(())
+        })?;
+        Ok(vpx_files)
     } else {
-        let dirs = fs::read_dir(tables_path)?;
-        dirs.map(|entry| {
+        let mut vpx_files = Vec::new();
+        // TODO is there a cleaner version like try_filter_map?
+        let mut dirs = fs::read_dir(tables_path)?;
+        dirs.try_for_each(|entry| {
             let dir_entry = entry?;
             let path = dir_entry.path();
             if path.is_file() {
@@ -34,11 +41,10 @@ pub fn find_vpx_files<P: AsRef<Path>>(recursive: bool, tables_path: P) -> io::Re
                     vpx_files.push(path);
                 }
             }
-            Ok(())
-        })
-        .collect::<io::Result<()>>()?;
+            Ok::<(), io::Error>(())
+        })?;
+        Ok(vpx_files)
     }
-    Ok(vpx_files)
 }
 
 pub fn index_vpx_files(vpx_files: &[PathBuf], progress: impl Fn(u64)) -> Vec<(PathBuf, TableInfo)> {

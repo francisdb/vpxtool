@@ -33,7 +33,7 @@ impl Default for Font {
             style: 0,
             weight: 0,
             size: 400,
-            name: "Arial".to_owned(),
+            name: "Arial".to_string(),
         }
     }
 }

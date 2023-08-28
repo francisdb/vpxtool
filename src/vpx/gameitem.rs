@@ -145,31 +145,31 @@ const ITEM_TYPE_FLASHER: u32 = 20;
 const ITEM_TYPE_RUBBER: u32 = 21;
 const ITEM_TYPE_HIT_TARGET: u32 = 22;
 
-const TYPE_NAMES: [&str; 23] = [
-    "Wall",
-    "Flipper",
-    "Timer",
-    "Plunger",
-    "Text",
-    "Bumper",
-    "Trigger",
-    "Light",
-    "Kicker",
-    "Decal",
-    "Gate",
-    "Spinner",
-    "Ramp",
-    "Table",
-    "LightCenter",
-    "DragPoint",
-    "Collection",
-    "DispReel",
-    "LightSeq",
-    "Prim",
-    "Flasher",
-    "Rubber",
-    "Target",
-];
+// const TYPE_NAMES: [&str; 23] = [
+//     "Wall",
+//     "Flipper",
+//     "Timer",
+//     "Plunger",
+//     "Text",
+//     "Bumper",
+//     "Trigger",
+//     "Light",
+//     "Kicker",
+//     "Decal",
+//     "Gate",
+//     "Spinner",
+//     "Ramp",
+//     "Table",
+//     "LightCenter",
+//     "DragPoint",
+//     "Collection",
+//     "DispReel",
+//     "LightSeq",
+//     "Prim",
+//     "Flasher",
+//     "Rubber",
+//     "Target",
+// ];
 
 pub const FILTER_NONE: u32 = 0;
 pub const FILTER_ADDITIVE: u32 = 1;
