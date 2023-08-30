@@ -1,5 +1,5 @@
 use std::fmt::Debug;
-use std::io::{self, BufRead};
+use std::io;
 
 use quick_xml::de::from_reader;
 use quick_xml::de::*;
@@ -12,17 +12,17 @@ pub struct POV {
     pub desktop: ModePov,
     pub fullscreen: ModePov,
     pub fullsinglescreen: ModePov,
-    pub customsettings: Customsettings,
+    pub customsettings: Option<Customsettings>,
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub struct ModePov {
     #[serde(rename = "LayoutMode")]
-    pub layout_mode: u32,
+    pub layout_mode: Option<u32>,
     pub inclination: f32,
     pub fov: f32,
     pub layback: f32,
-    pub lookat: f32,
+    pub lookat: Option<f32>,
     pub rotation: f32,
     pub xscale: f32,
     pub yscale: f32,
@@ -31,21 +31,21 @@ pub struct ModePov {
     pub yoffset: f32,
     pub zoffset: f32,
     #[serde(rename = "ViewHOfs")]
-    pub view_hofs: f32,
+    pub view_hofs: Option<f32>,
     #[serde(rename = "ViewVOfs")]
-    pub view_vofs: f32,
+    pub view_vofs: Option<f32>,
     #[serde(rename = "WindowTopXOfs")]
-    pub window_top_xofs: f32,
+    pub window_top_xofs: Option<f32>,
     #[serde(rename = "WindowTopYOfs")]
-    pub window_top_yofs: f32,
+    pub window_top_yofs: Option<f32>,
     #[serde(rename = "WindowTopZOfs")]
-    pub window_top_zofs: f32,
+    pub window_top_zofs: Option<f32>,
     #[serde(rename = "WindowBottomXOfs")]
-    pub window_bottom_xofs: f32,
+    pub window_bottom_xofs: Option<f32>,
     #[serde(rename = "WindowBottomYOfs")]
-    pub window_bottom_yofs: f32,
+    pub window_bottom_yofs: Option<f32>,
     #[serde(rename = "WindowBottomZOfs")]
-    pub window_bottom_zofs: f32,
+    pub window_bottom_zofs: Option<f32>,
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
@@ -111,11 +111,11 @@ mod tests {
 
         let expected = POV {
             desktop: ModePov {
-                layout_mode: 0,
+                layout_mode: Some(0),
                 inclination: 0.0,
                 fov: 46.399986,
                 layback: 0.0,
-                lookat: 39.99996,
+                lookat: Some(39.99996),
                 rotation: 0.0,
                 xscale: 1.0,
                 yscale: 0.988,
@@ -123,21 +123,21 @@ mod tests {
                 xoffset: 0.0,
                 yoffset: 46.00006,
                 zoffset: -320.0,
-                view_hofs: 0.0,
-                view_vofs: 0.0,
-                window_top_xofs: 0.0,
-                window_top_yofs: 0.0,
-                window_top_zofs: 370.54193,
-                window_bottom_xofs: 0.0,
-                window_bottom_yofs: 0.0,
-                window_bottom_zofs: 138.95322,
+                view_hofs: Some(0.0),
+                view_vofs: Some(0.0),
+                window_top_xofs: Some(0.0),
+                window_top_yofs: Some(0.0),
+                window_top_zofs: Some(370.54193),
+                window_bottom_xofs: Some(0.0),
+                window_bottom_yofs: Some(0.0),
+                window_bottom_zofs: Some(138.95322),
             },
             fullscreen: ModePov {
-                layout_mode: 2,
+                layout_mode: Some(2),
                 inclination: 2.0,
                 fov: 77.0,
                 layback: 50.20001,
-                lookat: 25.0,
+                lookat: Some(25.0),
                 rotation: 270.0,
                 xscale: 1.0540019,
                 yscale: 1.2159998,
@@ -145,21 +145,21 @@ mod tests {
                 xoffset: 0.0,
                 yoffset: 186.54193,
                 zoffset: 952.1677,
-                view_hofs: -1.4901161e-8,
-                view_vofs: -11.100006,
-                window_top_xofs: -5.0,
-                window_top_yofs: -275.0,
-                window_top_zofs: 365.54193,
-                window_bottom_xofs: 1.0,
-                window_bottom_yofs: -34.0,
-                window_bottom_zofs: 230.95322,
+                view_hofs: Some(-1.4901161e-8),
+                view_vofs: Some(-11.100006),
+                window_top_xofs: Some(-5.0),
+                window_top_yofs: Some(-275.0),
+                window_top_zofs: Some(365.54193),
+                window_bottom_xofs: Some(1.0),
+                window_bottom_yofs: Some(-34.0),
+                window_bottom_zofs: Some(230.95322),
             },
             fullsinglescreen: ModePov {
-                layout_mode: 0,
+                layout_mode: Some(0),
                 inclination: 0.0,
                 fov: 45.0,
                 layback: 0.0,
-                lookat: 52.0,
+                lookat: Some(52.0),
                 rotation: 0.0,
                 xscale: 1.2,
                 yscale: 1.1,
@@ -167,16 +167,16 @@ mod tests {
                 xoffset: 0.0,
                 yoffset: 30.0,
                 zoffset: -50.0,
-                view_hofs: 0.0,
-                view_vofs: 0.0,
-                window_top_xofs: 0.0,
-                window_top_yofs: 0.0,
-                window_top_zofs: 370.54193,
-                window_bottom_xofs: 0.0,
-                window_bottom_yofs: 0.0,
-                window_bottom_zofs: 138.95322,
+                view_hofs: Some(0.0),
+                view_vofs: Some(0.0),
+                window_top_xofs: Some(0.0),
+                window_top_yofs: Some(0.0),
+                window_top_zofs: Some(370.54193),
+                window_bottom_xofs: Some(0.0),
+                window_bottom_yofs: Some(0.0),
+                window_bottom_zofs: Some(138.95322),
             },
-            customsettings: Customsettings {
+            customsettings: Some(Customsettings {
                 ssaa: -1,
                 postproc_aa: -1,
                 ingame_ao: -1,
@@ -194,10 +194,89 @@ mod tests {
                 include_flipper_physics: 0,
                 sound_volume: 100,
                 sound_music_volume: 100,
-            },
+            }),
         };
 
         let pov = load("testdata/test.pov")?;
+
+        assert_eq!(pov, expected);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_load_legacy() -> std::io::Result<()> {
+        let expected = POV {
+            desktop: ModePov {
+                layout_mode: None,
+                inclination: 40.59998,
+                fov: 46.0,
+                layback: 0.0,
+                lookat: None,
+                rotation: 0.0,
+                xscale: 1.0,
+                yscale: 0.938001,
+                zscale: 1.0,
+                xoffset: 0.0,
+                yoffset: -26.800074,
+                zoffset: -300.0,
+                view_hofs: None,
+                view_vofs: None,
+                window_top_xofs: None,
+                window_top_yofs: None,
+                window_top_zofs: None,
+                window_bottom_xofs: None,
+                window_bottom_yofs: None,
+                window_bottom_zofs: None,
+            },
+            fullscreen: ModePov {
+                layout_mode: None,
+                inclination: 0.0,
+                fov: 27.0,
+                layback: 76.0,
+                lookat: None,
+                rotation: 270.0,
+                xscale: 1.0,
+                yscale: 1.16,
+                zscale: 1.0,
+                xoffset: -10.0,
+                yoffset: 0.0,
+                zoffset: -200.0,
+                view_hofs: None,
+                view_vofs: None,
+                window_top_xofs: None,
+                window_top_yofs: None,
+                window_top_zofs: None,
+                window_bottom_xofs: None,
+                window_bottom_yofs: None,
+                window_bottom_zofs: None,
+            },
+            fullsinglescreen: ModePov {
+                layout_mode: None,
+                inclination: 54.0,
+                fov: 32.0,
+                layback: 0.0,
+                lookat: None,
+                rotation: 0.0,
+                xscale: 1.0,
+                yscale: 1.0,
+                zscale: 1.0,
+                xoffset: 0.0,
+                yoffset: 0.0,
+                zoffset: -250.0,
+                view_hofs: None,
+                view_vofs: None,
+                window_top_xofs: None,
+                window_top_yofs: None,
+                window_top_zofs: None,
+                window_bottom_xofs: None,
+                window_bottom_yofs: None,
+                window_bottom_zofs: None,
+            },
+            customsettings: None,
+        };
+
+        let pov = load("testdata/test.legacy.pov")?;
 
         assert_eq!(pov, expected);
 

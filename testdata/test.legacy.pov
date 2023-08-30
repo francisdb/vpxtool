@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<POV>
+	<desktop>
+		<inclination>40.599979</inclination>
+		<fov>46.000000</fov>
+		<layback>0.000000</layback>
+		<rotation>0.000000</rotation>
+		<xscale>1.000000</xscale>
+		<yscale>0.938001</yscale>
+		<zscale>1.000000</zscale>
+		<xoffset>0.000000</xoffset>
+		<yoffset>-26.800074</yoffset>
+		<zoffset>-300.000000</zoffset>
+	</desktop>
+	<fullscreen>
+		<inclination>0.000000</inclination>
+		<fov>27.000000</fov>
+		<layback>76.000000</layback>
+		<rotation>270.000000</rotation>
+		<xscale>1.000000</xscale>
+		<yscale>1.160000</yscale>
+		<zscale>1.000000</zscale>
+		<xoffset>-10.000000</xoffset>
+		<yoffset>0.000000</yoffset>
+		<zoffset>-200.000000</zoffset>
+	</fullscreen>
+	<fullsinglescreen>
+		<inclination>54.000000</inclination>
+		<fov>32.000000</fov>
+		<layback>0.000000</layback>
+		<rotation>0.000000</rotation>
+		<xscale>1.000000</xscale>
+		<yscale>1.000000</yscale>
+		<zscale>1.000000</zscale>
+		<xoffset>0.000000</xoffset>
+		<yoffset>0.000000</yoffset>
+		<zoffset>-250.000000</zoffset>
+	</fullsinglescreen>
+</POV>
+
