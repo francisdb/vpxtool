@@ -1,5 +1,6 @@
 pub mod config;
 pub mod directb2s;
+pub mod pov;
 mod frontend;
 mod indexer;
 pub mod jsonmodel;
