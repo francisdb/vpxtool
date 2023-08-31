@@ -92,12 +92,12 @@ pub fn load<P: AsRef<Path>>(path: P) -> Result<POV, io::Error> {
     from_reader(reader).map_err(|e| io::Error::new(io::ErrorKind::Other, e))
 }
 
-// pub fn save<P: AsRef<Path>>(path: P, pov: &POV) -> Result<(), io::Error> {
-//     let file = std::fs::File::create(path)?;
-//     let mut writer = std::io::BufWriter::new(file);
-//     to_writer(&mut writer, pov);
-//     Ok(())
-// }
+pub fn save<P: AsRef<Path>>(path: P, pov: &POV) -> Result<(), io::Error> {
+    let file = std::fs::File::create(path)?;
+    let mut writer = std::io::BufWriter::new(file);
+    to_writer(&mut writer, pov);
+    Ok(())
+}
 
 #[cfg(test)]
 mod tests {
@@ -107,8 +107,6 @@ mod tests {
 
     #[test]
     fn test_load() -> std::io::Result<()> {
-        //let pov = load(include_str!("../../testdata/test.pov"))?;
-
         let expected = POV {
             desktop: ModePov {
                 layout_mode: Some(0),
