@@ -83,6 +83,6 @@
         <PhysicsSet>0</PhysicsSet>
         <IncludeFlipperPhysics>0</IncludeFlipperPhysics>
         <SoundVolume>100</SoundVolume>
-        <SoundMusicVolume>100</SoundMusicVolume>
+        <MusicVolume>100</MusicVolume>
     </customsettings>
 </POV>

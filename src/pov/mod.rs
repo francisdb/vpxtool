@@ -82,7 +82,7 @@ pub struct Customsettings {
     pub include_flipper_physics: i32,
     #[serde(rename = "SoundVolume")]
     pub sound_volume: i32,
-    #[serde(rename = "SoundMusicVolume")]
+    #[serde(rename = "MusicVolume")]
     pub sound_music_volume: i32,
 }
 
@@ -92,12 +92,12 @@ pub fn load<P: AsRef<Path>>(path: P) -> Result<POV, io::Error> {
     from_reader(reader).map_err(|e| io::Error::new(io::ErrorKind::Other, e))
 }
 
-pub fn save<P: AsRef<Path>>(path: P, pov: &POV) -> Result<(), io::Error> {
-    let file = std::fs::File::create(path)?;
-    let mut writer = std::io::BufWriter::new(file);
-    to_writer(&mut writer, pov);
-    Ok(())
-}
+// pub fn save<P: AsRef<Path>>(path: P, pov: &POV) -> Result<(), io::Error> {
+//     let file = std::fs::File::create(path)?;
+//     let mut writer = std::io::BufWriter::new(file);
+//     to_writer(&mut writer, pov);
+//     Ok(())
+// }
 
 #[cfg(test)]
 mod tests {
