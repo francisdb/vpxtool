@@ -152,6 +152,37 @@ impl<'a> BiffReader<'a> {
         s.to_string()
     }
 
+    pub fn get_str_no_remaining_update_utf8(&mut self, count: usize) -> String {
+        // Below is the code used to read the CODE field in the C++ version
+        //
+        //    // check if script is either plain ASCII or UTF-8, or if it contains invalid stuff
+        //    uint32_t state = UTF8_ACCEPT;
+        //    if (validate_utf8(&state, szText, cchar) == UTF8_REJECT) {
+        //       char* const utf8Text = iso8859_1_to_utf8(szText, cchar); // old ANSI characters? -> convert to UTF-8
+        //       delete[] szText;
+        //       szText = utf8Text;
+        //    }
+        //
+        // https://github.com/vpinball/vpinball/blob/5ac9cfcb19e721ed9373465866cb724a655ad55f/codeview.cpp#L1761-L1767
+
+        let mut pos_0 = count;
+        // find the end of the 0-terminated string
+        for p in 0..count {
+            if self.data[self.pos + p] == 0 {
+                pos_0 = p;
+                break;
+            }
+        }
+        let data = &self.data[self.pos..self.pos + pos_0];
+
+        let s = match String::from_utf8(data.to_vec()) {
+            Ok(s) => s,
+            Err(_e) => decode_latin1(data).to_string(),
+        };
+        self.pos += count;
+        s.to_string()
+    }
+
     pub fn get_str_no_remaining_update(&mut self, count: usize) -> String {
         let mut pos_0 = count;
         // find the end of the string

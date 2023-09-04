@@ -800,7 +800,7 @@ pub fn read_all_gamedata_records(input: &[u8], version: &Version) -> GameData {
             "SECB" => gamedata.protection_data = Some(reader.get_record_data(false).to_vec()),
             "CODE" => {
                 let len = reader.get_u32_no_remaining_update();
-                gamedata.code = reader.get_str_no_remaining_update(len as usize);
+                gamedata.code = reader.get_str_no_remaining_update_utf8(len as usize);
             }
             other => {
                 let data = reader.get_record_data(false);
