@@ -1,9 +1,7 @@
-use std::fmt::Debug;
 use std::io;
+use std::{fmt::Debug, io::BufWriter};
 
-use quick_xml::de::from_reader;
-use quick_xml::de::*;
-use quick_xml::se::to_writer;
+use quick_xml::Writer;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
@@ -89,21 +87,122 @@ pub struct Customsettings {
 pub fn load<P: AsRef<Path>>(path: P) -> Result<POV, io::Error> {
     let file = std::fs::File::open(path)?;
     let reader = std::io::BufReader::new(file);
-    from_reader(reader).map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+    quick_xml::de::from_reader(reader).map_err(|e| io::Error::new(io::ErrorKind::Other, e))
 }
 
-// pub fn save<P: AsRef<Path>>(path: P, pov: &POV) -> Result<(), io::Error> {
-//     let file = std::fs::File::create(path)?;
-//     let mut writer = std::io::BufWriter::new(file);
-//     to_writer(&mut writer, pov);
-//     Ok(())
-// }
+pub fn save<P: AsRef<Path>>(path: P, pov: &POV) -> Result<(), io::Error> {
+    let file = std::fs::File::create(path)?;
+    let mut writer = Writer::new(BufWriter::new(file));
+    // TODO is there a better way to do this?
+    writer.write_serializable("POV", pov).map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+}
 
 #[cfg(test)]
 mod tests {
 
+    use std::path::PathBuf;
+
     use super::*;
     use pretty_assertions::assert_eq;
+    use testdir::testdir;
+
+    #[test]
+    fn test_write_read() -> std::io::Result<()> {
+        let dir: PathBuf = testdir!();
+        let test_pov_path = dir.join("test.pov");
+
+        let pov = POV {
+            desktop: ModePov {
+                layout_mode: Some(0),
+                inclination: 0.0,
+                fov: 46.399986,
+                layback: 0.0,
+                lookat: Some(39.99996),
+                rotation: 0.0,
+                xscale: 1.0,
+                yscale: 0.988,
+                zscale: 1.0,
+                xoffset: 0.0,
+                yoffset: 46.00006,
+                zoffset: -320.0,
+                view_hofs: Some(0.0),
+                view_vofs: Some(0.0),
+                window_top_xofs: Some(0.0),
+                window_top_yofs: Some(0.0),
+                window_top_zofs: Some(370.54193),
+                window_bottom_xofs: Some(0.0),
+                window_bottom_yofs: Some(0.0),
+                window_bottom_zofs: Some(138.95322),
+            },
+            fullscreen: ModePov {
+                layout_mode: Some(2),
+                inclination: 2.0,
+                fov: 77.0,
+                layback: 50.20001,
+                lookat: Some(25.0),
+                rotation: 270.0,
+                xscale: 1.0540019,
+                yscale: 1.2159998,
+                zscale: 1.0,
+                xoffset: 0.0,
+                yoffset: 186.54193,
+                zoffset: 952.1677,
+                view_hofs: Some(-1.4901161e-8),
+                view_vofs: Some(-11.100006),
+                window_top_xofs: Some(-5.0),
+                window_top_yofs: Some(-275.0),
+                window_top_zofs: Some(365.54193),
+                window_bottom_xofs: Some(1.0),
+                window_bottom_yofs: Some(-34.0),
+                window_bottom_zofs: Some(230.95322),
+            },
+            fullsinglescreen: ModePov {
+                layout_mode: Some(0),
+                inclination: 0.0,
+                fov: 45.0,
+                layback: 0.0,
+                lookat: Some(52.0),
+                rotation: 0.0,
+                xscale: 1.0540019,
+                yscale: 1.2159998,
+                zscale: 1.0,
+                xoffset: 0.0,
+                yoffset: 186.54193,
+                zoffset: 952.1677,
+                view_hofs: Some(-1.4901161e-8),
+                view_vofs: Some(-11.100006),
+                window_top_xofs: Some(-5.0),
+                window_top_yofs: Some(-275.0),
+                window_top_zofs: Some(365.54193),
+                window_bottom_xofs: Some(1.0),
+                window_bottom_yofs: Some(-34.0),
+                window_bottom_zofs: Some(230.95322),
+            },
+            customsettings: Some(Customsettings {
+                ssaa: -1,
+                postproc_aa: -1,
+                ingame_ao: -1,
+                sc_sp_reflect: -1,
+                fps_limiter: -1,
+                overwrite_details_level: 0,
+                details_level: 5,
+                ball_reflection: -1,
+                ball_trail: -1,
+                ball_trail_strength: 0.2,
+                overwrite_night_day: 1,
+                night_day_level: 63,
+                gameplay_difficulty: 19.999998,
+                physics_set: 0,
+                include_flipper_physics: 0,
+                sound_volume: 100,
+                sound_music_volume: 100,
+            }),
+        };
+        save(&test_pov_path, &pov)?;
+        let loaded = load(&test_pov_path)?;
+        assert_eq!(pov, loaded);
+        Ok(())
+    }
 
     #[test]
     fn test_load() -> std::io::Result<()> {
