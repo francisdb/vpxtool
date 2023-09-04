@@ -38,6 +38,7 @@ pub mod image;
 pub mod sound;
 pub mod tableinfo;
 pub mod version;
+pub mod model;
 
 pub struct VPX {
     custominfotags: custominfotags::CustomInfoTags, // this is a bit redundant
@@ -408,9 +409,10 @@ fn read_bytes_at<F: Read + Seek, P: AsRef<Path>>(
     Ok(bytes)
 }
 
+/// Write the script to file in utf8 encoding
 pub fn extract_script<P: AsRef<Path>>(gamedata: &GameData, vbs_path: &P) -> Result<(), io::Error> {
     let script = &gamedata.code;
-    std::fs::write(vbs_path, script)
+    std::fs::write(vbs_path, &script.string)
 }
 
 pub fn read_gamedata<F: Seek + Read>(
@@ -648,7 +650,7 @@ pub fn diff_script<P: AsRef<Path>>(vpx_file_path: P) -> io::Result<String> {
                 let version = read_version(&mut comp)?;
                 let gamedata = read_gamedata(&mut comp, &version)?;
                 let script = gamedata.code;
-                std::fs::write(&original_vbs_path, script)?;
+                std::fs::write(&original_vbs_path, script.string)?;
                 let diff_color = if colored::control::SHOULD_COLORIZE.should_colorize() {
                     DiffColor::Always
                 } else {
@@ -721,9 +723,7 @@ mod tests {
     use logging_timer::time;
     use pretty_assertions::assert_eq;
     use pretty_env_logger::env_logger;
-    use std::{
-        collections::hash_map::DefaultHasher, hash::Hash, hash::Hasher, io::Cursor,
-    };
+    use std::{collections::hash_map::DefaultHasher, hash::Hash, hash::Hasher, io::Cursor};
     use testdir::testdir;
 
     use crate::indexer::find_vpx_files;

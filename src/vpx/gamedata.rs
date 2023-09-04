@@ -2,6 +2,7 @@
 
 use super::{
     biff::{self, BiffReader, BiffWriter},
+    model::StringWithEncoding,
     version::Version,
 };
 
@@ -157,7 +158,7 @@ pub struct GameData {
     pub name: String,                                              // NAME 112
     pub custom_colors: Vec<u8>,                                    //[Color; 16], // CCUS 113
     pub protection_data: Option<Vec<u8>>,                          // SECB (removed in ?)
-    pub code: String,                                              // CODE 114
+    pub code: StringWithEncoding,                                  // CODE 114
     // This is a bit of a hack because we want reproducible builds.
     // 10.8.0 beta 1-4 had EFSS at the old location, but it was moved to the new location in beta 5
     // Some tables were released with these old betas, so we need to support both locations to be 100% reproducing the orignal table
@@ -167,7 +168,7 @@ pub struct GameData {
 
 impl GameData {
     pub fn set_code(&mut self, script: String) {
-        self.code = script;
+        self.code = StringWithEncoding::new(script);
     }
 }
 
@@ -295,7 +296,7 @@ impl Default for GameData {
             name: "Table1".to_string(), // seems to be the default name
             custom_colors: vec![],      //[Color::BLACK; 16],
             protection_data: None,
-            code: String::new(),
+            code: StringWithEncoding::empty(),
             bg_view_horizontal_offset_desktop: None,
             bg_view_vertical_offset_desktop: None,
             bg_window_top_x_offset_desktop: None,
@@ -602,7 +603,7 @@ pub fn write_all_gamedata_records(gamedata: &GameData, version: &Version) -> Vec
     if let Some(protection_data) = &gamedata.protection_data {
         writer.write_tagged_data("SECB", protection_data);
     }
-    writer.write_tagged_string_no_size("CODE", gamedata.code.as_str());
+    writer.write_tagged_string_with_encoding_no_size("CODE", &gamedata.code);
 
     writer.close(true);
     // TODO how do we get rid of this extra copy?
@@ -800,7 +801,8 @@ pub fn read_all_gamedata_records(input: &[u8], version: &Version) -> GameData {
             "SECB" => gamedata.protection_data = Some(reader.get_record_data(false).to_vec()),
             "CODE" => {
                 let len = reader.get_u32_no_remaining_update();
-                gamedata.code = reader.get_str_no_remaining_update_utf8(len as usize);
+                // at least a the time of 1060, some code was still encoded in latin1
+                gamedata.code = reader.get_str_with_encoding_no_remaining_update(len as usize);
             }
             other => {
                 let data = reader.get_record_data(false);
@@ -951,7 +953,7 @@ mod tests {
             name: String::from("test name"),
             custom_colors: vec![1, 1, 2, 4], // [Color::RED; 16],
             protection_data: None,
-            code: String::from("test code"),
+            code: StringWithEncoding::from("test code wit some unicode: Ǣ"),
             bg_view_horizontal_offset_desktop: None,
             bg_view_vertical_offset_desktop: None,
             bg_window_top_x_offset_desktop: None,
