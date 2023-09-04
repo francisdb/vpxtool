@@ -274,7 +274,9 @@ fn launch_table(
 ) -> Result<ExitStatus> {
     // start process ./VPinballX_GL -play [table path]
     let mut cmd = std::process::Command::new(vpinball_executable);
-    if !fullscreen {
+    if fullscreen {
+        cmd.arg("-EnableTrueFullscreen");
+    }else{
         cmd.arg("-DisableTrueFullscreen");
     }
     cmd.arg("-play");

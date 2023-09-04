@@ -3,6 +3,8 @@ use nom::number::complete::{le_f32, le_f64, le_i16, le_i32, le_i64, le_u16, le_u
 use nom::ToUsize;
 use utf16string::WStr;
 
+use super::model::{StringEncoding, StringWithEncoding};
+
 pub trait BiffRead {
     fn biff_read(reader: &mut BiffReader<'_>) -> Self;
 }
@@ -150,6 +152,45 @@ impl<'a> BiffReader<'a> {
         self.pos += count;
         self.sub_remaining(count);
         s.to_string()
+    }
+
+    pub fn get_str_with_encoding_no_remaining_update(
+        &mut self,
+        count: usize,
+    ) -> StringWithEncoding {
+        // Below is the code used to read the CODE field in the C++ version
+        //
+        //    // check if script is either plain ASCII or UTF-8, or if it contains invalid stuff
+        //    uint32_t state = UTF8_ACCEPT;
+        //    if (validate_utf8(&state, szText, cchar) == UTF8_REJECT) {
+        //       char* const utf8Text = iso8859_1_to_utf8(szText, cchar); // old ANSI characters? -> convert to UTF-8
+        //       delete[] szText;
+        //       szText = utf8Text;
+        //    }
+        //
+        // https://github.com/vpinball/vpinball/blob/5ac9cfcb19e721ed9373465866cb724a655ad55f/codeview.cpp#L1761-L1767
+
+        let mut pos_0 = count;
+        // find the end of the 0-terminated string
+        for p in 0..count {
+            if self.data[self.pos + p] == 0 {
+                pos_0 = p;
+                break;
+            }
+        }
+        let data = &self.data[self.pos..self.pos + pos_0];
+
+        self.pos += count;
+        match String::from_utf8(data.to_vec()) {
+            Ok(s) => StringWithEncoding {
+                encoding: StringEncoding::Utf8,
+                string: s.to_string(),
+            },
+            Err(_e) => StringWithEncoding {
+                encoding: StringEncoding::Latin1,
+                string: decode_latin1(data).to_string(),
+            },
+        }
     }
 
     pub fn get_str_no_remaining_update(&mut self, count: usize) -> String {
@@ -547,6 +588,15 @@ impl BiffWriter {
         self.write_data(&d);
     }
 
+    pub fn write_string_with_encoding(&mut self, value: &StringWithEncoding) {
+        let d = match value.encoding {
+            StringEncoding::Latin1 => encode_latin1_lossy(&value.string).to_vec(),
+            StringEncoding::Utf8 => value.string.clone().into_bytes(),
+        };
+        self.write_u32(d.len().try_into().unwrap());
+        self.write_data(&d);
+    }
+
     pub fn write_string_empty_zero(&mut self, value: &str) {
         if value.is_empty() {
             // sound files encode empty string like this
@@ -626,6 +676,16 @@ impl BiffWriter {
         self.end_tag_no_size();
     }
 
+    pub fn write_tagged_string_with_encoding_no_size(
+        &mut self,
+        tag: &str,
+        value: &StringWithEncoding,
+    ) {
+        self.new_tag(tag);
+        self.write_string_with_encoding(value);
+        self.end_tag_no_size();
+    }
+
     pub fn write_tagged_wide_string(&mut self, tag: &str, value: &str) {
         self.new_tag(tag);
         self.write_wide_string(value);
@@ -676,5 +736,32 @@ impl BiffWriter {
     pub(crate) fn write_marker_tag(&mut self, tag: &str) {
         self.new_tag(tag);
         self.end_tag();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn read_write_empty() {
+        let mut writer = BiffWriter::new();
+        writer.close(true);
+        let mut reader = BiffReader::new(writer.get_data());
+        assert_eq!(reader.next(false), None);
+        assert_eq!(reader.is_eof(), true);
+    }
+
+    #[test]
+    fn read_write_empty_tag() {
+        let mut writer = BiffWriter::new();
+        writer.write_tagged_empty("TEST");
+        writer.close(true);
+        let mut reader = BiffReader::new(writer.get_data());
+        assert_eq!(reader.next(false), Some("TEST".to_string()));
+        reader.next(false);
+        assert_eq!(reader.is_eof(), true);
     }
 }
