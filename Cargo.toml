@@ -34,7 +34,7 @@ serde = { version = "1.0.188", features = ["derive"] }
 serde_json = { version = "1.0.105", features = ["preserve_order"] }
 shellexpand = "3.1.0"
 utf16string = "0.2.0"
-walkdir = "2.3.3"
+walkdir = "2.4.0"
 wild = "2.1.0"
 
 [dev-dependencies]
