@@ -61,11 +61,10 @@ fn default_vpinball_executable_detection() -> PathBuf {
 }
 
 fn create_default_config(config_file: &str) {
-    println!("Warning: Failed to detect the vpinball executable.");
-
     let mut vpx_executable = default_vpinball_executable_detection();
 
-    if Path::new("/etc/hosts").exists() {
+    if !Path::new(config_file).exists() {
+        println!("Warning: Failed to detect the vpinball executable.");
         print!("vpinball executale path: ");
         io::stdout().flush().expect("Failed to flush stdout");
 
@@ -74,7 +73,15 @@ fn create_default_config(config_file: &str) {
             .read_line(&mut new_executable_path)
             .expect("Failed to read line");
 
+
         vpx_executable = PathBuf::from(new_executable_path.trim().to_string());
+
+        if !vpx_executable.exists() {
+            println!("Error: input file path wasn't found.");
+            println!("Executable path is not set. ");
+
+            std::process::exit(1);
+        }
     }
 
     let full_path = format!(
