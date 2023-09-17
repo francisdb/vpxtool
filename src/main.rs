@@ -7,6 +7,7 @@ pub mod vpx;
 use clap::{arg, Arg, Command};
 use colored::Colorize;
 use console::Emoji;
+use indicatif::style::ProgressTracker;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::fs::{metadata, File};
 use std::io::{self, Read};
@@ -29,14 +30,21 @@ use crate::vpx::version;
 // see https://github.com/fusion-engineering/rust-git-version/issues/21
 const GIT_VERSION: &str = git_version!(args = ["--tags", "--always", "--dirty=-modified"]);
 
-// TODO switch to figment for config
-//   write the config if it doesn't exist
-//   with empty values or defults?
+use figment::{
+    providers::{Format, Toml},
+    Figment,
+};
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+struct Config {
+    vpx_executable: String,
+}
 
 const OK: Emoji = Emoji("✅", "[launch]");
 const NOK: Emoji = Emoji("❌", "[crash]");
 
-fn default_vpinball_executable() -> PathBuf {
+fn default_vpinball_executable_detection() -> PathBuf {
     if cfg!(target_os = "windows") {
         // baller installer default
         let dir = PathBuf::from("c:\\vPinball\\VisualPinball");
@@ -50,6 +58,59 @@ fn default_vpinball_executable() -> PathBuf {
         let home = dirs::home_dir().unwrap();
         home.join("vpinball").join("vpinball").join("VPinballX_GL")
     }
+}
+
+fn create_default_config(config_file: &str) {
+    println!("Warning: Failed to detect the vpinball executable.");
+
+    let mut vpx_executable = default_vpinball_executable_detection();
+
+    if Path::new("/etc/hosts").exists() {
+        print!("vpinball executale path: ");
+        io::stdout().flush().expect("Failed to flush stdout");
+
+        let mut new_executable_path = String::new();
+        io::stdin()
+            .read_line(&mut new_executable_path)
+            .expect("Failed to read line");
+
+        vpx_executable = PathBuf::from(new_executable_path.trim().to_string());
+    }
+
+    let full_path = format!(
+        "vpx_executable = \"{}\"",
+        vpx_executable.to_string_lossy().to_string()
+    );
+
+    let file_result = File::create(config_file);
+    match file_result {
+        Ok(mut file) => {
+            let write_result = file.write_all(full_path.as_bytes());
+            match write_result {
+                Ok(_) => {
+                    println!("Write succeeded!");
+                }
+                Err(err) => {
+                    eprintln!("Write error: {}", err);
+                }
+            }
+        }
+        Err(err) => {
+            eprintln!("File creation error: {}", err);
+        }
+    }
+}
+
+fn default_vpinball_executable() -> PathBuf {
+    let config_file = "vpxtool.toml";
+
+    if !Path::new(config_file).exists() {
+        create_default_config(config_file);
+    }
+    let figment = Figment::new().merge(Toml::file(config_file));
+
+    let config: Config = figment.extract().unwrap();
+    PathBuf::from(config.vpx_executable)
 }
 
 fn default_tables_root() -> PathBuf {
