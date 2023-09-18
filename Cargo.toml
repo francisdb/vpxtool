@@ -31,7 +31,7 @@ open = "5.0.0"
 pretty_env_logger = "0.5.0"
 quick-xml = { version = "0.30.0", features = ["serialize"] }
 serde = { version = "1.0.188", features = ["derive"] }
-serde_json = { version = "1.0.106", features = ["preserve_order"] }
+serde_json = { version = "1.0.107", features = ["preserve_order"] }
 shellexpand = "3.1.0"
 utf16string = "0.2.0"
 walkdir = "2.4.0"
