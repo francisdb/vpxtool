@@ -35,10 +35,10 @@ pub mod font;
 pub mod gamedata;
 pub mod gameitem;
 pub mod image;
+pub mod model;
 pub mod sound;
 pub mod tableinfo;
 pub mod version;
-pub mod model;
 
 pub struct VPX {
     custominfotags: custominfotags::CustomInfoTags, // this is a bit redundant
