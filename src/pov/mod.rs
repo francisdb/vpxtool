@@ -1,7 +1,7 @@
-use std::io;
-use std::{fmt::Debug, io::BufWriter};
+use std::fmt::Debug;
+use std::{fs, io};
 
-use quick_xml::Writer;
+use quick_xml::se::Serializer;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
@@ -59,9 +59,9 @@ pub struct Customsettings {
     #[serde(rename = "FPSLimiter")]
     pub fps_limiter: i32,
     #[serde(rename = "OverwriteDetailsLevel")]
-    pub overwrite_details_level: i32,
+    pub overwrite_details_level: u32,
     #[serde(rename = "DetailsLevel")]
-    pub details_level: i32,
+    pub details_level: u32,
     #[serde(rename = "BallReflection")]
     pub ball_reflection: i32,
     #[serde(rename = "BallTrail")]
@@ -69,19 +69,19 @@ pub struct Customsettings {
     #[serde(rename = "BallTrailStrength")]
     pub ball_trail_strength: f32,
     #[serde(rename = "OverwriteNightDay")]
-    pub overwrite_night_day: i32,
+    pub overwrite_night_day: u32,
     #[serde(rename = "NightDayLevel")]
-    pub night_day_level: i32,
+    pub night_day_level: u32,
     #[serde(rename = "GameplayDifficulty")]
     pub gameplay_difficulty: f32,
     #[serde(rename = "PhysicsSet")]
-    pub physics_set: i32,
+    pub physics_set: u32,
     #[serde(rename = "IncludeFlipperPhysics")]
-    pub include_flipper_physics: i32,
+    pub include_flipper_physics: u32,
     #[serde(rename = "SoundVolume")]
-    pub sound_volume: i32,
+    pub sound_volume: u32,
     #[serde(rename = "MusicVolume")]
-    pub sound_music_volume: i32,
+    pub sound_music_volume: u32,
 }
 
 pub fn load<P: AsRef<Path>>(path: P) -> Result<POV, io::Error> {
@@ -91,10 +91,17 @@ pub fn load<P: AsRef<Path>>(path: P) -> Result<POV, io::Error> {
 }
 
 pub fn save<P: AsRef<Path>>(path: P, pov: &POV) -> Result<(), io::Error> {
-    let file = std::fs::File::create(path)?;
-    let mut writer = Writer::new(BufWriter::new(file));
-    // TODO is there a better way to do this?
-    writer.write_serializable("POV", pov).map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+    // TODO is there a way to do this without buffer?
+    let mut buffer = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n".to_string();
+    let mut ser = Serializer::new(&mut buffer);
+    ser.indent(' ', 4);
+
+    // write the <?xml version="1.0" encoding="UTF-8"?>
+    // ser.write_declaration(true)?;
+
+    pov.serialize(ser)
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+    fs::write(&path, buffer)
 }
 
 #[cfg(test)]

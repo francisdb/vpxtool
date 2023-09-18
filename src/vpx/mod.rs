@@ -35,6 +35,7 @@ pub mod font;
 pub mod gamedata;
 pub mod gameitem;
 pub mod image;
+pub mod math;
 pub mod model;
 pub mod sound;
 pub mod tableinfo;
@@ -784,7 +785,7 @@ mod tests {
 
         let mac = read_mac(&mut comp)?;
         let expected = [
-            162, 87, 146, 17, 177, 126, 27, 1, 88, 117, 121, 155, 8, 111, 172, 22,
+            26, 207, 96, 222, 89, 140, 131, 117, 185, 116, 6, 2, 113, 119, 49, 153,
         ];
         assert_eq!(mac, expected);
         Ok(())

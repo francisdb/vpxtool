@@ -2,6 +2,7 @@
 
 use super::{
     biff::{self, BiffReader, BiffWriter},
+    math::{dequantize_unsigned, quantize_unsigned},
     model::StringWithEncoding,
     version::Version,
 };
@@ -9,6 +10,53 @@ use super::{
 pub const VIEW_LAYOUT_MODE_LEGACY: u32 = 0; // All tables before 10.8 used a viewer position relative to a fitting of a set of bounding vertices (not all parts) with a standard perspective projection skewed by a layback angle
 pub const VIEW_LAYOUT_MODE_CAMERA: u32 = 1; // Position viewer relative to the bottom center of the table, use a standard camera perspective projection, replace layback by a frustrum offset
 pub const VIEW_LAYOUT_MODE_WINDOW: u32 = 2; // Position viewer relative to the bottom center of the table, use an oblique surface (re)projection (needs some postprocess to avoid distortion)
+
+// TODO switch to a array of 3 view modes like in the original code
+#[derive(Debug, PartialEq)]
+pub struct ViewSetup {
+    // ViewLayoutMode mMode = VLM_LEGACY;
+
+    // // Overall scene scale
+    // float mSceneScaleZ = 1.0f;
+
+    // // View position (relative to table bounds for legacy mode, relative to the bottom center of the table for others)
+    // float mViewX = 0.f;
+    // float mViewY = CMTOVPU(20.f);
+    // float mViewZ = CMTOVPU(70.f);
+    // float mLookAt = 0.25f; // Look at expressed as a camera inclination for legacy, or a percent of the table height, starting from bottom (0.25 is around top of slingshots)
+
+    // // Viewport adjustments
+    // float mViewportRotation = 0.f;
+    // float mSceneScaleX = 1.0f;
+    // float mSceneScaleY = 1.0f;
+
+    // // View properties
+    // float mFOV = 45.0f; // Camera & Legacy: Field of view, in degrees
+    // float mLayback = 0.0f; // Legacy: A skewing angle that deform the table to make it look 'good'
+    // float mViewHOfs = 0.0f; // Camera & Window: horizontal frustrum offset
+    // float mViewVOfs = 0.0f; // Camera & Window: vertical frustrum offset
+
+    // // Magic Window mode properties
+    // float mWindowTopXOfs = 0.0f; // Upper window border offset from left and right table bounds
+    // float mWindowTopYOfs = 0.0f; // Upper window border Y coordinate, relative to table top
+    // float mWindowTopZOfs = CMTOVPU(20.0f); // Upper window border Z coordinate, relative to table playfield Z
+    // float mWindowBottomXOfs = 0.0f; // Lower window border offset from left and right table bounds
+    // float mWindowBottomYOfs = 0.0f; // Lower window border Y coordinate, relative to table bottom
+    // float mWindowBottomZOfs = CMTOVPU(7.5f); // Lower window border Z coordinate, relative to table playfield Z
+    pub mode: u32,
+}
+
+impl ViewSetup {
+    pub fn new() -> Self {
+        ViewSetup {
+            mode: VIEW_LAYOUT_MODE_LEGACY,
+        }
+    }
+
+    fn default() -> Self {
+        ViewSetup::new()
+    }
+}
 
 #[derive(Debug, PartialEq)]
 pub struct GameData {
@@ -134,7 +182,9 @@ pub struct GameData {
     pub ball_decal_mode: bool,                                     // BDMO 90
     pub ball_playfield_reflection_strength: f32,                   // BPRS 91
     pub default_bulb_intensity_scale_on_ball: Option<f32>,         // DBIS 92 (added in 10.?)
-    pub ball_trail_strength: f32,                                  // BTST 93
+    /// this has a special quantization,
+    /// See [`Self::get_ball_trail_strength`] and [`Self::set_ball_trail_strength`]
+    pub ball_trail_strength: u32, // BTST 93
     pub user_detail_level: u32,                                    // ARAC 94
     pub overwrite_global_detail_level: bool,                       // OVDL 95
     pub overwrite_global_day_night: bool,                          // OVDN 96
@@ -169,6 +219,14 @@ pub struct GameData {
 impl GameData {
     pub fn set_code(&mut self, script: String) {
         self.code = StringWithEncoding::new(script);
+    }
+
+    pub fn get_ball_trail_strength(&self) -> f32 {
+        dequantize_unsigned(8, self.ball_trail_strength)
+    }
+
+    pub fn set_ball_trail_strength(&mut self, value: f32) {
+        self.ball_trail_strength = quantize_unsigned(8, value);
     }
 }
 
@@ -272,7 +330,7 @@ impl Default for GameData {
             ball_decal_mode: false,
             ball_playfield_reflection_strength: 1.0,
             default_bulb_intensity_scale_on_ball: None, //1.0,
-            ball_trail_strength: 0.4901961,
+            ball_trail_strength: quantize_unsigned(8, 0.4901961),
             user_detail_level: 5,
             overwrite_global_detail_level: false,
             overwrite_global_day_night: false,
@@ -562,7 +620,7 @@ pub fn write_all_gamedata_records(gamedata: &GameData, version: &Version) -> Vec
     if let Some(dbis) = gamedata.default_bulb_intensity_scale_on_ball {
         writer.write_tagged_f32("DBIS", dbis);
     }
-    writer.write_tagged_f32("BTST", gamedata.ball_trail_strength);
+    writer.write_tagged_u32("BTST", gamedata.ball_trail_strength);
     writer.write_tagged_u32("ARAC", gamedata.user_detail_level);
     writer.write_tagged_bool("OGAC", gamedata.overwrite_global_detail_level);
     writer.write_tagged_bool("OGDN", gamedata.overwrite_global_day_night);
@@ -761,7 +819,7 @@ pub fn read_all_gamedata_records(input: &[u8], version: &Version) -> GameData {
             "DBIS" => gamedata.default_bulb_intensity_scale_on_ball = Some(reader.get_f32()),
             "BTST" => {
                 // TODO do we need this QuantizedUnsignedBits for some of the float fields?
-                gamedata.ball_trail_strength = reader.get_f32();
+                gamedata.ball_trail_strength = reader.get_u32();
             }
             "ARAC" => gamedata.user_detail_level = reader.get_u32(),
             "OGAC" => gamedata.overwrite_global_detail_level = reader.get_bool(),
@@ -929,7 +987,7 @@ mod tests {
             ball_decal_mode: true,
             ball_playfield_reflection_strength: 2.0,
             default_bulb_intensity_scale_on_ball: Some(2.0),
-            ball_trail_strength: 0.666,
+            ball_trail_strength: quantize_unsigned(8, 0.55),
             user_detail_level: 9,
             overwrite_global_detail_level: true,
             overwrite_global_day_night: true,

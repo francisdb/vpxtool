@@ -1,19 +1,21 @@
 pub mod config;
 pub mod directb2s;
-pub mod pov;
 mod frontend;
 mod indexer;
 pub mod jsonmodel;
+pub mod pov;
 pub mod vpx;
 
-use clap::{arg, Arg, Command};
+use clap::{arg, Arg, ArgMatches, Command};
 use colored::Colorize;
 use console::Emoji;
 use indicatif::{ProgressBar, ProgressStyle};
+use pov::{Customsettings, ModePov, POV};
 use std::fs::{metadata, File};
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::process::exit;
+use vpx::math::{dequantize_unsigned, quantize_unsigned_percent};
 
 use std::io::Write;
 
@@ -24,7 +26,9 @@ use base64::{engine::general_purpose, Engine as _};
 use crate::config::SetupConfigResult;
 use directb2s::load;
 use vpx::tableinfo::{self};
-use vpx::{cat_script, expanded, importvbs, verify, VerifyResult};
+
+use vpx::{cat_script, expanded, gamedata, importvbs, read_gamedata, verify, VerifyResult};
+
 use vpx::{extractvbs, ExtractResult};
 
 use crate::vpx::version;
@@ -157,6 +161,19 @@ fn main() {
                 ),
         )
         .subcommand(
+            Command::new("pov")
+                .subcommand_required(true)
+                .about("Point of view file (pov) related commands")
+                .subcommand(Command::new("extract")
+                .about("Extracts a the pov file from a vpx file")
+                .arg(
+                    arg!(<VPXPATH> "The path(s) to the vpx file(s)")
+                        .required(true)
+                        .num_args(1..),
+                ),
+                )
+        )
+        .subcommand(
             Command::new("assemble")
                 .about("Assembles a vpx file")
                 .arg(arg!(<DIRPATH> "The path to the vpx structure").required(true)),
@@ -216,7 +233,7 @@ fn main() {
                 }
             }
         }
-        Some(("frontend", sub_matches)) => {
+        Some(("frontend", _sub_matches)) => {
             let (config_path, config) = config::load_or_setup_config().unwrap();
             let vpx_files_with_tableinfo = frontend::frontend_index(config.tables_folder, true);
 
@@ -435,6 +452,29 @@ fn main() {
             },
             _ => unreachable!(),
         },
+        Some(("pov", sub_matches)) => match sub_matches.subcommand() {
+            Some(("extract", sub_matches)) => {
+                let paths: Vec<&str> = sub_matches
+                    .get_many::<String>("VPXPATH")
+                    .unwrap_or_default()
+                    .map(|v| v.as_str())
+                    .collect::<Vec<_>>();
+                for path in paths {
+                    let expanded_path = PathBuf::from(expand_path(path));
+                    match extract_pov(&expanded_path) {
+                        Ok(pov_path) => {
+                            println!("CREATED {}", pov_path.display());
+                        }
+                        Err(e) => {
+                            let warning = format!("Error extracting pov: {}", e).red();
+                            println!("{}", warning);
+                            exit(1);
+                        }
+                    }
+                }
+            }
+            _ => unreachable!(),
+        },
         _ => unreachable!(), // If all subcommands are defined above, anything else is unreachable!()
     }
 }
@@ -442,6 +482,120 @@ fn main() {
 fn new(vpx_file_path: &str) -> std::io::Result<()> {
     // TODO check if file exists and prompt to overwrite / add option to force
     vpx::new_minimal_vpx(vpx_file_path)
+}
+
+fn extract_pov(vpx_path: &PathBuf) -> io::Result<PathBuf> {
+    // read vpx
+    // create pov
+    // write pov
+
+    let mut comp = cfb::open(vpx_path)?;
+    let version = version::read_version(&mut comp)?;
+    let table_info = read_gamedata(&mut comp, &version)?;
+
+    let pov = POV {
+        desktop: ModePov {
+            layout_mode: table_info.bg_view_mode_desktop,
+            inclination: table_info.bg_view_mode_desktop.unwrap_or_default() as f32,
+            fov: table_info.bg_fov_desktop,
+            layback: table_info.bg_layback_desktop,
+            lookat: Some(table_info.bg_inclination_desktop),
+            rotation: table_info.bg_rotation_desktop,
+            xscale: table_info.bg_scale_x_desktop,
+            yscale: table_info.bg_scale_y_desktop,
+            zscale: table_info.bg_scale_z_desktop,
+            xoffset: table_info.bg_offset_x_desktop,
+            yoffset: table_info.bg_offset_y_desktop,
+            zoffset: table_info.bg_offset_z_desktop,
+            view_hofs: table_info.bg_view_horizontal_offset_desktop,
+            view_vofs: table_info.bg_view_vertical_offset_desktop,
+            window_top_xofs: table_info.bg_window_top_x_offset_desktop,
+            window_top_yofs: table_info.bg_window_top_y_offset_desktop,
+            window_top_zofs: table_info.bg_window_top_z_offset_desktop,
+            window_bottom_xofs: table_info.bg_window_bottom_x_offset_desktop,
+            window_bottom_yofs: table_info.bg_window_bottom_y_offset_desktop,
+            window_bottom_zofs: table_info.bg_window_bottom_z_offset_desktop,
+        },
+        fullscreen: ModePov {
+            layout_mode: table_info.bg_view_mode_fullscreen,
+            inclination: table_info.bg_view_mode_fullscreen.unwrap_or_default() as f32,
+            fov: table_info.bg_fov_fullscreen,
+            layback: table_info.bg_layback_fullscreen,
+            lookat: Some(table_info.bg_inclination_fullscreen),
+            rotation: table_info.bg_rotation_fullscreen,
+            xscale: table_info.bg_scale_x_fullscreen,
+            yscale: table_info.bg_scale_y_fullscreen,
+            zscale: table_info.bg_scale_z_fullscreen,
+            xoffset: table_info.bg_offset_x_fullscreen,
+            yoffset: table_info.bg_offset_y_fullscreen,
+            zoffset: table_info.bg_offset_z_fullscreen,
+            view_hofs: table_info.bg_view_horizontal_offset_fullscreen,
+            view_vofs: table_info.bg_view_vertical_offset_fullscreen,
+            window_top_xofs: table_info.bg_window_top_x_offset_fullscreen,
+            window_top_yofs: table_info.bg_window_top_y_offset_fullscreen,
+            window_top_zofs: table_info.bg_window_top_z_offset_fullscreen,
+            window_bottom_xofs: table_info.bg_window_bottom_x_offset_fullscreen,
+            window_bottom_yofs: table_info.bg_window_bottom_y_offset_fullscreen,
+            window_bottom_zofs: table_info.bg_window_bottom_z_offset_fullscreen,
+        },
+        fullsinglescreen: ModePov {
+            // TODO fix these defaults
+            layout_mode: table_info.bg_view_mode_full_single_screen,
+            inclination: table_info
+                .bg_view_mode_full_single_screen
+                .unwrap_or_default() as f32,
+            fov: table_info.bg_fov_full_single_screen.unwrap_or_default(),
+            layback: table_info.bg_layback_full_single_screen.unwrap_or_default(),
+            lookat: table_info.bg_inclination_full_single_screen,
+            rotation: table_info
+                .bg_rotation_full_single_screen
+                .unwrap_or_default(),
+            xscale: table_info.bg_scale_x_full_single_screen.unwrap_or_default(),
+            yscale: table_info.bg_scale_y_full_single_screen.unwrap_or_default(),
+            zscale: table_info.bg_scale_z_full_single_screen.unwrap_or_default(),
+            xoffset: table_info
+                .bg_offset_x_full_single_screen
+                .unwrap_or_default(),
+            yoffset: table_info
+                .bg_offset_y_full_single_screen
+                .unwrap_or_default(),
+            zoffset: table_info
+                .bg_offset_z_full_single_screen
+                .unwrap_or_default(),
+            view_hofs: table_info.bg_view_horizontal_offset_full_single_screen,
+            view_vofs: table_info.bg_view_vertical_offset_full_single_screen,
+            window_top_xofs: table_info.bg_window_top_x_offset_full_single_screen,
+            window_top_yofs: table_info.bg_window_top_y_offset_full_single_screen,
+            window_top_zofs: table_info.bg_window_top_z_offset_full_single_screen,
+            window_bottom_xofs: table_info.bg_window_bottom_x_offset_full_single_screen,
+            window_bottom_yofs: table_info.bg_window_bottom_y_offset_full_single_screen,
+            window_bottom_zofs: table_info.bg_window_bottom_z_offset_full_single_screen,
+        },
+        customsettings: Some(Customsettings {
+            ssaa: table_info.use_aal,
+            postproc_aa: table_info.use_fxaa,
+            ingame_ao: table_info.use_ao,
+            sc_sp_reflect: table_info.use_ssr.unwrap_or(-1),
+            fps_limiter: table_info.table_adaptive_vsync,
+            overwrite_details_level: table_info.overwrite_global_detail_level as u32,
+            details_level: table_info.user_detail_level,
+            ball_reflection: table_info.use_reflection_for_balls,
+            ball_trail: table_info.use_trail_for_balls,
+            ball_trail_strength: dequantize_unsigned(8, table_info.ball_trail_strength),
+            overwrite_night_day: table_info.overwrite_global_day_night as u32,
+            night_day_level: quantize_unsigned_percent(table_info.global_emission_scale),
+            gameplay_difficulty: table_info.global_difficulty * 100.0,
+            physics_set: table_info.override_physics,
+            include_flipper_physics: table_info.override_physics_flipper.unwrap_or(false) as u32,
+            sound_volume: quantize_unsigned_percent(table_info.table_sound_volume),
+            sound_music_volume: quantize_unsigned_percent(table_info.table_music_volume),
+        }),
+    };
+
+    let pov_path = vpx_path.with_extension("pov");
+    pov::save(&pov_path, &pov)?;
+
+    Ok(pov_path)
 }
 
 fn extract_directb2s(expanded_path: &String) {
