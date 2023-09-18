@@ -32,7 +32,7 @@ jobs:
           target/
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
     - name: Build
-      run: cargo fmt --check
+      run: cargo fmt --all --check
     - name: Build
       run: cargo build --verbose
     - name: Run tests
