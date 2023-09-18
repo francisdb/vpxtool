@@ -49,6 +49,12 @@ Options:
   -h, --help       Print help
 ```
 
+## Configuration
+
+A configuration file will be written to store the Visual Pinball executable location.
+
+Tables are assummed to be in the same directory as the executable for now.
+
 ## References / Research
 
 Other related projects that read assemble vpx files:
