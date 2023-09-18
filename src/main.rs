@@ -7,6 +7,7 @@ pub mod vpx;
 use clap::{arg, Arg, Command};
 use colored::Colorize;
 use console::Emoji;
+use indicatif::style::ProgressTracker;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::fs::{metadata, File};
 use std::io::{self, Read};
@@ -29,40 +30,180 @@ use crate::vpx::version;
 // see https://github.com/fusion-engineering/rust-git-version/issues/21
 const GIT_VERSION: &str = git_version!(args = ["--tags", "--always", "--dirty=-modified"]);
 
-// TODO switch to figment for config
-//   write the config if it doesn't exist
-//   with empty values or defults?
+use dialoguer::theme::ColorfulTheme;
+use dialoguer::Select;
+use figment::{
+    providers::{Format, Toml},
+    Figment,
+};
+use serde::Deserialize;
+use std::env;
+const CONFIGURATION_FILE_PATH: &str = "vpxtool.cfg";
+
+#[derive(Deserialize)]
+struct Config {
+    vpx_executable: String,
+}
 
 const OK: Emoji = Emoji("✅", "[launch]");
 const NOK: Emoji = Emoji("❌", "[crash]");
 
-fn default_vpinball_executable() -> PathBuf {
+fn default_vpinball_executable_detection() -> PathBuf {
+    // TODO: Improve the executable detection.
+    let mut local = env::current_dir().unwrap();
+
     if cfg!(target_os = "windows") {
         // baller installer default
         let dir = PathBuf::from("c:\\vPinball\\VisualPinball");
         let exe = dir.join("VPinballX64.exe");
-        if exe.exists() {
+
+        // Check current directory
+        if local.join("VPinballX64.exe").exists() {
+            local.join("VPinballX64.exe")
+        } else if local.join("VPinballX.exe").exists() {
+            local.join("VPinballX.exe")
+        } else if exe.exists() {
             exe
         } else {
             dir.join("VPinballX.exe")
         }
     } else {
-        let home = dirs::home_dir().unwrap();
-        home.join("vpinball").join("vpinball").join("VPinballX_GL")
+        local = local.join("VPinballX_GL");
+
+        if local.exists() {
+            local
+        } else {
+            let home = dirs::home_dir().unwrap();
+            home.join("vpinball").join("vpinball").join("VPinballX_GL")
+        }
     }
+}
+
+fn create_default_config() {
+    println!("Warning: Failed find a config file.");
+
+    let mut config_file = CONFIGURATION_FILE_PATH;
+
+    let home_directory_configuration_path =
+        dirs::config_dir().unwrap().join(CONFIGURATION_FILE_PATH);
+
+    let choices: Vec<(String, String)> = vec![
+        (
+            "Home".to_string(),
+            home_directory_configuration_path
+                .to_string_lossy()
+                .to_string(),
+        ),
+        ("Local".to_string(), format!("{}", CONFIGURATION_FILE_PATH)),
+    ];
+
+    let selection_opt = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt("Configuration location: ")
+        .default(0)
+        .items(
+            &choices
+                .iter()
+                .map(|(choice, description)| format!("{} \x1b[90m{}\x1b[0m", choice, description))
+                .collect::<Vec<_>>(),
+        )
+        .interact_opt()
+        .unwrap();
+
+    if let Some(index) = selection_opt {
+        let (_selected_choice, path) = (&choices[index].0, &choices[index].1);
+
+        config_file = path;
+    }
+
+    let mut vpx_executable = default_vpinball_executable_detection();
+
+    if !vpx_executable.exists() {
+        println!("Warning: Failed to detect the vpinball executable.");
+        print!("vpinball executale path: ");
+        io::stdout().flush().expect("Failed to flush stdout");
+
+        let mut new_executable_path = String::new();
+        io::stdin()
+            .read_line(&mut new_executable_path)
+            .expect("Failed to read line");
+
+        vpx_executable = PathBuf::from(new_executable_path.trim().to_string());
+
+        if !vpx_executable.exists() {
+            println!("Error: input file path wasn't found.");
+            println!("Executable path is not set. ");
+
+            std::process::exit(1);
+        }
+    }
+
+    let full_path = format!(
+        "vpx_executable = \"{}\"\n",
+        vpx_executable.to_string_lossy().to_string()
+    );
+
+    let file_result = File::create(config_file);
+    match file_result {
+        Ok(mut file) => {
+            let write_result = file.write_all(full_path.as_bytes());
+            match write_result {
+                Ok(_) => {
+                    println!("Configuration saved at {}.", config_file);
+                }
+                Err(err) => {
+                    eprintln!("Write error: {}", err);
+                }
+            }
+        }
+        Err(err) => {
+            eprintln!("File creation error: {}", err);
+        }
+    }
+}
+
+fn load_config() -> Config {
+    // Check if a configuration file can be found.
+    if !(dirs::config_dir()
+        .unwrap()
+        .join(CONFIGURATION_FILE_PATH)
+        .exists()
+        || Path::new(CONFIGURATION_FILE_PATH).exists())
+    {
+        create_default_config();
+    }
+
+    // Just try to read both.
+    let figment = Figment::new()
+        .merge(Toml::file(
+            dirs::config_dir().unwrap().join(CONFIGURATION_FILE_PATH),
+        ))
+        .merge(Toml::file(CONFIGURATION_FILE_PATH));
+
+    figment.extract().unwrap()
+}
+
+fn default_vpinball_executable() -> PathBuf {
+    let config = load_config();
+
+    PathBuf::from(config.vpx_executable)
 }
 
 fn default_tables_root() -> PathBuf {
-    if cfg!(target_os = "windows") {
-        // baller installer default
-        PathBuf::from("c:\\vPinball\\VisualPinball\\Tables")
-    } else {
-        let home = dirs::home_dir().unwrap();
-        home.join("vpinball").join("tables")
-    }
+    let config = load_config();
+
+    // There might be a reason to keep the tables in another directory ? Disk space for example.
+    // Both Linux and MacOS is case sensitive, but Windows doesn't care. So we grab it from the executable name.
+    let parent_directory = Path::new(&config.vpx_executable)
+        .parent()
+        .unwrap()
+        .join("tables");
+
+    parent_directory
 }
 
 fn main() {
+    load_config();
+
     // to allow for non static strings in clap
     // I had to enable the "string" module
     // is this considered a bad idea?
