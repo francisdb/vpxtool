@@ -276,7 +276,7 @@ fn launch_table(
     let mut cmd = std::process::Command::new(vpinball_executable);
     if fullscreen {
         cmd.arg("-EnableTrueFullscreen");
-    }else{
+    } else {
         cmd.arg("-DisableTrueFullscreen");
     }
     cmd.arg("-play");

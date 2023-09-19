@@ -1,7 +1,7 @@
 use std::{
     cmp,
     fmt::Display,
-    io::{Read, Seek, Write, self},
+    io::{self, Read, Seek, Write},
     path::{Path, MAIN_SEPARATOR_STR},
 };
 
