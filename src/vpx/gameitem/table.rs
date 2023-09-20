@@ -1,4 +1,4 @@
-use crate::vpx::biff::{BiffRead, BiffReader, self};
+use crate::vpx::biff::{self, BiffRead, BiffReader};
 
 #[derive(Debug, PartialEq)]
 pub struct Table {
