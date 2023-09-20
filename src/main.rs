@@ -265,6 +265,14 @@ fn main() {
                 ),
         )
         .subcommand(
+            Command::new("ls")
+                .about("Show a vpx file content")
+                .arg(
+                    arg!(<VPXPATH> "The path(s) to the vpx file(s)")
+                        .required(true),
+                    ),
+            )
+        .subcommand(
             Command::new("extract")
                 .about("Extracts a vpx file")
                 .arg(
@@ -390,6 +398,15 @@ fn main() {
                 vpx_files.len(),
                 &json_path.display()
             );
+        }
+        Some(("ls", sub_matches)) => {
+            let path = sub_matches
+                .get_one::<String>("VPXPATH")
+                .map(|s| s.as_str())
+                .unwrap_or_default();
+
+            let expanded_path = expand_path(path);
+            ls(expanded_path.as_ref());
         }
         Some(("extract", sub_matches)) => {
             let yes = sub_matches.get_flag("FORCE");
@@ -729,6 +746,10 @@ fn info(vpx_file_path: &str, json: bool) -> io::Result<()> {
     });
 
     Ok(())
+}
+
+pub fn ls(vpx_file_path: &Path) {
+    expanded::extract_directory_list(vpx_file_path);
 }
 
 pub fn extract(vpx_file_path: &Path, yes: bool) {

@@ -50,6 +50,141 @@ pub fn extract(vpx_file_path: &Path, expanded_path: &Path) -> std::io::Result<()
     Ok(())
 }
 
+pub fn extract_directory_list(vpx_file_path: &Path) {
+    let root_dir_path_str = vpx_file_path.with_extension("");
+    let root_dir_path = Path::new(&root_dir_path_str);
+    let root_dir_parent = root_dir_path
+        .parent()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_default();
+
+    let vbs_path = root_dir_path.join("script.vbs");
+
+    let mut comp = cfb::open(vpx_file_path).unwrap();
+    let version = version::read_version(&mut comp).unwrap();
+    let gamedata = read_gamedata(&mut comp, &version).unwrap();
+
+    let mut files: Vec<String> = Vec::new();
+
+    let images_path = root_dir_path.join("images");
+    let images_size = gamedata.images_size;
+    for index in 0..images_size {
+        let path = format!("GameStg/Image{}", index);
+        let mut input = Vec::new();
+        comp.open_stream(&path)
+            .unwrap()
+            .read_to_end(&mut input)
+            .unwrap();
+        let mut reader = BiffReader::new(&input);
+        let img = ImageData::biff_read(&mut reader);
+
+        let mut jpeg_path = images_path.clone();
+        let ext = img.ext();
+
+        jpeg_path.push(format!("{}.{}", img.name, ext));
+
+        files.push(jpeg_path.to_string_lossy().to_string());
+    }
+    if images_size == 0 {
+        files.push(
+            images_path
+                .join(std::path::MAIN_SEPARATOR_STR)
+                .to_string_lossy()
+                .to_string(),
+        );
+    }
+
+    let sounds_size = gamedata.sounds_size;
+    let sounds_path = root_dir_path.join("sounds");
+    for index in 0..sounds_size {
+        let path = format!("GameStg/Sound{}", index);
+        let mut input = Vec::new();
+        comp.open_stream(&path)
+            .unwrap()
+            .read_to_end(&mut input)
+            .unwrap();
+        let mut reader = BiffReader::new(&input);
+        let sound = sound::read(&version, &mut reader);
+
+        let ext = sound.ext();
+        let mut sound_path = sounds_path.clone();
+        sound_path.push(format!("{}.{}", sound.name, ext));
+
+        files.push(sound_path.to_string_lossy().to_string());
+    }
+    if sounds_size == 0 {
+        files.push(
+            sounds_path
+                .join(std::path::MAIN_SEPARATOR_STR)
+                .to_string_lossy()
+                .to_string(),
+        );
+    }
+
+    let fonts_size = gamedata.fonts_size;
+    let fonts_path = root_dir_path.join("fonts");
+    for index in 0..fonts_size {
+        let path = format!("GameStg/Font{}", index);
+        let mut input = Vec::new();
+        comp.open_stream(&path)
+            .unwrap()
+            .read_to_end(&mut input)
+            .unwrap();
+        let font = font::read(&input);
+
+        let ext = font.ext();
+        let mut font_path = fonts_path.clone();
+        font_path.push(format!("Font{}.{}.{}", index, font.name, ext));
+
+        files.push(font_path.join("/").to_string_lossy().to_string());
+    }
+    if fonts_size == 0 {
+        files.push(fonts_path.to_string_lossy().to_string());
+    }
+
+    let entries = retrieve_entries_from_compound_file(&mut comp);
+    entries.iter().for_each(|path| {
+        let mut stream = comp.open_stream(path).unwrap();
+        // write the steam directly to a file
+        let file_path = root_dir_path.join(&path[1..]);
+        // println!("Writing to {}", file_path.display());
+        files.push(file_path.to_string_lossy().to_string());
+    });
+
+    files.sort();
+
+    // These files are made by:
+
+    // -extract_script
+    files.push(
+        root_dir_path
+            .join("script.vbs")
+            .to_string_lossy()
+            .to_string(),
+    );
+    // -extract_collections
+    files.push(
+        root_dir_path
+            .join("collections.json")
+            .to_string_lossy()
+            .to_string(),
+    );
+    // -extract_info
+    files.push(
+        root_dir_path
+            .join("TableInfo.json")
+            .to_string_lossy()
+            .to_string(),
+    );
+    // TODO -extract_gameitems
+
+    for file_path in files {
+        if let Some(relative_path) = file_path.strip_prefix(&root_dir_parent) {
+            println!("{}", relative_path);
+        }
+    }
+}
+
 fn extract_info(comp: &mut CompoundFile<File>, root_dir_path: &Path) -> std::io::Result<()> {
     let json_path = root_dir_path.join("TableInfo.json");
     let mut json_file = std::fs::File::create(&json_path).unwrap();
@@ -236,8 +371,7 @@ fn extract_gameitems(comp: &mut CompoundFile<File>, gamedata: &GameData, root_di
     }
 }
 
-fn extract_binaries(comp: &mut CompoundFile<std::fs::File>, root_dir_path: &Path) {
-    // write all remaining entries
+fn retrieve_entries_from_compound_file(comp: &CompoundFile<std::fs::File>) -> Vec<String> {
     let entries: Vec<String> = comp
         .walk()
         .filter(|entry| {
@@ -266,6 +400,13 @@ fn extract_binaries(comp: &mut CompoundFile<std::fs::File>, root_dir_path: &Path
             path.to_owned()
         })
         .collect();
+
+    entries
+}
+
+fn extract_binaries(comp: &mut CompoundFile<std::fs::File>, root_dir_path: &Path) {
+    // write all remaining entries
+    let entries = retrieve_entries_from_compound_file(comp);
 
     entries.iter().for_each(|path| {
         let mut stream = comp.open_stream(path).unwrap();
