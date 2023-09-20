@@ -71,10 +71,10 @@ impl TableOption {
 }
 
 pub fn frontend_index(
-    tables_path: String,
+    tables_path: PathBuf,
     recursive: bool,
 ) -> Vec<(PathBuf, tableinfo::TableInfo)> {
-    println!("Indexing {}", tables_path);
+    println!("Indexing {}", &tables_path.display());
     let vpx_files = indexer::find_vpx_files(recursive, &tables_path).unwrap();
     let pb = ProgressBar::new(vpx_files.len() as u64);
     pb.set_style(
