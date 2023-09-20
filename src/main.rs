@@ -259,7 +259,7 @@ fn main() {
                         .default_value("true"),
                 )
                 .arg(
-                    arg!(<VPXROOTPATH> "The path to the root directory of vpx files")
+                    arg!(<VPXPATH> "The path(s) to the vpx file(s)")
                         .required(false)
                         .default_value(&default_tables_root)
                 ),
@@ -268,7 +268,7 @@ fn main() {
             Command::new("ls")
                 .about("Show a vpx file content")
                 .arg(
-                    arg!(<VPXPATH> "The path(s) to the vpx file(s)")
+                    arg!(<VPXPATH> "The path to the vpx file")
                         .required(true),
                     ),
             )
