@@ -1306,6 +1306,7 @@ dependencies = [
  "serde_json",
  "shellexpand",
  "testdir",
+ "toml",
  "utf16string",
  "walkdir",
  "wild",

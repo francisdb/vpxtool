@@ -37,6 +37,7 @@ utf16string = "0.2.0"
 walkdir = "2.4.0"
 wild = "2.1.0"
 figment = { version = "0.10", features = ["toml", "env"] }
+toml = "0.7.8"
 
 [dev-dependencies]
 pretty_assertions = "1.4.0"
