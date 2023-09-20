@@ -71,10 +71,6 @@ fn main() {
                         .help("Recursively index subdirectories")
                         .default_value("true"),
                 )
-                .arg(
-                    arg!(<VPXROOTPATH> "The path to the root directory of vpx files. Defaults to what is set up in the config file.")
-                        .required(false)
-                ),
         )
         .subcommand(
             Command::new("index")
@@ -220,7 +216,7 @@ fn main() {
             }
         }
         Some(("frontend", sub_matches)) => {
-            let (config_path, config) = config::load_or_setup_config();
+            let (config_path, config) = config::load_or_setup_config().unwrap();
             let vpx_files_with_tableinfo = frontend::frontend_index(config.tables_folder, true);
 
             println!("Using config file {}", config_path.display());
@@ -232,8 +228,20 @@ fn main() {
             let path = sub_matches
                 .get_one::<String>("VPXROOTPATH")
                 .map(|s| s.as_str());
-            let path = path.unwrap_or("");
-            let expanded_path = expand_path(path);
+
+            let expanded_path = match path {
+                Some(path) => expand_path(path),
+                None => match config::load_config().unwrap() {
+                    Some((config_path, config)) => {
+                        println!("Using config file {}", config_path.display());
+                        config.tables_folder.to_string_lossy().to_string()
+                    }
+                    None => {
+                        eprintln!("No VPXROOTPATH provided up and no config file found");
+                        exit(1);
+                    }
+                },
+            };
             println!("Indexing {}", expanded_path);
             let vpx_files = indexer::find_vpx_files(recursive, &expanded_path).unwrap();
             let pb = ProgressBar::new(vpx_files.len() as u64);

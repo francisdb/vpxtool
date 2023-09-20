@@ -12,7 +12,7 @@ use std::{env, io};
 
 use std::io::Write;
 
-const CONFIGURATION_FILE_PATH: &str = "vpxtool.cfg";
+const CONFIGURATION_FILE_NAME: &str = "vpxtool.cfg";
 
 #[derive(Deserialize, Serialize)]
 pub struct Config {
@@ -28,6 +28,7 @@ impl Config {
     }
 }
 
+#[derive(PartialEq, Debug)]
 pub struct ResolvedConfig {
     pub vpx_executable: PathBuf,
     pub tables_folder: PathBuf,
@@ -65,23 +66,39 @@ pub(crate) fn setup_config() -> io::Result<SetupConfigResult> {
     }
 }
 
-pub fn load_or_setup_config() -> (PathBuf, ResolvedConfig) {
-    // Check if a configuration file can be found.
-    let existing_config_path = config_path();
-    let config_path = match existing_config_path {
-        Some(path) => path,
+pub fn load_or_setup_config() -> io::Result<(PathBuf, ResolvedConfig)> {
+    match load_config()? {
+        Some(loaded) => Ok(loaded),
         None => {
             // TODO avoid stdout interaction here
             println!("Warning: Failed find a config file.");
-            return create_default_config().unwrap();
+            create_default_config()
         }
-    };
+    }
+}
 
-    // Just try to read both.
+pub fn load_config() -> io::Result<Option<(PathBuf, ResolvedConfig)>> {
+    match config_path() {
+        Some(config_path) => {
+            let config = read_config(&config_path)?;
+            Ok(Some((config_path, config)))
+        }
+        None => Ok(None),
+    }
+}
+
+fn read_config(config_path: &PathBuf) -> io::Result<ResolvedConfig> {
     let figment = Figment::new().merge(Toml::file(&config_path));
 
     // TODO avoid unwrap
-    let config: Config = figment.extract().unwrap();
+    let config: Config = figment.extract().map_err(|e| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("Failed to load config file: {}", e),
+        )
+    })?;
+    // apply defaults
+    // TODO we might want to suggest the value in the config file by having it empty with a comment
     let tables_folder = config
         .tables_folder
         .unwrap_or(default_tables_root(&config.vpx_executable));
@@ -89,7 +106,7 @@ pub fn load_or_setup_config() -> (PathBuf, ResolvedConfig) {
         vpx_executable: config.vpx_executable,
         tables_folder: tables_folder.clone(),
     };
-    (config_path, resolved_config)
+    Ok(resolved_config)
 }
 
 pub fn clear_config() -> io::Result<Option<PathBuf>> {
@@ -104,11 +121,11 @@ pub fn clear_config() -> io::Result<Option<PathBuf>> {
 }
 
 fn local_config_path() -> PathBuf {
-    Path::new(CONFIGURATION_FILE_PATH).to_path_buf()
+    Path::new(CONFIGURATION_FILE_NAME).to_path_buf()
 }
 
 fn home_config_path() -> PathBuf {
-    dirs::config_dir().unwrap().join(CONFIGURATION_FILE_PATH)
+    dirs::config_dir().unwrap().join(CONFIGURATION_FILE_NAME)
 }
 
 fn create_default_config() -> io::Result<(PathBuf, ResolvedConfig)> {
@@ -234,9 +251,26 @@ fn default_vpinball_executable_detection() -> PathBuf {
 mod tests {
     use super::*;
 
+    use testdir::testdir;
+
     // test that we can read a incomplete config file with missing tables_folder
     #[test]
-    fn test_read_incomplete_config() {
-        todo!("implement test")
+    fn test_read_incomplete_config() -> io::Result<()> {
+        // create a temporary file
+        let temp_dir = testdir!();
+        let config_file = temp_dir.join(CONFIGURATION_FILE_NAME);
+        // write a string
+        let mut file = File::create(&config_file)?;
+        file.write_all(b"vpx_executable = \"/tmp/test/vpinball\"")?;
+
+        let config = read_config(&config_file)?;
+        assert_eq!(
+            config,
+            ResolvedConfig {
+                vpx_executable: PathBuf::from("/tmp/test/vpinball"),
+                tables_folder: PathBuf::from("/tmp/test/tables"),
+            }
+        );
+        Ok(())
     }
 }
