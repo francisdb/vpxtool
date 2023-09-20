@@ -203,15 +203,12 @@ pub fn verify(vpx_file_path: &PathBuf) -> VerifyResult {
     }
 }
 
-pub fn cat_script(vpx_file_path: &PathBuf) {
-
+pub fn cat_script(vpx_file_path: &PathBuf) -> String {
     let mut comp = cfb::open(vpx_file_path).unwrap();
     let version = version::read_version(&mut comp).unwrap();
     let gamedata = read_gamedata(&mut comp, &version).unwrap();
 
-    let script = &gamedata.code.string;
-
-    println!("{}", script);
+    gamedata.code.string
 }
 
 pub fn vbs_path_for(vpx_file_path: &PathBuf) -> PathBuf {

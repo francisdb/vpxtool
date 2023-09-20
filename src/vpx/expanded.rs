@@ -50,15 +50,13 @@ pub fn extract(vpx_file_path: &Path, expanded_path: &Path) -> std::io::Result<()
     Ok(())
 }
 
-pub fn extract_directory_list(vpx_file_path: &Path) {
+pub fn extract_directory_list(vpx_file_path: &Path) -> Vec<String> {
     let root_dir_path_str = vpx_file_path.with_extension("");
     let root_dir_path = Path::new(&root_dir_path_str);
     let root_dir_parent = root_dir_path
         .parent()
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or_default();
-
-    let vbs_path = root_dir_path.join("script.vbs");
 
     let mut comp = cfb::open(vpx_file_path).unwrap();
     let version = version::read_version(&mut comp).unwrap();
@@ -178,11 +176,18 @@ pub fn extract_directory_list(vpx_file_path: &Path) {
     );
     // TODO -extract_gameitems
 
-    for file_path in files {
-        if let Some(relative_path) = file_path.strip_prefix(&root_dir_parent) {
-            println!("{}", relative_path);
-        }
-    }
+    files = files
+        .into_iter()
+        .map(|file_path| {
+            if let Some(relative_path) = file_path.strip_prefix(&root_dir_parent) {
+                relative_path.to_string()
+            } else {
+                file_path.clone()
+            }
+        })
+        .collect::<Vec<String>>();
+
+    files
 }
 
 fn extract_info(comp: &mut CompoundFile<File>, root_dir_path: &Path) -> std::io::Result<()> {

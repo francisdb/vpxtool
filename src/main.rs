@@ -22,7 +22,7 @@ use base64::{engine::general_purpose, Engine as _};
 
 use directb2s::load;
 use vpx::tableinfo::{self};
-use vpx::{expanded, importvbs, verify, cat_script, VerifyResult};
+use vpx::{cat_script, expanded, importvbs, verify, VerifyResult};
 use vpx::{extractvbs, ExtractResult};
 
 use crate::vpx::version;
@@ -413,8 +413,10 @@ fn main() {
                 .map(|s| s.as_str())
                 .unwrap_or_default();
 
-             let expanded_path = PathBuf::from(expand_path(path));
-             cat_script(&expanded_path);
+            let expanded_path = PathBuf::from(expand_path(path));
+            let code = cat_script(&expanded_path);
+
+            println!("{}", code)
         }
         Some(("ls", sub_matches)) => {
             let path = sub_matches
@@ -766,7 +768,11 @@ fn info(vpx_file_path: &str, json: bool) -> io::Result<()> {
 }
 
 pub fn ls(vpx_file_path: &Path) {
-    expanded::extract_directory_list(vpx_file_path);
+    let files = expanded::extract_directory_list(vpx_file_path);
+
+    for file_path in &files {
+        println!("{}", file_path);
+    }
 }
 
 pub fn extract(vpx_file_path: &Path, yes: bool) {
