@@ -22,7 +22,7 @@ use base64::{engine::general_purpose, Engine as _};
 
 use directb2s::load;
 use vpx::tableinfo::{self};
-use vpx::{expanded, importvbs, verify, VerifyResult};
+use vpx::{expanded, importvbs, verify, cat_script, VerifyResult};
 use vpx::{extractvbs, ExtractResult};
 
 use crate::vpx::version;
@@ -265,6 +265,14 @@ fn main() {
                 ),
         )
         .subcommand(
+            Command::new("script")
+                .about("Show a vpx script")
+                .arg(
+                    arg!(<VPXPATH> "The path to the vpx file")
+                        .required(true),
+                    ),
+            )
+        .subcommand(
             Command::new("ls")
                 .about("Show a vpx file content")
                 .arg(
@@ -398,6 +406,15 @@ fn main() {
                 vpx_files.len(),
                 &json_path.display()
             );
+        }
+        Some(("script", sub_matches)) => {
+            let path = sub_matches
+                .get_one::<String>("VPXPATH")
+                .map(|s| s.as_str())
+                .unwrap_or_default();
+
+             let expanded_path = PathBuf::from(expand_path(path));
+             cat_script(&expanded_path);
         }
         Some(("ls", sub_matches)) => {
             let path = sub_matches
