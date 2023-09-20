@@ -20,6 +20,7 @@ Commands:
   diff        Prints out a diff between the vbs in the vpx and the sidecar vbs
   frontend    Acts as a frontend for launching vpx files
   index       Indexes a directory of vpx files
+  ls          List directory contents without extracting the vpx file
   extract     Extracts a vpx file
   extractvbs  Extracts the vbs from a vpx file next to it
   importvbs   Imports the vbs next to it into a vpx file
