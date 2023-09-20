@@ -207,13 +207,7 @@ fn write_config(config_file: &PathBuf, config: &Config) -> io::Result<()> {
 }
 
 pub fn default_tables_root(vpx_executable: &PathBuf) -> PathBuf {
-    // There might be a reason to keep the tables in another directory ? Disk space for example.
-    // Both Linux and MacOS is case sensitive, but Windows doesn't care. So we grab it from the executable name.
     vpx_executable.parent().unwrap().join("tables")
-}
-
-pub fn default_vpinball_executable(config: &Config) -> PathBuf {
-    PathBuf::from(config.vpx_executable.clone())
 }
 
 fn default_vpinball_executable_detection() -> PathBuf {
