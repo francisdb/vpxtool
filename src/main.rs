@@ -22,7 +22,7 @@ use base64::{engine::general_purpose, Engine as _};
 
 use directb2s::load;
 use vpx::tableinfo::{self};
-use vpx::{expanded, importvbs, verify, VerifyResult};
+use vpx::{cat_script, expanded, importvbs, verify, VerifyResult};
 use vpx::{extractvbs, ExtractResult};
 
 use crate::vpx::version;
@@ -259,11 +259,27 @@ fn main() {
                         .default_value("true"),
                 )
                 .arg(
-                    arg!(<VPXROOTPATH> "The path to the root directory of vpx files")
+                    arg!(<VPXPATH> "The path(s) to the vpx file(s)")
                         .required(false)
                         .default_value(&default_tables_root)
                 ),
         )
+        .subcommand(
+            Command::new("script")
+                .about("Show a vpx script")
+                .arg(
+                    arg!(<VPXPATH> "The path to the vpx file")
+                        .required(true),
+                    ),
+            )
+        .subcommand(
+            Command::new("ls")
+                .about("Show a vpx file content")
+                .arg(
+                    arg!(<VPXPATH> "The path to the vpx file")
+                        .required(true),
+                    ),
+            )
         .subcommand(
             Command::new("extract")
                 .about("Extracts a vpx file")
@@ -390,6 +406,26 @@ fn main() {
                 vpx_files.len(),
                 &json_path.display()
             );
+        }
+        Some(("script", sub_matches)) => {
+            let path = sub_matches
+                .get_one::<String>("VPXPATH")
+                .map(|s| s.as_str())
+                .unwrap_or_default();
+
+            let expanded_path = PathBuf::from(expand_path(path));
+            let code = cat_script(&expanded_path);
+
+            println!("{}", code)
+        }
+        Some(("ls", sub_matches)) => {
+            let path = sub_matches
+                .get_one::<String>("VPXPATH")
+                .map(|s| s.as_str())
+                .unwrap_or_default();
+
+            let expanded_path = expand_path(path);
+            ls(expanded_path.as_ref());
         }
         Some(("extract", sub_matches)) => {
             let yes = sub_matches.get_flag("FORCE");
@@ -729,6 +765,14 @@ fn info(vpx_file_path: &str, json: bool) -> io::Result<()> {
     });
 
     Ok(())
+}
+
+pub fn ls(vpx_file_path: &Path) {
+    let files = expanded::extract_directory_list(vpx_file_path);
+
+    for file_path in &files {
+        println!("{}", file_path);
+    }
 }
 
 pub fn extract(vpx_file_path: &Path, yes: bool) {
