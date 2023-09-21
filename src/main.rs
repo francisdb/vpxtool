@@ -6,10 +6,10 @@ pub mod jsonmodel;
 pub mod pov;
 pub mod vpx;
 
-use clap::{arg, Arg, ArgMatches, Command};
+use clap::{arg, Arg, Command};
 use colored::Colorize;
 use console::Emoji;
-use indicatif::{ProgressBar, ProgressStyle};
+use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use pov::{Customsettings, ModePov, POV};
 use std::fs::{metadata, File};
 use std::io::{self, Read};
@@ -27,8 +27,9 @@ use crate::config::SetupConfigResult;
 use directb2s::load;
 use vpx::tableinfo::{self};
 
-use vpx::{cat_script, expanded, gamedata, importvbs, read_gamedata, verify, VerifyResult};
+use vpx::{cat_script, expanded, importvbs, read_gamedata, verify, VerifyResult};
 
+use crate::indexer::Progress;
 use vpx::{extractvbs, ExtractResult};
 
 use crate::vpx::version;
@@ -38,6 +39,31 @@ const GIT_VERSION: &str = git_version!(args = ["--tags", "--always", "--dirty=-m
 
 const OK: Emoji = Emoji("✅", "[launch]");
 const NOK: Emoji = Emoji("❌", "[crash]");
+
+pub struct ProgressBarProgress {
+    pb: ProgressBar,
+}
+impl ProgressBarProgress {
+    fn new(pb: ProgressBar) -> Self {
+        Self { pb }
+    }
+}
+impl Progress for ProgressBarProgress {
+    fn set_length(&self, len: u64) {
+        if len > 0 {
+            self.pb.set_draw_target(ProgressDrawTarget::stdout());
+        } else {
+            self.pb.set_draw_target(ProgressDrawTarget::hidden());
+        }
+        self.pb.set_length(len)
+    }
+    fn set_position(&self, pos: u64) {
+        self.pb.set_position(pos)
+    }
+    fn finish_and_clear(&self) {
+        self.pb.finish_and_clear()
+    }
+}
 
 fn main() {
     // to allow for non static strings in clap
@@ -214,9 +240,9 @@ fn main() {
             let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
             let path = path.unwrap_or("");
             let expanded_path = expand_path(path);
-            println!("showing info for {}", expanded_path);
+            println!("showing info for {}", expanded_path.display());
             let json = sub_matches.get_flag("JSON");
-            info(expanded_path.as_ref(), json).unwrap();
+            info(&expanded_path, json).unwrap();
         }
         Some(("diff", sub_matches)) => {
             let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
@@ -235,9 +261,8 @@ fn main() {
         }
         Some(("frontend", _sub_matches)) => {
             let (config_path, config) = config::load_or_setup_config().unwrap();
-            let vpx_files_with_tableinfo = frontend::frontend_index(config.tables_folder, true);
-
             println!("Using config file {}", config_path.display());
+            let vpx_files_with_tableinfo = frontend::frontend_index(&config, true);
             let vpinball_executable = config.vpx_executable;
             frontend::frontend(vpx_files_with_tableinfo, &vpinball_executable);
         }
@@ -247,12 +272,16 @@ fn main() {
                 .get_one::<String>("VPXROOTPATH")
                 .map(|s| s.as_str());
 
-            let expanded_path = match path {
-                Some(path) => expand_path(path),
+            let (tables_folder_path, tables_index_path) = match path {
+                Some(path) => {
+                    let tables_path = expand_path(path);
+                    let tables_index_path = config::tables_index_path(&tables_path);
+                    (tables_path, tables_index_path)
+                }
                 None => match config::load_config().unwrap() {
                     Some((config_path, config)) => {
                         println!("Using config file {}", config_path.display());
-                        config.tables_folder.to_string_lossy().to_string()
+                        (config.tables_folder, config.tables_index_path)
                     }
                     None => {
                         eprintln!("No VPXROOTPATH provided up and no config file found");
@@ -260,25 +289,26 @@ fn main() {
                     }
                 },
             };
-            println!("Indexing {}", expanded_path);
-            let vpx_files = indexer::find_vpx_files(recursive, &expanded_path).unwrap();
-            let pb = ProgressBar::new(vpx_files.len() as u64);
+            let pb = ProgressBar::hidden();
             pb.set_style(
                 ProgressStyle::with_template(
                     "{spinner:.green} [{bar:.cyan/blue}] {pos}/{human_len} ({eta})",
                 )
                 .unwrap(),
             );
-            let vpx_files_with_tableinfo = indexer::index_vpx_files(&vpx_files, |pos: u64| {
-                pb.set_position(pos);
-            });
-            pb.finish_and_clear();
-            let json_path = Path::new(&expanded_path).join("index.json");
-            indexer::write_index_json(vpx_files_with_tableinfo, json_path.clone());
+            let progress = ProgressBarProgress::new(pb);
+            let index = indexer::index_folder(
+                recursive,
+                &tables_folder_path,
+                &tables_index_path,
+                &progress,
+            )
+            .unwrap();
+            progress.finish_and_clear();
             println!(
                 "Indexed {} vpx files into {}",
-                vpx_files.len(),
-                &json_path.display()
+                index.tables.len(),
+                &tables_index_path.display()
             );
         }
         Some(("script", sub_matches)) => {
@@ -310,7 +340,7 @@ fn main() {
                 .collect();
             for path in paths {
                 let expanded_path = expand_path(path);
-                println!("extracting from {}", expanded_path);
+                println!("extracting from {}", expanded_path.display());
                 if expanded_path.ends_with(".directb2s") {
                     extract_directb2s(&expanded_path);
                 } else {
@@ -479,7 +509,7 @@ fn main() {
     }
 }
 
-fn new(vpx_file_path: &str) -> std::io::Result<()> {
+fn new(vpx_file_path: &str) -> io::Result<()> {
     // TODO check if file exists and prompt to overwrite / add option to force
     vpx::new_minimal_vpx(vpx_file_path)
 }
@@ -598,25 +628,24 @@ fn extract_pov(vpx_path: &PathBuf) -> io::Result<PathBuf> {
     Ok(pov_path)
 }
 
-fn extract_directb2s(expanded_path: &String) {
+fn extract_directb2s(expanded_path: &PathBuf) {
     let mut file = File::open(expanded_path).unwrap();
     let mut text = String::new();
     file.read_to_string(&mut text).unwrap();
     match load(&text) {
         Ok(b2s) => {
             println!("DirectB2S file version {}", b2s.version);
-            let root_dir_path_str = expanded_path.replace(".directb2s", ".directb2s.extracted");
+            let root_dir_path = expanded_path.with_extension("directb2s.extracted");
 
-            let root_dir_path = Path::new(&root_dir_path_str);
             let mut root_dir = std::fs::DirBuilder::new();
             root_dir.recursive(true);
-            root_dir.create(root_dir_path).unwrap();
+            root_dir.create(&root_dir_path).unwrap();
 
-            println!("Writing to {}", root_dir_path_str);
-            wite_images(b2s, root_dir_path);
+            println!("Writing to {}", root_dir_path.display());
+            wite_images(b2s, root_dir_path.as_path());
         }
         Err(msg) => {
-            println!("Failed to load {}: {}", expanded_path, msg);
+            println!("Failed to load {}: {}", expanded_path.display(), msg);
             exit(1);
         }
     }
@@ -744,7 +773,7 @@ fn os_independent_file_name(file_path: String) -> Option<String> {
         .map(|f| f.to_string())
 }
 
-fn expand_path(path: &str) -> String {
+fn expand_path(path: &str) -> PathBuf {
     // TODO expand all instead of only tilde?
     let expanded_path = shellexpand::tilde(path);
     match metadata(expanded_path.as_ref()) {
@@ -760,10 +789,10 @@ fn expand_path(path: &str) -> String {
             exit(1);
         }
     }
-    expanded_path.to_string()
+    PathBuf::from(expanded_path.to_string())
 }
 
-fn info(vpx_file_path: &str, json: bool) -> io::Result<()> {
+fn info(vpx_file_path: &PathBuf, json: bool) -> io::Result<()> {
     let mut comp = cfb::open(vpx_file_path)?;
     let version = version::read_version(&mut comp)?;
     // GameData also has a name field that we might want to display here

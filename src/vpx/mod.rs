@@ -1,3 +1,4 @@
+use std::error::Error;
 use std::io::{self, Read, Seek, Write};
 use std::path::MAIN_SEPARATOR_STR;
 use std::{
@@ -112,8 +113,12 @@ pub fn write_vpx<F: Read + Write + Seek>(
     write_mac(comp, &mac)
 }
 
-pub fn new_minimal_vpx<P: AsRef<Path>>(vpx_file_path: P) -> std::io::Result<()> {
-    let file = File::create(vpx_file_path)?;
+pub fn new_minimal_vpx<P: AsRef<Path>>(vpx_file_path: P) -> io::Result<()> {
+    let file = File::options()
+        .read(true)
+        .write(true)
+        .create(true)
+        .open(&vpx_file_path)?;
     let mut comp = CompoundFile::create(file)?;
     write_minimal_vpx(&mut comp)
 }
@@ -413,8 +418,13 @@ fn read_bytes_at<F: Read + Seek, P: AsRef<Path>>(
 ) -> Result<Vec<u8>, io::Error> {
     // println!("reading bytes at: {:?}", path.as_ref());
     let mut bytes = Vec::new();
-    let mut stream = comp.open_stream(path)?;
-    stream.read_to_end(&mut bytes)?;
+    let mut stream = comp.open_stream(&path)?;
+    stream.read_to_end(&mut bytes).map_err(|e| {
+        io::Error::new(
+            io::ErrorKind::Other,
+            format!("Failed to read bytes at {:?}, this might be because the file is open in write only mode. {}", path.as_ref(), e),
+        )
+    })?;
     Ok(bytes)
 }
 
@@ -627,10 +637,14 @@ fn read_custominfotags<F: Read + Write + Seek>(
         .join("GameStg")
         .join("CustomInfoTags");
     let mut tags_data = Vec::new();
-    let mut stream = comp.open_stream(path)?;
-    stream.read_to_end(&mut tags_data)?;
+    let tags = if comp.is_stream(&path) {
+        let mut stream = comp.open_stream(path)?;
+        stream.read_to_end(&mut tags_data)?;
 
-    let tags = custominfotags::read_custominfotags(&tags_data);
+        custominfotags::read_custominfotags(&tags_data)
+    } else {
+        CustomInfoTags::default()
+    };
     Ok(tags)
 }
 
@@ -879,6 +893,19 @@ mod tests {
     }
 
     #[test]
+    fn create_minimal_vpx_and_read() -> io::Result<()> {
+        let dir: PathBuf = testdir!();
+        let test_vpx_path = dir.join("test.vpx");
+        let mut comp = cfb::create(&test_vpx_path)?;
+        write_minimal_vpx(&mut comp)?;
+        comp.flush()?;
+        let vpx = read_vpx(&mut comp)?;
+        assert_eq!(vpx.info.table_name, None);
+        assert_eq!(vpx.info.table_version, None);
+        Ok(())
+    }
+
+    #[test]
     #[ignore = "slow integration test that only runs on correctly set up machines"]
     fn read_and_write_all() -> io::Result<()> {
         init();
@@ -890,8 +917,8 @@ mod tests {
         }
         let paths = find_vpx_files(true, &folder)?;
 
-        paths.iter().try_for_each(|path_str| {
-            let path = PathBuf::from(path_str);
+        paths.iter().try_for_each(|info| {
+            let path = info.path.clone();
             println!("testing: {:?}", path);
             let test_vpx_path = read_and_write_vpx(&path)?;
 
