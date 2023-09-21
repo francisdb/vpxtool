@@ -32,6 +32,7 @@ impl Config {
 pub struct ResolvedConfig {
     pub vpx_executable: PathBuf,
     pub tables_folder: PathBuf,
+    pub tables_index_path: PathBuf,
 }
 
 pub fn config_path() -> Option<PathBuf> {
@@ -105,8 +106,13 @@ fn read_config(config_path: &PathBuf) -> io::Result<ResolvedConfig> {
     let resolved_config = ResolvedConfig {
         vpx_executable: config.vpx_executable,
         tables_folder: tables_folder.clone(),
+        tables_index_path: tables_index_path(&tables_folder),
     };
     Ok(resolved_config)
+}
+
+pub(crate) fn tables_index_path(tables_folder: &PathBuf) -> PathBuf {
+    tables_folder.join("vpxtool_index.json")
 }
 
 pub fn clear_config() -> io::Result<Option<PathBuf>> {
@@ -187,10 +193,12 @@ fn create_default_config() -> io::Result<(PathBuf, ResolvedConfig)> {
     }
 
     let tables_root = default_tables_root(&vpx_executable);
+    let index_path = tables_index_path(&tables_root);
 
     let resolved_config = ResolvedConfig {
         vpx_executable: vpx_executable,
         tables_folder: tables_root,
+        tables_index_path: index_path,
     };
     let config = Config::from(&resolved_config);
 
@@ -202,8 +210,7 @@ fn create_default_config() -> io::Result<(PathBuf, ResolvedConfig)> {
 fn write_config(config_file: &PathBuf, config: &Config) -> io::Result<()> {
     let toml = toml::to_string(&config).unwrap();
     let mut file = File::create(config_file)?;
-    file.write_all(toml.as_bytes())?;
-    Ok(())
+    file.write_all(toml.as_bytes())
 }
 
 pub fn default_tables_root(vpx_executable: &PathBuf) -> PathBuf {
@@ -263,6 +270,7 @@ mod tests {
             ResolvedConfig {
                 vpx_executable: PathBuf::from("/tmp/test/vpinball"),
                 tables_folder: PathBuf::from("/tmp/test/tables"),
+                tables_index_path: PathBuf::from("/tmp/test/tables/vpxtool_index.json"),
             }
         );
         Ok(())

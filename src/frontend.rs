@@ -11,9 +11,12 @@ use dialoguer::theme::ColorfulTheme;
 use dialoguer::{Input, Select};
 use indicatif::{ProgressBar, ProgressStyle};
 
+use crate::config::ResolvedConfig;
+use crate::indexer::{IndexedTable, Progress};
 use crate::{
     indexer, tableinfo,
     vpx::{self, extractvbs, vbs_path_for, version, ExtractResult},
+    ProgressBarProgress,
 };
 
 const LAUNCH: Emoji = Emoji("🚀", "[launch]");
@@ -70,40 +73,38 @@ impl TableOption {
     }
 }
 
-pub fn frontend_index(
-    tables_path: PathBuf,
-    recursive: bool,
-) -> Vec<(PathBuf, tableinfo::TableInfo)> {
-    println!("Indexing {}", &tables_path.display());
-    let vpx_files = indexer::find_vpx_files(recursive, &tables_path).unwrap();
-    let pb = ProgressBar::new(vpx_files.len() as u64);
+pub fn frontend_index(resolved_config: &ResolvedConfig, recursive: bool) -> Vec<IndexedTable> {
+    let pb = ProgressBar::hidden();
     pb.set_style(
         ProgressStyle::with_template(
             "{spinner:.green} [{bar:.cyan/blue}] {pos}/{human_len} ({eta})",
         )
         .unwrap(),
     );
-    let mut vpx_files_with_tableinfo = indexer::index_vpx_files(&vpx_files, |pos: u64| {
-        pb.set_position(pos);
-    });
-    pb.finish_and_clear();
+    let progress = ProgressBarProgress::new(pb);
+    let index = indexer::index_folder(
+        recursive,
+        &resolved_config.tables_folder,
+        &resolved_config.tables_index_path,
+        &progress,
+    )
+    .unwrap();
+    progress.finish_and_clear();
+
+    let mut tables = index.tables;
 
     // TODO this is a second sort, does not make a lot of sense to do the first one
-    vpx_files_with_tableinfo
-        .sort_by_key(|(path1, info1)| display_table_line(path1, info1).to_lowercase());
-    vpx_files_with_tableinfo
+    tables.sort_by_key(|indexed| display_table_line(&indexed).to_lowercase());
+    tables
 }
 
-pub fn frontend(
-    vpx_files_with_tableinfo: Vec<(PathBuf, tableinfo::TableInfo)>,
-    vpinball_executable: &Path,
-) {
+pub fn frontend(vpx_files_with_tableinfo: Vec<IndexedTable>, vpinball_executable: &Path) {
     let mut selection_opt = None;
     loop {
         let selections = vpx_files_with_tableinfo
             .iter()
             // TODO can we expand the tuple to args?
-            .map(|(path, info)| display_table_line(path, info))
+            .map(|indexed| display_table_line(&indexed))
             .collect::<Vec<String>>();
 
         // TODO check FuzzySelect, requires feature to be enabled
@@ -116,9 +117,8 @@ pub fn frontend(
 
         match selection_opt {
             Some(selection) => {
-                let (selected_path, _selected_info) =
-                    vpx_files_with_tableinfo.get(selection).unwrap();
-
+                let info = vpx_files_with_tableinfo.get(selection).unwrap();
+                let selected_path = &info.path;
                 match choose_table_option() {
                     Some(TableOption::LaunchFullscreen) => {
                         launch(selected_path, vpinball_executable, true);
@@ -155,7 +155,7 @@ pub fn frontend(
                     },
                     Some(TableOption::CreateVBSPatch) => {
                         let original_path =
-                            match vpx::extractvbs(selected_path, true, Some("vbs.original")) {
+                            match extractvbs(selected_path, true, Some("vbs.original")) {
                                 ExtractResult::Existed(path) => path,
                                 ExtractResult::Extracted(path) => path,
                             };
@@ -286,9 +286,15 @@ fn launch_table(
     Ok(result)
 }
 
-fn display_table_line(path: &Path, info: &tableinfo::TableInfo) -> String {
-    let file_name = path.file_stem().unwrap().to_str().unwrap().to_string();
-    Some(info.table_name.to_owned())
+fn display_table_line(table: &IndexedTable) -> String {
+    let file_name = table
+        .path
+        .file_stem()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+    Some(table.table_info.table_name.to_owned())
         .filter(|s| !s.clone().unwrap_or_default().is_empty())
         .map(|s| {
             format!(
