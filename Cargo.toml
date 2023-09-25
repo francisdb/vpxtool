@@ -16,7 +16,7 @@ chrono = { version = "0.4.31", default-features = false, features = ["clock"] }
 clap = { version = "4.4.4", features = ["derive", "string"] }
 colored = "2.0.4"
 console = "0.15.7"
-dialoguer = "0.10.4"
+dialoguer = "0.11.0"
 # dialoguer = { path = "../dialoguer" }
 dirs = "5.0.1"
 encoding_rs = "0.8.33"
