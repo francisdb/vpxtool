@@ -1,4 +1,3 @@
-use std::error::Error;
 use std::io::{self, Read, Seek, Write};
 use std::path::MAIN_SEPARATOR_STR;
 use std::{
