@@ -91,9 +91,7 @@ pub fn frontend_index(resolved_config: &ResolvedConfig, recursive: bool) -> Vec<
     .unwrap();
     progress.finish_and_clear();
 
-    let mut tables = index.tables;
-
-    // TODO this is a second sort, does not make a lot of sense to do the first one
+    let mut tables: Vec<IndexedTable> = index.tables();
     tables.sort_by_key(|indexed| display_table_line(&indexed).to_lowercase());
     tables
 }

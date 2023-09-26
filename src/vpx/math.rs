@@ -26,9 +26,9 @@ pub fn dequantize_unsigned_percent(i: u32) -> f32 {
 #[inline]
 pub fn quantize_unsigned_percent(x: f32) -> u32 {
     const N: f32 = 100.0;
-    const Np1: f32 = 101.0;
+    const NP1: f32 = 101.0;
     assert!(x >= 0.0);
-    (x * Np1).min(N) as u32
+    (x * NP1).min(N) as u32
 }
 
 // template <unsigned char bits> // bits to map to

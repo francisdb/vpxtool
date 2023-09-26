@@ -142,7 +142,6 @@ pub fn extract_directory_list(vpx_file_path: &Path) -> Vec<String> {
 
     let entries = retrieve_entries_from_compound_file(&mut comp);
     entries.iter().for_each(|path| {
-        let mut stream = comp.open_stream(path).unwrap();
         // write the steam directly to a file
         let file_path = root_dir_path.join(&path[1..]);
         // println!("Writing to {}", file_path.display());

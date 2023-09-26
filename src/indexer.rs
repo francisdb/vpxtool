@@ -17,7 +17,7 @@ use walkdir::WalkDir;
 use crate::tableinfo::{read_tableinfo, TableInfo};
 
 /// Introduced because we want full control over serialization
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct IndexedTableInfo {
     pub table_name: Option<String>,
     pub author_name: Option<String>,
@@ -91,7 +91,7 @@ impl<'de> Deserialize<'de> for IsoSystemTime {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct IndexedTable {
     pub path: PathBuf,
     pub table_info: IndexedTableInfo,
@@ -100,25 +100,41 @@ pub struct IndexedTable {
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub struct TablesIndex {
-    pub tables: Vec<IndexedTable>,
+    tables: HashMap<PathBuf, IndexedTable>,
 }
 
 impl TablesIndex {
     pub(crate) fn empty() -> TablesIndex {
-        TablesIndex { tables: vec![] }
+        TablesIndex {
+            tables: HashMap::new(),
+        }
     }
 
-    pub fn add_all(&mut self, new_tables: Vec<IndexedTable>) {
-        self.tables.extend(new_tables);
+    pub(crate) fn len(&self) -> usize {
+        self.tables.len()
+    }
+
+    pub(crate) fn insert(&mut self, table: IndexedTable) {
+        self.tables.insert(table.path.clone(), table);
+    }
+
+    pub fn insert_all(&mut self, new_tables: Vec<IndexedTable>) {
+        for table in new_tables {
+            self.insert(table);
+        }
+    }
+
+    pub fn merge(&mut self, other: TablesIndex) {
+        self.tables.extend(other.tables);
+    }
+
+    pub fn tables(&self) -> Vec<IndexedTable> {
+        self.tables.values().map(|t| t.clone()).collect()
     }
 
     pub(crate) fn should_index(&self, path_with_metadata: &PathWithMetadata) -> bool {
         // if exists with different last modified or missing
-        let existing = self
-            .tables
-            .iter()
-            .find(|t| t.path == path_with_metadata.path);
-        match existing {
+        match self.tables.get(&path_with_metadata.path) {
             Some(existing) => {
                 let existing_last_modified: SystemTime = existing.last_modified.into();
                 existing_last_modified != path_with_metadata.last_modified
@@ -131,8 +147,40 @@ impl TablesIndex {
         // create a hashset with the paths
         let len = self.tables.len();
         let paths_set: HashSet<PathBuf> = paths.iter().map(|p| p.path.clone()).collect();
-        self.tables.retain(|t| paths_set.contains(&t.path));
+        self.tables.retain(|path, _| paths_set.contains(path));
         len - self.tables.len()
+    }
+}
+
+/// We prefer keeping a flat index instead of an object
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
+pub struct TablesIndexJson {
+    tables: Vec<IndexedTable>,
+}
+
+impl From<TablesIndex> for TablesIndexJson {
+    fn from(index: TablesIndex) -> Self {
+        TablesIndexJson {
+            tables: index.tables(),
+        }
+    }
+}
+
+impl From<&TablesIndex> for TablesIndexJson {
+    fn from(table: &TablesIndex) -> Self {
+        TablesIndexJson {
+            tables: table.tables(),
+        }
+    }
+}
+
+impl From<TablesIndexJson> for TablesIndex {
+    fn from(index: TablesIndexJson) -> Self {
+        let mut tables = HashMap::new();
+        for table in index.tables {
+            tables.insert(table.path.clone(), table);
+        }
+        TablesIndex { tables }
     }
 }
 
@@ -226,10 +274,10 @@ pub fn index_folder<P: AsRef<Path>>(
     }
 
     println!("  {} files need (re)indexing.", vpx_files_to_index.len());
-    let vpx_files_with_tableinfo = index_vpx_files(&vpx_files_to_index, progress);
+    let vpx_files_with_table_info = index_vpx_files(&vpx_files_to_index, progress);
 
     // add new files to index
-    index.add_all(vpx_files_with_tableinfo.tables);
+    index.merge(vpx_files_with_table_info);
 
     // write the index to a file
     write_index_json(&index, tables_index_path)?;
@@ -243,7 +291,7 @@ pub fn index_vpx_files(vpx_files: &[PathWithMetadata], progress: &impl Progress)
     // .par_iter() instead of .iter()
     progress.set_length(vpx_files.len() as u64);
 
-    let mut vpx_files_with_tableinfo: Vec<IndexedTable> = vpx_files
+    let vpx_files_with_table_info: HashMap<PathBuf, IndexedTable> = vpx_files
         .iter()
         .enumerate()
         .flat_map(|(i, vpx_file)| {
@@ -257,7 +305,7 @@ pub fn index_vpx_files(vpx_files: &[PathWithMetadata], progress: &impl Progress)
                         table_info: indexed_table_info,
                         last_modified: IsoSystemTime(last_modified),
                     };
-                    Some(indexed)
+                    Some((indexed.path.clone(), indexed))
                 }
                 Err(e) => {
                     // TODO we want to return any failures instead of printing here
@@ -273,9 +321,9 @@ pub fn index_vpx_files(vpx_files: &[PathWithMetadata], progress: &impl Progress)
         .collect();
 
     // sort by name
-    vpx_files_with_tableinfo.sort_by(|a, b| table_name_compare(a, b));
+    // vpx_files_with_table_info.sort_by(|a, b| table_name_compare(a, b));
     TablesIndex {
-        tables: vpx_files_with_tableinfo,
+        tables: vpx_files_with_table_info,
     }
 }
 
@@ -306,7 +354,8 @@ pub fn write_index_json<P: AsRef<Path>>(
     json_path: P,
 ) -> io::Result<()> {
     let json_file = File::create(json_path)?;
-    serde_json::to_writer_pretty(json_file, &indexed_tables)
+    let indexed_tables_json: TablesIndexJson = indexed_tables.into();
+    serde_json::to_writer_pretty(json_file, &indexed_tables_json)
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
 }
 
@@ -315,18 +364,24 @@ pub fn read_index_json<P: AsRef<Path>>(json_path: P) -> io::Result<Option<Tables
         return Ok(None);
     }
     let json_file = File::open(json_path)?;
-    serde_json::from_reader(json_file).map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+    match serde_json::from_reader::<_, TablesIndexJson>(json_file) {
+        Ok(indexed_tables_json) => {
+            let indexed_tables: TablesIndex = indexed_tables_json.into();
+            Ok(Some(indexed_tables))
+        }
+        Err(e) => Err(io::Error::new(io::ErrorKind::Other, e)),
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::vpx;
+    use serde_json::json;
     use testdir::testdir;
 
     #[test]
     fn test_index_vpx_files() -> io::Result<()> {
-        // create empty files in testdir
         let test_dir = testdir!();
         let vpx_1_path = test_dir.join("test.vpx");
         let vpx_2_path = test_dir.join("test2.vpx");
@@ -345,8 +400,42 @@ mod tests {
         println!("vpx_files");
         let indexed_tables = index_vpx_files(&vpx_files, &VoidProgress);
         assert_eq!(indexed_tables.tables.len(), 2);
-        assert_eq!(indexed_tables.tables[0].path, vpx_1_path);
-        assert_eq!(indexed_tables.tables[1].path, vpx_2_path);
+        // get the first two tables
+
+        let table1 = indexed_tables.tables.get(&vpx_1_path);
+        let table2 = indexed_tables.tables.get(&vpx_2_path);
+        assert_eq!(table1.map(|t| t.path.clone()), Some(vpx_1_path));
+        assert_eq!(table2.map(|t| t.path.clone()), Some(vpx_2_path));
+        Ok(())
+    }
+
+    #[test]
+    fn test_write_read_empty_array() -> io::Result<()> {
+        let index = TablesIndex::empty();
+        let test_dir = testdir!();
+        let index_path = test_dir.join("test.json");
+        // write empty json array using serde_json
+        let json_file = File::create(&index_path)?;
+        let json_object = json!({
+            "tables": []
+        });
+        serde_json::to_writer_pretty(json_file, &json_object)?;
+        let read = read_index_json(&index_path)?;
+        assert_eq!(read, Some(index));
+        Ok(())
+    }
+
+    #[test]
+    fn test_write_read_invalid_file() -> io::Result<()> {
+        let index = TablesIndex::empty();
+        let test_dir = testdir!();
+        let index_path = test_dir.join("test.json");
+        // write empty json array using serde_json
+        let json_file = File::create(&index_path)?;
+        // write garbage to file
+        serde_json::to_writer_pretty(json_file, &"garbage")?;
+        let read = read_index_json(&index_path);
+        assert!(read.is_err());
         Ok(())
     }
 
@@ -363,26 +452,25 @@ mod tests {
 
     #[test]
     fn test_write_read_single_item_index() -> io::Result<()> {
-        let index = TablesIndex {
-            tables: vec![IndexedTable {
-                path: PathBuf::from("test.vpx"),
-                table_info: IndexedTableInfo {
-                    table_name: Some("test".to_string()),
-                    author_name: Some("test".to_string()),
-                    table_blurb: None,
-                    table_rules: None,
-                    author_email: None,
-                    release_date: None,
-                    table_save_rev: None,
-                    table_version: None,
-                    author_website: None,
-                    table_save_date: None,
-                    table_description: None,
-                    properties: HashMap::new(),
-                },
-                last_modified: IsoSystemTime(SystemTime::UNIX_EPOCH),
-            }],
-        };
+        let mut index = TablesIndex::empty();
+        index.insert(IndexedTable {
+            path: PathBuf::from("test.vpx"),
+            table_info: IndexedTableInfo {
+                table_name: Some("test".to_string()),
+                author_name: Some("test".to_string()),
+                table_blurb: None,
+                table_rules: None,
+                author_email: None,
+                release_date: None,
+                table_save_rev: None,
+                table_version: None,
+                author_website: None,
+                table_save_date: None,
+                table_description: None,
+                properties: HashMap::new(),
+            },
+            last_modified: IsoSystemTime(SystemTime::UNIX_EPOCH),
+        });
         let test_dir = testdir!();
         let index_path = test_dir.join("test.json");
         write_index_json(&index, &index_path)?;

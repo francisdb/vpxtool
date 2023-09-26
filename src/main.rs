@@ -307,7 +307,7 @@ fn main() {
             progress.finish_and_clear();
             println!(
                 "Indexed {} vpx files into {}",
-                index.tables.len(),
+                index.len(),
                 &tables_index_path.display()
             );
         }
