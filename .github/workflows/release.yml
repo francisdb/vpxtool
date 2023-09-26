@@ -34,14 +34,14 @@ jobs:
             os: macOS-latest
             target: x86_64-apple-darwin
             bin: vpxtool
-            name: vpxtool-Darwin-x86_64.tar.gz
+            name: vpxtool-macOS-x86_64.tar.gz
             cargo_command: cargo
 
           - os_name: macOS-aarch64
             os: macOS-latest
             target: aarch64-apple-darwin
             bin: vpxtool
-            name: vpxtool-Darwin-aarch64.tar.gz
+            name: vpxtool-macOS-aarch64.tar.gz
             cargo_command: cargo
 
     runs-on: ${{ matrix.platform.os }}
