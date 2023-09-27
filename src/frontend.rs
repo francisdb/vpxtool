@@ -11,6 +11,7 @@ use console::Emoji;
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::{Input, Select};
 use indicatif::{ProgressBar, ProgressStyle};
+use is_executable::IsExecutable;
 
 use crate::config::ResolvedConfig;
 use crate::indexer::{IndexError, IndexedTable, Progress};
@@ -233,22 +234,30 @@ fn choose_table_option() -> Option<TableOption> {
 
 fn launch(selected_path: &PathBuf, vpinball_executable: &Path, fullscreen: bool) {
     println!("{} {}", LAUNCH, selected_path.display());
+
+    if !vpinball_executable.is_executable() {
+        report_and_exit(format!(
+            "Unable to launch table, {} is not executable",
+            vpinball_executable.display()
+        ));
+    }
+
     match launch_table(selected_path, vpinball_executable, fullscreen) {
         Ok(status) => match status.code() {
             Some(0) => {
                 //println!("Table exited normally");
             }
             Some(11) => {
-                println!("{} Table exited with segfault, you might want to report this to the vpinball team.", CRASH);
+                eprintln!("{} Table exited with segfault, you might want to report this to the vpinball team.", CRASH);
             }
             Some(139) => {
-                println!("{} Table exited with segfault, you might want to report this to the vpinball team.", CRASH);
+                eprintln!("{} Table exited with segfault, you might want to report this to the vpinball team.", CRASH);
             }
             Some(code) => {
-                println!("Table exited with code {}", code);
+                eprintln!("Table exited with code {}", code);
             }
             None => {
-                println!("Table exited with unknown code");
+                eprintln!("Table exited with unknown code");
             }
         },
         Err(e) => {
@@ -265,7 +274,7 @@ fn launch(selected_path: &PathBuf, vpinball_executable: &Path, fullscreen: bool)
 }
 
 fn report_and_exit(msg: String) -> ! {
-    println!("{CRASH} {}", msg);
+    eprintln!("{CRASH} {}", msg);
     exit(1);
 }
 
