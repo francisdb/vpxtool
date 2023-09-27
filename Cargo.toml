@@ -38,6 +38,7 @@ walkdir = "2.4.0"
 wild = "2.2.0"
 figment = { version = "0.10", features = ["toml", "env"] }
 toml = "0.8.0"
+is_executable = "1.0.1"
 
 [dev-dependencies]
 pretty_assertions = "1.4.0"
