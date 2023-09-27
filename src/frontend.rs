@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::{
     fs::File,
     io,
@@ -101,13 +102,17 @@ pub fn frontend_index(
     Ok(tables)
 }
 
-pub fn frontend(vpx_files_with_tableinfo: Vec<IndexedTable>, vpinball_executable: &Path) {
+pub fn frontend(
+    vpx_files_with_tableinfo: &Vec<IndexedTable>,
+    roms: &HashSet<String>,
+    vpinball_executable: &Path,
+) {
     let mut selection_opt = None;
     loop {
         let selections = vpx_files_with_tableinfo
             .iter()
             // TODO can we expand the tuple to args?
-            .map(|indexed| display_table_line(&indexed))
+            .map(|indexed| display_table_line_full(indexed, roms))
             .collect::<Vec<String>>();
 
         // TODO check FuzzySelect, requires feature to be enabled
@@ -315,6 +320,28 @@ fn display_table_line(table: &IndexedTable) -> String {
             )
         })
         .unwrap_or(file_name)
+}
+
+fn display_table_line_full(table: &IndexedTable, roms: &HashSet<String>) -> String {
+    let base = display_table_line(table);
+    let suffix = match &table.game_name {
+        Some(name) => {
+            let rom_found = roms.contains(&name.to_lowercase());
+            if rom_found {
+                format!(" - [{}]", name.dimmed())
+            } else {
+                if table.requires_pinmame {
+                    format!(" - {} [{}]", Emoji("⚠️", "!"), &name)
+                        .yellow()
+                        .to_string()
+                } else {
+                    format!(" - [{}]", name.dimmed())
+                }
+            }
+        }
+        None => "".to_string(),
+    };
+    format!("{}{}", base, suffix)
 }
 
 fn capitalize_first_letter(s: &str) -> String {

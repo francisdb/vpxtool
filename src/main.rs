@@ -262,6 +262,7 @@ fn main() {
         Some(("frontend", _sub_matches)) => {
             let (config_path, config) = config::load_or_setup_config().unwrap();
             println!("Using config file {}", config_path.display());
+            let roms = indexer::find_roms(&config.rom_folder()).unwrap();
             match frontend::frontend_index(&config, true) {
                 Ok(tables) if tables.is_empty() => {
                     let warning =
@@ -271,7 +272,7 @@ fn main() {
                 }
                 Ok(vpx_files_with_tableinfo) => {
                     let vpinball_executable = config.vpx_executable;
-                    frontend::frontend(vpx_files_with_tableinfo, &vpinball_executable);
+                    frontend::frontend(&vpx_files_with_tableinfo, &roms, &vpinball_executable);
                 }
                 Err(IndexError::FolderDoesNotExist(path)) => {
                     let warning = format!(
