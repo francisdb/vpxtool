@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
+use std::fmt::Debug;
 use std::fs::Metadata;
 use std::time::SystemTime;
 use std::{
@@ -241,6 +242,27 @@ impl Progress for VoidProgress {
     fn finish_and_clear(&self) {}
 }
 
+pub enum IndexError {
+    FolderDoesNotExist(PathBuf),
+    IoError(io::Error),
+}
+impl Debug for IndexError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            IndexError::FolderDoesNotExist(path) => {
+                write!(f, "Folder does not exist: {}", path.display())
+            }
+            IndexError::IoError(e) => write!(f, "IO error: {}", e),
+        }
+    }
+}
+
+impl From<io::Error> for IndexError {
+    fn from(e: io::Error) -> Self {
+        IndexError::IoError(e)
+    }
+}
+
 /// Indexes all vpx files in the given folder and writes the index to a file.
 /// Returns the index.
 /// If the index file already exists, it will be read and updated.
@@ -250,20 +272,30 @@ pub fn index_folder<P: AsRef<Path>>(
     tables_folder: P,
     tables_index_path: P,
     progress: &impl Progress,
-) -> io::Result<TablesIndex> {
+) -> Result<TablesIndex, IndexError> {
     println!("Indexing {}", tables_folder.as_ref().display());
+
+    if !tables_folder.as_ref().exists() {
+        return Err(IndexError::FolderDoesNotExist(
+            tables_folder.as_ref().to_path_buf(),
+        ));
+    }
 
     let existing_index = read_index_json(&tables_index_path)?;
     if let Some(index) = &existing_index {
-        println!("  Found existing index with {} files", index.tables.len());
+        println!(
+            "  Found existing index with {} tables at {}",
+            index.tables.len(),
+            tables_index_path.as_ref().display()
+        );
     }
     let mut index = existing_index.unwrap_or(TablesIndex::empty());
 
     let vpx_files = find_vpx_files(recursive, tables_folder)?;
-    println!("  Found {} files", vpx_files.len());
+    println!("  Found {} tables", vpx_files.len());
     // remove files that are missing
     let removed_len = index.remove_missing(&vpx_files);
-    println!("  {} missing files have been removed", removed_len);
+    println!("  {} missing tables have been removed", removed_len);
 
     // find files that are missing or have been modified
     let mut vpx_files_to_index = Vec::new();
@@ -273,7 +305,7 @@ pub fn index_folder<P: AsRef<Path>>(
         }
     }
 
-    println!("  {} files need (re)indexing.", vpx_files_to_index.len());
+    println!("  {} tables need (re)indexing.", vpx_files_to_index.len());
     let vpx_files_with_table_info = index_vpx_files(&vpx_files_to_index, progress);
 
     // add new files to index
