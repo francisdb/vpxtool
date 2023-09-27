@@ -1,6 +1,7 @@
 use std::{
     fs::File,
-    io::{Result, Write},
+    io,
+    io::Write,
     path::{Path, PathBuf},
     process::{exit, ExitStatus},
 };
@@ -12,7 +13,7 @@ use dialoguer::{Input, Select};
 use indicatif::{ProgressBar, ProgressStyle};
 
 use crate::config::ResolvedConfig;
-use crate::indexer::{IndexedTable, Progress};
+use crate::indexer::{IndexError, IndexedTable, Progress};
 use crate::{
     indexer, tableinfo,
     vpx::{self, extractvbs, vbs_path_for, version, ExtractResult},
@@ -73,7 +74,10 @@ impl TableOption {
     }
 }
 
-pub fn frontend_index(resolved_config: &ResolvedConfig, recursive: bool) -> Vec<IndexedTable> {
+pub fn frontend_index(
+    resolved_config: &ResolvedConfig,
+    recursive: bool,
+) -> Result<Vec<IndexedTable>, IndexError> {
     let pb = ProgressBar::hidden();
     pb.set_style(
         ProgressStyle::with_template(
@@ -87,13 +91,13 @@ pub fn frontend_index(resolved_config: &ResolvedConfig, recursive: bool) -> Vec<
         &resolved_config.tables_folder,
         &resolved_config.tables_index_path,
         &progress,
-    )
-    .unwrap();
+    );
     progress.finish_and_clear();
+    let index = index?;
 
     let mut tables: Vec<IndexedTable> = index.tables();
     tables.sort_by_key(|indexed| display_table_line(&indexed).to_lowercase());
-    tables
+    Ok(tables)
 }
 
 pub fn frontend(vpx_files_with_tableinfo: Vec<IndexedTable>, vpinball_executable: &Path) {
@@ -188,7 +192,7 @@ pub fn frontend(vpx_files_with_tableinfo: Vec<IndexedTable>, vpinball_executable
     }
 }
 
-fn gather_table_info(selected_path: &PathBuf) -> Result<String> {
+fn gather_table_info(selected_path: &PathBuf) -> io::Result<String> {
     let mut comp = cfb::open(selected_path)?;
     let version = version::read_version(&mut comp)?;
     let table_info = tableinfo::read_tableinfo(&mut comp)?;
@@ -269,7 +273,7 @@ fn launch_table(
     selected_path: &PathBuf,
     vpinball_executable: &Path,
     fullscreen: bool,
-) -> Result<ExitStatus> {
+) -> io::Result<ExitStatus> {
     // start process ./VPinballX_GL -play [table path]
     let mut cmd = std::process::Command::new(vpinball_executable);
     if fullscreen {

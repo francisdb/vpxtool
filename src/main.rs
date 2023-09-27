@@ -29,7 +29,7 @@ use vpx::tableinfo::{self};
 
 use vpx::{cat_script, expanded, importvbs, read_gamedata, verify, VerifyResult};
 
-use crate::indexer::Progress;
+use crate::indexer::{IndexError, Progress};
 use vpx::{extractvbs, ExtractResult};
 
 use crate::vpx::version;
@@ -262,9 +262,32 @@ fn main() {
         Some(("frontend", _sub_matches)) => {
             let (config_path, config) = config::load_or_setup_config().unwrap();
             println!("Using config file {}", config_path.display());
-            let vpx_files_with_tableinfo = frontend::frontend_index(&config, true);
-            let vpinball_executable = config.vpx_executable;
-            frontend::frontend(vpx_files_with_tableinfo, &vpinball_executable);
+            match frontend::frontend_index(&config, true) {
+                Ok(tables) if tables.is_empty() => {
+                    let warning =
+                        format!("No tables found in {}", config.tables_folder.display()).red();
+                    eprintln!("{}", warning);
+                    exit(1);
+                }
+                Ok(vpx_files_with_tableinfo) => {
+                    let vpinball_executable = config.vpx_executable;
+                    frontend::frontend(vpx_files_with_tableinfo, &vpinball_executable);
+                }
+                Err(IndexError::FolderDoesNotExist(path)) => {
+                    let warning = format!(
+                        "Configured tables folder does not exist: {}",
+                        path.display()
+                    )
+                    .red();
+                    eprintln!("{}", warning);
+                    exit(1);
+                }
+                Err(IndexError::IoError(e)) => {
+                    let warning = format!("Error running frontend: {}", e).red();
+                    eprintln!("{}", warning);
+                    exit(1);
+                }
+            }
         }
         Some(("index", sub_matches)) => {
             let recursive = sub_matches.get_flag("RECURSIVE");
