@@ -1,20 +1,23 @@
 pub mod config;
 pub mod directb2s;
+pub mod fixprint;
 mod frontend;
 mod indexer;
 pub mod jsonmodel;
 pub mod pov;
 pub mod vpx;
 
-use clap::{arg, Arg, Command};
+use clap::{arg, Arg, ArgMatches, Command};
 use colored::Colorize;
 use console::Emoji;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use pov::{Customsettings, ModePov, POV};
+use std::error::Error;
+use std::fmt::Display;
 use std::fs::{metadata, File};
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
-use std::process::exit;
+use std::process::{exit, ExitCode};
 use vpx::math::{dequantize_unsigned, quantize_unsigned_percent};
 
 use std::io::Write;
@@ -65,11 +68,398 @@ impl Progress for ProgressBarProgress {
     }
 }
 
-fn main() {
+const CMD_FRONTEND: &'static str = "frontend";
+const CMD_DIFF: &'static str = "diff";
+
+const CMD_SIMPLE_FRONTEND: &'static str = "simplefrontend";
+
+const CMD_CONFIG: &'static str = "config";
+const CMD_CONFIG_SETUP: &'static str = "setup";
+const CMD_CONFIG_PATH: &'static str = "path";
+const CMD_CONFIG_SHOW: &'static str = "show";
+const CMD_CONFIG_CLEAR: &'static str = "clear";
+const CMD_CONFIG_EDIT: &'static str = "edit";
+
+const CMD_SCRIPT: &'static str = "script";
+const CMD_SCRIPT_SHOW: &'static str = "show";
+const CMD_SCRIPT_EDIT: &'static str = "edit";
+
+fn main() -> ExitCode {
+    fixprint::safe_main(run)
+}
+
+fn run() -> io::Result<ExitCode> {
+    let command = build_command();
+    let matches = command.get_matches_from(wild::args());
+    handle_command(matches)
+}
+
+fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
+    match matches.subcommand() {
+        Some(("info", sub_matches)) => {
+            let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
+            let path = path.unwrap_or("");
+            let expanded_path = expand_path(path)?;
+            println!("showing info for {}", expanded_path.display())?;
+            let json = sub_matches.get_flag("JSON");
+            info(&expanded_path, json).unwrap();
+            Ok(ExitCode::SUCCESS)
+        }
+        Some((CMD_DIFF, sub_matches)) => {
+            let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
+            let path = path.unwrap_or("");
+            let expanded_path = expand_path(path)?;
+            match vpx::diff_script(PathBuf::from(expanded_path)) {
+                Ok(output) => {
+                    println!("{}", output)?;
+                    Ok(ExitCode::SUCCESS)
+                }
+                Err(e) => {
+                    let warning = format!("Error running diff: {}", e).red();
+                    println!("{}", warning)?;
+                    Ok(ExitCode::FAILURE)
+                }
+            }
+        }
+        Some((CMD_FRONTEND, _sub_matches)) => {
+            let (config_path, config) = config::load_or_setup_config().unwrap();
+            println!("Using config file {}", config_path.display())?;
+            let roms = indexer::find_roms(&config.rom_folder()).unwrap();
+            match frontend::frontend_index(&config, true) {
+                Ok(tables) if tables.is_empty() => {
+                    let warning =
+                        format!("No tables found in {}", config.tables_folder.display()).red();
+                    eprintln!("{}", warning)?;
+                    Ok(ExitCode::FAILURE)
+                }
+                Ok(vpx_files_with_tableinfo) => {
+                    let vpinball_executable = config.vpx_executable;
+                    frontend::frontend(&vpx_files_with_tableinfo, &roms, &vpinball_executable);
+                    Ok(ExitCode::SUCCESS)
+                }
+                Err(IndexError::FolderDoesNotExist(path)) => {
+                    let warning = format!(
+                        "Configured tables folder does not exist: {}",
+                        path.display()
+                    )
+                    .red();
+                    eprintln!("{}", warning)?;
+                    Ok(ExitCode::FAILURE)
+                }
+                Err(IndexError::IoError(e)) => {
+                    let warning = format!("Error running frontend: {}", e).red();
+                    eprintln!("{}", warning)?;
+                    Ok(ExitCode::FAILURE)
+                }
+            }
+        }
+        Some((CMD_SIMPLE_FRONTEND, _sub_matches)) => {
+            let (config_path, config) = config::load_or_setup_config().unwrap();
+            println!("Using config file {}", config_path.display())?;
+            let roms = indexer::find_roms(&config.rom_folder()).unwrap();
+            match frontend::frontend_index(&config, true) {
+                Ok(tables) if tables.is_empty() => {
+                    let warning =
+                        format!("No tables found in {}", config.tables_folder.display()).red();
+                    eprintln!("{}", warning)?;
+                    Ok(ExitCode::FAILURE)
+                }
+                Ok(vpx_files_with_tableinfo) => {
+                    let vpinball_executable = config.vpx_executable;
+                    frontend::frontend(&vpx_files_with_tableinfo, &roms, &vpinball_executable);
+                    Ok(ExitCode::SUCCESS)
+                }
+                Err(IndexError::FolderDoesNotExist(path)) => {
+                    let warning = format!(
+                        "Configured tables folder does not exist: {}",
+                        path.display()
+                    )
+                    .red();
+                    eprintln!("{}", warning)?;
+                    Ok(ExitCode::FAILURE)
+                }
+                Err(IndexError::IoError(e)) => {
+                    let warning = format!("Error running frontend: {}", e).red();
+                    eprintln!("{}", warning)?;
+                    Ok(ExitCode::FAILURE)
+                }
+            }
+        }
+        Some(("index", sub_matches)) => {
+            let recursive = sub_matches.get_flag("RECURSIVE");
+            let path = sub_matches
+                .get_one::<String>("VPXROOTPATH")
+                .map(|s| s.as_str());
+
+            let (tables_folder_path, tables_index_path) = match path {
+                Some(path) => {
+                    let tables_path = expand_path(path)?;
+                    let tables_index_path = config::tables_index_path(&tables_path);
+                    (tables_path, tables_index_path)
+                }
+                None => match config::load_config().unwrap() {
+                    Some((config_path, config)) => {
+                        println!("Using config file {}", config_path.display())?;
+                        (config.tables_folder, config.tables_index_path)
+                    }
+                    None => {
+                        eprintln!("No VPXROOTPATH provided up and no config file found")?;
+                        exit(1);
+                    }
+                },
+            };
+            let pb = ProgressBar::hidden();
+            pb.set_style(
+                ProgressStyle::with_template(
+                    "{spinner:.green} [{bar:.cyan/blue}] {pos}/{human_len} ({eta})",
+                )
+                .unwrap(),
+            );
+            let progress = ProgressBarProgress::new(pb);
+            let index = indexer::index_folder(
+                recursive,
+                &tables_folder_path,
+                &tables_index_path,
+                &progress,
+            )
+            .unwrap();
+            progress.finish_and_clear();
+            println!(
+                "Indexed {} vpx files into {}",
+                index.len(),
+                &tables_index_path.display()
+            )?;
+            Ok(ExitCode::SUCCESS)
+        }
+        Some((CMD_SCRIPT, sub_matches)) => match sub_matches.subcommand() {
+            Some((CMD_SCRIPT_SHOW, sub_matches)) => {
+                let path = sub_matches
+                    .get_one::<String>("VPXPATH")
+                    .map(|s| s.as_str())
+                    .unwrap_or_default();
+
+                let expanded_path = expand_path(path)?;
+                let code = cat_script(&expanded_path);
+
+                println!("{}", code)?;
+                Ok(ExitCode::SUCCESS)
+            }
+            Some((CMD_SCRIPT_EDIT, sub_matches)) => {
+                let path = sub_matches
+                    .get_one::<String>("VPXPATH")
+                    .map(|s| s.as_str())
+                    .unwrap_or_default();
+
+                let expanded_vpx_path = expand_path(path)?;
+
+                let vbs_path = crate::vpx::vbs_path_for(&expanded_vpx_path);
+                if vbs_path.exists() {
+                    open_or_fail(&vbs_path)
+                } else {
+                    extractvbs(&expanded_vpx_path, false, None);
+                    open_or_fail(&vbs_path)
+                }
+            }
+            _ => unreachable!(),
+        },
+        Some(("ls", sub_matches)) => {
+            let path = sub_matches
+                .get_one::<String>("VPXPATH")
+                .map(|s| s.as_str())
+                .unwrap_or_default();
+
+            let expanded_path = expand_path(path)?;
+            ls(expanded_path.as_ref())?;
+            Ok(ExitCode::SUCCESS)
+        }
+        Some(("extract", sub_matches)) => {
+            let yes = sub_matches.get_flag("FORCE");
+            let paths: Vec<&str> = sub_matches
+                .get_many::<String>("VPXPATH")
+                .unwrap_or_default()
+                .map(|v| v.as_str())
+                .collect();
+            for path in paths {
+                let expanded_path = expand_path(path)?;
+                println!("extracting from {}", expanded_path.display())?;
+                if expanded_path.ends_with(".directb2s") {
+                    extract_directb2s(&expanded_path).unwrap();
+                } else {
+                    extract(expanded_path.as_ref(), yes).unwrap();
+                }
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+        Some(("extractvbs", sub_matches)) => {
+            let overwrite = sub_matches.get_flag("OVERWRITE");
+            let paths: Vec<&str> = sub_matches
+                .get_many::<String>("VPXPATH")
+                .unwrap_or_default()
+                .map(|v| v.as_str())
+                .collect::<Vec<_>>();
+            for path in paths {
+                let expanded_path = PathBuf::from(expand_path(path)?);
+                match extractvbs(&expanded_path, overwrite, None) {
+                    ExtractResult::Existed(vbs_path) => {
+                        let warning =
+                            format!("EXISTED {}", vbs_path.display()).truecolor(255, 125, 0);
+                        println!("{}", warning)?;
+                    }
+                    ExtractResult::Extracted(vbs_path) => {
+                        println!("CREATED {}", vbs_path.display())?;
+                    }
+                }
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+        Some(("importvbs", sub_matches)) => {
+            let path: &str = sub_matches.get_one::<String>("VPXPATH").unwrap().as_str();
+            let expanded_path = PathBuf::from(expand_path(path)?);
+            match importvbs(&expanded_path, None) {
+                Ok(vbs_path) => {
+                    println!("IMPORTED {}", vbs_path.display())?;
+                    Ok(ExitCode::SUCCESS)
+                }
+                Err(e) => {
+                    let warning = format!("Error importing vbs: {}", e).red();
+                    eprintln!("{}", warning)?;
+                    Ok(ExitCode::FAILURE)
+                }
+            }
+        }
+
+        Some(("verify", sub_matches)) => {
+            let paths: Vec<&str> = sub_matches
+                .get_many::<String>("VPXPATH")
+                .unwrap_or_default()
+                .map(|v| v.as_str())
+                .collect::<Vec<_>>();
+            for path in paths {
+                let expanded_path = PathBuf::from(expand_path(path)?);
+                match verify(&expanded_path) {
+                    VerifyResult::Ok(vbs_path) => {
+                        println!("{OK} {}", vbs_path.display())?;
+                    }
+                    VerifyResult::Failed(vbs_path, msg) => {
+                        let warning =
+                            format!("{NOK} {} {}", vbs_path.display(), msg).truecolor(255, 125, 0);
+                        eprintln!("{}", warning)?;
+                    }
+                }
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+        Some(("new", sub_matches)) => {
+            let path = {
+                let this = sub_matches.get_one::<String>("VPXPATH").map(|v| v.as_str());
+                match this {
+                    Some(x) => x,
+                    None => unreachable!("VPXPATH is required"),
+                }
+            };
+
+            let expanded_path = shellexpand::tilde(path);
+            println!("creating new vpx file at {}", expanded_path)?;
+            new(expanded_path.as_ref())?;
+            Ok(ExitCode::SUCCESS)
+        }
+        Some((CMD_CONFIG, sub_matches)) => match sub_matches.subcommand() {
+            Some((CMD_CONFIG_SETUP, _)) => match config::setup_config() {
+                Ok(SetupConfigResult::Configured(config_path)) => {
+                    println!("Created config file {}", config_path.display())?;
+                    Ok(ExitCode::SUCCESS)
+                }
+                Ok(SetupConfigResult::Existing(config_path)) => {
+                    println!("Config file already exists at {}", config_path.display())?;
+                    Ok(ExitCode::SUCCESS)
+                }
+                Err(e) => {
+                    eprintln!("Failed to create config file: {}", e)?;
+                    Ok(ExitCode::FAILURE)
+                }
+            },
+            Some((CMD_CONFIG_PATH, _)) => match config::config_path() {
+                Some(config_path) => {
+                    println!("{}", config_path.display())?;
+                    Ok(ExitCode::SUCCESS)
+                }
+                None => {
+                    eprintln!("No config file found")?;
+                    Ok(ExitCode::FAILURE)
+                }
+            },
+            Some((CMD_CONFIG_SHOW, _)) => match config::config_path() {
+                Some(config_path) => {
+                    let mut file = File::open(&config_path).unwrap();
+                    let mut text = String::new();
+                    file.read_to_string(&mut text).unwrap();
+                    println!("{}", text)?;
+                    Ok(ExitCode::SUCCESS)
+                }
+                None => {
+                    eprintln!("No config file found")?;
+                    Ok(ExitCode::FAILURE)
+                }
+            },
+            Some((CMD_CONFIG_CLEAR, _)) => match config::clear_config() {
+                Ok(Some(config_path)) => {
+                    println!("Cleared config file {}", config_path.display())?;
+                    Ok(ExitCode::SUCCESS)
+                }
+                Ok(None) => {
+                    println!("No config file found")?;
+                    Ok(ExitCode::SUCCESS)
+                }
+                Err(e) => fail_with_error("Failed to clear config file: {}", e),
+            },
+            Some((CMD_CONFIG_EDIT, _)) => match config::config_path() {
+                Some(config_path) => {
+                    let editor = std::env::var("EDITOR").expect("EDITOR not set");
+                    let status = std::process::Command::new(editor)
+                        .arg(config_path)
+                        .status()
+                        .unwrap();
+                    if !status.success() {
+                        fail("Failed to edit config file")
+                    } else {
+                        Ok(ExitCode::SUCCESS)
+                    }
+                }
+                None => fail("No config file found"),
+            },
+            _ => unreachable!(),
+        },
+        Some(("pov", sub_matches)) => match sub_matches.subcommand() {
+            Some(("extract", sub_matches)) => {
+                let paths: Vec<&str> = sub_matches
+                    .get_many::<String>("VPXPATH")
+                    .unwrap_or_default()
+                    .map(|v| v.as_str())
+                    .collect::<Vec<_>>();
+                for path in paths {
+                    let expanded_path = PathBuf::from(expand_path(path)?);
+                    match extract_pov(&expanded_path) {
+                        Ok(pov_path) => {
+                            println!("CREATED {}", pov_path.display()).unwrap();
+                        }
+                        Err(err) => {
+                            fail_with_error("Error extracting pov", err).unwrap();
+                        }
+                    }
+                }
+                Ok(ExitCode::SUCCESS)
+            }
+            _ => unreachable!(),
+        },
+        _ => unreachable!(), // If all subcommands are defined above, anything else is unreachable!()
+    }
+}
+
+fn build_command() -> Command {
     // to allow for non static strings in clap
     // I had to enable the "string" module
     // is this considered a bad idea?
-    let matches = Command::new("vpxtool")
+    Command::new("vpxtool")
         .version(GIT_VERSION)
         .author("Francis DB")
         .about("Extracts and assembles vpx files")
@@ -87,13 +477,25 @@ fn main() {
                 ),
         )
         .subcommand(
-            Command::new("diff")
+            Command::new(CMD_DIFF)
                 .about("Prints out a diff between the vbs in the vpx and the sidecar vbs")
                 .arg(arg!(<VPXPATH> "The path to the vpx file").required(true))
         )
         .subcommand(
-            Command::new("frontend")
-                .about("Acts as a frontend for launching vpx files")
+            Command::new(CMD_FRONTEND)
+                .about("Text based frontend for launching vpx files")
+                .arg(
+                    Arg::new("RECURSIVE")
+                        .short('r')
+                        .long("recursive")
+                        .num_args(0)
+                        .help("Recursively index subdirectories")
+                        .default_value("true"),
+                )
+        )
+        .subcommand(
+            Command::new(CMD_SIMPLE_FRONTEND)
+                .about("Simple text based frontend for launching vpx files")
                 .arg(
                     Arg::new("RECURSIVE")
                         .short('r')
@@ -120,21 +522,34 @@ fn main() {
                 ),
         )
         .subcommand(
-            Command::new("script")
-                .about("Show a vpx script")
-                .arg(
-                    arg!(<VPXPATH> "The path to the vpx file")
-                        .required(true),
-                    ),
-            )
+            Command::new(CMD_SCRIPT)
+                .subcommand_required(true)
+                .about("Vpx script code related commands")
+                .subcommand(
+                    Command::new(CMD_SCRIPT_SHOW)
+                        .about("Show a vpx script")
+                        .arg(
+                            arg!(<VPXPATH> "The path to the vpx file")
+                                .required(true),
+                        ),
+                )
+                .subcommand(
+                    Command::new(CMD_SCRIPT_EDIT)
+                        .about("Edit the table vpx script")
+                        .arg(
+                            arg!(<VPXPATH> "The path to the vpx file")
+                                .required(true),
+                        ),
+                )
+        )
         .subcommand(
             Command::new("ls")
                 .about("Show a vpx file content")
                 .arg(
                     arg!(<VPXPATH> "The path to the vpx file")
                         .required(true),
-                    ),
-            )
+                ),
+        )
         .subcommand(
             Command::new("extract")
                 .about("Extracts a vpx file")
@@ -191,12 +606,12 @@ fn main() {
                 .subcommand_required(true)
                 .about("Point of view file (pov) related commands")
                 .subcommand(Command::new("extract")
-                .about("Extracts a the pov file from a vpx file")
-                .arg(
-                    arg!(<VPXPATH> "The path(s) to the vpx file(s)")
-                        .required(true)
-                        .num_args(1..),
-                ),
+                                .about("Extracts a the pov file from a vpx file")
+                                .arg(
+                                    arg!(<VPXPATH> "The path(s) to the vpx file(s)")
+                                        .required(true)
+                                        .num_args(1..),
+                                ),
                 )
         )
         .subcommand(
@@ -210,327 +625,51 @@ fn main() {
                 .arg(arg!(<VPXPATH> "The path(s) to the vpx file").required(true)),
         )
         .subcommand(
-            Command::new("config")
+            Command::new(CMD_CONFIG)
                 .subcommand_required(true)
                 .about("Vpxtool related config file")
                 .subcommand(
-                    Command::new("setup")
+                    Command::new(CMD_CONFIG_SETUP)
                         .about("Sets up the config file"),
                 )
                 .subcommand(
-                    Command::new("path")
+                    Command::new(CMD_CONFIG_PATH)
                         .about("Shows the current config file path"),
-            ).subcommand(
-                Command::new("clear")
-                    .about("Clears the current config file"),
                 )
-            .subcommand(
-        Command::new("cat")
-            .about("Shows the contents of the config file"),
-            )
                 .subcommand(
-                    Command::new("edit")
+                    Command::new(CMD_CONFIG_CLEAR)
+                        .about("Clears the current config file"),
+                )
+                .subcommand(
+                    Command::new(CMD_CONFIG_SHOW)
+                        .about("Shows the contents of the config file"),
+                )
+                .subcommand(
+                    Command::new(CMD_CONFIG_EDIT)
                         .about("Edits the config file using the default editor"),
                 )
-    )
-        .get_matches_from(wild::args());
+        )
+}
 
-    match matches.subcommand() {
-        Some(("info", sub_matches)) => {
-            let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
-            let path = path.unwrap_or("");
-            let expanded_path = expand_path(path);
-            println!("showing info for {}", expanded_path.display());
-            let json = sub_matches.get_flag("JSON");
-            info(&expanded_path, json).unwrap();
+fn open_or_fail(vbs_path: &PathBuf) -> io::Result<ExitCode> {
+    match open::that(&vbs_path) {
+        Ok(_) => Ok(ExitCode::SUCCESS),
+        Err(err) => {
+            let msg = format!("Unable to open {}", vbs_path.to_string_lossy());
+            fail_with_error(msg, err)
         }
-        Some(("diff", sub_matches)) => {
-            let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
-            let path = path.unwrap_or("");
-            let expanded_path = expand_path(path);
-            match vpx::diff_script(PathBuf::from(expanded_path)) {
-                Ok(output) => {
-                    println!("{}", output);
-                }
-                Err(e) => {
-                    let warning = format!("Error running diff: {}", e).red();
-                    println!("{}", warning);
-                    exit(1);
-                }
-            }
-        }
-        Some(("frontend", _sub_matches)) => {
-            let (config_path, config) = config::load_or_setup_config().unwrap();
-            println!("Using config file {}", config_path.display());
-            let roms = indexer::find_roms(&config.rom_folder()).unwrap();
-            match frontend::frontend_index(&config, true) {
-                Ok(tables) if tables.is_empty() => {
-                    let warning =
-                        format!("No tables found in {}", config.tables_folder.display()).red();
-                    eprintln!("{}", warning);
-                    exit(1);
-                }
-                Ok(vpx_files_with_tableinfo) => {
-                    let vpinball_executable = config.vpx_executable;
-                    frontend::frontend(&vpx_files_with_tableinfo, &roms, &vpinball_executable);
-                }
-                Err(IndexError::FolderDoesNotExist(path)) => {
-                    let warning = format!(
-                        "Configured tables folder does not exist: {}",
-                        path.display()
-                    )
-                    .red();
-                    eprintln!("{}", warning);
-                    exit(1);
-                }
-                Err(IndexError::IoError(e)) => {
-                    let warning = format!("Error running frontend: {}", e).red();
-                    eprintln!("{}", warning);
-                    exit(1);
-                }
-            }
-        }
-        Some(("index", sub_matches)) => {
-            let recursive = sub_matches.get_flag("RECURSIVE");
-            let path = sub_matches
-                .get_one::<String>("VPXROOTPATH")
-                .map(|s| s.as_str());
-
-            let (tables_folder_path, tables_index_path) = match path {
-                Some(path) => {
-                    let tables_path = expand_path(path);
-                    let tables_index_path = config::tables_index_path(&tables_path);
-                    (tables_path, tables_index_path)
-                }
-                None => match config::load_config().unwrap() {
-                    Some((config_path, config)) => {
-                        println!("Using config file {}", config_path.display());
-                        (config.tables_folder, config.tables_index_path)
-                    }
-                    None => {
-                        eprintln!("No VPXROOTPATH provided up and no config file found");
-                        exit(1);
-                    }
-                },
-            };
-            let pb = ProgressBar::hidden();
-            pb.set_style(
-                ProgressStyle::with_template(
-                    "{spinner:.green} [{bar:.cyan/blue}] {pos}/{human_len} ({eta})",
-                )
-                .unwrap(),
-            );
-            let progress = ProgressBarProgress::new(pb);
-            let index = indexer::index_folder(
-                recursive,
-                &tables_folder_path,
-                &tables_index_path,
-                &progress,
-            )
-            .unwrap();
-            progress.finish_and_clear();
-            println!(
-                "Indexed {} vpx files into {}",
-                index.len(),
-                &tables_index_path.display()
-            );
-        }
-        Some(("script", sub_matches)) => {
-            let path = sub_matches
-                .get_one::<String>("VPXPATH")
-                .map(|s| s.as_str())
-                .unwrap_or_default();
-
-            let expanded_path = PathBuf::from(expand_path(path));
-            let code = cat_script(&expanded_path);
-
-            println!("{}", code)
-        }
-        Some(("ls", sub_matches)) => {
-            let path = sub_matches
-                .get_one::<String>("VPXPATH")
-                .map(|s| s.as_str())
-                .unwrap_or_default();
-
-            let expanded_path = expand_path(path);
-            ls(expanded_path.as_ref());
-        }
-        Some(("extract", sub_matches)) => {
-            let yes = sub_matches.get_flag("FORCE");
-            let paths: Vec<&str> = sub_matches
-                .get_many::<String>("VPXPATH")
-                .unwrap_or_default()
-                .map(|v| v.as_str())
-                .collect();
-            for path in paths {
-                let expanded_path = expand_path(path);
-                println!("extracting from {}", expanded_path.display());
-                if expanded_path.ends_with(".directb2s") {
-                    extract_directb2s(&expanded_path);
-                } else {
-                    extract(expanded_path.as_ref(), yes);
-                }
-            }
-        }
-        Some(("extractvbs", sub_matches)) => {
-            let overwrite = sub_matches.get_flag("OVERWRITE");
-            let paths: Vec<&str> = sub_matches
-                .get_many::<String>("VPXPATH")
-                .unwrap_or_default()
-                .map(|v| v.as_str())
-                .collect::<Vec<_>>();
-            for path in paths {
-                let expanded_path = PathBuf::from(expand_path(path));
-                match extractvbs(&expanded_path, overwrite, None) {
-                    ExtractResult::Existed(vbs_path) => {
-                        let warning =
-                            format!("EXISTED {}", vbs_path.display()).truecolor(255, 125, 0);
-                        println!("{}", warning);
-                    }
-                    ExtractResult::Extracted(vbs_path) => {
-                        println!("CREATED {}", vbs_path.display());
-                    }
-                }
-            }
-        }
-        Some(("importvbs", sub_matches)) => {
-            let path: &str = sub_matches.get_one::<String>("VPXPATH").unwrap().as_str();
-            let expanded_path = PathBuf::from(expand_path(path));
-            match importvbs(&expanded_path, None) {
-                Ok(vbs_path) => {
-                    println!("IMPORTED {}", vbs_path.display());
-                }
-                Err(e) => {
-                    let warning = format!("Error importing vbs: {}", e).red();
-                    println!("{}", warning);
-                    exit(1);
-                }
-            }
-        }
-
-        Some(("verify", sub_matches)) => {
-            let paths: Vec<&str> = sub_matches
-                .get_many::<String>("VPXPATH")
-                .unwrap_or_default()
-                .map(|v| v.as_str())
-                .collect::<Vec<_>>();
-            for path in paths {
-                let expanded_path = PathBuf::from(expand_path(path));
-                match verify(&expanded_path) {
-                    VerifyResult::Ok(vbs_path) => {
-                        println!("{OK} {}", vbs_path.display());
-                    }
-                    VerifyResult::Failed(vbs_path, msg) => {
-                        let warning =
-                            format!("{NOK} {} {}", vbs_path.display(), msg).truecolor(255, 125, 0);
-                        println!("{}", warning);
-                    }
-                }
-            }
-        }
-        Some(("new", sub_matches)) => {
-            let path = {
-                let this = sub_matches.get_one::<String>("VPXPATH").map(|v| v.as_str());
-                match this {
-                    Some(x) => x,
-                    None => unreachable!("VPXPATH is required"),
-                }
-            };
-
-            let expanded_path = shellexpand::tilde(path);
-            println!("creating new vpx file at {}", expanded_path);
-            new(expanded_path.as_ref()).unwrap();
-        }
-        Some(("config", sub_matches)) => match sub_matches.subcommand() {
-            Some(("setup", _)) => match config::setup_config() {
-                Ok(SetupConfigResult::Configured(config_path)) => {
-                    println!("Created config file {}", config_path.display());
-                }
-                Ok(SetupConfigResult::Existing(config_path)) => {
-                    println!("Config file already exists at {}", config_path.display());
-                }
-                Err(e) => {
-                    eprintln!("Failed to create config file: {}", e);
-                    exit(1);
-                }
-            },
-            Some(("path", _)) => match config::config_path() {
-                Some(config_path) => {
-                    println!("{}", config_path.display());
-                }
-                None => {
-                    eprintln!("No config file found");
-                    exit(1);
-                }
-            },
-            Some(("cat", _)) => match config::config_path() {
-                Some(config_path) => {
-                    let mut file = File::open(&config_path).unwrap();
-                    let mut text = String::new();
-                    file.read_to_string(&mut text).unwrap();
-                    println!("{}", text);
-                }
-                None => {
-                    eprintln!("No config file found");
-                    exit(1);
-                }
-            },
-            Some(("clear", _)) => match config::clear_config() {
-                Ok(Some(config_path)) => {
-                    println!("Cleared config file {}", config_path.display());
-                }
-                Ok(None) => {
-                    println!("No config file found");
-                }
-                Err(e) => {
-                    eprintln!("Failed to clear config file: {}", e);
-                    exit(1);
-                }
-            },
-            Some(("edit", _)) => match config::config_path() {
-                Some(config_path) => {
-                    let editor = std::env::var("EDITOR").expect("EDITOR not set");
-                    let status = std::process::Command::new(editor)
-                        .arg(config_path)
-                        .status()
-                        .unwrap();
-                    if !status.success() {
-                        eprintln!("Failed to edit config file");
-                        exit(1);
-                    }
-                }
-                None => {
-                    eprintln!("No config file found");
-                    exit(1);
-                }
-            },
-            _ => unreachable!(),
-        },
-        Some(("pov", sub_matches)) => match sub_matches.subcommand() {
-            Some(("extract", sub_matches)) => {
-                let paths: Vec<&str> = sub_matches
-                    .get_many::<String>("VPXPATH")
-                    .unwrap_or_default()
-                    .map(|v| v.as_str())
-                    .collect::<Vec<_>>();
-                for path in paths {
-                    let expanded_path = PathBuf::from(expand_path(path));
-                    match extract_pov(&expanded_path) {
-                        Ok(pov_path) => {
-                            println!("CREATED {}", pov_path.display());
-                        }
-                        Err(e) => {
-                            let warning = format!("Error extracting pov: {}", e).red();
-                            println!("{}", warning);
-                            exit(1);
-                        }
-                    }
-                }
-            }
-            _ => unreachable!(),
-        },
-        _ => unreachable!(), // If all subcommands are defined above, anything else is unreachable!()
     }
+}
+
+fn fail_with_error(message: impl Display, err: impl Error) -> io::Result<ExitCode> {
+    let warning = format!("{message}: {err}");
+    fail(warning)
+}
+
+fn fail<M: AsRef<str>>(message: M) -> io::Result<ExitCode> {
+    let warning = message.as_ref().red();
+    eprintln!("{}", warning)?;
+    Ok(ExitCode::FAILURE)
 }
 
 fn new(vpx_file_path: &str) -> io::Result<()> {
@@ -652,27 +791,28 @@ fn extract_pov(vpx_path: &PathBuf) -> io::Result<PathBuf> {
     Ok(pov_path)
 }
 
-fn extract_directb2s(expanded_path: &PathBuf) {
+fn extract_directb2s(expanded_path: &PathBuf) -> io::Result<()> {
     let mut file = File::open(expanded_path).unwrap();
     let mut text = String::new();
     file.read_to_string(&mut text).unwrap();
     match load(&text) {
         Ok(b2s) => {
-            println!("DirectB2S file version {}", b2s.version);
+            println!("DirectB2S file version {}", b2s.version)?;
             let root_dir_path = expanded_path.with_extension("directb2s.extracted");
 
             let mut root_dir = std::fs::DirBuilder::new();
             root_dir.recursive(true);
             root_dir.create(&root_dir_path).unwrap();
 
-            println!("Writing to {}", root_dir_path.display());
+            println!("Writing to {}", root_dir_path.display())?;
             wite_images(b2s, root_dir_path.as_path());
         }
         Err(msg) => {
-            println!("Failed to load {}: {}", expanded_path.display(), msg);
+            println!("Failed to load {}: {}", expanded_path.display(), msg)?;
             exit(1);
         }
     }
+    Ok(())
 }
 
 fn wite_images(b2s: directb2s::DirectB2SData, root_dir_path: &Path) {
@@ -797,23 +937,25 @@ fn os_independent_file_name(file_path: String) -> Option<String> {
         .map(|f| f.to_string())
 }
 
-fn expand_path(path: &str) -> PathBuf {
+fn expand_path(path: &str) -> io::Result<PathBuf> {
     // TODO expand all instead of only tilde?
     let expanded_path = shellexpand::tilde(path);
     match metadata(expanded_path.as_ref()) {
         Ok(md) => {
             if !md.is_file() && !md.is_dir() && md.is_symlink() {
-                println!("{} is not a file", expanded_path);
-                exit(1);
+                Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!("{} is not a file", expanded_path),
+                ))
+            } else {
+                Ok(PathBuf::from(expanded_path.to_string()))
             }
         }
         Err(msg) => {
-            let warning = format!("Failed to read metadata for {}: {}", expanded_path, msg).red();
-            println!("{}", warning);
-            exit(1);
+            let warning = format!("Failed to read metadata for {}: {}", expanded_path, msg);
+            Err(io::Error::new(io::ErrorKind::InvalidInput, warning))
         }
     }
-    PathBuf::from(expanded_path.to_string())
 }
 
 fn info(vpx_file_path: &PathBuf, json: bool) -> io::Result<()> {
@@ -824,17 +966,17 @@ fn info(vpx_file_path: &PathBuf, json: bool) -> io::Result<()> {
     let table_info = tableinfo::read_tableinfo(&mut comp)?;
     // TODO check the json flag
 
-    println!("{:>18} {}", "VPX Version:".green(), version);
+    println!("{:>18} {}", "VPX Version:".green(), version)?;
     println!(
         "{:>18} {}",
         "Table Name:".green(),
         table_info.table_name.unwrap_or("[not set]".to_string())
-    );
+    )?;
     println!(
         "{:>18} {}",
         "Version:".green(),
         table_info.table_version.unwrap_or("[not set]".to_string())
-    );
+    )?;
     println!(
         "{:>18} {}{}{}",
         "Author:".green(),
@@ -853,58 +995,59 @@ fn info(vpx_file_path: &PathBuf, json: bool) -> io::Result<()> {
             .filter(|s| !s.is_empty())
             .map(|s| format!("{} ", s))
             .unwrap_or_default(),
-    );
+    )?;
     println!(
         "{:>18} {}",
         "Save revision:".green(),
         table_info.table_save_rev.unwrap_or("[not set]".to_string())
-    );
+    )?;
     println!(
         "{:>18} {}",
         "Save date:".green(),
         table_info
             .table_save_date
             .unwrap_or("[not set]".to_string())
-    );
+    )?;
     println!(
         "{:>18} {}",
         "Release Date:".green(),
         table_info.release_date.unwrap_or("[not set]".to_string())
-    );
+    )?;
     println!(
         "{:>18} {}",
         "Description:".green(),
         table_info
             .table_description
             .unwrap_or("[not set]".to_string())
-    );
+    )?;
     println!(
         "{:>18} {}",
         "Blurb:".green(),
         table_info.table_blurb.unwrap_or("[not set]".to_string())
-    );
+    )?;
     println!(
         "{:>18} {}",
         "Rules:".green(),
         table_info.table_rules.unwrap_or("[not set]".to_string())
-    );
+    )?;
     // other properties
-    table_info.properties.iter().for_each(|(prop, value)| {
-        println!("{:>18}: {}", prop.green(), value);
-    });
+    table_info
+        .properties
+        .iter()
+        .map(|(prop, value)| println!("{:>18}: {}", prop.green(), value))
+        .collect::<io::Result<()>>()?;
 
     Ok(())
 }
 
-pub fn ls(vpx_file_path: &Path) {
-    let files = expanded::extract_directory_list(vpx_file_path);
-
-    for file_path in &files {
-        println!("{}", file_path);
-    }
+pub fn ls(vpx_file_path: &Path) -> io::Result<()> {
+    expanded::extract_directory_list(vpx_file_path)
+        .iter()
+        .map(|file_path| println!("{}", file_path))
+        .collect()
 }
 
-pub fn extract(vpx_file_path: &Path, yes: bool) {
+pub fn extract(vpx_file_path: &Path, yes: bool) -> io::Result<ExitCode> {
     let root_dir_path_str = vpx_file_path.with_extension("");
     let root_dir_path = Path::new(&root_dir_path_str);
 
@@ -916,22 +1059,35 @@ pub fn extract(vpx_file_path: &Path, yes: bool) {
         //   let use_color = stdout().is_terminal();
         let warning =
             format!("Directory {} already exists", root_dir_path.display()).truecolor(255, 125, 0);
-        println!("{}", warning);
-        println!("Do you want to continue exporting? (y/n)");
+        println!("{}", warning)?;
+        println!("Do you want to continue exporting? (y/n)")?;
         let mut input = String::new();
         std::io::stdin().read_line(&mut input).unwrap();
         if input.trim() != "y" {
-            println!("Aborting");
-            exit(0);
+            println!("Aborting")?;
+            Ok(ExitCode::SUCCESS)
+        } else {
+            match expanded::extract(vpx_file_path, root_dir_path) {
+                Ok(_) => {
+                    println!("Successfully extracted to {}", root_dir_path.display())?;
+                    Ok(ExitCode::SUCCESS)
+                }
+                Err(e) => {
+                    println!("Failed to extract: {}", e)?;
+                    Ok(ExitCode::FAILURE)
+                }
+            }
         }
-    }
-    match expanded::extract(vpx_file_path, root_dir_path) {
-        Ok(_) => {
-            println!("Successfully extracted to {}", root_dir_path.display());
-        }
-        Err(e) => {
-            println!("Failed to extract: {}", e);
-            exit(1);
+    } else {
+        match expanded::extract(vpx_file_path, root_dir_path) {
+            Ok(_) => {
+                println!("Successfully extracted to {}", root_dir_path.display())?;
+                Ok(ExitCode::SUCCESS)
+            }
+            Err(e) => {
+                println!("Failed to extract: {}", e)?;
+                Ok(ExitCode::FAILURE)
+            }
         }
     }
 }

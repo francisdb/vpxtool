@@ -362,7 +362,7 @@ fn extract_gameitems(comp: &mut CompoundFile<File>, gamedata: &GameData, root_di
             .read_to_end(&mut input)
             .unwrap();
         //println!("GameItem {} size: {}", path, input.len());
-        let gameitem = gameitem::read(&input);
+        let _gameitem = gameitem::read(&input);
 
         //dbg!(gameitem);
 
