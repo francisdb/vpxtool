@@ -1338,6 +1338,7 @@ dependencies = [
  "pretty_env_logger",
  "quick-xml",
  "rand",
+ "regex",
  "serde",
  "serde_json",
  "shellexpand",

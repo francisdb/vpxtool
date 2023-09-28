@@ -3,6 +3,7 @@ use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::fs::Metadata;
+use std::io::Read;
 use std::time::SystemTime;
 use std::{
     ffi::OsStr,
@@ -15,7 +16,9 @@ use colored::Colorize;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use walkdir::WalkDir;
 
-use crate::tableinfo::{read_tableinfo, TableInfo};
+use crate::tableinfo::TableInfo;
+use crate::vpx;
+use crate::vpx::gamedata::GameData;
 
 /// Introduced because we want full control over serialization
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
@@ -96,6 +99,8 @@ impl<'de> Deserialize<'de> for IsoSystemTime {
 pub struct IndexedTable {
     pub path: PathBuf,
     pub table_info: IndexedTableInfo,
+    pub game_name: Option<String>,
+    pub requires_pinmame: bool,
     pub last_modified: IsoSystemTime,
 }
 
@@ -183,6 +188,34 @@ impl From<TablesIndexJson> for TablesIndex {
         }
         TablesIndex { tables }
     }
+}
+
+/// Returns all roms names lower case for the roms in the given folder
+pub fn find_roms<P: AsRef<Path>>(rom_path: P) -> io::Result<HashSet<String>> {
+    // TODO
+    // TODO if there is an ini file for the table we might have to check locally for the rom
+    //   currently only a standalone feature
+    let mut roms = HashSet::new();
+    // TODO is there a cleaner version like try_filter_map?
+    let mut entries = fs::read_dir(rom_path)?;
+    entries.try_for_each(|entry| {
+        let dir_entry = entry?;
+        let path = dir_entry.path();
+        if path.is_file() {
+            if let Some("zip") = path.extension().and_then(OsStr::to_str) {
+                roms.insert(
+                    path.file_stem()
+                        .unwrap()
+                        .to_str()
+                        .unwrap()
+                        .to_string()
+                        .to_lowercase(),
+                );
+            }
+        }
+        Ok::<(), io::Error>(())
+    })?;
+    Ok(roms)
 }
 
 pub fn find_vpx_files<P: AsRef<Path>>(
@@ -327,18 +360,8 @@ pub fn index_vpx_files(vpx_files: &[PathWithMetadata], progress: &impl Progress)
         .iter()
         .enumerate()
         .flat_map(|(i, vpx_file)| {
-            let result = cfb::open(&vpx_file.path).and_then(|mut comp| read_tableinfo(&mut comp));
-            let optional = match result {
-                Ok(table_info) => {
-                    let last_modified = last_modified(&vpx_file.path).unwrap();
-                    let indexed_table_info = IndexedTableInfo::from(table_info);
-                    let indexed = IndexedTable {
-                        path: vpx_file.path.clone(),
-                        table_info: indexed_table_info,
-                        last_modified: IsoSystemTime(last_modified),
-                    };
-                    Some((indexed.path.clone(), indexed))
-                }
+            let optional = match index_vpx_file(&vpx_file) {
+                Ok(indexed_table) => Some(indexed_table),
                 Err(e) => {
                     // TODO we want to return any failures instead of printing here
                     let warning =
@@ -357,6 +380,46 @@ pub fn index_vpx_files(vpx_files: &[PathWithMetadata], progress: &impl Progress)
     TablesIndex {
         tables: vpx_files_with_table_info,
     }
+}
+
+fn index_vpx_file(vpx_file_path: &PathWithMetadata) -> io::Result<(PathBuf, IndexedTable)> {
+    let path = &vpx_file_path.path;
+    let mut vpx_file = vpx::open(path)?;
+    let table_info = vpx_file.read_tableinfo()?;
+    let game_data = vpx_file.read_gamedata()?;
+    let code = consider_sidecar_vbs(path, game_data)?;
+    //  also this sidecar should be part of the cache key
+    let game_name = extract_game_name(&code);
+    let requires_pinmame = requires_pinmame(&code);
+
+    let last_modified = last_modified(path).unwrap();
+    let indexed_table_info = IndexedTableInfo::from(table_info);
+
+    let indexed = IndexedTable {
+        path: path.clone(),
+        table_info: indexed_table_info,
+        game_name,
+        requires_pinmame,
+        last_modified: IsoSystemTime(last_modified),
+    };
+    Ok((indexed.path.clone(), indexed))
+}
+
+/// If there is a file with the same name and extension .vbs we pick that code
+/// instead of the code in the vpx file.
+///
+/// TODO if this file changes the index entry is currently not invalidated
+fn consider_sidecar_vbs(path: &PathBuf, game_data: GameData) -> io::Result<String> {
+    let vbs_path = path.with_extension("vbs");
+    let code = if vbs_path.exists() {
+        let mut vbs_file = File::open(vbs_path)?;
+        let mut code = String::new();
+        vbs_file.read_to_string(&mut code)?;
+        code
+    } else {
+        game_data.code.string
+    };
+    Ok(code)
 }
 
 fn table_name_compare(a: &IndexedTable, b: &IndexedTable) -> Ordering {
@@ -401,8 +464,42 @@ pub fn read_index_json<P: AsRef<Path>>(json_path: P) -> io::Result<Option<Tables
             let indexed_tables: TablesIndex = indexed_tables_json.into();
             Ok(Some(indexed_tables))
         }
-        Err(e) => Err(io::Error::new(io::ErrorKind::Other, e)),
+        Err(e) => {
+            println!(
+                "Failed to parse index file, ignoring existing index. ({})",
+                e
+            );
+            Ok(None)
+        }
     }
+}
+
+fn extract_game_name<S: AsRef<str>>(code: S) -> Option<String> {
+    // TODO can we find a first match through an option?
+    // needs to be all lowercase to match with (?i) case insensitive
+    const RE: &str = r#"(?i)const\s*cgamename\s*=\s*\"([^"\\]*(?:\\.[^"\\]*)*)\""#;
+    let re = regex::Regex::new(RE).unwrap();
+    code.as_ref()
+        .lines()
+        // skip rows that start with ' or whitespace followed by '
+        .filter(|line| !line.trim().starts_with('\''))
+        .filter(|line| line.to_lowercase().trim().contains("cgamename"))
+        .flat_map(|line| {
+            let caps = re.captures(line)?;
+            let first = caps.get(1)?;
+            Some(first.as_str().to_string())
+        })
+        .next()
+}
+
+fn requires_pinmame<S: AsRef<str>>(code: S) -> bool {
+    let lower = code.as_ref().to_lowercase();
+    const RE: &str = r#"sub\s*loadvpm"#;
+    let re = regex::Regex::new(RE).unwrap();
+    lower
+        .lines()
+        .filter(|line| !line.trim().starts_with('\''))
+        .any(|line| line.contains("loadvpm") && !re.is_match(&lower))
 }
 
 #[cfg(test)]
@@ -459,15 +556,14 @@ mod tests {
 
     #[test]
     fn test_write_read_invalid_file() -> io::Result<()> {
-        let index = TablesIndex::empty();
         let test_dir = testdir!();
         let index_path = test_dir.join("test.json");
         // write empty json array using serde_json
         let json_file = File::create(&index_path)?;
         // write garbage to file
         serde_json::to_writer_pretty(json_file, &"garbage")?;
-        let read = read_index_json(&index_path);
-        assert!(read.is_err());
+        let read = read_index_json(&index_path)?;
+        assert_eq!(read, None);
         Ok(())
     }
 
@@ -501,6 +597,8 @@ mod tests {
                 table_description: None,
                 properties: HashMap::new(),
             },
+            game_name: Some("testrom".to_string()),
+            requires_pinmame: true,
             last_modified: IsoSystemTime(SystemTime::UNIX_EPOCH),
         });
         let test_dir = testdir!();
@@ -517,5 +615,125 @@ mod tests {
         let read = read_index_json(&index_path)?;
         assert_eq!(read, None);
         Ok(())
+    }
+
+    #[test]
+    fn test_extract_game_name() {
+        let code = r#"
+  Dim tableheight: tableheight = Table1.height
+
+  Const cGameName="godzilla",UseSolenoids=2,UseLamps=1,UseGI=0, SCoin=""
+  Const UseVPMModSol = True
+
+"#
+        .to_string();
+        let game_name = extract_game_name(code);
+        assert_eq!(game_name, Some("godzilla".to_string()));
+    }
+
+    #[test]
+    fn test_extract_game_name_commented() {
+        let code = r#"
+  'Const cGameName = "commented"
+  Const cGameName = "actual"
+"#
+        .to_string();
+        let game_name = extract_game_name(code);
+        assert_eq!(game_name, Some("actual".to_string()));
+    }
+
+    #[test]
+    fn test_extract_game_name_spaced() {
+        let code = r#"
+  Const cGameName = "gg"
+"#
+        .to_string();
+        let game_name = extract_game_name(code);
+        assert_eq!(game_name, Some("gg".to_string()));
+    }
+
+    #[test]
+    fn test_extract_game_name_casing() {
+        let code = r#"
+  const cgamenamE = "othercase"
+"#
+        .to_string();
+        let game_name = extract_game_name(code);
+        assert_eq!(game_name, Some("othercase".to_string()));
+    }
+
+    #[test]
+    fn test_extract_game_name_uppercase_name() {
+        let code = r#"
+Const cGameName = "BOOM"
+"#
+        .to_string();
+        let game_name = extract_game_name(code);
+        assert_eq!(game_name, Some("BOOM".to_string()));
+    }
+
+    #[test]
+    fn test_extract_game_name_with_underscore() {
+        let code = r#"
+Const cGameName="simp_a27",UseSolenoids=1,UseLamps=0,UseGI=0,SSolenoidOn="SolOn",SSolenoidOff="SolOff", SCoin="coin"
+
+LoadVPM "01000200", "DE.VBS", 3.36
+"#
+            .to_string();
+        let game_name = extract_game_name(code);
+        assert_eq!(game_name, Some("simp_a27".to_string()));
+    }
+
+    #[test]
+    fn test_requires_pinmame() {
+        let code = r#"#
+  LoadVPM "01210000", "sys80.VBS", 3.1
+"#
+        .to_string();
+        assert_eq!(requires_pinmame(code), true);
+    }
+
+    #[test]
+    fn test_requires_pinmame_other_casing() {
+        let code = r#"
+  loadVpm "01210000", \"sys80.VBS\", 3.1
+"#
+        .to_string();
+        assert_eq!(requires_pinmame(code), true);
+    }
+
+    #[test]
+    fn test_requires_pinmame_not() {
+        let code = r#"
+Const cGameName = "GTB_4Square_1971"
+"#
+        .to_string();
+        assert_eq!(requires_pinmame(code), false);
+    }
+
+    #[test]
+    fn test_requires_pinmame_with_same_sub() {
+        // got this from blood machines
+        let code = r#"
+Sub LoadVPM(VPMver, VBSfile, VBSver)
+	LoadVBSFiles VPMver, VBSfile, VBSver
+	LoadController("VPM")
+End Sub
+"#
+        .to_string();
+        assert_eq!(requires_pinmame(code), false);
+    }
+
+    #[test]
+    fn test_requires_pinmame_comment() {
+        // got this from blood machines
+        let code = r#"
+' VRRoom set based on RenderingMode
+' Internal DMD in Desktop Mode, using a textbox (must be called before LoadVPM)
+Dim UseVPMDMD, VRRoom, DesktopMode
+If RenderingMode = 2 Then VRRoom = VRRoomChoice Else VRRoom = 0
+"#
+        .to_string();
+        assert_eq!(requires_pinmame(code), false);
     }
 }

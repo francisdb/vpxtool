@@ -35,6 +35,23 @@ pub struct ResolvedConfig {
     pub tables_index_path: PathBuf,
 }
 
+impl ResolvedConfig {
+    pub fn rom_folder(&self) -> PathBuf {
+        if cfg!(target_os = "windows") {
+            // return the roms folder in the same directory as the vpx executable
+            return self
+                .vpx_executable
+                .parent()
+                .unwrap()
+                .join("VPinMAME")
+                .join("roms");
+        } else {
+            // return the roms folder in the home directory
+            return dirs::home_dir().unwrap().join(".pinmame").join("roms");
+        }
+    }
+}
+
 pub fn config_path() -> Option<PathBuf> {
     let home_directory_configuration_path = home_config_path();
     if home_directory_configuration_path.exists() {

@@ -1,6 +1,7 @@
 use std::io::{self, Read, Seek, Write};
 use std::path::MAIN_SEPARATOR_STR;
 use std::{
+    fs,
     fs::File,
     path::{Path, PathBuf},
 };
@@ -12,6 +13,7 @@ use md2::{Digest, Md2};
 
 use crate::vpx::biff::BiffReader;
 
+use crate::vpx::tableinfo::read_tableinfo;
 use tableinfo::{write_tableinfo, TableInfo};
 use version::Version;
 
@@ -23,7 +25,6 @@ use self::gamedata::GameData;
 use self::gameitem::GameItemEnum;
 use self::image::ImageData;
 use self::sound::SoundData;
-use self::tableinfo::read_tableinfo;
 use self::version::{read_version, write_version};
 
 pub mod biff;
@@ -61,6 +62,38 @@ pub enum ExtractResult {
 pub enum VerifyResult {
     Ok(PathBuf),
     Failed(PathBuf, String),
+}
+
+pub struct VpxFile<F> {
+    // keep this private
+    compound_file: CompoundFile<F>,
+}
+
+impl<F: Read + Seek + Write> VpxFile<F> {
+    /// Opens an existing compound file, using the underlying reader.  If the
+    /// underlying reader also supports the `Write` trait, then the
+    /// `CompoundFile` object will be writable as well.
+    pub fn open(inner: F) -> io::Result<VpxFile<F>> {
+        let compound_file = CompoundFile::open(inner)?;
+        Ok(VpxFile { compound_file })
+    }
+
+    pub fn read_version(&mut self) -> io::Result<Version> {
+        version::read_version(&mut self.compound_file)
+    }
+
+    pub fn read_tableinfo(&mut self) -> io::Result<TableInfo> {
+        tableinfo::read_tableinfo(&mut self.compound_file)
+    }
+
+    pub fn read_gamedata(&mut self) -> io::Result<GameData> {
+        let version = self.read_version()?;
+        read_gamedata(&mut self.compound_file, &version)
+    }
+}
+
+pub fn open<P: AsRef<Path>>(path: P) -> io::Result<VpxFile<fs::File>> {
+    VpxFile::open(fs::File::open(path)?)
 }
 
 pub fn read(path: &PathBuf) -> io::Result<VPX> {
