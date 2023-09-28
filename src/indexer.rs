@@ -3,6 +3,7 @@ use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::fs::Metadata;
+use std::io::Read;
 use std::time::SystemTime;
 use std::{
     ffi::OsStr,
@@ -17,6 +18,7 @@ use walkdir::WalkDir;
 
 use crate::tableinfo::TableInfo;
 use crate::vpx;
+use crate::vpx::gamedata::GameData;
 
 /// Introduced because we want full control over serialization
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
@@ -385,8 +387,7 @@ fn index_vpx_file(vpx_file_path: &PathWithMetadata) -> io::Result<(PathBuf, Inde
     let mut vpx_file = vpx::open(path)?;
     let table_info = vpx_file.read_tableinfo()?;
     let game_data = vpx_file.read_gamedata()?;
-    let code = game_data.code.string;
-    // TODO if there is a sidecar vbs we pick the wrong code
+    let code = consider_sidecar_vbs(path, game_data)?;
     //  also this sidecar should be part of the cache key
     let game_name = extract_game_name(&code);
     let requires_pinmame = requires_pinmame(&code);
@@ -402,6 +403,23 @@ fn index_vpx_file(vpx_file_path: &PathWithMetadata) -> io::Result<(PathBuf, Inde
         last_modified: IsoSystemTime(last_modified),
     };
     Ok((indexed.path.clone(), indexed))
+}
+
+/// If there is a file with the same name and extension .vbs we pick that code
+/// instead of the code in the vpx file.
+///
+/// TODO if this file changes the index entry is currently not invalidated
+fn consider_sidecar_vbs(path: &PathBuf, game_data: GameData) -> Result<String, Error> {
+    let vbs_path = path.with_extension("vbs");
+    let code = if vbs_path.exists() {
+        let mut vbs_file = File::open(vbs_path)?;
+        let mut code = String::new();
+        vbs_file.read_to_string(&mut code)?;
+        code
+    } else {
+        game_data.code.string
+    };
+    Ok(code)
 }
 
 fn table_name_compare(a: &IndexedTable, b: &IndexedTable) -> Ordering {
