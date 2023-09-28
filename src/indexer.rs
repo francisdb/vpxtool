@@ -409,7 +409,7 @@ fn index_vpx_file(vpx_file_path: &PathWithMetadata) -> io::Result<(PathBuf, Inde
 /// instead of the code in the vpx file.
 ///
 /// TODO if this file changes the index entry is currently not invalidated
-fn consider_sidecar_vbs(path: &PathBuf, game_data: GameData) -> Result<String, Error> {
+fn consider_sidecar_vbs(path: &PathBuf, game_data: GameData) -> io::Result<String> {
     let vbs_path = path.with_extension("vbs");
     let code = if vbs_path.exists() {
         let mut vbs_file = File::open(vbs_path)?;
@@ -556,7 +556,6 @@ mod tests {
 
     #[test]
     fn test_write_read_invalid_file() -> io::Result<()> {
-        let index = TablesIndex::empty();
         let test_dir = testdir!();
         let index_path = test_dir.join("test.json");
         // write empty json array using serde_json
