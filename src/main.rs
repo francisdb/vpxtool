@@ -1,11 +1,13 @@
 pub mod config;
 pub mod directb2s;
 pub mod fixprint;
-mod frontend;
 mod indexer;
 pub mod jsonmodel;
 pub mod pov;
+mod simplefrontend;
 pub mod vpx;
+
+mod frontend;
 
 use clap::{arg, Arg, ArgMatches, Command};
 use colored::Colorize;
@@ -146,16 +148,14 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             let (config_path, config) = config::load_or_setup_config().unwrap();
             println!("Using config file {}", config_path.display())?;
             let roms = indexer::find_roms(&config.rom_folder()).unwrap();
-            match frontend::frontend_index(&config, true) {
-                Ok(tables) if tables.is_empty() => {
-                    let warning =
-                        format!("No tables found in {}", config.tables_folder.display()).red();
-                    eprintln!("{}", warning)?;
-                    Ok(ExitCode::FAILURE)
-                }
-                Ok(vpx_files_with_tableinfo) => {
-                    let vpinball_executable = config.vpx_executable;
-                    frontend::frontend(&vpx_files_with_tableinfo, &roms, &vpinball_executable);
+            match simplefrontend::frontend_index(&config, true) {
+                Ok(tables) => {
+                    // I guess we can handle empty tables here
+                    frontend::main().map_err(|err| {
+                        // convert to io error
+                        let msg = format!("Error running frontend {}", err);
+                        io::Error::new(io::ErrorKind::Other, msg)
+                    })?;
                     Ok(ExitCode::SUCCESS)
                 }
                 Err(IndexError::FolderDoesNotExist(path)) => {
@@ -178,7 +178,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             let (config_path, config) = config::load_or_setup_config().unwrap();
             println!("Using config file {}", config_path.display())?;
             let roms = indexer::find_roms(&config.rom_folder()).unwrap();
-            match frontend::frontend_index(&config, true) {
+            match simplefrontend::frontend_index(&config, true) {
                 Ok(tables) if tables.is_empty() => {
                     let warning =
                         format!("No tables found in {}", config.tables_folder.display()).red();
@@ -187,7 +187,11 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 }
                 Ok(vpx_files_with_tableinfo) => {
                     let vpinball_executable = config.vpx_executable;
-                    frontend::frontend(&vpx_files_with_tableinfo, &roms, &vpinball_executable);
+                    simplefrontend::frontend(
+                        &vpx_files_with_tableinfo,
+                        &roms,
+                        &vpinball_executable,
+                    );
                     Ok(ExitCode::SUCCESS)
                 }
                 Err(IndexError::FolderDoesNotExist(path)) => {
