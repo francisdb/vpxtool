@@ -13,7 +13,7 @@ bytes = "1.5.0"
 cfb = "0.8.1"
 #see https://github.com/chronotope/chrono/issues/602#issuecomment-1242149249
 chrono = { version = "0.4.31", default-features = false, features = ["clock"] }
-clap = { version = "4.4.4", features = ["derive", "string"] }
+clap = { version = "4.4.6", features = ["derive", "string"] }
 colored = "2.0.4"
 console = "0.15.7"
 dialoguer = "0.11.0"
