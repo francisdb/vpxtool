@@ -26,6 +26,7 @@ const LAUNCH: Emoji = Emoji("🚀", "[launch]");
 const CRASH: Emoji = Emoji("💥", "[crash]");
 
 enum TableOption {
+    Launch,
     LaunchFullscreen,
     LaunchWindowed,
     ShowDetails,
@@ -37,7 +38,8 @@ enum TableOption {
 }
 
 impl TableOption {
-    const ALL: [TableOption; 7] = [
+    const ALL: [TableOption; 8] = [
+        TableOption::Launch,
         TableOption::LaunchFullscreen,
         TableOption::LaunchWindowed,
         TableOption::ShowDetails,
@@ -50,20 +52,22 @@ impl TableOption {
 
     fn from_index(index: usize) -> Option<TableOption> {
         match index {
-            0 => Some(TableOption::LaunchFullscreen),
-            1 => Some(TableOption::LaunchWindowed),
-            2 => Some(TableOption::ShowDetails),
-            3 => Some(TableOption::ExtractVBS),
-            4 => Some(TableOption::EditVBS),
-            5 => Some(TableOption::ShowVBSDiff),
-            6 => Some(TableOption::CreateVBSPatch),
-            // 7 => Some(TableOption::ClearNVRAM),
+            0 => Some(TableOption::Launch),
+            1 => Some(TableOption::LaunchFullscreen),
+            2 => Some(TableOption::LaunchWindowed),
+            3 => Some(TableOption::ShowDetails),
+            4 => Some(TableOption::ExtractVBS),
+            5 => Some(TableOption::EditVBS),
+            6 => Some(TableOption::ShowVBSDiff),
+            7 => Some(TableOption::CreateVBSPatch),
+            // 8 => Some(TableOption::ClearNVRAM),
             _ => None,
         }
     }
 
     fn display(&self) -> String {
         match self {
+            TableOption::Launch => "Launch".to_string(),
             TableOption::LaunchFullscreen => "Launch Fullscreen".to_string(),
             TableOption::LaunchWindowed => "Launch Windowed".to_string(),
             TableOption::ShowDetails => "Show Details".to_string(),
@@ -128,11 +132,14 @@ pub fn frontend(
                 let info = vpx_files_with_tableinfo.get(selection).unwrap();
                 let selected_path = &info.path;
                 match choose_table_option() {
+                    Some(TableOption::Launch) => {
+                        launch(selected_path, vpinball_executable, None);
+                    }
                     Some(TableOption::LaunchFullscreen) => {
-                        launch(selected_path, vpinball_executable, true);
+                        launch(selected_path, vpinball_executable, Some(true));
                     }
                     Some(TableOption::LaunchWindowed) => {
-                        launch(selected_path, vpinball_executable, false);
+                        launch(selected_path, vpinball_executable, Some(false));
                     }
                     Some(TableOption::EditVBS) => {
                         let path = vbs_path_for(selected_path);
@@ -237,7 +244,7 @@ fn choose_table_option() -> Option<TableOption> {
     selection_opt.and_then(TableOption::from_index)
 }
 
-fn launch(selected_path: &PathBuf, vpinball_executable: &Path, fullscreen: bool) {
+fn launch(selected_path: &PathBuf, vpinball_executable: &Path, fullscreen: Option<bool>) {
     println!("{} {}", LAUNCH, selected_path.display());
 
     if !vpinball_executable.is_executable() {
@@ -286,14 +293,18 @@ fn report_and_exit(msg: String) -> ! {
 fn launch_table(
     selected_path: &PathBuf,
     vpinball_executable: &Path,
-    fullscreen: bool,
+    fullscreen: Option<bool>,
 ) -> io::Result<ExitStatus> {
     // start process ./VPinballX_GL -play [table path]
     let mut cmd = std::process::Command::new(vpinball_executable);
-    if fullscreen {
-        cmd.arg("-EnableTrueFullscreen");
-    } else {
-        cmd.arg("-DisableTrueFullscreen");
+    match fullscreen {
+        Some(true) => {
+            cmd.arg("-EnableTrueFullscreen");
+        }
+        Some(false) => {
+            cmd.arg("-DisableTrueFullscreen");
+        }
+        None => (),
     }
     cmd.arg("-play");
     cmd.arg(selected_path);
