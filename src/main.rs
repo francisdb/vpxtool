@@ -1,11 +1,13 @@
 pub mod config;
 pub mod directb2s;
 pub mod fixprint;
-mod frontend;
 mod indexer;
 pub mod jsonmodel;
 pub mod pov;
+mod simplefrontend;
 pub mod vpx;
+
+mod frontend;
 
 use clap::{arg, Arg, ArgMatches, Command};
 use colored::Colorize;
@@ -84,6 +86,27 @@ const CMD_SCRIPT: &'static str = "script";
 const CMD_SCRIPT_SHOW: &'static str = "show";
 const CMD_SCRIPT_EDIT: &'static str = "edit";
 
+const CMD_INDEX: &'static str = "index";
+
+const CMD_LS: &'static str = "ls";
+
+const CMD_EXTRACT: &'static str = "extract";
+
+const CMD_POV: &'static str = "pov";
+const CMD_POV_EXTRACT: &'static str = "extract";
+
+const CMD_NEW: &'static str = "new";
+
+const CMD_INFO: &'static str = "info";
+
+const CMD_EXTRACTVBS: &'static str = "extractvbs";
+
+const CMD_IMPORTVBS: &'static str = "importvbs";
+
+const CMD_VERIFY: &'static str = "verify";
+
+const CMD_ASSEMBLE: &'static str = "assemble";
+
 fn main() -> ExitCode {
     fixprint::safe_main(run)
 }
@@ -96,7 +119,7 @@ fn run() -> io::Result<ExitCode> {
 
 fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
     match matches.subcommand() {
-        Some(("info", sub_matches)) => {
+        Some((CMD_INFO, sub_matches)) => {
             let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
             let path = path.unwrap_or("");
             let expanded_path = expand_path(path)?;
@@ -125,16 +148,14 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             let (config_path, config) = config::load_or_setup_config().unwrap();
             println!("Using config file {}", config_path.display())?;
             let roms = indexer::find_roms(&config.rom_folder()).unwrap();
-            match frontend::frontend_index(&config, true) {
-                Ok(tables) if tables.is_empty() => {
-                    let warning =
-                        format!("No tables found in {}", config.tables_folder.display()).red();
-                    eprintln!("{}", warning)?;
-                    Ok(ExitCode::FAILURE)
-                }
-                Ok(vpx_files_with_tableinfo) => {
-                    let vpinball_executable = config.vpx_executable;
-                    frontend::frontend(&vpx_files_with_tableinfo, &roms, &vpinball_executable);
+            match simplefrontend::frontend_index(&config, true) {
+                Ok(tables) => {
+                    // I guess we can handle empty tables here
+                    frontend::main().map_err(|err| {
+                        // convert to io error
+                        let msg = format!("Error running frontend {}", err);
+                        io::Error::new(io::ErrorKind::Other, msg)
+                    })?;
                     Ok(ExitCode::SUCCESS)
                 }
                 Err(IndexError::FolderDoesNotExist(path)) => {
@@ -157,7 +178,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             let (config_path, config) = config::load_or_setup_config().unwrap();
             println!("Using config file {}", config_path.display())?;
             let roms = indexer::find_roms(&config.rom_folder()).unwrap();
-            match frontend::frontend_index(&config, true) {
+            match simplefrontend::frontend_index(&config, true) {
                 Ok(tables) if tables.is_empty() => {
                     let warning =
                         format!("No tables found in {}", config.tables_folder.display()).red();
@@ -166,7 +187,11 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 }
                 Ok(vpx_files_with_tableinfo) => {
                     let vpinball_executable = config.vpx_executable;
-                    frontend::frontend(&vpx_files_with_tableinfo, &roms, &vpinball_executable);
+                    simplefrontend::frontend(
+                        &vpx_files_with_tableinfo,
+                        &roms,
+                        &vpinball_executable,
+                    );
                     Ok(ExitCode::SUCCESS)
                 }
                 Err(IndexError::FolderDoesNotExist(path)) => {
@@ -185,7 +210,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 }
             }
         }
-        Some(("index", sub_matches)) => {
+        Some((CMD_INDEX, sub_matches)) => {
             let recursive = sub_matches.get_flag("RECURSIVE");
             let path = sub_matches
                 .get_one::<String>("VPXROOTPATH")
@@ -262,7 +287,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             }
             _ => unreachable!(),
         },
-        Some(("ls", sub_matches)) => {
+        Some((CMD_LS, sub_matches)) => {
             let path = sub_matches
                 .get_one::<String>("VPXPATH")
                 .map(|s| s.as_str())
@@ -272,7 +297,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             ls(expanded_path.as_ref())?;
             Ok(ExitCode::SUCCESS)
         }
-        Some(("extract", sub_matches)) => {
+        Some((CMD_EXTRACT, sub_matches)) => {
             let yes = sub_matches.get_flag("FORCE");
             let paths: Vec<&str> = sub_matches
                 .get_many::<String>("VPXPATH")
@@ -290,7 +315,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             }
             Ok(ExitCode::SUCCESS)
         }
-        Some(("extractvbs", sub_matches)) => {
+        Some((CMD_EXTRACTVBS, sub_matches)) => {
             let overwrite = sub_matches.get_flag("OVERWRITE");
             let paths: Vec<&str> = sub_matches
                 .get_many::<String>("VPXPATH")
@@ -312,7 +337,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             }
             Ok(ExitCode::SUCCESS)
         }
-        Some(("importvbs", sub_matches)) => {
+        Some((CMD_IMPORTVBS, sub_matches)) => {
             let path: &str = sub_matches.get_one::<String>("VPXPATH").unwrap().as_str();
             let expanded_path = PathBuf::from(expand_path(path)?);
             match importvbs(&expanded_path, None) {
@@ -328,7 +353,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             }
         }
 
-        Some(("verify", sub_matches)) => {
+        Some((CMD_VERIFY, sub_matches)) => {
             let paths: Vec<&str> = sub_matches
                 .get_many::<String>("VPXPATH")
                 .unwrap_or_default()
@@ -349,7 +374,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             }
             Ok(ExitCode::SUCCESS)
         }
-        Some(("new", sub_matches)) => {
+        Some((CMD_NEW, sub_matches)) => {
             let path = {
                 let this = sub_matches.get_one::<String>("VPXPATH").map(|v| v.as_str());
                 match this {
@@ -429,8 +454,8 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             },
             _ => unreachable!(),
         },
-        Some(("pov", sub_matches)) => match sub_matches.subcommand() {
-            Some(("extract", sub_matches)) => {
+        Some((CMD_POV, sub_matches)) => match sub_matches.subcommand() {
+            Some((CMD_POV_EXTRACT, sub_matches)) => {
                 let paths: Vec<&str> = sub_matches
                     .get_many::<String>("VPXPATH")
                     .unwrap_or_default()
@@ -506,7 +531,7 @@ fn build_command() -> Command {
                 )
         )
         .subcommand(
-            Command::new("index")
+            Command::new(CMD_INDEX)
                 .about("Indexes a directory of vpx files")
                 .arg(
                     Arg::new("RECURSIVE")
@@ -543,7 +568,7 @@ fn build_command() -> Command {
                 )
         )
         .subcommand(
-            Command::new("ls")
+            Command::new(CMD_LS)
                 .about("Show a vpx file content")
                 .arg(
                     arg!(<VPXPATH> "The path to the vpx file")
@@ -551,7 +576,7 @@ fn build_command() -> Command {
                 ),
         )
         .subcommand(
-            Command::new("extract")
+            Command::new(CMD_EXTRACT)
                 .about("Extracts a vpx file")
                 .arg(
                     Arg::new("FORCE")
@@ -567,7 +592,7 @@ fn build_command() -> Command {
                 ),
         )
         .subcommand(
-            Command::new("extractvbs")
+            Command::new(CMD_EXTRACTVBS)
                 .about("Extracts the vbs from a vpx file next to it")
                 .arg(
                     Arg::new("OVERWRITE")
@@ -584,7 +609,7 @@ fn build_command() -> Command {
                 ),
         )
         .subcommand(
-            Command::new("importvbs")
+            Command::new(CMD_IMPORTVBS)
                 .about("Imports the vbs next to it into a vpx file")
                 .arg(
                     arg!(<VPXPATH> "The path(s) to the vpx file(s)")
@@ -593,7 +618,7 @@ fn build_command() -> Command {
                 ),
         )
         .subcommand(
-            Command::new("verify")
+            Command::new(CMD_VERIFY)
                 .about("Verify the structure of a vpx file")
                 .arg(
                     arg!(<VPXPATH> "The path(s) to the vpx file(s)")
@@ -602,10 +627,10 @@ fn build_command() -> Command {
                 ),
         )
         .subcommand(
-            Command::new("pov")
+            Command::new(CMD_POV)
                 .subcommand_required(true)
                 .about("Point of view file (pov) related commands")
-                .subcommand(Command::new("extract")
+                .subcommand(Command::new(CMD_POV_EXTRACT)
                                 .about("Extracts a the pov file from a vpx file")
                                 .arg(
                                     arg!(<VPXPATH> "The path(s) to the vpx file(s)")
@@ -615,12 +640,12 @@ fn build_command() -> Command {
                 )
         )
         .subcommand(
-            Command::new("assemble")
+            Command::new(CMD_ASSEMBLE)
                 .about("Assembles a vpx file")
                 .arg(arg!(<DIRPATH> "The path to the vpx structure").required(true)),
         )
         .subcommand(
-            Command::new("new")
+            Command::new(CMD_NEW)
                 .about("Creates a minimal empty new vpx file")
                 .arg(arg!(<VPXPATH> "The path(s) to the vpx file").required(true)),
         )

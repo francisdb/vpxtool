@@ -40,6 +40,9 @@ figment = { version = "0.10", features = ["toml", "env"] }
 toml = "0.8.1"
 is_executable = "1.0.1"
 regex = { version = "1.9.6", features = [] }
+ratatui = "0.23.0"
+crossterm = "0.27.0"
+anyhow = "1.0.75"
 
 [dev-dependencies]
 pretty_assertions = "1.4.0"
