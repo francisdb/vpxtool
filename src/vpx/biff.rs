@@ -459,7 +459,7 @@ impl<'a> BiffReader<'a> {
         }
     }
 
-    pub(crate) fn data_until(&mut self, tag: &[u8]) -> Vec<u8> {
+    pub fn data_until(&mut self, tag: &[u8]) -> Vec<u8> {
         // read bytes until we see tag and return it, put pos to the beginning of the tag
         let mut pos = self.pos;
         let mut found = false;
