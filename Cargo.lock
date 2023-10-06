@@ -700,12 +700,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "lzw"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d947cbb889ed21c2a84be6ffbaebf5b4e0f4340638cba0444907e38b56be084"
-
-[[package]]
 name = "md2"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1312,6 +1306,8 @@ checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 [[package]]
 name = "vpin"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e37ff13fbb4de0ffe56c00eb4cda1ec145d63a21b42047b92616fb9e9287924"
 dependencies = [
  "byteorder",
  "bytes",
@@ -1328,25 +1324,18 @@ name = "vpxtool"
 version = "0.1.0"
 dependencies = [
  "base64",
- "byteorder",
- "bytes",
- "cfb",
  "chrono",
  "clap",
  "colored",
  "console",
  "dialoguer",
  "dirs",
- "encoding_rs",
  "figment",
  "git-version",
  "indicatif",
  "is_executable",
  "log",
  "logging_timer",
- "lzw",
- "md2",
- "nom",
  "open",
  "pretty_assertions",
  "pretty_env_logger",

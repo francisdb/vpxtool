@@ -28,7 +28,6 @@ pub mod directb2s;
 pub mod fixprint;
 mod frontend;
 pub mod indexer;
-pub mod jsonmodel;
 pub mod pov;
 
 // see https://github.com/fusion-engineering/rust-git-version/issues/21
@@ -672,9 +671,8 @@ fn extract_pov(vpx_path: &PathBuf) -> io::Result<PathBuf> {
     // create pov
     // write pov
 
-    let mut comp = cfb::open(vpx_path)?;
-    let version = version::read_version(&mut comp)?;
-    let table_info = read_gamedata(&mut comp, &version)?;
+    let mut vpx_file = vpin::vpx::open(vpx_path)?;
+    let table_info = vpx_file.read_gamedata()?;
 
     let pov = POV {
         desktop: ModePov {

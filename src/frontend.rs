@@ -13,6 +13,7 @@ use dialoguer::theme::ColorfulTheme;
 use dialoguer::{Input, Select};
 use indicatif::{ProgressBar, ProgressStyle};
 use is_executable::IsExecutable;
+use vpin::vpx::VpxFile;
 
 use crate::config::ResolvedConfig;
 use crate::indexer::{IndexError, IndexedTable, Progress};
@@ -206,9 +207,9 @@ pub fn frontend(
 }
 
 fn gather_table_info(selected_path: &PathBuf) -> io::Result<String> {
-    let mut comp = cfb::open(selected_path)?;
-    let version = version::read_version(&mut comp)?;
-    let table_info = tableinfo::read_tableinfo(&mut comp)?;
+    let mut vpx_file = vpin::vpx::open(selected_path)?;
+    let version = vpx_file.read_version()?;
+    let table_info = vpx_file.read_tableinfo()?;
     let msg = format!("version: {:#?}\n{:#?}", version, table_info);
     Ok(msg)
 }
