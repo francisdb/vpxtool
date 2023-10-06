@@ -151,9 +151,9 @@ checksum = "a3e2c3daef883ecc1b5d58c15adae93470a91d425f3532ba1695849656af3fc1"
 
 [[package]]
 name = "byteorder"
-version = "1.4.3"
+version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14c189c53d098945499cdfa7ecc63567cf3886b3332b312a5b4585d8d3a6a610"
+checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
 
 [[package]]
 name = "bytes"
@@ -698,12 +698,6 @@ dependencies = [
  "quote",
  "syn 1.0.109",
 ]
-
-[[package]]
-name = "lzw"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d947cbb889ed21c2a84be6ffbaebf5b4e0f4340638cba0444907e38b56be084"
 
 [[package]]
 name = "md2"
@@ -1310,29 +1304,38 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 
 [[package]]
+name = "vpin"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e37ff13fbb4de0ffe56c00eb4cda1ec145d63a21b42047b92616fb9e9287924"
+dependencies = [
+ "byteorder",
+ "bytes",
+ "cfb",
+ "encoding_rs",
+ "md2",
+ "nom",
+ "serde_json",
+ "utf16string",
+]
+
+[[package]]
 name = "vpxtool"
 version = "0.1.0"
 dependencies = [
  "base64",
- "byteorder",
- "bytes",
- "cfb",
  "chrono",
  "clap",
  "colored",
  "console",
  "dialoguer",
  "dirs",
- "encoding_rs",
  "figment",
  "git-version",
  "indicatif",
  "is_executable",
  "log",
  "logging_timer",
- "lzw",
- "md2",
- "nom",
  "open",
  "pretty_assertions",
  "pretty_env_logger",
@@ -1344,7 +1347,7 @@ dependencies = [
  "shellexpand",
  "testdir",
  "toml 0.8.1",
- "utf16string",
+ "vpin",
  "walkdir",
  "wild",
 ]

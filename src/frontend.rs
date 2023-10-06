@@ -17,9 +17,9 @@ use is_executable::IsExecutable;
 use crate::config::ResolvedConfig;
 use crate::indexer::{IndexError, IndexedTable, Progress};
 use crate::{
-    indexer, tableinfo,
-    vpx::{self, extractvbs, vbs_path_for, version, ExtractResult},
-    ProgressBarProgress,
+    diff_script, indexer, run_diff,
+    vpx::{extractvbs, vbs_path_for, ExtractResult},
+    DiffColor, ProgressBarProgress,
 };
 
 const LAUNCH: Emoji = Emoji("🚀", "[launch]");
@@ -159,7 +159,7 @@ pub fn frontend(
                             prompt(msg.truecolor(255, 125, 0).to_string());
                         }
                     },
-                    Some(TableOption::ShowVBSDiff) => match vpx::diff_script(selected_path) {
+                    Some(TableOption::ShowVBSDiff) => match diff_script(selected_path) {
                         Ok(diff) => {
                             prompt(diff);
                         }
@@ -177,7 +177,7 @@ pub fn frontend(
                         let vbs_path = vbs_path_for(selected_path);
                         let patch_path = vbs_path.with_extension("vbs.patch");
 
-                        match vpx::run_diff(&original_path, &vbs_path, vpx::DiffColor::Never) {
+                        match run_diff(&original_path, &vbs_path, DiffColor::Never) {
                             Ok(diff) => {
                                 let mut file = File::create(&patch_path).unwrap();
                                 file.write_all(&diff).unwrap();
@@ -206,9 +206,9 @@ pub fn frontend(
 }
 
 fn gather_table_info(selected_path: &PathBuf) -> io::Result<String> {
-    let mut comp = cfb::open(selected_path)?;
-    let version = version::read_version(&mut comp)?;
-    let table_info = tableinfo::read_tableinfo(&mut comp)?;
+    let mut vpx_file = vpin::vpx::open(selected_path)?;
+    let version = vpx_file.read_version()?;
+    let table_info = vpx_file.read_tableinfo()?;
     let msg = format!("version: {:#?}\n{:#?}", version, table_info);
     Ok(msg)
 }
