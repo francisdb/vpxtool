@@ -1,5 +1,4 @@
 use chrono::{DateTime, Utc};
-use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::fs::Metadata;
@@ -420,23 +419,6 @@ fn consider_sidecar_vbs(path: &PathBuf, game_data: GameData) -> io::Result<Strin
         game_data.code.string
     };
     Ok(code)
-}
-
-fn table_name_compare(a: &IndexedTable, b: &IndexedTable) -> Ordering {
-    // TODO get rid of clone() here
-    let a_lower = a
-        .table_info
-        .table_name
-        .clone()
-        .unwrap_or("".to_string())
-        .to_lowercase();
-    let b_lower = b
-        .table_info
-        .table_name
-        .clone()
-        .unwrap_or("".to_string())
-        .to_lowercase();
-    a_lower.cmp(&b_lower)
 }
 
 fn last_modified<P: AsRef<Path>>(path: P) -> io::Result<SystemTime> {

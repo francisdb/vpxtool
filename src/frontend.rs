@@ -13,13 +13,12 @@ use dialoguer::theme::ColorfulTheme;
 use dialoguer::{Input, Select};
 use indicatif::{ProgressBar, ProgressStyle};
 use is_executable::IsExecutable;
-use vpin::vpx::VpxFile;
 
 use crate::config::ResolvedConfig;
 use crate::indexer::{IndexError, IndexedTable, Progress};
 use crate::{
-    diff_script, indexer, run_diff, tableinfo,
-    vpx::{extractvbs, vbs_path_for, version, ExtractResult},
+    diff_script, indexer, run_diff,
+    vpx::{extractvbs, vbs_path_for, ExtractResult},
     DiffColor, ProgressBarProgress,
 };
 

@@ -17,10 +17,8 @@ use std::path::{Path, PathBuf};
 use std::process::{exit, ExitCode};
 use vpin::vpx;
 use vpin::vpx::math::{dequantize_unsigned, quantize_unsigned_percent};
-use vpin::vpx::version::read_version;
 use vpin::vpx::{
-    cat_script, expanded, extractvbs, importvbs, read_gamedata, tableinfo, verify, version,
-    ExtractResult, VerifyResult,
+    cat_script, expanded, extractvbs, importvbs, tableinfo, verify, ExtractResult, VerifyResult,
 };
 
 pub mod config;
@@ -949,11 +947,11 @@ fn expand_path(path: &str) -> io::Result<PathBuf> {
 }
 
 fn info(vpx_file_path: &PathBuf, json: bool) -> io::Result<()> {
-    let mut comp = cfb::open(vpx_file_path)?;
-    let version = version::read_version(&mut comp)?;
+    let mut vpx_file = vpx::open(vpx_file_path)?;
+    let version = vpx_file.read_version()?;
     // GameData also has a name field that we might want to display here
     // where is this shown in the UI?
-    let table_info = tableinfo::read_tableinfo(&mut comp)?;
+    let table_info = vpx_file.read_tableinfo()?;
     // TODO check the json flag
 
     println!("{:>18} {}", "VPX Version:".green(), version)?;
@@ -1088,10 +1086,9 @@ pub fn diff_script<P: AsRef<Path>>(vpx_file_path: P) -> io::Result<String> {
     let original_vbs_path = vpx_file_path.as_ref().with_extension("vbs.original.tmp");
 
     if vbs_path.exists() {
-        match cfb::open(&vpx_file_path) {
-            Ok(mut comp) => {
-                let version = read_version(&mut comp)?;
-                let gamedata = read_gamedata(&mut comp, &version)?;
+        match vpx::open(&vpx_file_path) {
+            Ok(mut vpx_file) => {
+                let gamedata = vpx_file.read_gamedata()?;
                 let script = gamedata.code;
                 std::fs::write(&original_vbs_path, script.string)?;
                 let diff_color = if colored::control::SHOULD_COLORIZE.should_colorize() {
