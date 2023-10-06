@@ -17,9 +17,9 @@ use is_executable::IsExecutable;
 use crate::config::ResolvedConfig;
 use crate::indexer::{IndexError, IndexedTable, Progress};
 use crate::{
-    indexer, tableinfo,
-    vpx::{self, extractvbs, vbs_path_for, version, ExtractResult},
-    ProgressBarProgress,
+    diff_script, indexer, run_diff, tableinfo,
+    vpx::{extractvbs, vbs_path_for, version, ExtractResult},
+    DiffColor, ProgressBarProgress,
 };
 
 const LAUNCH: Emoji = Emoji("🚀", "[launch]");
@@ -159,7 +159,7 @@ pub fn frontend(
                             prompt(msg.truecolor(255, 125, 0).to_string());
                         }
                     },
-                    Some(TableOption::ShowVBSDiff) => match vpx::diff_script(selected_path) {
+                    Some(TableOption::ShowVBSDiff) => match diff_script(selected_path) {
                         Ok(diff) => {
                             prompt(diff);
                         }
@@ -177,7 +177,7 @@ pub fn frontend(
                         let vbs_path = vbs_path_for(selected_path);
                         let patch_path = vbs_path.with_extension("vbs.patch");
 
-                        match vpx::run_diff(&original_path, &vbs_path, vpx::DiffColor::Never) {
+                        match run_diff(&original_path, &vbs_path, DiffColor::Never) {
                             Ok(diff) => {
                                 let mut file = File::create(&patch_path).unwrap();
                                 file.write_all(&diff).unwrap();

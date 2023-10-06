@@ -1,4 +1,3 @@
-use std::fmt::Display;
 use std::process::ExitCode;
 use vpxtool::{fixprint, run};
 

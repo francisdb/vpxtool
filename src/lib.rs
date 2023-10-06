@@ -2,11 +2,6 @@ use crate::config::SetupConfigResult;
 use crate::directb2s::load;
 use crate::indexer::{IndexError, Progress};
 use crate::pov::{Customsettings, ModePov, POV};
-use crate::vpx::math::{dequantize_unsigned, quantize_unsigned_percent};
-use crate::vpx::{
-    cat_script, expanded, extractvbs, importvbs, read_gamedata, tableinfo, verify, version,
-    ExtractResult, VerifyResult,
-};
 use base64::Engine;
 use clap::{arg, Arg, ArgMatches, Command};
 use colored::Colorize;
@@ -20,6 +15,13 @@ use std::io;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{exit, ExitCode};
+use vpin::vpx;
+use vpin::vpx::math::{dequantize_unsigned, quantize_unsigned_percent};
+use vpin::vpx::version::read_version;
+use vpin::vpx::{
+    cat_script, expanded, extractvbs, importvbs, read_gamedata, tableinfo, verify, version,
+    ExtractResult, VerifyResult,
+};
 
 pub mod config;
 pub mod directb2s;
@@ -28,7 +30,6 @@ mod frontend;
 pub mod indexer;
 pub mod jsonmodel;
 pub mod pov;
-pub mod vpx;
 
 // see https://github.com/fusion-engineering/rust-git-version/issues/21
 const GIT_VERSION: &str = git_version!(args = ["--tags", "--always", "--dirty=-modified"]);
@@ -98,7 +99,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
             let path = path.unwrap_or("");
             let expanded_path = expand_path(path)?;
-            match vpx::diff_script(PathBuf::from(expanded_path)) {
+            match diff_script(PathBuf::from(expanded_path)) {
                 Ok(output) => {
                     println!("{}", output)?;
                     Ok(ExitCode::SUCCESS)
@@ -1081,4 +1082,83 @@ pub fn extract(vpx_file_path: &Path, yes: bool) -> io::Result<ExitCode> {
             }
         }
     }
+}
+
+pub fn diff_script<P: AsRef<Path>>(vpx_file_path: P) -> io::Result<String> {
+    // set extension for PathBuf
+    let vbs_path = vpx_file_path.as_ref().with_extension("vbs");
+    let original_vbs_path = vpx_file_path.as_ref().with_extension("vbs.original.tmp");
+
+    if vbs_path.exists() {
+        match cfb::open(&vpx_file_path) {
+            Ok(mut comp) => {
+                let version = read_version(&mut comp)?;
+                let gamedata = read_gamedata(&mut comp, &version)?;
+                let script = gamedata.code;
+                std::fs::write(&original_vbs_path, script.string)?;
+                let diff_color = if colored::control::SHOULD_COLORIZE.should_colorize() {
+                    DiffColor::Always
+                } else {
+                    DiffColor::Never
+                };
+                let output = run_diff(&original_vbs_path, &vbs_path, diff_color)?;
+
+                if original_vbs_path.exists() {
+                    std::fs::remove_file(original_vbs_path)?;
+                }
+                Ok(String::from_utf8_lossy(&output).to_string())
+            }
+            Err(e) => {
+                let msg = format!(
+                    "Not a valid vpx file {}: {}",
+                    vpx_file_path.as_ref().display(),
+                    e
+                );
+                Err(io::Error::new(io::ErrorKind::InvalidData, msg))
+            }
+        }
+    } else {
+        // wrap the error
+        let msg = format!("No sidecar vbs file found: {}", vbs_path.display());
+        Err(io::Error::new(io::ErrorKind::NotFound, msg))
+    }
+}
+
+pub enum DiffColor {
+    Always,
+    Never,
+}
+
+impl DiffColor {
+    // to color arg
+    fn to_diff_arg(&self) -> String {
+        match self {
+            DiffColor::Always => String::from("always"),
+            DiffColor::Never => String::from("never"),
+        }
+    }
+}
+
+pub fn run_diff(
+    original_vbs_path: &Path,
+    vbs_path: &Path,
+    color: DiffColor,
+) -> Result<Vec<u8>, io::Error> {
+    let parent = vbs_path
+        .parent()
+        //.and_then(|f| f.parent())
+        .unwrap_or(Path::new("."));
+    let original_vbs_filename = original_vbs_path
+        .file_name()
+        .unwrap_or(original_vbs_path.as_os_str());
+    let vbs_filename = vbs_path.file_name().unwrap_or(vbs_path.as_os_str());
+    std::process::Command::new("diff")
+        .current_dir(parent)
+        .arg("-u")
+        .arg("-w")
+        .arg(format!("--color={}", color.to_diff_arg()))
+        .arg(original_vbs_filename)
+        .arg(vbs_filename)
+        .output()
+        .map(|o| o.stdout)
 }
