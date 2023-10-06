@@ -1347,7 +1347,6 @@ dependencies = [
  "shellexpand",
  "testdir",
  "toml 0.8.1",
- "utf16string",
  "vpin",
  "walkdir",
  "wild",
