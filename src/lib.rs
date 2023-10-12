@@ -1,7 +1,5 @@
 use crate::config::SetupConfigResult;
-use crate::directb2s::load;
 use crate::indexer::{IndexError, Progress};
-use crate::pov::{Customsettings, ModePov, POV};
 use base64::Engine;
 use clap::{arg, Arg, ArgMatches, Command};
 use colored::Colorize;
@@ -15,18 +13,16 @@ use std::io;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{exit, ExitCode};
+use vpin::directb2s::load;
+use vpin::pov::{Customsettings, ModePov, POV};
 use vpin::vpx;
 use vpin::vpx::math::{dequantize_unsigned, quantize_unsigned_percent};
-use vpin::vpx::{
-    cat_script, expanded, extractvbs, importvbs, tableinfo, verify, ExtractResult, VerifyResult,
-};
+use vpin::vpx::{expanded, extractvbs, importvbs, tableinfo, verify, ExtractResult, VerifyResult};
 
 pub mod config;
-pub mod directb2s;
 pub mod fixprint;
 mod frontend;
 pub mod indexer;
-pub mod pov;
 
 // see https://github.com/fusion-engineering/rust-git-version/issues/21
 const GIT_VERSION: &str = git_version!(args = ["--tags", "--always", "--dirty=-modified"]);
@@ -226,7 +222,9 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     .unwrap_or_default();
 
                 let expanded_path = expand_path(path)?;
-                let code = cat_script(&expanded_path);
+                let mut vpx_file = vpx::open(&expanded_path)?;
+                let game_data = vpx_file.read_gamedata()?;
+                let code = game_data.code.string;
 
                 println!("{}", code)?;
                 Ok(ExitCode::SUCCESS)
@@ -772,7 +770,7 @@ fn extract_pov(vpx_path: &PathBuf) -> io::Result<PathBuf> {
     };
 
     let pov_path = vpx_path.with_extension("pov");
-    pov::save(&pov_path, &pov)?;
+    vpin::pov::save(&pov_path, &pov)?;
 
     Ok(pov_path)
 }
@@ -801,7 +799,7 @@ fn extract_directb2s(expanded_path: &PathBuf) -> io::Result<()> {
     Ok(())
 }
 
-fn wite_images(b2s: directb2s::DirectB2SData, root_dir_path: &Path) {
+fn wite_images(b2s: vpin::directb2s::DirectB2SData, root_dir_path: &Path) {
     if let Some(backglass_off_image) = b2s.images.backglass_off_image {
         write_base64_to_file(
             root_dir_path,
