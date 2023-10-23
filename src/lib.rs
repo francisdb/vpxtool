@@ -10,10 +10,10 @@ use std::error::Error;
 use std::fmt::Display;
 use std::fs::{metadata, File};
 use std::io;
-use std::io::{Read, Write};
+use std::io::{BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{exit, ExitCode};
-use vpin::directb2s::load;
+use vpin::directb2s::read;
 use vpin::pov::{Customsettings, ModePov, POV};
 use vpin::vpx;
 use vpin::vpx::math::{dequantize_unsigned, quantize_unsigned_percent};
@@ -776,10 +776,9 @@ fn extract_pov(vpx_path: &PathBuf) -> io::Result<PathBuf> {
 }
 
 fn extract_directb2s(expanded_path: &PathBuf) -> io::Result<()> {
-    let mut file = File::open(expanded_path).unwrap();
-    let mut text = String::new();
-    file.read_to_string(&mut text).unwrap();
-    match load(&text) {
+    let file = File::open(expanded_path).unwrap();
+    let reader = BufReader::new(file);
+    match read(reader) {
         Ok(b2s) => {
             println!("DirectB2S file version {}", b2s.version)?;
             let root_dir_path = expanded_path.with_extension("directb2s.extracted");
