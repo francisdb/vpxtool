@@ -895,16 +895,6 @@ dependencies = [
 
 [[package]]
 name = "quick-xml"
-version = "0.30.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eff6510e86862b57b210fd8cbe8ed3f0d7d600b9c2863cd4549a2e033c66e956"
-dependencies = [
- "memchr",
- "serde",
-]
-
-[[package]]
-name = "quick-xml"
 version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1004a344b30a54e2ee58d66a71b32d2db2feb0a31f9a2d302bf0536f15de2a33"
@@ -1320,7 +1310,7 @@ dependencies = [
  "encoding_rs",
  "md2",
  "nom",
- "quick-xml 0.31.0",
+ "quick-xml",
  "serde",
  "serde_json",
  "serde_repr",
@@ -1347,7 +1337,7 @@ dependencies = [
  "open",
  "pretty_assertions",
  "pretty_env_logger",
- "quick-xml 0.30.0",
+ "quick-xml",
  "rand",
  "regex",
  "serde",
