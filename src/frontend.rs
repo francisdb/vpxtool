@@ -16,8 +16,9 @@ use is_executable::IsExecutable;
 
 use crate::config::ResolvedConfig;
 use crate::indexer::{IndexError, IndexedTable, Progress};
+use crate::patcher::patch_vbs_file;
 use crate::{
-    diff_script, indexer, patch_vbs_file, run_diff,
+    diff_script, indexer, run_diff,
     vpx::{extractvbs, vbs_path_for, ExtractResult},
     DiffColor, ProgressBarProgress,
 };
