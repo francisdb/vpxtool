@@ -1243,7 +1243,7 @@ pub fn patch_script(script: String) -> String {
         let marker = "'Define a variable for each drop target";
         let dt_class = include_str!("assets/drop_target_class.vbs");
         patched_script =
-            patched_script.replace(marker, format!("{}\n{}", dt_class, marker).as_str());
+            patched_script.replace(marker, format!("{}\r\n{}", dt_class, marker).as_str());
 
         // DT7 = Array(dt1, dt1a, pdt1, 7, 0)
         // DT27 = Array(dt2, dt2a, pdt2, 27, 0, false)
@@ -1279,7 +1279,7 @@ pub fn patch_script(script: String) -> String {
         let marker = "'Define a variable for each stand-up target";
         let st_class = include_str!("assets/standup_target_class.vbs");
         patched_script =
-            patched_script.replace(marker, format!("{}\n{}", st_class, marker).as_str());
+            patched_script.replace(marker, format!("{}\r\n{}", st_class, marker).as_str());
 
         // apply the following replacements
 
