@@ -1338,6 +1338,9 @@ Sub DoSTAnim()
 	Next
 End Sub
 "#;
+        // vbs files should have windows line endings
+        let script = script.replace("\n", "\r\n");
+
         let expected = r#"
 Class DropTarget
   Private m_primary, m_secondary, m_prim, m_sw, m_animate, m_isDropped
@@ -1423,6 +1426,8 @@ Sub DoSTAnim()
 	Next
 End Sub
 "#;
+        // vbs files should have windows line endings
+        let expected = expected.replace("\n", "\r\n");
 
         let result = patch_script(script.to_string());
         assert_eq!(expected, result);
