@@ -17,7 +17,7 @@ use is_executable::IsExecutable;
 use crate::config::ResolvedConfig;
 use crate::indexer::{IndexError, IndexedTable, Progress};
 use crate::{
-    diff_script, indexer, run_diff,
+    diff_script, indexer, patch_vbs_file, run_diff,
     vpx::{extractvbs, vbs_path_for, ExtractResult},
     DiffColor, ProgressBarProgress,
 };
@@ -32,19 +32,21 @@ enum TableOption {
     ShowDetails,
     ExtractVBS,
     EditVBS,
+    PatchVBS,
     ShowVBSDiff,
     CreateVBSPatch,
     // ClearNVRAM,
 }
 
 impl TableOption {
-    const ALL: [TableOption; 8] = [
+    const ALL: [TableOption; 9] = [
         TableOption::Launch,
         TableOption::LaunchFullscreen,
         TableOption::LaunchWindowed,
         TableOption::ShowDetails,
         TableOption::ExtractVBS,
         TableOption::EditVBS,
+        TableOption::PatchVBS,
         TableOption::ShowVBSDiff,
         TableOption::CreateVBSPatch,
         // TableOption::ClearNVRAM,
@@ -58,9 +60,10 @@ impl TableOption {
             3 => Some(TableOption::ShowDetails),
             4 => Some(TableOption::ExtractVBS),
             5 => Some(TableOption::EditVBS),
-            6 => Some(TableOption::ShowVBSDiff),
-            7 => Some(TableOption::CreateVBSPatch),
-            // 8 => Some(TableOption::ClearNVRAM),
+            6 => Some(TableOption::PatchVBS),
+            7 => Some(TableOption::ShowVBSDiff),
+            8 => Some(TableOption::CreateVBSPatch),
+            // 9 => Some(TableOption::ClearNVRAM),
             _ => None,
         }
     }
@@ -68,13 +71,14 @@ impl TableOption {
     fn display(&self) -> String {
         match self {
             TableOption::Launch => "Launch".to_string(),
-            TableOption::LaunchFullscreen => "Launch Fullscreen".to_string(),
-            TableOption::LaunchWindowed => "Launch Windowed".to_string(),
-            TableOption::ShowDetails => "Show Details".to_string(),
+            TableOption::LaunchFullscreen => "Launch fullscreen".to_string(),
+            TableOption::LaunchWindowed => "Launch windowed".to_string(),
+            TableOption::ShowDetails => "Show details".to_string(),
             TableOption::ExtractVBS => "VBScript > Extract".to_string(),
             TableOption::EditVBS => "VBScript > Edit".to_string(),
+            TableOption::PatchVBS => "VBScript > Patch typical standalone issues".to_string(),
             TableOption::ShowVBSDiff => "VBScript > Diff".to_string(),
-            TableOption::CreateVBSPatch => "VBScript > Create Patch".to_string(),
+            TableOption::CreateVBSPatch => "VBScript > Create patch file".to_string(),
             // TableOption::ClearNVRAM => "Clear NVRAM".to_string(),
         }
     }
@@ -168,6 +172,24 @@ pub fn frontend(
                             prompt(msg.truecolor(255, 125, 0).to_string());
                         }
                     },
+                    Some(TableOption::PatchVBS) => {
+                        let vbs_path = match extractvbs(selected_path, false, Some("vbs")) {
+                            ExtractResult::Existed(path) => path,
+                            ExtractResult::Extracted(path) => path,
+                        };
+                        match patch_vbs_file(&vbs_path) {
+                            Ok(_) => {
+                                prompt(format!(
+                                    "Patched VBS file at {}",
+                                    vbs_path.to_string_lossy()
+                                ));
+                            }
+                            Err(err) => {
+                                let msg = format!("Unable to patch VBS: {}", err);
+                                prompt(msg.truecolor(255, 125, 0).to_string());
+                            }
+                        }
+                    }
                     Some(TableOption::CreateVBSPatch) => {
                         let original_path =
                             match extractvbs(selected_path, true, Some("vbs.original")) {
