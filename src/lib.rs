@@ -295,7 +295,15 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     }
                 };
 
-                patch_vbs_file(&vbs_path)?;
+                let applied = patch_vbs_file(&vbs_path)?;
+                if applied.is_empty() {
+                    println!("No patches applied")?;
+                } else {
+                    applied
+                        .iter()
+                        .map(|patch| println!("Applied patch: {}", patch))
+                        .collect::<io::Result<()>>()?;
+                }
                 Ok(ExitCode::SUCCESS)
             }
             _ => unreachable!(),

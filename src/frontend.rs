@@ -179,11 +179,18 @@ pub fn frontend(
                             ExtractResult::Extracted(path) => path,
                         };
                         match patch_vbs_file(&vbs_path) {
-                            Ok(_) => {
-                                prompt(format!(
-                                    "Patched VBS file at {}",
-                                    vbs_path.to_string_lossy()
-                                ));
+                            Ok(applied) => {
+                                if applied.is_empty() {
+                                    prompt("No patches applied.".to_string());
+                                } else {
+                                    applied.iter().for_each(|patch| {
+                                        println!("Applied patch: {}", patch);
+                                    });
+                                    prompt(format!(
+                                        "Patched VBS file at {}",
+                                        vbs_path.to_string_lossy()
+                                    ));
+                                }
                             }
                             Err(err) => {
                                 let msg = format!("Unable to patch VBS: {}", err);
