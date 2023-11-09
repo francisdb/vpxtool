@@ -1,5 +1,6 @@
 use crate::config::SetupConfigResult;
 use crate::indexer::{IndexError, Progress};
+use crate::patcher::patch_vbs_file;
 use base64::Engine;
 use clap::{arg, Arg, ArgMatches, Command};
 use colored::Colorize;
@@ -24,14 +25,19 @@ pub mod fixprint;
 mod frontend;
 pub mod indexer;
 
+pub mod patcher;
+
 // see https://github.com/fusion-engineering/rust-git-version/issues/21
 const GIT_VERSION: &str = git_version!(args = ["--tags", "--always", "--dirty=-modified"]);
 
 const OK: Emoji = Emoji("✅", "[launch]");
 const NOK: Emoji = Emoji("❌", "[crash]");
 
+const CMD_INFO: &'static str = "info";
 const CMD_FRONTEND: &'static str = "frontend";
 const CMD_DIFF: &'static str = "diff";
+const CMD_EXTRACT: &'static str = "extract";
+const CMD_EXTRACT_VBS: &'static str = "extractvbs";
 
 const CMD_SIMPLE_FRONTEND: &'static str = "simplefrontend";
 
@@ -42,8 +48,13 @@ const CMD_CONFIG_SHOW: &'static str = "show";
 const CMD_CONFIG_CLEAR: &'static str = "clear";
 const CMD_CONFIG_EDIT: &'static str = "edit";
 
+const CMD_POV: &'static str = "pov";
+const CMD_POV_EXTRACT: &'static str = "extract";
+
 const CMD_SCRIPT: &'static str = "script";
 const CMD_SCRIPT_SHOW: &'static str = "show";
+const CMD_SCRIPT_EXTRACT: &'static str = "extract";
+const CMD_SCRIPT_PATCH: &'static str = "patch";
 const CMD_SCRIPT_EDIT: &'static str = "edit";
 
 pub struct ProgressBarProgress {
@@ -79,7 +90,7 @@ pub fn run() -> io::Result<ExitCode> {
 
 fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
     match matches.subcommand() {
-        Some(("info", sub_matches)) => {
+        Some((CMD_INFO, sub_matches)) => {
             let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
             let path = path.unwrap_or("");
             let expanded_path = expand_path(path)?;
@@ -229,6 +240,25 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 println!("{}", code)?;
                 Ok(ExitCode::SUCCESS)
             }
+            Some((CMD_SCRIPT_EXTRACT, sub_matches)) => {
+                let path = sub_matches
+                    .get_one::<String>("VPXPATH")
+                    .map(|s| s.as_str())
+                    .unwrap_or_default();
+
+                let expanded_path = expand_path(path)?;
+                match extractvbs(&expanded_path, false, None) {
+                    ExtractResult::Existed(vbs_path) => {
+                        let warning =
+                            format!("EXISTED {}", vbs_path.display()).truecolor(255, 125, 0);
+                        println!("{}", warning)?;
+                    }
+                    ExtractResult::Extracted(vbs_path) => {
+                        println!("CREATED {}", vbs_path.display())?;
+                    }
+                }
+                Ok(ExitCode::SUCCESS)
+            }
             Some((CMD_SCRIPT_EDIT, sub_matches)) => {
                 let path = sub_matches
                     .get_one::<String>("VPXPATH")
@@ -245,6 +275,37 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     open_or_fail(&vbs_path)
                 }
             }
+            Some((CMD_SCRIPT_PATCH, sub_matches)) => {
+                let path = sub_matches
+                    .get_one::<String>("VPXPATH")
+                    .map(|s| s.as_str())
+                    .unwrap_or_default();
+
+                let expanded_path = expand_path(path)?;
+                let vbs_path = match extractvbs(&expanded_path, false, None) {
+                    ExtractResult::Existed(vbs_path) => {
+                        let warning =
+                            format!("EXISTED {}", vbs_path.display()).truecolor(255, 125, 0);
+                        println!("{}", warning)?;
+                        vbs_path
+                    }
+                    ExtractResult::Extracted(vbs_path) => {
+                        println!("CREATED {}", vbs_path.display())?;
+                        vbs_path
+                    }
+                };
+
+                let applied = patch_vbs_file(&vbs_path)?;
+                if applied.is_empty() {
+                    println!("No patches applied")?;
+                } else {
+                    applied
+                        .iter()
+                        .map(|patch| println!("Applied patch: {}", patch))
+                        .collect::<io::Result<()>>()?;
+                }
+                Ok(ExitCode::SUCCESS)
+            }
             _ => unreachable!(),
         },
         Some(("ls", sub_matches)) => {
@@ -257,7 +318,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             ls(expanded_path.as_ref())?;
             Ok(ExitCode::SUCCESS)
         }
-        Some(("extract", sub_matches)) => {
+        Some((CMD_EXTRACT, sub_matches)) => {
             let yes = sub_matches.get_flag("FORCE");
             let paths: Vec<&str> = sub_matches
                 .get_many::<String>("VPXPATH")
@@ -275,7 +336,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             }
             Ok(ExitCode::SUCCESS)
         }
-        Some(("extractvbs", sub_matches)) => {
+        Some((CMD_EXTRACT_VBS, sub_matches)) => {
             let overwrite = sub_matches.get_flag("OVERWRITE");
             let paths: Vec<&str> = sub_matches
                 .get_many::<String>("VPXPATH")
@@ -414,8 +475,8 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             },
             _ => unreachable!(),
         },
-        Some(("pov", sub_matches)) => match sub_matches.subcommand() {
-            Some(("extract", sub_matches)) => {
+        Some((CMD_POV, sub_matches)) => match sub_matches.subcommand() {
+            Some((CMD_POV_EXTRACT, sub_matches)) => {
                 let paths: Vec<&str> = sub_matches
                     .get_many::<String>("VPXPATH")
                     .unwrap_or_default()
@@ -450,7 +511,7 @@ fn build_command() -> Command {
         .about("Extracts and assembles vpx files")
         .arg_required_else_help(true)
         .subcommand(
-            Command::new("info")
+            Command::new(CMD_INFO)
                 .about("Show information about a vpx file")
                 .arg(arg!(<VPXPATH> "The path to the vpx file").required(true))
                 .arg(
@@ -519,6 +580,14 @@ fn build_command() -> Command {
                         ),
                 )
                 .subcommand(
+                    Command::new(CMD_SCRIPT_EXTRACT)
+                        .about("Extract the table vpx script")
+                        .arg(
+                            arg!(<VPXPATH> "The path to the vpx file")
+                                .required(true),
+                        ),
+                )
+                .subcommand(
                     Command::new(CMD_SCRIPT_EDIT)
                         .about("Edit the table vpx script")
                         .arg(
@@ -526,6 +595,14 @@ fn build_command() -> Command {
                                 .required(true),
                         ),
                 )
+                .subcommand(
+                    Command::new(CMD_SCRIPT_PATCH)
+                        .about("Patch the table vpx script for typical standalone issues")
+                        .arg(
+                            arg!(<VPXPATH> "The path to the vpx file")
+                                .required(true),
+                        ),
+                ),
         )
         .subcommand(
             Command::new("ls")
@@ -552,7 +629,7 @@ fn build_command() -> Command {
                 ),
         )
         .subcommand(
-            Command::new("extractvbs")
+            Command::new(CMD_EXTRACT_VBS)
                 .about("Extracts the vbs from a vpx file next to it")
                 .arg(
                     Arg::new("OVERWRITE")
@@ -587,10 +664,10 @@ fn build_command() -> Command {
                 ),
         )
         .subcommand(
-            Command::new("pov")
+            Command::new(CMD_POV)
                 .subcommand_required(true)
                 .about("Point of view file (pov) related commands")
-                .subcommand(Command::new("extract")
+                .subcommand(Command::new(CMD_POV_EXTRACT)
                                 .about("Extracts a the pov file from a vpx file")
                                 .arg(
                                     arg!(<VPXPATH> "The path(s) to the vpx file(s)")
