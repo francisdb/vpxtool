@@ -191,7 +191,7 @@ fn create_default_config() -> io::Result<(PathBuf, ResolvedConfig)> {
 
     if !vpx_executable.exists() {
         println!("Warning: Failed to detect the vpinball executable.");
-        print!("vpinball executale path: ");
+        print!("vpinball executable path: ");
         io::stdout().flush().expect("Failed to flush stdout");
 
         let mut new_executable_path = String::new();
