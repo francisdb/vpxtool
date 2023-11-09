@@ -191,6 +191,9 @@ impl From<TablesIndexJson> for TablesIndex {
 
 /// Returns all roms names lower case for the roms in the given folder
 pub fn find_roms<P: AsRef<Path>>(rom_path: P) -> io::Result<HashSet<String>> {
+    if !rom_path.as_ref().exists() {
+        return Ok(HashSet::new());
+    }
     // TODO
     // TODO if there is an ini file for the table we might have to check locally for the rom
     //   currently only a standalone feature
