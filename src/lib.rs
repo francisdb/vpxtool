@@ -345,10 +345,17 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             for path in paths {
                 let expanded_path = expand_path(path)?;
                 println!("extracting from {}", expanded_path.display())?;
-                if expanded_path.ends_with(".directb2s") {
-                    extract_directb2s(&expanded_path).unwrap();
-                } else {
-                    extract(expanded_path.as_ref(), yes).unwrap();
+                let ext = expanded_path.extension().map(|e| e.to_ascii_lowercase());
+                match ext {
+                    Some(ext) if ext == "directb2s" => {
+                        extract_directb2s(&expanded_path)?;
+                    }
+                    Some(ext) if ext == "vpx" => {
+                        extract(expanded_path.as_ref(), yes)?;
+                    }
+                    _ => {
+                        return fail(format!("Unknown file type: {}", expanded_path.display()));
+                    }
                 }
             }
             Ok(ExitCode::SUCCESS)
