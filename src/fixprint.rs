@@ -1,3 +1,4 @@
+use colored::Colorize;
 use std::io;
 use std::io::Write;
 use std::process::ExitCode;
@@ -57,7 +58,8 @@ pub fn safe_main(main: fn() -> io::Result<ExitCode>) -> ExitCode {
             ExitCode::SUCCESS
         }
         Err(err) => {
-            eprintln!("{}", err).ok();
+            let warning = format!("{err}").red();
+            eprintln!("{warning}").ok();
             ExitCode::FAILURE
         }
         Ok(exit_code) => exit_code, //::SUCCESS,

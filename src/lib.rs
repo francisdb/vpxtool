@@ -342,15 +342,26 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 .unwrap_or_default()
                 .map(|v| v.as_str())
                 .collect();
-            for path in paths {
+            paths.iter().try_for_each(|path| {
                 let expanded_path = expand_path(path)?;
-                println!("extracting from {}", expanded_path.display())?;
-                if expanded_path.ends_with(".directb2s") {
-                    extract_directb2s(&expanded_path).unwrap();
-                } else {
-                    extract(expanded_path.as_ref(), yes).unwrap();
+                let ext = expanded_path.extension().map(|e| e.to_ascii_lowercase());
+                match ext {
+                    Some(ext) if ext == "directb2s" => {
+                        println!("extracting from {}", expanded_path.display())?;
+                        extract_directb2s(&expanded_path)?;
+                        Ok(())
+                    }
+                    Some(ext) if ext == "vpx" => {
+                        println!("extracting from {}", expanded_path.display())?;
+                        extract(expanded_path.as_ref(), yes)?;
+                        Ok(())
+                    }
+                    _ => Err(io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        format!("Unknown file type: {}", expanded_path.display()),
+                    )),
                 }
-            }
+            })?;
             Ok(ExitCode::SUCCESS)
         }
         Some((CMD_EXTRACT_VBS, sub_matches)) => {
