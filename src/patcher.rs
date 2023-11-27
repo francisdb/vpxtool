@@ -56,22 +56,24 @@ pub fn patch_script(script: String) -> (String, HashSet<PatchType>) {
 }
 
 fn patch_standup_target_array(script: String) -> String {
-    let marker = "'Define a variable for each stand-up target";
-    let st_class = include_str!("assets/standup_target_class.vbs");
-    let mut patched_script = script.replace(marker, format!("{}\r\n{}", st_class, marker).as_str());
+    let mut patched_script = script;
 
     // apply the following replacements
 
     // ST41 = Array(sw41, Target_Rect_Fat_011_BM_Lit_Room, 41, 0)
     // becomes
     // Set ST41 = (new StandupTarget)(sw41, Target_Rect_Fat_011_BM_Lit_Room, 41, 0)
-    let re = Regex::new(r"(ST\d+\s*=\s*)Array\(").unwrap();
+    let re = Regex::new(r"(ST[a-zA-Z]*\d+\s*=\s*)Array\(").unwrap();
     patched_script = re
         .replace_all(&patched_script, |caps: &regex::Captures| {
             let ind = caps.get(1).unwrap().as_str();
             format!("Set {}(new StandupTarget)(", ind)
         })
         .to_string();
+
+    let st_class = include_str!("assets/standup_target_class.vbs");
+    let marker = "'Define a variable for each stand-up target";
+    patched_script = introduce_class(patched_script, marker, "new StandupTarget", st_class);
 
     patched_script = patched_script.replace("STArray(i)(0)", "STArray(i).primary");
     patched_script = patched_script.replace("STArray(i)(1)", "STArray(i).prim");
@@ -81,16 +83,14 @@ fn patch_standup_target_array(script: String) -> String {
 }
 
 fn patch_drop_target_array(script: String) -> String {
-    let marker = "'Define a variable for each drop target";
-    let dt_class = include_str!("assets/drop_target_class.vbs");
-    let mut patched_script = script.replace(marker, format!("{}\r\n{}", dt_class, marker).as_str());
+    let mut patched_script = script;
 
     // DT7 = Array(dt1, dt1a, pdt1, 7, 0)
     // DT27 = Array(dt2, dt2a, pdt2, 27, 0, false)
     // becomes
     // Set DT7 = (new DropTarget)(dt1, dt1a, pdt1, 7, 0, false)
     // Set DT27 = (new DropTarget)(dt2, dt2a, pdt2, 27, 0, false)
-    let re = Regex::new(r"(DT\d+\s*=\s*)Array\((.*?)\s*(,\s*(false|true))?\)").unwrap();
+    let re = Regex::new(r"(DT[a-zA-Z]*\d+\s*=\s*)Array\((.*?)\s*(,\s*(false|true))?\)").unwrap();
     patched_script = re
         .replace_all(&patched_script, |caps: &regex::Captures| {
             let ind = caps.get(1).unwrap().as_str();
@@ -104,6 +104,10 @@ fn patch_drop_target_array(script: String) -> String {
         })
         .to_string();
 
+    let dt_class = include_str!("assets/drop_target_class.vbs");
+    let marker = "'Define a variable for each drop target";
+    patched_script = introduce_class(patched_script, marker, "new DropTarget", dt_class);
+
     patched_script = patched_script.replace("DTArray(i)(0)", "DTArray(i).primary");
     patched_script = patched_script.replace("DTArray(i)(1)", "DTArray(i).secondary");
     patched_script = patched_script.replace("DTArray(i)(2)", "DTArray(i).prim");
@@ -116,10 +120,107 @@ fn patch_drop_target_array(script: String) -> String {
     patched_script
 }
 
+fn introduce_class(script: String, marker: &str, fallback_marker: &str, class_def: &str) -> String {
+    if script.match_indices(marker).count() == 1 {
+        script.replace(marker, format!("{}\r\n{}", class_def, marker).as_str())
+    } else {
+        // Put class_def before the first line that contains "new DropTarget"
+        // which we previously added.
+        let regex = format!(r"\r\n(.*?)({fallback_marker})");
+        let re = Regex::new(regex.as_ref()).unwrap();
+        if re.is_match(&script) {
+            re.replace(&script, |caps: &regex::Captures| {
+                println!("caps: {:?}", caps);
+                let first = caps.get(1).unwrap().as_str();
+                let second = caps.get(2).unwrap().as_str();
+                format!("\r\n{}\r\n{}{}", class_def, first, second)
+            })
+            .to_string()
+        } else {
+            // No better location found, append the class at the end of the file.
+            format!("{}\r\n{}", script, class_def)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_introduce_class_at_marker() {
+        let script = r#"
+hello
+this is the line
+this is the other line
+end"#;
+        let marker = "this is the line";
+        let fallback_marker = "other";
+        let class_def = "Class Foo\r\nEnd Class\r\n";
+        let expected = r#"
+hello
+Class Foo
+End Class
+
+this is the line
+this is the other line
+end"#;
+        let script = script.replace("\n", "\r\n");
+        let expected = expected.replace("\n", "\r\n");
+
+        let result = introduce_class(script.to_string(), marker, fallback_marker, class_def);
+
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn test_introduce_class_at_fallback() {
+        let script = r#"
+hello
+this is the line
+this is the other line
+end"#;
+        let marker = "missing";
+        let fallback_marker = "other";
+        let class_def = "Class Foo\r\nEnd Class\r\n";
+        let expected = r#"
+hello
+this is the line
+Class Foo
+End Class
+
+this is the other line
+end"#;
+        let script = script.replace("\n", "\r\n");
+        let expected = expected.replace("\n", "\r\n");
+
+        let result = introduce_class(script.to_string(), marker, fallback_marker, class_def);
+
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn test_introduce_class_at_end() {
+        let script = r#"
+hello
+end"#;
+        let marker = "missing";
+        let fallback_marker = "also missing";
+        let class_def = "Class Foo\r\nEnd Class\r\n";
+        let expected = r#"
+hello
+end
+Class Foo
+End Class
+"#;
+        let script = script.replace("\n", "\r\n");
+        let expected = expected.replace("\n", "\r\n");
+
+        let result = introduce_class(script.to_string(), marker, fallback_marker, class_def);
+
+        assert_eq!(expected, result);
+    }
 
     #[test]
     fn test_vbs_patch() {
@@ -127,7 +228,7 @@ mod tests {
 'Define a variable for each drop target
 Dim DT9, DT47
 
-DT9 = Array(sw9, sw9a, sw9p, 9, 0, false)
+DTBk9=Array(sw9, sw9a, sw9p, 9, 0, false)
 DT47 = Array(sw47, sw47a, sw47p, 47, 0)
 
 Sub DoDTAnim()
@@ -140,7 +241,7 @@ End Sub
 'Define a variable for each stand-up target
 Dim ST41, ST42
 
-ST41 = Array(sw41, Target_Rect_Fat_011_BM_Lit_Room, 41, 0)
+ST41= Array(sw41, Target_Rect_Fat_011_BM_Lit_Room, 41, 0)
 ST42 = Array(sw42, Target_Rect_Fat_010_BM_Lit_Room, 42, 0)
 
 Sub DoSTAnim()
@@ -190,7 +291,7 @@ End Class
 'Define a variable for each drop target
 Dim DT9, DT47
 
-Set DT9 = (new DropTarget)(sw9, sw9a, sw9p, 9, 0, false)
+Set DTBk9=(new DropTarget)(sw9, sw9a, sw9p, 9, 0, false)
 Set DT47 = (new DropTarget)(sw47, sw47a, sw47p, 47, 0, false)
 
 Sub DoDTAnim()
@@ -228,7 +329,7 @@ End Class
 'Define a variable for each stand-up target
 Dim ST41, ST42
 
-Set ST41 = (new StandupTarget)(sw41, Target_Rect_Fat_011_BM_Lit_Room, 41, 0)
+Set ST41= (new StandupTarget)(sw41, Target_Rect_Fat_011_BM_Lit_Room, 41, 0)
 Set ST42 = (new StandupTarget)(sw42, Target_Rect_Fat_010_BM_Lit_Room, 42, 0)
 
 Sub DoSTAnim()
