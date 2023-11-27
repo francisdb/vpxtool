@@ -27,7 +27,7 @@ git-version = "0.3.8"
 indicatif = "0.17.7"
 log = "0.4.20"
 logging_timer = "1.1.0"
-open = "5.0.0"
+open = "5.0.1"
 pretty_env_logger = "0.5.0"
 quick-xml = { version = "0.31.0", features = ["serialize"] }
 serde = { version = "1.0.192", features = ["derive"] }
