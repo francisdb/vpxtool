@@ -56,16 +56,14 @@ pub fn patch_script(script: String) -> (String, HashSet<PatchType>) {
 }
 
 fn patch_standup_target_array(script: String) -> String {
-    let mut patched_script = script;
-
     // apply the following replacements
 
     // ST41 = Array(sw41, Target_Rect_Fat_011_BM_Lit_Room, 41, 0)
     // becomes
     // Set ST41 = (new StandupTarget)(sw41, Target_Rect_Fat_011_BM_Lit_Room, 41, 0)
     let re = Regex::new(r"(ST[a-zA-Z]*\d+\s*=\s*)Array\(").unwrap();
-    patched_script = re
-        .replace_all(&patched_script, |caps: &regex::Captures| {
+    let mut patched_script = re
+        .replace_all(&script, |caps: &regex::Captures| {
             let ind = caps.get(1).unwrap().as_str();
             format!("Set {}(new StandupTarget)(", ind)
         })
@@ -83,16 +81,14 @@ fn patch_standup_target_array(script: String) -> String {
 }
 
 fn patch_drop_target_array(script: String) -> String {
-    let mut patched_script = script;
-
     // DT7 = Array(dt1, dt1a, pdt1, 7, 0)
     // DT27 = Array(dt2, dt2a, pdt2, 27, 0, false)
     // becomes
     // Set DT7 = (new DropTarget)(dt1, dt1a, pdt1, 7, 0, false)
     // Set DT27 = (new DropTarget)(dt2, dt2a, pdt2, 27, 0, false)
     let re = Regex::new(r"(DT[a-zA-Z]*\d+\s*=\s*)Array\((.*?)\s*(,\s*(false|true))?\)").unwrap();
-    patched_script = re
-        .replace_all(&patched_script, |caps: &regex::Captures| {
+    let mut patched_script = re
+        .replace_all(&script, |caps: &regex::Captures| {
             let ind = caps.get(1).unwrap().as_str();
             let ind2 = caps.get(2).unwrap().as_str();
             let ind3 = caps.get(3);
