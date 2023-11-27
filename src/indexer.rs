@@ -462,8 +462,9 @@ pub fn read_index_json<P: AsRef<Path>>(json_path: P) -> io::Result<Option<Tables
 fn extract_game_name<S: AsRef<str>>(code: S) -> Option<String> {
     // TODO can we find a first match through an option?
     // needs to be all lowercase to match with (?i) case insensitive
-    const RE: &str = r#"(?i)const\s*cgamename\s*=\s*\"([^"\\]*(?:\\.[^"\\]*)*)\""#;
-    let re = regex::Regex::new(RE).unwrap();
+    const LINE_WITH_GAMENAME_RE: &str =
+        r#"(?i)(?:.*?)*cgamename\s*=\s*\"([^"\\]*(?:\\.[^"\\]*)*)\""#;
+    let re = regex::Regex::new(LINE_WITH_GAMENAME_RE).unwrap();
     code.as_ref()
         .lines()
         // skip rows that start with ' or whitespace followed by '
@@ -667,6 +668,27 @@ LoadVPM "01000200", "DE.VBS", 3.36
             .to_string();
         let game_name = extract_game_name(code);
         assert_eq!(game_name, Some("simp_a27".to_string()));
+    }
+
+    #[test]
+    fn test_extract_game_name_multidef_end() {
+        let code = r#"
+Const UseSolenoids=2,UseLamps=0,UseSync=1,UseGI=0,SCoin="coin",cGameName="barbwire"
+"#
+        .to_string();
+        let game_name = extract_game_name(code);
+        assert_eq!(game_name, Some("barbwire".to_string()));
+    }
+
+    #[test]
+    fn test_extract_game_name_2_line_dim() {
+        let code = r#"
+Dim cGameName
+cGameName = "abv106"
+"#
+        .to_string();
+        let game_name = extract_game_name(code);
+        assert_eq!(game_name, Some("abv106".to_string()));
     }
 
     #[test]
