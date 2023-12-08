@@ -58,14 +58,16 @@ pub fn patch_script(script: String) -> (String, HashSet<PatchType>) {
 fn patch_standup_target_array(script: String) -> String {
     // apply the following replacements
 
-    // ST41 = Array(sw41, Target_Rect_Fat_011_BM_Lit_Room, 41, 0)
+    //   ST41 = Array(sw41, Target_Rect_Fat_011_BM_Lit_Room, 41, 0)
     // becomes
-    // Set ST41 = (new StandupTarget)(sw41, Target_Rect_Fat_011_BM_Lit_Room, 41, 0)
-    let re = Regex::new(r"(ST[a-zA-Z0-9]*\s*=\s*)Array\(").unwrap();
+    //   Set ST41 = (new StandupTarget)(sw41, Target_Rect_Fat_011_BM_Lit_Room, 41, 0)
+    // The fact that it ends with a number is important, to not match the target list array
+    let re = Regex::new(r"(ST[a-zA-Z0-9]*\s*=\s*)Array\((.*?\s*,\s*[0-9]+\s*)\)").unwrap();
     let mut patched_script = re
         .replace_all(&script, |caps: &regex::Captures| {
             let ind = caps.get(1).unwrap().as_str();
-            format!("Set {}(new StandupTarget)(", ind)
+            let ind2 = caps.get(2).unwrap().as_str();
+            format!("Set {}(new StandupTarget)({})", ind, ind2)
         })
         .to_string();
 
@@ -81,12 +83,15 @@ fn patch_standup_target_array(script: String) -> String {
 }
 
 fn patch_drop_target_array(script: String) -> String {
-    // DT7 = Array(dt1, dt1a, pdt1, 7, 0)
-    // DT27 = Array(dt2, dt2a, pdt2, 27, 0, false)
+    //   DT7 = Array(dt1, dt1a, pdt1, 7, 0)
+    //   DT27 = Array(dt2, dt2a, pdt2, 27, 0, false)
     // becomes
-    // Set DT7 = (new DropTarget)(dt1, dt1a, pdt1, 7, 0, false)
-    // Set DT27 = (new DropTarget)(dt2, dt2a, pdt2, 27, 0, false)
-    let re = Regex::new(r"(DT[a-zA-Z0-9]*\s*=\s*)Array\((.*?)\s*(,\s*(false|true))?\)").unwrap();
+    //   Set DT7 = (new DropTarget)(dt1, dt1a, pdt1, 7, 0, false)
+    //   Set DT27 = (new DropTarget)(dt2, dt2a, pdt2, 27, 0, false)
+    // The fact that it ends with a number and optional boolean is important, to not match the target list array
+    let re =
+        Regex::new(r"(DT[a-zA-Z0-9]*\s*=\s*)Array\((.*?\s*,\s*[0-9]+\s*)(,\s*(false|true))?\)")
+            .unwrap();
     let mut patched_script = re
         .replace_all(&script, |caps: &regex::Captures| {
             let ind = caps.get(1).unwrap().as_str();
@@ -229,6 +234,9 @@ DT47 = Array(sw47, sw47a, sw47p, 47, 0)
 DTA1v = Array(DTA1, DTA1a, DTA1p, 1, 0)
 DTJKv = Array(DTJK, DTJKa, DTJKp, 3, 0)
 
+Dim DTArray
+DTArray = Array(DTBk9,DT47,DTA1v,DTJKv)
+
 Sub DoDTAnim()
 	Dim i
 	For i=0 to Ubound(DTArray)
@@ -241,6 +249,9 @@ Dim ST41, ST42
 
 ST41= Array(sw41, Target_Rect_Fat_011_BM_Lit_Room, 41, 0)
 ST42 = Array(sw42, Target_Rect_Fat_010_BM_Lit_Room, 42, 0)
+
+Dim STArray
+STArray = Array(ST41,ST42)
 
 Sub DoSTAnim()
 	Dim i
@@ -294,6 +305,9 @@ Set DT47 = (new DropTarget)(sw47, sw47a, sw47p, 47, 0, false)
 Set DTA1v = (new DropTarget)(DTA1, DTA1a, DTA1p, 1, 0, false)
 Set DTJKv = (new DropTarget)(DTJK, DTJKa, DTJKp, 3, 0, false)
 
+Dim DTArray
+DTArray = Array(DTBk9,DT47,DTA1v,DTJKv)
+
 Sub DoDTAnim()
 	Dim i
 	For i=0 to Ubound(DTArray)
@@ -331,6 +345,9 @@ Dim ST41, ST42
 
 Set ST41= (new StandupTarget)(sw41, Target_Rect_Fat_011_BM_Lit_Room, 41, 0)
 Set ST42 = (new StandupTarget)(sw42, Target_Rect_Fat_010_BM_Lit_Room, 42, 0)
+
+Dim STArray
+STArray = Array(ST41,ST42)
 
 Sub DoSTAnim()
 	Dim i
