@@ -485,7 +485,7 @@ fn requires_pinmame<S: AsRef<str>>(code: S) -> bool {
     lower
         .lines()
         .filter(|line| !line.trim().starts_with('\''))
-        .any(|line| line.contains("loadvpm") && !re.is_match(&lower))
+        .any(|line| line.contains("loadvpm") && !re.is_match(&line))
 }
 
 #[cfg(test)]
@@ -742,5 +742,20 @@ If RenderingMode = 2 Then VRRoom = VRRoomChoice Else VRRoom = 0
 "#
         .to_string();
         assert_eq!(requires_pinmame(code), false);
+    }
+
+    #[test]
+    fn test_requires_pinmame_comment_and_used() {
+        // got this from blood machines
+        let code = r#"
+Const SCoin="coin3",cCredits=""
+
+LoadVPM "01210000","sys80.vbs",3.10
+
+'Sub LoadVPM(VPMver, VBSfile, VBSver)
+'	On Error Resume Next
+"#
+        .to_string();
+        assert_eq!(requires_pinmame(code), true);
     }
 }
