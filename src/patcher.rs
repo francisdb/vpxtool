@@ -61,7 +61,7 @@ fn patch_standup_target_array(script: String) -> String {
     // ST41 = Array(sw41, Target_Rect_Fat_011_BM_Lit_Room, 41, 0)
     // becomes
     // Set ST41 = (new StandupTarget)(sw41, Target_Rect_Fat_011_BM_Lit_Room, 41, 0)
-    let re = Regex::new(r"(ST[a-zA-Z]*\d+\s*=\s*)Array\(").unwrap();
+    let re = Regex::new(r"(ST[a-zA-Z0-9]*\s*=\s*)Array\(").unwrap();
     let mut patched_script = re
         .replace_all(&script, |caps: &regex::Captures| {
             let ind = caps.get(1).unwrap().as_str();
@@ -86,8 +86,7 @@ fn patch_drop_target_array(script: String) -> String {
     // becomes
     // Set DT7 = (new DropTarget)(dt1, dt1a, pdt1, 7, 0, false)
     // Set DT27 = (new DropTarget)(dt2, dt2a, pdt2, 27, 0, false)
-    let re = Regex::new(r"(DT[a-zA-Z]*\d+[a-zA-Z]*\s*=\s*)Array\((.*?)\s*(,\s*(false|true))?\)")
-        .unwrap();
+    let re = Regex::new(r"(DT[a-zA-Z0-9]*\s*=\s*)Array\((.*?)\s*(,\s*(false|true))?\)").unwrap();
     let mut patched_script = re
         .replace_all(&script, |caps: &regex::Captures| {
             let ind = caps.get(1).unwrap().as_str();
@@ -223,11 +222,12 @@ End Class
     fn test_vbs_patch() {
         let script = r#"
 'Define a variable for each drop target
-Dim DT9, DT47, DTA1v
+Dim DT9, DT47, DTA1v, DTJKv
 
-DTBk9=Array(sw9, sw9a, sw9p, 9, 0, false)
+DTBk9=Array(sw9, sw9a, sw9p, 9, 0, true)
 DT47 = Array(sw47, sw47a, sw47p, 47, 0)
 DTA1v = Array(DTA1, DTA1a, DTA1p, 1, 0)
+DTJKv = Array(DTJK, DTJKa, DTJKp, 3, 0)
 
 Sub DoDTAnim()
 	Dim i
@@ -287,11 +287,12 @@ Class DropTarget
 End Class
 
 'Define a variable for each drop target
-Dim DT9, DT47, DTA1v
+Dim DT9, DT47, DTA1v, DTJKv
 
-Set DTBk9=(new DropTarget)(sw9, sw9a, sw9p, 9, 0, false)
+Set DTBk9=(new DropTarget)(sw9, sw9a, sw9p, 9, 0, true)
 Set DT47 = (new DropTarget)(sw47, sw47a, sw47p, 47, 0, false)
 Set DTA1v = (new DropTarget)(DTA1, DTA1a, DTA1p, 1, 0, false)
+Set DTJKv = (new DropTarget)(DTJK, DTJKa, DTJKp, 3, 0, false)
 
 Sub DoDTAnim()
 	Dim i
