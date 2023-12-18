@@ -465,7 +465,8 @@ fn extract_game_name<S: AsRef<str>>(code: S) -> Option<String> {
     const LINE_WITH_GAMENAME_RE: &str =
         r#"(?i)(?:.*?)*cgamename\s*=\s*\"([^"\\]*(?:\\.[^"\\]*)*)\""#;
     let re = regex::Regex::new(LINE_WITH_GAMENAME_RE).unwrap();
-    code.as_ref()
+    let unified = unify_line_endings(code.as_ref());
+    unified
         .lines()
         // skip rows that start with ' or whitespace followed by '
         .filter(|line| !line.trim().starts_with('\''))
@@ -479,13 +480,22 @@ fn extract_game_name<S: AsRef<str>>(code: S) -> Option<String> {
 }
 
 fn requires_pinmame<S: AsRef<str>>(code: S) -> bool {
-    let lower = code.as_ref().to_lowercase();
+    let unified = unify_line_endings(code.as_ref());
+    let lower = unified.to_lowercase();
     const RE: &str = r#"sub\s*loadvpm"#;
     let re = regex::Regex::new(RE).unwrap();
     lower
         .lines()
         .filter(|line| !line.trim().starts_with('\''))
         .any(|line| line.contains("loadvpm") && !re.is_match(&line))
+}
+
+/// Some scripts contain \r as line separator. Eg "Monte Carlo (Premier 1987) (10.7) 1.6.vpx"
+/// Therefore we replace all \r\n and \r with \n
+fn unify_line_endings(code: &str) -> String {
+    // Some scripts contain \r as line separator.
+    // Therefore we replace all \r\n and \r with \n
+    code.replace("\r\n", "\n").replace("\r", "\n")
 }
 
 #[cfg(test)]
@@ -756,6 +766,14 @@ LoadVPM "01210000","sys80.vbs",3.10
 '	On Error Resume Next
 "#
         .to_string();
+        assert_eq!(requires_pinmame(code), true);
+    }
+
+    #[test]
+    fn test_requires_pinmame_cr_only_lines_and_commented_sub_loadvpm() {
+        // This code was taken from "Monte Carlo (Premier 1987) (10.7) 1.6.vpx"
+        let code =
+            "LoadVPM \"01210000\", \"sys80.VBS\", 3.1\r\r'Sub LoadVPM(VPMver, VBSfile, VBSver)\r";
         assert_eq!(requires_pinmame(code), true);
     }
 }
