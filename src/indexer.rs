@@ -490,11 +490,9 @@ fn requires_pinmame<S: AsRef<str>>(code: S) -> bool {
         .any(|line| line.contains("loadvpm") && !re.is_match(&line))
 }
 
-/// Some scripts contain \r as line separator. Eg "Monte Carlo (Premier 1987) (10.7) 1.6.vpx"
-/// Therefore we replace all \r\n and \r with \n
+/// Some scripts contain only CR as line separator. Eg "Monte Carlo (Premier 1987) (10.7) 1.6.vpx"
+/// Therefore we replace first all CRLF and then all leftover CR with LF
 fn unify_line_endings(code: &str) -> String {
-    // Some scripts contain \r as line separator.
-    // Therefore we replace all \r\n and \r with \n
     code.replace("\r\n", "\n").replace("\r", "\n")
 }
 
