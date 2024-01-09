@@ -9,6 +9,12 @@ use std::io::{Read, Write};
 use std::path::Path;
 
 #[derive(Debug, PartialEq, Eq, Hash)]
+pub enum LineEndingsResult {
+    NoChanges,
+    Unified,
+}
+
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub enum PatchType {
     DropTarget,
     StandupTarget,
@@ -35,6 +41,30 @@ pub fn patch_vbs_file(vbs_path: &Path) -> io::Result<HashSet<PatchType>> {
     Ok(applied)
 }
 
+/**
+ * This function will unify the line endings of a vbs file to \r\n
+ * This is needed because some vbs files have mixed line endings, which causes
+ * the vbs parser to fail.
+ * One example is [Aztec (Williams 1976) 1.3 by jipeji16](https://www.vpforums.org/index.php?app=downloads&showfile=15768)
+ */
+pub fn unify_line_endings_vbs_file(vbs_path: &Path) -> io::Result<LineEndingsResult> {
+    // TODO we probably need to ensure proper encoding here in stead of going for utf8
+    let mut file = File::open(&vbs_path)?;
+    let mut text = String::new();
+    file.read_to_string(&mut text)?;
+
+    let patched_text = unify_line_endings(&text);
+
+    let mut file = File::create(&vbs_path)?;
+    file.write_all(patched_text.as_bytes())?;
+
+    if text != patched_text {
+        Ok(LineEndingsResult::Unified)
+    } else {
+        Ok(LineEndingsResult::NoChanges)
+    }
+}
+
 pub fn patch_script(script: String) -> (String, HashSet<PatchType>) {
     // TODO we could work with regex::bytes::Regex instead to avoid the conversion to utf8
 
@@ -53,6 +83,16 @@ pub fn patch_script(script: String) -> (String, HashSet<PatchType>) {
 
     //todo!("implement patching");
     (patched_script, applied_patches)
+}
+
+fn unify_line_endings(script: &String) -> String {
+    // first replace all \r\n with \n
+    // then replace all \r with \n (this is the main issue, as some files have mixed \r\n and \r)
+    // then go back to standard vbs line endings \r\n
+    script
+        .replace("\r\n", "\n")
+        .replace("\r", "\n")
+        .replace("\n", "\r\n")
 }
 
 fn patch_standup_target_array(script: String) -> String {
@@ -148,6 +188,16 @@ fn introduce_class(script: String, marker: &str, fallback_marker: &str, class_de
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_unify_line_endings() {
+        let script = "first\nsecond\r\nthird\rfourth";
+        let expected = "first\r\nsecond\r\nthird\r\nfourth";
+
+        let result = unify_line_endings(&script.to_string());
+
+        assert_eq!(expected, result);
+    }
 
     #[test]
     fn test_introduce_class_at_marker() {

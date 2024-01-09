@@ -16,7 +16,8 @@ use is_executable::IsExecutable;
 
 use crate::config::ResolvedConfig;
 use crate::indexer::{IndexError, IndexedTable, Progress};
-use crate::patcher::patch_vbs_file;
+use crate::patcher::LineEndingsResult::{NoChanges, Unified};
+use crate::patcher::{patch_vbs_file, unify_line_endings_vbs_file};
 use crate::{
     diff_script, indexer, run_diff,
     vpx::{extractvbs, vbs_path_for, ExtractResult},
@@ -34,13 +35,14 @@ enum TableOption {
     ExtractVBS,
     EditVBS,
     PatchVBS,
+    UnifyLineEndings,
     ShowVBSDiff,
     CreateVBSPatch,
     // ClearNVRAM,
 }
 
 impl TableOption {
-    const ALL: [TableOption; 9] = [
+    const ALL: [TableOption; 10] = [
         TableOption::Launch,
         TableOption::LaunchFullscreen,
         TableOption::LaunchWindowed,
@@ -48,6 +50,7 @@ impl TableOption {
         TableOption::ExtractVBS,
         TableOption::EditVBS,
         TableOption::PatchVBS,
+        TableOption::UnifyLineEndings,
         TableOption::ShowVBSDiff,
         TableOption::CreateVBSPatch,
         // TableOption::ClearNVRAM,
@@ -62,8 +65,9 @@ impl TableOption {
             4 => Some(TableOption::ExtractVBS),
             5 => Some(TableOption::EditVBS),
             6 => Some(TableOption::PatchVBS),
-            7 => Some(TableOption::ShowVBSDiff),
-            8 => Some(TableOption::CreateVBSPatch),
+            7 => Some(TableOption::UnifyLineEndings),
+            8 => Some(TableOption::ShowVBSDiff),
+            9 => Some(TableOption::CreateVBSPatch),
             // 9 => Some(TableOption::ClearNVRAM),
             _ => None,
         }
@@ -78,6 +82,7 @@ impl TableOption {
             TableOption::ExtractVBS => "VBScript > Extract".to_string(),
             TableOption::EditVBS => "VBScript > Edit".to_string(),
             TableOption::PatchVBS => "VBScript > Patch typical standalone issues".to_string(),
+            TableOption::UnifyLineEndings => "VBScript > Unify line endings".to_string(),
             TableOption::ShowVBSDiff => "VBScript > Diff".to_string(),
             TableOption::CreateVBSPatch => "VBScript > Create patch file".to_string(),
             // TableOption::ClearNVRAM => "Clear NVRAM".to_string(),
@@ -191,6 +196,30 @@ pub fn frontend(
                                         vbs_path.to_string_lossy()
                                     ));
                                 }
+                            }
+                            Err(err) => {
+                                let msg = format!("Unable to patch VBS: {}", err);
+                                prompt(msg.truecolor(255, 125, 0).to_string());
+                            }
+                        }
+                    }
+                    Some(TableOption::UnifyLineEndings) => {
+                        let vbs_path = match extractvbs(selected_path, false, Some("vbs")) {
+                            ExtractResult::Existed(path) => path,
+                            ExtractResult::Extracted(path) => path,
+                        };
+                        match unify_line_endings_vbs_file(&vbs_path) {
+                            Ok(NoChanges) => {
+                                prompt(
+                                    "No changes applied as file has correct line endings"
+                                        .to_string(),
+                                );
+                            }
+                            Ok(Unified) => {
+                                prompt(format!(
+                                    "Unified line endings in VBS file at {}",
+                                    vbs_path.to_string_lossy()
+                                ));
                             }
                             Err(err) => {
                                 let msg = format!("Unable to patch VBS: {}", err);
