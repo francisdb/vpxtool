@@ -394,9 +394,9 @@ fn display_table_line(table: &IndexedTable) -> String {
 
 fn display_table_line_full(table: &IndexedTable, roms: &HashSet<String>) -> String {
     let base = display_table_line(table);
-    let suffix = match &table.game_name {
+    let gamename_suffix = match &table.game_name {
         Some(name) => {
-            let rom_found = roms.contains(&name.to_lowercase());
+            let rom_found = table.local_rom_path.is_some() || roms.contains(&name.to_lowercase());
             if rom_found {
                 format!(" - [{}]", name.dimmed())
             } else {
@@ -411,7 +411,11 @@ fn display_table_line_full(table: &IndexedTable, roms: &HashSet<String>) -> Stri
         }
         None => "".to_string(),
     };
-    format!("{}{}", base, suffix)
+    let b2s_suffix = match &table.b2s_path {
+        Some(_) => " ▀".dimmed(),
+        None => "".into(),
+    };
+    format!("{}{}{}", base, gamename_suffix, b2s_suffix)
 }
 
 fn capitalize_first_letter(s: &str) -> String {
