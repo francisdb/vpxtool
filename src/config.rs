@@ -36,18 +36,41 @@ pub struct ResolvedConfig {
 }
 
 impl ResolvedConfig {
-    pub fn rom_folder(&self) -> PathBuf {
+    pub fn global_pinmame_folder(&self) -> PathBuf {
+        // first we try to read the ini file
+        let ini_file = self.vpinball_ini_file();
+        if ini_file.exists() {
+            let ini = ini::Ini::load_from_file(ini_file).unwrap();
+            let standalone_section = ini.section(Some("Standalone")).unwrap();
+            if let Some(value) = standalone_section.get("PinMAMEPath") {
+                // if the path exists we return it
+                let path = PathBuf::from(value);
+                if path.exists() {
+                    return path;
+                }
+            }
+        }
+
         if cfg!(target_os = "windows") {
-            // return the roms folder in the same directory as the vpx executable
-            return self
-                .vpx_executable
-                .parent()
-                .unwrap()
-                .join("VPinMAME")
-                .join("roms");
+            self.vpx_executable.parent().unwrap().join("VPinMAME")
         } else {
-            // return the roms folder in the home directory
-            return dirs::home_dir().unwrap().join(".pinmame").join("roms");
+            dirs::home_dir().unwrap().join(".pinmame")
+        }
+    }
+
+    pub fn global_pinmame_rom_folder(&self) -> PathBuf {
+        self.global_pinmame_folder().join("roms")
+    }
+
+    pub fn vpinball_ini_file(&self) -> PathBuf {
+        if cfg!(target_os = "windows") {
+            // in the same directory as the vpx executable
+            return self.vpx_executable.parent().unwrap().join("VPinballX.ini");
+        } else {
+            return dirs::home_dir()
+                .unwrap()
+                .join(".vpinball")
+                .join("VPinballX.ini");
         }
     }
 }

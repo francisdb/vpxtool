@@ -36,6 +36,7 @@ const CMD_FRONTEND: &'static str = "frontend";
 const CMD_DIFF: &'static str = "diff";
 const CMD_EXTRACT: &'static str = "extract";
 const CMD_EXTRACT_VBS: &'static str = "extractvbs";
+const CMD_IMPORT_VBS: &'static str = "importvbs";
 
 const CMD_SIMPLE_FRONTEND: &'static str = "simplefrontend";
 
@@ -49,6 +50,7 @@ const CMD_CONFIG_EDIT: &'static str = "edit";
 const CMD_SCRIPT: &'static str = "script";
 const CMD_SCRIPT_SHOW: &'static str = "show";
 const CMD_SCRIPT_EXTRACT: &'static str = "extract";
+const CMD_SCRIPT_IMPORT: &'static str = "import";
 const CMD_SCRIPT_PATCH: &'static str = "patch";
 const CMD_SCRIPT_EDIT: &'static str = "edit";
 
@@ -113,16 +115,19 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
         Some((CMD_FRONTEND, _sub_matches)) => {
             let (config_path, config) = config::load_or_setup_config()?;
             println!("Using config file {}", config_path.display())?;
-            let roms = indexer::find_roms(&config.rom_folder())?;
+            let roms = indexer::find_roms(&config.global_pinmame_rom_folder())?;
             if roms.is_empty() {
-                let warning =
-                    format!("No roms found in {}", config.rom_folder().display()).yellow();
+                let warning = format!(
+                    "No roms found in {}",
+                    config.global_pinmame_rom_folder().display()
+                )
+                .yellow();
                 eprintln!("{}", warning)?;
             } else {
                 println!(
                     "Found {} roms in {}",
                     roms.len(),
-                    config.rom_folder().display()
+                    config.global_pinmame_rom_folder().display()
                 )?;
             }
             match frontend::frontend_index(&config, true) {
@@ -156,16 +161,19 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
         Some((CMD_SIMPLE_FRONTEND, _sub_matches)) => {
             let (config_path, config) = config::load_or_setup_config()?;
             println!("Using config file {}", config_path.display())?;
-            let roms = indexer::find_roms(&config.rom_folder())?;
+            let roms = indexer::find_roms(&config.global_pinmame_rom_folder())?;
             if roms.is_empty() {
-                let warning =
-                    format!("No roms found in {}", config.rom_folder().display()).yellow();
+                let warning = format!(
+                    "No roms found in {}",
+                    config.global_pinmame_rom_folder().display()
+                )
+                .yellow();
                 eprintln!("{}", warning)?;
             } else {
                 println!(
                     "Found {} roms in {}",
                     roms.len(),
-                    config.rom_folder().display()
+                    config.global_pinmame_rom_folder().display()
                 )?;
             }
             match frontend::frontend_index(&config, true) {
@@ -276,6 +284,25 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 }
                 Ok(ExitCode::SUCCESS)
             }
+            Some((CMD_SCRIPT_IMPORT, sub_matches)) => {
+                let path = sub_matches
+                    .get_one::<String>("VPXPATH")
+                    .map(|s| s.as_str())
+                    .unwrap_or_default();
+
+                let expanded_path = expand_path(path)?;
+                match importvbs(&expanded_path, None) {
+                    Ok(vbs_path) => {
+                        println!("IMPORTED {}", vbs_path.display())?;
+                        Ok(ExitCode::SUCCESS)
+                    }
+                    Err(e) => {
+                        let warning = format!("Error importing vbs: {}", e).red();
+                        eprintln!("{}", warning)?;
+                        Ok(ExitCode::FAILURE)
+                    }
+                }
+            }
             Some((CMD_SCRIPT_EDIT, sub_matches)) => {
                 let path = sub_matches
                     .get_one::<String>("VPXPATH")
@@ -372,7 +399,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 .map(|v| v.as_str())
                 .collect::<Vec<_>>();
             for path in paths {
-                let expanded_path = PathBuf::from(expand_path(path)?);
+                let expanded_path = expand_path(path)?;
                 match extractvbs(&expanded_path, overwrite, None) {
                     ExtractResult::Existed(vbs_path) => {
                         let warning =
@@ -386,9 +413,9 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             }
             Ok(ExitCode::SUCCESS)
         }
-        Some(("importvbs", sub_matches)) => {
+        Some((CMD_IMPORT_VBS, sub_matches)) => {
             let path: &str = sub_matches.get_one::<String>("VPXPATH").unwrap().as_str();
-            let expanded_path = PathBuf::from(expand_path(path)?);
+            let expanded_path = expand_path(path)?;
             match importvbs(&expanded_path, None) {
                 Ok(vbs_path) => {
                     println!("IMPORTED {}", vbs_path.display())?;
@@ -409,7 +436,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 .map(|v| v.as_str())
                 .collect::<Vec<_>>();
             for path in paths {
-                let expanded_path = PathBuf::from(expand_path(path)?);
+                let expanded_path = expand_path(path)?;
                 match verify(&expanded_path) {
                     VerifyResult::Ok(vbs_path) => {
                         println!("{OK} {}", vbs_path.display())?;
@@ -594,6 +621,14 @@ fn build_command() -> Command {
                         ),
                 )
                 .subcommand(
+                    Command::new(CMD_SCRIPT_IMPORT)
+                        .about("Import the table vpx script")
+                        .arg(
+                            arg!(<VPXPATH> "The path to the vpx file")
+                                .required(true),
+                        ),
+                )
+                .subcommand(
                     Command::new(CMD_SCRIPT_EDIT)
                         .about("Edit the table vpx script")
                         .arg(
@@ -652,7 +687,7 @@ fn build_command() -> Command {
                 ),
         )
         .subcommand(
-            Command::new("importvbs")
+            Command::new(CMD_IMPORT_VBS)
                 .about("Imports the vbs next to it into a vpx file")
                 .arg(
                     arg!(<VPXPATH> "The path(s) to the vpx file(s)")

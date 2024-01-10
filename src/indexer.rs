@@ -99,6 +99,8 @@ pub struct IndexedTable {
     pub path: PathBuf,
     pub table_info: IndexedTableInfo,
     pub game_name: Option<String>,
+    pub b2s_path: Option<PathBuf>,
+    pub local_rom_path: Option<PathBuf>,
     pub requires_pinmame: bool,
     pub last_modified: IsoSystemTime,
 }
@@ -393,6 +395,8 @@ fn index_vpx_file(vpx_file_path: &PathWithMetadata) -> io::Result<(PathBuf, Inde
     //  also this sidecar should be part of the cache key
     let game_name = extract_game_name(&code);
     let requires_pinmame = requires_pinmame(&code);
+    let local_rom_path = find_local_rom_path(vpx_file_path, &game_name);
+    let b2s_path = find_b2s_path(vpx_file_path);
 
     let last_modified = last_modified(path).unwrap();
     let indexed_table_info = IndexedTableInfo::from(table_info);
@@ -401,10 +405,46 @@ fn index_vpx_file(vpx_file_path: &PathWithMetadata) -> io::Result<(PathBuf, Inde
         path: path.clone(),
         table_info: indexed_table_info,
         game_name,
+        b2s_path,
+        local_rom_path,
         requires_pinmame,
         last_modified: IsoSystemTime(last_modified),
     };
     Ok((indexed.path.clone(), indexed))
+}
+
+fn find_local_rom_path(
+    vpx_file_path: &PathWithMetadata,
+    game_name: &Option<String>,
+) -> Option<PathBuf> {
+    game_name.as_ref().and_then(|game_name| {
+        let rom_file_name = format!("{}.zip", game_name);
+        let rom_path = vpx_file_path
+            .path
+            .parent()
+            .unwrap()
+            .join("pinmame")
+            .join("roms")
+            .join(rom_file_name);
+        if rom_path.exists() {
+            Some(rom_path)
+        } else {
+            None
+        }
+    })
+}
+
+fn find_b2s_path(vpx_file_path: &PathWithMetadata) -> Option<PathBuf> {
+    let b2s_file_name = format!(
+        "{}.directb2s",
+        vpx_file_path.path.file_stem().unwrap().to_string_lossy()
+    );
+    let b2s_path = vpx_file_path.path.parent().unwrap().join(b2s_file_name);
+    if b2s_path.exists() {
+        Some(b2s_path)
+    } else {
+        None
+    }
 }
 
 /// If there is a file with the same name and extension .vbs we pick that code
@@ -592,6 +632,8 @@ mod tests {
                 properties: HashMap::new(),
             },
             game_name: Some("testrom".to_string()),
+            b2s_path: Some(PathBuf::from("test.b2s")),
+            local_rom_path: Some(PathBuf::from("testrom.zip")),
             requires_pinmame: true,
             last_modified: IsoSystemTime(SystemTime::UNIX_EPOCH),
         });
