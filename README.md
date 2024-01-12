@@ -1,9 +1,11 @@
 # vpxtool
+
 Cross-platform console based utility for the vpinball ecosystem
 
 ## Install
 
-Download the latest release for your operating system at https://github.com/francisdb/vpxtool/releases, extract it and if wanted copy or symlink the binary to `$HOME/bin` to put in on your path
+Download the latest release for your operating system at https://github.com/francisdb/vpxtool/releases, extract it and
+if wanted copy or symlink the binary to `$HOME/bin` to put in on your path
 
 ## Usage
 
@@ -50,6 +52,13 @@ Options:
   -r, --recursive  Recursively index subdirectories
   -h, --help       Print help
 ```
+
+## Frontend
+
+Vpxtool can act as a frontend for launching vpx files. It will index a directory of vpx files and then present a menu to
+launch them.
+
+![Frontend](docs/frontend.png)
 
 ## Configuration
 
