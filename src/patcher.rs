@@ -171,7 +171,6 @@ fn introduce_class(script: String, marker: &str, fallback_marker: &str, class_de
         let re = Regex::new(regex.as_ref()).unwrap();
         if re.is_match(&script) {
             re.replace(&script, |caps: &regex::Captures| {
-                println!("caps: {:?}", caps);
                 let first = caps.get(1).unwrap().as_str();
                 let second = caps.get(2).unwrap().as_str();
                 format!("\r\n{}\r\n{}{}", class_def, first, second)

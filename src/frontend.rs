@@ -319,16 +319,19 @@ fn launch(selected_path: &PathBuf, vpinball_executable: &Path, fullscreen: Optio
                 //println!("Table exited normally");
             }
             Some(11) => {
-                eprintln!("{} Table exited with segfault, you might want to report this to the vpinball team.", CRASH);
+                prompt(format!("{} Visual Pinball exited with segfault, you might want to report this to the vpinball team.", CRASH));
             }
             Some(139) => {
-                eprintln!("{} Table exited with segfault, you might want to report this to the vpinball team.", CRASH);
+                prompt(format!("{} Visual Pinball exited with segfault, you might want to report this to the vpinball team.", CRASH));
             }
             Some(code) => {
-                eprintln!("Table exited with code {}", code);
+                prompt(format!(
+                    "{} Visual Pinball exited with code {}",
+                    CRASH, code
+                ));
             }
             None => {
-                eprintln!("Table exited with unknown code");
+                prompt("Visual Pinball exited with unknown code");
             }
         },
         Err(e) => {
