@@ -418,7 +418,7 @@ fn find_local_rom_path(
     game_name: &Option<String>,
 ) -> Option<PathBuf> {
     game_name.as_ref().and_then(|game_name| {
-        let rom_file_name = format!("{}.zip", game_name);
+        let rom_file_name = format!("{}.zip", game_name.to_lowercase());
         let rom_path = vpx_file_path
             .path
             .parent()
