@@ -39,7 +39,7 @@ figment = { version = "0.10", features = ["toml", "env"] }
 toml = "0.8.8"
 is_executable = "1.0.1"
 regex = { version = "1.10.2", features = [] }
-vpin = { version = "0.7.0" }
+vpin = { version = "0.8.0" }
 rust-ini = "0.20.0"
 
 [dev-dependencies]
