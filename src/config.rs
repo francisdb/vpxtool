@@ -319,14 +319,27 @@ mod tests {
         file.write_all(b"vpx_executable = \"/tmp/test/vpinball\"")?;
 
         let config = read_config(&config_file)?;
-        assert_eq!(
-            config,
-            ResolvedConfig {
-                vpx_executable: PathBuf::from("/tmp/test/vpinball"),
-                tables_folder: PathBuf::from("/tmp/test/tables"),
-                tables_index_path: PathBuf::from("/tmp/test/tables/vpxtool_index.json"),
-            }
-        );
+
+        if cfg!(target_os = "macos") {
+            let expected_tables_dir = dirs::home_dir().unwrap().join(".vpinball").join("tables");
+            assert_eq!(
+                config,
+                ResolvedConfig {
+                    vpx_executable: PathBuf::from("/tmp/test/vpinball"),
+                    tables_folder: expected_tables_dir.clone(),
+                    tables_index_path: expected_tables_dir.join("vpxtool_index.json"),
+                }
+            );
+        } else {
+            assert_eq!(
+                config,
+                ResolvedConfig {
+                    vpx_executable: PathBuf::from("/tmp/test/vpinball"),
+                    tables_folder: PathBuf::from("/tmp/test/tables"),
+                    tables_index_path: PathBuf::from("/tmp/test/tables/vpxtool_index.json"),
+                }
+            );
+        }
         Ok(())
     }
 }
