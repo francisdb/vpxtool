@@ -254,19 +254,22 @@ fn write_config(config_file: &PathBuf, config: &Config) -> io::Result<()> {
 }
 
 pub fn default_tables_root(vpx_executable: &PathBuf) -> PathBuf {
-    vpx_executable.parent().unwrap().join("tables")
+    // when on macos we assume that the tables are in ~/.vpinball/tables
+    if cfg!(target_os = "macos") {
+        return dirs::home_dir().unwrap().join(".vpinball").join("tables");
+    } else {
+        vpx_executable.parent().unwrap().join("tables")
+    }
 }
 
 fn default_vpinball_executable_detection() -> PathBuf {
-    // TODO: Improve the executable detection.
-    let mut local = env::current_dir().unwrap();
-
     if cfg!(target_os = "windows") {
         // baller installer default
         let dir = PathBuf::from("c:\\vPinball\\VisualPinball");
         let exe = dir.join("VPinballX64.exe");
 
         // Check current directory
+        let mut local = env::current_dir().unwrap();
         if local.join("VPinballX64.exe").exists() {
             local.join("VPinballX64.exe")
         } else if local.join("VPinballX.exe").exists() {
@@ -276,7 +279,18 @@ fn default_vpinball_executable_detection() -> PathBuf {
         } else {
             dir.join("VPinballX.exe")
         }
+    } else if cfg!(target_os = "macos") {
+        let dmg_install =
+            PathBuf::from("/Applications/VPinballX_GL.app/Contents/MacOS/VPinballX_GL");
+        if dmg_install.exists() {
+            dmg_install
+        } else {
+            let mut local = env::current_dir().unwrap();
+            local = local.join("VPinballX_GL");
+            local
+        }
     } else {
+        let mut local = env::current_dir().unwrap();
         local = local.join("VPinballX_GL");
 
         if local.exists() {
