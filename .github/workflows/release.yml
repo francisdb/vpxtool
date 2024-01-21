@@ -1,9 +1,5 @@
 name: Release
-on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+on: [ push ]
 permissions:
   contents: write
 jobs:
@@ -63,6 +59,9 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.platform.target }}
+      - name: Install gcc-aarch64-linux-gnu
+        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+        if: matrix.platform.target == 'aarch64-unknown-linux-musl'
       - name: Build binary (*nix)
         shell: bash
         run: |
