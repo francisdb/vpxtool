@@ -1,4 +1,5 @@
 # https://github.com/rust-lang/rust/issues/28924
 # Make sure the correct linker is used for cross-compiling
 [target.aarch64-unknown-linux-musl]
-linker = "aarch64-linux-musl-gcc"
+linker = "aarch64-linux-gnu-gcc"
+rustflags = ["-C", "target-feature=+crt-static", "-C", "link-arg=-lgcc"]
