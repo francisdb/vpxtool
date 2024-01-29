@@ -34,7 +34,7 @@ serde = { version = "1.0.196", features = ["derive"] }
 serde_json = { version = "1.0.112", features = ["preserve_order"] }
 shellexpand = "3.1.0"
 walkdir = "2.4.0"
-wild = "2.2.0"
+wild = "2.2.1"
 figment = { version = "0.10", features = ["toml", "env"] }
 toml = "0.8.8"
 is_executable = "1.0.1"
