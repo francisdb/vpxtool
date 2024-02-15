@@ -36,7 +36,7 @@ shellexpand = "3.1.0"
 walkdir = "2.4.0"
 wild = "2.2.1"
 figment = { version = "0.10", features = ["toml", "env"] }
-toml = "0.8.9"
+toml = "0.8.10"
 is_executable = "1.0.1"
 regex = { version = "1.10.3", features = [] }
 vpin = { version = "0.8.0" }
