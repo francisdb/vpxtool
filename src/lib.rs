@@ -57,11 +57,13 @@ const CMD_SCRIPT_EDIT: &'static str = "edit";
 pub struct ProgressBarProgress {
     pb: ProgressBar,
 }
+
 impl ProgressBarProgress {
     fn new(pb: ProgressBar) -> Self {
         Self { pb }
     }
 }
+
 impl Progress for ProgressBarProgress {
     fn set_length(&self, len: u64) {
         if len > 0 {
@@ -535,7 +537,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
 }
 
 fn build_command() -> Command {
-    // to allow for non static strings in clap
+    // to allow for non-static strings in clap
     // I had to enable the "string" module
     // is this considered a bad idea?
     Command::new("vpxtool")
@@ -543,6 +545,7 @@ fn build_command() -> Command {
         .author("Francis DB")
         .about("Extracts and assembles vpx files")
         .arg_required_else_help(true)
+        .before_help(format!("Vpxtool {GIT_VERSION}"))
         .subcommand(
             Command::new(CMD_INFO)
                 .about("Show information about a vpx file")
