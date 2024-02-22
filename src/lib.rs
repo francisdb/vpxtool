@@ -123,7 +123,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     "No roms found in {}",
                     config.global_pinmame_rom_folder().display()
                 )
-                    .yellow();
+                .yellow();
                 eprintln!("{}", warning)?;
             } else {
                 println!(
@@ -149,7 +149,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                         "Configured tables folder does not exist: {}",
                         path.display()
                     )
-                        .red();
+                    .red();
                     eprintln!("{}", warning)?;
                     Ok(ExitCode::FAILURE)
                 }
@@ -169,7 +169,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     "No roms found in {}",
                     config.global_pinmame_rom_folder().display()
                 )
-                    .yellow();
+                .yellow();
                 eprintln!("{}", warning)?;
             } else {
                 println!(
@@ -195,7 +195,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                         "Configured tables folder does not exist: {}",
                         path.display()
                     )
-                        .red();
+                    .red();
                     eprintln!("{}", warning)?;
                     Ok(ExitCode::FAILURE)
                 }
@@ -234,7 +234,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 ProgressStyle::with_template(
                     "{spinner:.green} [{bar:.cyan/blue}] {pos}/{human_len} ({eta})",
                 )
-                    .unwrap(),
+                .unwrap(),
             );
             let progress = ProgressBarProgress::new(pb);
             let index = indexer::index_folder(
@@ -243,7 +243,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 &tables_index_path,
                 &progress,
             )
-                .unwrap();
+            .unwrap();
             progress.finish_and_clear();
             println!(
                 "Indexed {} vpx files into {}",
