@@ -73,6 +73,7 @@ jobs:
           & ${{ matrix.platform.cargo_command }} build --locked --release --target ${{ matrix.platform.target }}
         if: contains(matrix.platform.os, 'windows')
       - name: Set full archive name as env variable
+        shell: bash
         run: |
           VERSION=$(echo ${GITHUB_REF#refs/tags/} | sed 's/\//-/g')
           EXTENSION="tar.gz"
