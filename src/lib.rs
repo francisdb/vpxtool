@@ -35,6 +35,7 @@ const CMD_INFO: &'static str = "info";
 const CMD_FRONTEND: &'static str = "frontend";
 const CMD_DIFF: &'static str = "diff";
 const CMD_EXTRACT: &'static str = "extract";
+const CMD_ASSEMBLE: &'static str = "assemble";
 const CMD_EXTRACT_VBS: &'static str = "extractvbs";
 const CMD_IMPORT_VBS: &'static str = "importvbs";
 
@@ -393,6 +394,39 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             })?;
             Ok(ExitCode::SUCCESS)
         }
+        Some((CMD_ASSEMBLE, sub_matches)) => {
+            let dir_path = sub_matches
+                .get_one::<String>("DIRPATH")
+                .map(|s| s.as_str())
+                .unwrap_or_default();
+            let expanded_dir_path = expand_path(dir_path)?;
+            let vpx_path = expanded_dir_path.with_extension("vpx");
+            if vpx_path.exists() {
+                let confirmed = confirm(
+                    format!("{} already exists.", vpx_path.display()),
+                    "Do you want to overwrite it?".to_string(),
+                )?;
+                if !confirmed {
+                    println!("Aborted")?;
+                    return Ok(ExitCode::SUCCESS);
+                }
+                std::fs::remove_file(&vpx_path)?;
+            }
+            let result = {
+                let vpx = expanded::read(&expanded_dir_path)?;
+                vpx::write(&vpx_path, &vpx)
+            };
+            match result {
+                Ok(_) => {
+                    println!("Successfully assembled to {}", vpx_path.display())?;
+                    Ok(ExitCode::SUCCESS)
+                }
+                Err(e) => {
+                    println!("Failed to assemble: {}", e)?;
+                    Ok(ExitCode::FAILURE)
+                }
+            }
+        }
         Some((CMD_EXTRACT_VBS, sub_matches)) => {
             let overwrite = sub_matches.get_flag("OVERWRITE");
             let paths: Vec<&str> = sub_matches
@@ -708,7 +742,7 @@ fn build_command() -> Command {
                 ),
         )
         .subcommand(
-            Command::new("assemble")
+            Command::new(CMD_ASSEMBLE)
                 .about("Assembles a vpx file")
                 .arg(arg!(<DIRPATH> "The path to the vpx structure").required(true)),
         )
@@ -1027,27 +1061,36 @@ pub fn ls(vpx_file_path: &Path) -> io::Result<()> {
         .collect()
 }
 
+pub fn confirm(msg: String, yes_no_question: String) -> io::Result<bool> {
+    // TODO do we need to check for terminal here?
+    //   let use_color = stdout().is_terminal();
+    let warning = msg.truecolor(255, 125, 0);
+    println!("{}", warning)?;
+    println!("{} (y/n)", yes_no_question)?;
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+    Ok(input.trim() == "y")
+}
+
 pub fn extract(vpx_file_path: &Path, yes: bool) -> io::Result<ExitCode> {
     let root_dir_path_str = vpx_file_path.with_extension("");
     let root_dir_path = Path::new(&root_dir_path_str);
 
-    let mut root_dir = std::fs::DirBuilder::new();
-    root_dir.recursive(true);
     // ask for confirmation if the directory exists
     if root_dir_path.exists() && !yes {
-        // TODO do we need to check for terminal here?
-        //   let use_color = stdout().is_terminal();
-        let warning =
-            format!("Directory {} already exists", root_dir_path.display()).truecolor(255, 125, 0);
-        println!("{}", warning)?;
-        println!("Do you want to continue exporting? (y/n)")?;
-        let mut input = String::new();
-        std::io::stdin().read_line(&mut input).unwrap();
-        if input.trim() != "y" {
-            println!("Aborting")?;
+        let confirmed = confirm(
+            format!("Directory {} already exists", root_dir_path.display()),
+            "Do you want to continue extracting?".to_string(),
+        )?;
+        if !confirmed {
+            println!("Aborted")?;
             Ok(ExitCode::SUCCESS)
         } else {
-            match expanded::extract(vpx_file_path, root_dir_path) {
+            let result = {
+                let vpx = vpx::read(&vpx_file_path.to_path_buf())?;
+                expanded::write(&vpx, &root_dir_path)
+            };
+            match result {
                 Ok(_) => {
                     println!("Successfully extracted to {}", root_dir_path.display())?;
                     Ok(ExitCode::SUCCESS)
@@ -1059,7 +1102,14 @@ pub fn extract(vpx_file_path: &Path, yes: bool) -> io::Result<ExitCode> {
             }
         }
     } else {
-        match expanded::extract(vpx_file_path, root_dir_path) {
+        let result = {
+            let mut root_dir = std::fs::DirBuilder::new();
+            root_dir.recursive(true);
+            root_dir.create(&root_dir_path)?;
+            let vpx = vpx::read(&vpx_file_path.to_path_buf())?;
+            expanded::write(&vpx, &root_dir_path)
+        };
+        match result {
             Ok(_) => {
                 println!("Successfully extracted to {}", root_dir_path.display())?;
                 Ok(ExitCode::SUCCESS)
