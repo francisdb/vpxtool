@@ -269,7 +269,7 @@ fn default_vpinball_executable_detection() -> PathBuf {
         let exe = dir.join("VPinballX64.exe");
 
         // Check current directory
-        let mut local = env::current_dir().unwrap();
+        let local = env::current_dir().unwrap();
         if local.join("VPinballX64.exe").exists() {
             local.join("VPinballX64.exe")
         } else if local.join("VPinballX.exe").exists() {
