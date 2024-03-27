@@ -16,6 +16,7 @@ use std::path::{Path, PathBuf};
 use std::process::{exit, ExitCode};
 use vpin::directb2s::read;
 use vpin::vpx;
+use vpin::vpx::jsonmodel::{info_to_json, json_to_info};
 use vpin::vpx::{expanded, extractvbs, importvbs, tableinfo, verify, ExtractResult, VerifyResult};
 
 pub mod config;
@@ -31,7 +32,6 @@ const GIT_VERSION: &str = git_version!(args = ["--tags", "--always", "--dirty=-m
 const OK: Emoji = Emoji("✅", "[launch]");
 const NOK: Emoji = Emoji("❌", "[crash]");
 
-const CMD_INFO: &'static str = "info";
 const CMD_FRONTEND: &'static str = "frontend";
 const CMD_DIFF: &'static str = "diff";
 const CMD_EXTRACT: &'static str = "extract";
@@ -54,6 +54,11 @@ const CMD_SCRIPT_EXTRACT: &'static str = "extract";
 const CMD_SCRIPT_IMPORT: &'static str = "import";
 const CMD_SCRIPT_PATCH: &'static str = "patch";
 const CMD_SCRIPT_EDIT: &'static str = "edit";
+
+const CMD_INFO: &'static str = "info";
+const CMD_INFO_SHOW: &'static str = "show";
+const CMD_INFO_EXTRACT: &'static str = "extract";
+const CMD_INFO_IMPORT: &'static str = "import";
 
 pub struct ProgressBarProgress {
     pb: ProgressBar,
@@ -90,15 +95,31 @@ pub fn run() -> io::Result<ExitCode> {
 
 fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
     match matches.subcommand() {
-        Some((CMD_INFO, sub_matches)) => {
-            let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
-            let path = path.unwrap_or("");
-            let expanded_path = expand_path(path)?;
-            println!("showing info for {}", expanded_path.display())?;
-            let json = sub_matches.get_flag("JSON");
-            info(&expanded_path, json).unwrap();
-            Ok(ExitCode::SUCCESS)
-        }
+        Some((CMD_INFO, sub_matches)) => match sub_matches.subcommand() {
+            Some((CMD_INFO_SHOW, sub_matches)) => {
+                let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
+                let path = path.unwrap_or("");
+                let expanded_path = expand_path(path)?;
+                println!("showing info for {}", expanded_path.display())?;
+                info_show(&expanded_path)?;
+                Ok(ExitCode::SUCCESS)
+            }
+            Some((CMD_INFO_EXTRACT, sub_matches)) => {
+                let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
+                let path = path.unwrap_or("");
+                let expanded_path = expand_path(path)?;
+                println!("extracting info for {}", expanded_path.display())?;
+                info_extract(&expanded_path)
+            }
+            Some((CMD_INFO_IMPORT, sub_matches)) => {
+                let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
+                let path = path.unwrap_or("");
+                let expanded_path = expand_path(path)?;
+                println!("importing info for {}", expanded_path.display())?;
+                info_import(&expanded_path)
+            }
+            _ => unreachable!(),
+        },
         Some((CMD_DIFF, sub_matches)) => {
             let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
             let path = path.unwrap_or("");
@@ -403,7 +424,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             let vpx_path = expanded_dir_path.with_extension("vpx");
             if vpx_path.exists() {
                 let confirmed = confirm(
-                    format!("{} already exists.", vpx_path.display()),
+                    format!("\"{}\" already exists.", vpx_path.display()),
                     "Do you want to overwrite it?".to_string(),
                 )?;
                 if !confirmed {
@@ -507,7 +528,10 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     Ok(ExitCode::SUCCESS)
                 }
                 Ok(SetupConfigResult::Existing(config_path)) => {
-                    println!("Config file already exists at {}", config_path.display())?;
+                    println!(
+                        "Config file already exists at \"{}\"",
+                        config_path.display()
+                    )?;
                     Ok(ExitCode::SUCCESS)
                 }
                 Err(e) => {
@@ -582,15 +606,32 @@ fn build_command() -> Command {
         .before_help(format!("Vpxtool {GIT_VERSION}"))
         .subcommand(
             Command::new(CMD_INFO)
-                .about("Show information about a vpx file")
-                .arg(arg!(<VPXPATH> "The path to the vpx file").required(true))
-                .arg(
-                    Arg::new("JSON")
-                        .short('j')
-                        .long("json")
-                        .num_args(0)
-                        .help("Output as JSON"),
-                ),
+                .subcommand_required(true)
+                .about("Vpx table info related commands")
+                .subcommand(
+                    Command::new(CMD_INFO_SHOW)
+                        .about("Show information for a vpx file")
+                        .arg(
+                            arg!(<VPXPATH> "The path to the vpx file")
+                                .required(true),
+                        ),
+                )
+                .subcommand(
+                    Command::new(CMD_INFO_EXTRACT)
+                        .about("Extract information from a vpx file")
+                        .arg(
+                            arg!(<VPXPATH> "The path to the vpx file")
+                                .required(true),
+                        ),
+                )
+                .subcommand(
+                    Command::new(CMD_INFO_IMPORT)
+                        .about("Import information into a vpx file")
+                        .arg(
+                            arg!(<VPXPATH> "The path to the vpx file")
+                                .required(true),
+                        ),
+                )
         )
         .subcommand(
             Command::new(CMD_DIFF)
@@ -972,13 +1013,12 @@ fn expand_path(path: &str) -> io::Result<PathBuf> {
     }
 }
 
-fn info(vpx_file_path: &PathBuf, json: bool) -> io::Result<()> {
+fn info_show(vpx_file_path: &PathBuf) -> io::Result<()> {
     let mut vpx_file = vpx::open(vpx_file_path)?;
     let version = vpx_file.read_version()?;
     // GameData also has a name field that we might want to display here
     // where is this shown in the UI?
     let table_info = vpx_file.read_tableinfo()?;
-    // TODO check the json flag
 
     println!("{:>18} {}", "VPX Version:".green(), version)?;
     println!(
@@ -1054,6 +1094,55 @@ fn info(vpx_file_path: &PathBuf, json: bool) -> io::Result<()> {
     Ok(())
 }
 
+fn info_extract(vpx_file_path: &PathBuf) -> io::Result<ExitCode> {
+    let mut vpx_file = vpx::open(vpx_file_path)?;
+    let table_info = vpx_file.read_tableinfo()?;
+    let custom_info_tags = vpx_file.read_custominfotags()?;
+    let table_info_json = info_to_json(&table_info, &custom_info_tags);
+    let info_file_path = vpx_file_path.with_extension("info.json");
+    if info_file_path.exists() {
+        let confirmed = confirm(
+            format!("File \"{}\" already exists", info_file_path.display()),
+            "Do you want to overwrite the existing file?".to_string(),
+        )?;
+        if !confirmed {
+            println!("Aborted")?;
+            return Ok(ExitCode::SUCCESS);
+        }
+    }
+    let info_file = File::create(&info_file_path)?;
+    serde_json::to_writer_pretty(info_file, &table_info_json)?;
+    println!("Extracted table info to {}", info_file_path.display())?;
+    Ok(ExitCode::SUCCESS)
+}
+
+fn info_import(vpx_file_path: &PathBuf) -> io::Result<ExitCode> {
+    let info_file_path = vpx_file_path.with_extension("info.json");
+    if !info_file_path.exists() {
+        let warning = format!("File \"{}\" does not exist", info_file_path.display());
+        return Err(io::Error::new(io::ErrorKind::NotFound, warning));
+    }
+    let mut info_file = File::open(&info_file_path)?;
+    let json = serde_json::from_reader(&mut info_file).map_err(|e| {
+        io::Error::new(
+            io::ErrorKind::Other,
+            format!(
+                "Failed to parse/read json {}: {}",
+                info_file_path.display(),
+                e
+            ),
+        )
+    })?;
+
+    let (table_info, custom_info_tags) = json_to_info(json, None)?;
+    let mut vpx_file = vpx::open(vpx_file_path)?;
+    // vpx_file.write_custominfotags(&custom_info_tags)?;
+    // vpx_file.write_tableinfo(&table_info)?;
+    // println!("Imported table info from {}", info_file_path.display())?;
+    // Ok(ExitCode::SUCCESS)
+    fail("Not yet implemented")
+}
+
 pub fn ls(vpx_file_path: &Path) -> io::Result<()> {
     expanded::extract_directory_list(vpx_file_path)
         .iter()
@@ -1079,7 +1168,7 @@ pub fn extract(vpx_file_path: &Path, yes: bool) -> io::Result<ExitCode> {
     // ask for confirmation if the directory exists
     if root_dir_path.exists() && !yes {
         let confirmed = confirm(
-            format!("Directory {} already exists", root_dir_path.display()),
+            format!("Directory \"{}\" already exists", root_dir_path.display()),
             "Do you want to continue extracting?".to_string(),
         )?;
         if !confirmed {
