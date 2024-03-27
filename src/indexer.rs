@@ -13,6 +13,7 @@ use std::{
 
 use colored::Colorize;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use vpin::vpx::jsonmodel::json_to_info;
 use walkdir::WalkDir;
 
 use crate::tableinfo::TableInfo;
@@ -389,7 +390,13 @@ pub fn index_vpx_files(vpx_files: &[PathWithMetadata], progress: &impl Progress)
 fn index_vpx_file(vpx_file_path: &PathWithMetadata) -> io::Result<(PathBuf, IndexedTable)> {
     let path = &vpx_file_path.path;
     let mut vpx_file = vpx::open(path)?;
-    let table_info = vpx_file.read_tableinfo()?;
+    // if there's an .info.json file, we should use that instead of the info in the vpx file
+    let info_file_path = path.with_extension("info.json");
+    let table_info = if info_file_path.exists() {
+        read_table_info_json(&info_file_path)
+    } else {
+        vpx_file.read_tableinfo()
+    }?;
     let game_data = vpx_file.read_gamedata()?;
     let code = consider_sidecar_vbs(path, game_data)?;
     //  also this sidecar should be part of the cache key
@@ -411,6 +418,22 @@ fn index_vpx_file(vpx_file_path: &PathWithMetadata) -> io::Result<(PathBuf, Inde
         last_modified: IsoSystemTime(last_modified),
     };
     Ok((indexed.path.clone(), indexed))
+}
+
+fn read_table_info_json(info_file_path: &PathBuf) -> io::Result<TableInfo> {
+    let mut info_file = File::open(&info_file_path)?;
+    let json = serde_json::from_reader(&mut info_file).map_err(|e| {
+        io::Error::new(
+            io::ErrorKind::Other,
+            format!(
+                "Failed to parse/read json {}: {}",
+                info_file_path.display(),
+                e
+            ),
+        )
+    })?;
+    let (table_info, _custom_info_tags) = json_to_info(json, None)?;
+    Ok(table_info)
 }
 
 fn find_local_rom_path(
