@@ -54,12 +54,14 @@ const CMD_SCRIPT_EXTRACT: &'static str = "extract";
 const CMD_SCRIPT_IMPORT: &'static str = "import";
 const CMD_SCRIPT_PATCH: &'static str = "patch";
 const CMD_SCRIPT_EDIT: &'static str = "edit";
+const CMD_SCRIPT_DIFF: &'static str = "diff";
 
 const CMD_INFO: &'static str = "info";
 const CMD_INFO_SHOW: &'static str = "show";
 const CMD_INFO_EXTRACT: &'static str = "extract";
 const CMD_INFO_IMPORT: &'static str = "import";
 const CMD_INFO_EDIT: &'static str = "edit";
+const CMD_INFO_DIFF: &'static str = "diff";
 
 pub struct ProgressBarProgress {
     pb: ProgressBar,
@@ -102,7 +104,8 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 let path = path.unwrap_or("");
                 let expanded_path = expand_path(path)?;
                 println!("showing info for {}", expanded_path.display())?;
-                info_show(&expanded_path)?;
+                let info = info_gather(&expanded_path)?;
+                println!("{}", info)?;
                 Ok(ExitCode::SUCCESS)
             }
             Some((CMD_INFO_EXTRACT, sub_matches)) => {
@@ -127,13 +130,23 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 info_edit(&expanded_path)?;
                 Ok(ExitCode::SUCCESS)
             }
+            Some((CMD_INFO_DIFF, sub_matches)) => {
+                let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
+                let path = path.unwrap_or("");
+                let expanded_path = expand_path(path)?;
+                println!("diffing info for {}", expanded_path.display())?;
+                let diff = info_diff(&expanded_path)?;
+                println!("{}", diff)?;
+                Ok(ExitCode::SUCCESS)
+            }
             _ => unreachable!(),
         },
         Some((CMD_DIFF, sub_matches)) => {
+            // TODO this should diff more than only the script
             let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
             let path = path.unwrap_or("");
             let expanded_path = expand_path(path)?;
-            match diff_script(PathBuf::from(expanded_path)) {
+            match script_diff(PathBuf::from(expanded_path)) {
                 Ok(output) => {
                     println!("{}", output)?;
                     Ok(ExitCode::SUCCESS)
@@ -362,6 +375,17 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     extractvbs(&expanded_vpx_path, false, None);
                     open_or_fail(&vbs_path)
                 }
+            }
+            Some((CMD_SCRIPT_DIFF, sub_matches)) => {
+                let path = sub_matches
+                    .get_one::<String>("VPXPATH")
+                    .map(|s| s.as_str())
+                    .unwrap_or_default();
+
+                let expanded_path = expand_path(path)?;
+                let diff = script_diff(expanded_path)?;
+                println!("{}", diff)?;
+                Ok(ExitCode::SUCCESS)
             }
             Some((CMD_SCRIPT_PATCH, sub_matches)) => {
                 let path = sub_matches
@@ -656,6 +680,14 @@ fn build_command() -> Command {
                             arg!(<VPXPATH> "The path to the vpx file")
                                 .required(true),
                         ),
+                )
+                .subcommand(
+                    Command::new(CMD_INFO_DIFF)
+                        .about("Prints out a diff between the info in the vpx and the sidecar json")
+                        .arg(
+                            arg!(<VPXPATH> "The path to the vpx file")
+                                .required(true),
+                        ),
                 ),
         )
         .subcommand(
@@ -734,6 +766,14 @@ fn build_command() -> Command {
                 .subcommand(
                     Command::new(CMD_SCRIPT_EDIT)
                         .about("Edit the table vpx script")
+                        .arg(
+                            arg!(<VPXPATH> "The path to the vpx file")
+                                .required(true),
+                        ),
+                )
+                .subcommand(
+                    Command::new(CMD_SCRIPT_DIFF)
+                        .about("Prints out a diff between the script in the vpx and the sidecar vbs")
                         .arg(
                             arg!(<VPXPATH> "The path to the vpx file")
                                 .required(true),
@@ -1038,26 +1078,28 @@ fn expand_path(path: &str) -> io::Result<PathBuf> {
     }
 }
 
-fn info_show(vpx_file_path: &PathBuf) -> io::Result<()> {
+fn info_gather(vpx_file_path: &PathBuf) -> io::Result<String> {
     let mut vpx_file = vpx::open(vpx_file_path)?;
     let version = vpx_file.read_version()?;
     // GameData also has a name field that we might want to display here
     // where is this shown in the UI?
     let table_info = vpx_file.read_tableinfo()?;
 
-    println!("{:>18} {}", "VPX Version:".green(), version)?;
-    println!(
-        "{:>18} {}",
+    let mut buffer = String::new();
+
+    buffer.push_str(&format!("{:>18} {}\n", "VPX Version:".green(), version));
+    buffer.push_str(&format!(
+        "{:>18} {}\n",
         "Table Name:".green(),
         table_info.table_name.unwrap_or("[not set]".to_string())
-    )?;
-    println!(
-        "{:>18} {}",
+    ));
+    buffer.push_str(&format!(
+        "{:>18} {}\n",
         "Version:".green(),
         table_info.table_version.unwrap_or("[not set]".to_string())
-    )?;
-    println!(
-        "{:>18} {}{}{}",
+    ));
+    buffer.push_str(&format!(
+        "{:>18} {}{}{}\n",
         "Author:".green(),
         Some(table_info.author_name)
             .map(|s| s.unwrap_or("[not set]".to_string()))
@@ -1074,49 +1116,47 @@ fn info_show(vpx_file_path: &PathBuf) -> io::Result<()> {
             .filter(|s| !s.is_empty())
             .map(|s| format!("{} ", s))
             .unwrap_or_default(),
-    )?;
-    println!(
-        "{:>18} {}",
+    ));
+    buffer.push_str(&format!(
+        "{:>18} {}\n",
         "Save revision:".green(),
         table_info.table_save_rev.unwrap_or("[not set]".to_string())
-    )?;
-    println!(
-        "{:>18} {}",
+    ));
+    buffer.push_str(&format!(
+        "{:>18} {}\n",
         "Save date:".green(),
         table_info
             .table_save_date
             .unwrap_or("[not set]".to_string())
-    )?;
-    println!(
-        "{:>18} {}",
+    ));
+    buffer.push_str(&format!(
+        "{:>18} {}\n",
         "Release Date:".green(),
         table_info.release_date.unwrap_or("[not set]".to_string())
-    )?;
-    println!(
-        "{:>18} {}",
+    ));
+    buffer.push_str(&format!(
+        "{:>18} {}\n",
         "Description:".green(),
         table_info
             .table_description
             .unwrap_or("[not set]".to_string())
-    )?;
-    println!(
-        "{:>18} {}",
+    ));
+    buffer.push_str(&format!(
+        "{:>18} {}\n",
         "Blurb:".green(),
         table_info.table_blurb.unwrap_or("[not set]".to_string())
-    )?;
-    println!(
-        "{:>18} {}",
+    ));
+    buffer.push_str(&format!(
+        "{:>18} {}\n",
         "Rules:".green(),
         table_info.table_rules.unwrap_or("[not set]".to_string())
-    )?;
-    // other properties
-    table_info
-        .properties
-        .iter()
-        .map(|(prop, value)| println!("{:>18}: {}", prop.green(), value))
-        .collect::<io::Result<()>>()?;
+    ));
 
-    Ok(())
+    for (prop, value) in &table_info.properties {
+        buffer.push_str(&format!("{:>18}: {}\n", prop.green(), value));
+    }
+
+    Ok(buffer)
 }
 
 fn info_extract(vpx_file_path: &PathBuf) -> io::Result<ExitCode> {
@@ -1264,7 +1304,7 @@ pub fn extract(vpx_file_path: &Path, yes: bool) -> io::Result<ExitCode> {
     }
 }
 
-pub fn diff_info<P: AsRef<Path>>(vpx_file_path: P) -> io::Result<String> {
+pub fn info_diff<P: AsRef<Path>>(vpx_file_path: P) -> io::Result<String> {
     let expanded_vpx_path = expand_path(vpx_file_path.as_ref().to_str().unwrap())?;
     let info_file_path = expanded_vpx_path.with_extension("info.json");
     let original_info_path = vpx_file_path.as_ref().with_extension("info.original.tmp");
@@ -1286,7 +1326,7 @@ pub fn diff_info<P: AsRef<Path>>(vpx_file_path: P) -> io::Result<String> {
     }
 }
 
-pub fn diff_script<P: AsRef<Path>>(vpx_file_path: P) -> io::Result<String> {
+pub fn script_diff<P: AsRef<Path>>(vpx_file_path: P) -> io::Result<String> {
     // set extension for PathBuf
     let vbs_path = vpx_file_path.as_ref().with_extension("vbs");
     let original_vbs_path = vpx_file_path.as_ref().with_extension("vbs.original.tmp");
