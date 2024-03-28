@@ -13,7 +13,7 @@ use std::fs::{metadata, File};
 use std::io;
 use std::io::{BufReader, Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::{exit, ExitCode};
+use std::process::{exit, ExitCode, ExitStatus};
 use vpin::directb2s::read;
 use vpin::vpx;
 use vpin::vpx::jsonmodel::{info_to_json, json_to_info};
@@ -59,6 +59,7 @@ const CMD_INFO: &'static str = "info";
 const CMD_INFO_SHOW: &'static str = "show";
 const CMD_INFO_EXTRACT: &'static str = "extract";
 const CMD_INFO_IMPORT: &'static str = "import";
+const CMD_INFO_EDIT: &'static str = "edit";
 
 pub struct ProgressBarProgress {
     pb: ProgressBar,
@@ -118,6 +119,14 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 println!("importing info for {}", expanded_path.display())?;
                 info_import(&expanded_path)
             }
+            Some((CMD_INFO_EDIT, sub_matches)) => {
+                let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
+                let path = path.unwrap_or("");
+                let expanded_path = expand_path(path)?;
+                println!("editing info for {}", expanded_path.display())?;
+                info_edit(&expanded_path)?;
+                Ok(ExitCode::SUCCESS)
+            }
             _ => unreachable!(),
         },
         Some((CMD_DIFF, sub_matches)) => {
@@ -154,7 +163,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     config.global_pinmame_rom_folder().display()
                 )?;
             }
-            match frontend::frontend_index(&config, true) {
+            match frontend::frontend_index(&config, true, vec![]) {
                 Ok(tables) if tables.is_empty() => {
                     let warning =
                         format!("No tables found in {}", config.tables_folder.display()).red();
@@ -162,8 +171,13 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     Ok(ExitCode::FAILURE)
                 }
                 Ok(vpx_files_with_tableinfo) => {
-                    let vpinball_executable = config.vpx_executable;
-                    frontend::frontend(&vpx_files_with_tableinfo, &roms, &vpinball_executable);
+                    let vpinball_executable = &config.vpx_executable;
+                    frontend::frontend(
+                        &config,
+                        vpx_files_with_tableinfo,
+                        &roms,
+                        &vpinball_executable,
+                    );
                     Ok(ExitCode::SUCCESS)
                 }
                 Err(IndexError::FolderDoesNotExist(path)) => {
@@ -200,7 +214,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     config.global_pinmame_rom_folder().display()
                 )?;
             }
-            match frontend::frontend_index(&config, true) {
+            match frontend::frontend_index(&config, true, vec![]) {
                 Ok(tables) if tables.is_empty() => {
                     let warning =
                         format!("No tables found in {}", config.tables_folder.display()).red();
@@ -208,8 +222,13 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     Ok(ExitCode::FAILURE)
                 }
                 Ok(vpx_files_with_tableinfo) => {
-                    let vpinball_executable = config.vpx_executable;
-                    frontend::frontend(&vpx_files_with_tableinfo, &roms, &vpinball_executable);
+                    let vpinball_executable = &config.vpx_executable;
+                    frontend::frontend(
+                        &config,
+                        vpx_files_with_tableinfo,
+                        &roms,
+                        &vpinball_executable,
+                    );
                     Ok(ExitCode::SUCCESS)
                 }
                 Err(IndexError::FolderDoesNotExist(path)) => {
@@ -264,6 +283,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 &tables_folder_path,
                 &tables_index_path,
                 &progress,
+                vec![],
             )
             .unwrap();
             progress.finish_and_clear();
@@ -575,11 +595,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             },
             Some((CMD_CONFIG_EDIT, _)) => match config::config_path() {
                 Some(config_path) => {
-                    let editor = std::env::var("EDITOR").expect("EDITOR not set");
-                    let status = std::process::Command::new(editor)
-                        .arg(config_path)
-                        .status()
-                        .unwrap();
+                    let status = open_editor(&config_path)?;
                     if !status.success() {
                         fail("Failed to edit config file")
                     } else {
@@ -632,6 +648,15 @@ fn build_command() -> Command {
                                 .required(true),
                         ),
                 )
+                .subcommand(
+                    Command::new(CMD_INFO_EDIT)
+                        .about("Edit information for a vpx file")
+                        .long_about("Extracts the information from the vpx file into a json file, and opens it in the default editor.")
+                        .arg(
+                            arg!(<VPXPATH> "The path to the vpx file")
+                                .required(true),
+                        ),
+                ),
         )
         .subcommand(
             Command::new(CMD_DIFF)
@@ -1095,10 +1120,6 @@ fn info_show(vpx_file_path: &PathBuf) -> io::Result<()> {
 }
 
 fn info_extract(vpx_file_path: &PathBuf) -> io::Result<ExitCode> {
-    let mut vpx_file = vpx::open(vpx_file_path)?;
-    let table_info = vpx_file.read_tableinfo()?;
-    let custom_info_tags = vpx_file.read_custominfotags()?;
-    let table_info_json = info_to_json(&table_info, &custom_info_tags);
     let info_file_path = vpx_file_path.with_extension("info.json");
     if info_file_path.exists() {
         let confirmed = confirm(
@@ -1110,10 +1131,42 @@ fn info_extract(vpx_file_path: &PathBuf) -> io::Result<ExitCode> {
             return Ok(ExitCode::SUCCESS);
         }
     }
-    let info_file = File::create(&info_file_path)?;
-    serde_json::to_writer_pretty(info_file, &table_info_json)?;
+    write_info_json(vpx_file_path, &info_file_path)?;
     println!("Extracted table info to {}", info_file_path.display())?;
     Ok(ExitCode::SUCCESS)
+}
+
+fn write_info_json(vpx_file_path: &PathBuf, info_file_path: &PathBuf) -> io::Result<()> {
+    let mut vpx_file = vpx::open(vpx_file_path)?;
+    let table_info = vpx_file.read_tableinfo()?;
+    let custom_info_tags = vpx_file.read_custominfotags()?;
+    let table_info_json = info_to_json(&table_info, &custom_info_tags);
+    let info_file = File::create(&info_file_path)?;
+    serde_json::to_writer_pretty(info_file, &table_info_json)?;
+    Ok(())
+}
+
+fn info_edit(vpx_file_path: &PathBuf) -> io::Result<PathBuf> {
+    let info_file_path = vpx_file_path.with_extension("info.json");
+    if !info_file_path.exists() {
+        write_info_json(vpx_file_path, &info_file_path)?;
+    }
+    let status = open_editor(&info_file_path)?;
+    if !status.success() {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            format!("Failed to open editor for {}", info_file_path.display()),
+        ))
+    } else {
+        Ok(info_file_path)
+    }
+}
+
+fn open_editor(file_to_edit: &PathBuf) -> io::Result<ExitStatus> {
+    let editor = std::env::var("EDITOR").expect("EDITOR not set");
+    std::process::Command::new(editor)
+        .arg(file_to_edit)
+        .status()
 }
 
 fn info_import(vpx_file_path: &PathBuf) -> io::Result<ExitCode> {
@@ -1208,6 +1261,28 @@ pub fn extract(vpx_file_path: &Path, yes: bool) -> io::Result<ExitCode> {
                 Ok(ExitCode::FAILURE)
             }
         }
+    }
+}
+
+pub fn diff_info<P: AsRef<Path>>(vpx_file_path: P) -> io::Result<String> {
+    let expanded_vpx_path = expand_path(vpx_file_path.as_ref().to_str().unwrap())?;
+    let info_file_path = expanded_vpx_path.with_extension("info.json");
+    let original_info_path = vpx_file_path.as_ref().with_extension("info.original.tmp");
+    if info_file_path.exists() {
+        write_info_json(&expanded_vpx_path, &original_info_path)?;
+        let diff_color = if colored::control::SHOULD_COLORIZE.should_colorize() {
+            DiffColor::Always
+        } else {
+            DiffColor::Never
+        };
+        let output = run_diff(&original_info_path, &info_file_path, diff_color)?;
+        if original_info_path.exists() {
+            std::fs::remove_file(original_info_path)?;
+        }
+        Ok(String::from_utf8_lossy(&output).to_string())
+    } else {
+        let msg = format!("No sidecar info file found: {}", info_file_path.display());
+        Err(io::Error::new(io::ErrorKind::NotFound, msg))
     }
 }
 
