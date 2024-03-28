@@ -310,6 +310,7 @@ pub fn index_folder<P: AsRef<Path>>(
     tables_folder: P,
     tables_index_path: P,
     progress: &impl Progress,
+    force_reindex: Vec<PathBuf>,
 ) -> Result<TablesIndex, IndexError> {
     println!("Indexing {}", tables_folder.as_ref().display());
 
@@ -338,7 +339,7 @@ pub fn index_folder<P: AsRef<Path>>(
     // find files that are missing or have been modified
     let mut vpx_files_to_index = Vec::new();
     for vpx_file in vpx_files {
-        if index.should_index(&vpx_file) {
+        if force_reindex.contains(&vpx_file.path) || index.should_index(&vpx_file) {
             vpx_files_to_index.push(vpx_file);
         }
     }

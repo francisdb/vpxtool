@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::process::ExitCode;
 use std::{
     fs::File,
     io,
@@ -19,7 +20,7 @@ use crate::indexer::{IndexError, IndexedTable, Progress};
 use crate::patcher::LineEndingsResult::{NoChanges, Unified};
 use crate::patcher::{patch_vbs_file, unify_line_endings_vbs_file};
 use crate::{
-    diff_script, indexer, run_diff,
+    diff_info, diff_script, indexer, info_edit, run_diff,
     vpx::{extractvbs, vbs_path_for, ExtractResult},
     DiffColor, ProgressBarProgress,
 };
@@ -31,7 +32,10 @@ enum TableOption {
     Launch,
     LaunchFullscreen,
     LaunchWindowed,
-    ShowDetails,
+    ForceReload,
+    InfoShow,
+    InfoEdit,
+    InfoDiff,
     ExtractVBS,
     EditVBS,
     PatchVBS,
@@ -42,11 +46,14 @@ enum TableOption {
 }
 
 impl TableOption {
-    const ALL: [TableOption; 10] = [
+    const ALL: [TableOption; 13] = [
         TableOption::Launch,
         TableOption::LaunchFullscreen,
         TableOption::LaunchWindowed,
-        TableOption::ShowDetails,
+        TableOption::ForceReload,
+        TableOption::InfoShow,
+        TableOption::InfoEdit,
+        TableOption::InfoDiff,
         TableOption::ExtractVBS,
         TableOption::EditVBS,
         TableOption::PatchVBS,
@@ -61,14 +68,17 @@ impl TableOption {
             0 => Some(TableOption::Launch),
             1 => Some(TableOption::LaunchFullscreen),
             2 => Some(TableOption::LaunchWindowed),
-            3 => Some(TableOption::ShowDetails),
-            4 => Some(TableOption::ExtractVBS),
-            5 => Some(TableOption::EditVBS),
-            6 => Some(TableOption::PatchVBS),
-            7 => Some(TableOption::UnifyLineEndings),
-            8 => Some(TableOption::ShowVBSDiff),
-            9 => Some(TableOption::CreateVBSPatch),
-            // 9 => Some(TableOption::ClearNVRAM),
+            3 => Some(TableOption::ForceReload),
+            4 => Some(TableOption::InfoShow),
+            5 => Some(TableOption::InfoEdit),
+            6 => Some(TableOption::InfoDiff),
+            7 => Some(TableOption::ExtractVBS),
+            8 => Some(TableOption::EditVBS),
+            9 => Some(TableOption::PatchVBS),
+            10 => Some(TableOption::UnifyLineEndings),
+            11 => Some(TableOption::ShowVBSDiff),
+            12 => Some(TableOption::CreateVBSPatch),
+            // 13 => Some(TableOption::ClearNVRAM),
             _ => None,
         }
     }
@@ -78,7 +88,10 @@ impl TableOption {
             TableOption::Launch => "Launch".to_string(),
             TableOption::LaunchFullscreen => "Launch fullscreen".to_string(),
             TableOption::LaunchWindowed => "Launch windowed".to_string(),
-            TableOption::ShowDetails => "Show details".to_string(),
+            TableOption::ForceReload => "Force reload".to_string(),
+            TableOption::InfoShow => "Info > Show".to_string(),
+            TableOption::InfoEdit => "Info > Edit".to_string(),
+            TableOption::InfoDiff => "Info > Diff".to_string(),
             TableOption::ExtractVBS => "VBScript > Extract".to_string(),
             TableOption::EditVBS => "VBScript > Edit".to_string(),
             TableOption::PatchVBS => "VBScript > Patch typical standalone issues".to_string(),
@@ -93,6 +106,7 @@ impl TableOption {
 pub fn frontend_index(
     resolved_config: &ResolvedConfig,
     recursive: bool,
+    force_reindex: Vec<PathBuf>,
 ) -> Result<Vec<IndexedTable>, IndexError> {
     let pb = ProgressBar::hidden();
     pb.set_style(
@@ -107,6 +121,7 @@ pub fn frontend_index(
         &resolved_config.tables_folder,
         &resolved_config.tables_index_path,
         &progress,
+        force_reindex,
     );
     progress.finish_and_clear();
     let index = index?;
@@ -117,7 +132,8 @@ pub fn frontend_index(
 }
 
 pub fn frontend(
-    vpx_files_with_tableinfo: &Vec<IndexedTable>,
+    config: &ResolvedConfig,
+    mut vpx_files_with_tableinfo: Vec<IndexedTable>,
     roms: &HashSet<String>,
     vpinball_executable: &Path,
 ) {
@@ -150,6 +166,17 @@ pub fn frontend(
                     }
                     Some(TableOption::LaunchWindowed) => {
                         launch(selected_path, vpinball_executable, Some(false));
+                    }
+                    Some(TableOption::ForceReload) => {
+                        match frontend_index(config, true, vec![selected_path.clone()]) {
+                            Ok(index) => {
+                                vpx_files_with_tableinfo = index;
+                            }
+                            Err(err) => {
+                                let msg = format!("Unable to reload tables: {:?}", err);
+                                prompt(msg.truecolor(255, 125, 0).to_string());
+                            }
+                        }
                     }
                     Some(TableOption::EditVBS) => {
                         let path = vbs_path_for(selected_path);
@@ -247,12 +274,30 @@ pub fn frontend(
                             }
                         }
                     }
-                    Some(TableOption::ShowDetails) => match gather_table_info(selected_path) {
+                    Some(TableOption::InfoShow) => match gather_table_info(selected_path) {
                         Ok(info) => {
                             prompt(info);
                         }
                         Err(err) => {
                             let msg = format!("Unable to gather table info: {}", err);
+                            prompt(msg.truecolor(255, 125, 0).to_string());
+                        }
+                    },
+                    Some(TableOption::InfoEdit) => match do_info_edit(selected_path) {
+                        Ok(path) => {
+                            println!("Launched editor for {}", path.display());
+                        }
+                        Err(err) => {
+                            let msg = format!("Unable to edit table info: {}", err);
+                            prompt(msg.truecolor(255, 125, 0).to_string());
+                        }
+                    },
+                    Some(TableOption::InfoDiff) => match diff_info(selected_path) {
+                        Ok(diff) => {
+                            prompt(diff);
+                        }
+                        Err(err) => {
+                            let msg = format!("Unable to diff info: {}", err);
                             prompt(msg.truecolor(255, 125, 0).to_string());
                         }
                     },
@@ -270,6 +315,10 @@ fn gather_table_info(selected_path: &PathBuf) -> io::Result<String> {
     let table_info = vpx_file.read_tableinfo()?;
     let msg = format!("version: {:#?}\n{:#?}", version, table_info);
     Ok(msg)
+}
+
+fn do_info_edit(selected_path: &PathBuf) -> io::Result<PathBuf> {
+    info_edit(selected_path)
 }
 
 fn open(path: PathBuf) {
