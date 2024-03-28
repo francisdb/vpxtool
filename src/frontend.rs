@@ -1,5 +1,4 @@
 use std::collections::HashSet;
-use std::process::ExitCode;
 use std::{
     fs::File,
     io,
@@ -20,7 +19,7 @@ use crate::indexer::{IndexError, IndexedTable, Progress};
 use crate::patcher::LineEndingsResult::{NoChanges, Unified};
 use crate::patcher::{patch_vbs_file, unify_line_endings_vbs_file};
 use crate::{
-    diff_info, diff_script, indexer, info_edit, run_diff,
+    indexer, info_diff, info_edit, info_gather, run_diff, script_diff,
     vpx::{extractvbs, vbs_path_for, ExtractResult},
     DiffColor, ProgressBarProgress,
 };
@@ -196,7 +195,7 @@ pub fn frontend(
                             prompt(msg.truecolor(255, 125, 0).to_string());
                         }
                     },
-                    Some(TableOption::ShowVBSDiff) => match diff_script(selected_path) {
+                    Some(TableOption::ShowVBSDiff) => match script_diff(selected_path) {
                         Ok(diff) => {
                             prompt(diff);
                         }
@@ -274,7 +273,7 @@ pub fn frontend(
                             }
                         }
                     }
-                    Some(TableOption::InfoShow) => match gather_table_info(selected_path) {
+                    Some(TableOption::InfoShow) => match info_gather(selected_path) {
                         Ok(info) => {
                             prompt(info);
                         }
@@ -292,7 +291,7 @@ pub fn frontend(
                             prompt(msg.truecolor(255, 125, 0).to_string());
                         }
                     },
-                    Some(TableOption::InfoDiff) => match diff_info(selected_path) {
+                    Some(TableOption::InfoDiff) => match info_diff(selected_path) {
                         Ok(diff) => {
                             prompt(diff);
                         }
@@ -307,14 +306,6 @@ pub fn frontend(
             None => break,
         };
     }
-}
-
-fn gather_table_info(selected_path: &PathBuf) -> io::Result<String> {
-    let mut vpx_file = vpin::vpx::open(selected_path)?;
-    let version = vpx_file.read_version()?;
-    let table_info = vpx_file.read_tableinfo()?;
-    let msg = format!("version: {:#?}\n{:#?}", version, table_info);
-    Ok(msg)
 }
 
 fn do_info_edit(selected_path: &PathBuf) -> io::Result<PathBuf> {
