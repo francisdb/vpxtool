@@ -526,17 +526,25 @@ pub fn read_index_json<P: AsRef<Path>>(json_path: P) -> io::Result<Option<Tables
 fn extract_game_name<S: AsRef<str>>(code: S) -> Option<String> {
     // TODO can we find a first match through an option?
     // needs to be all lowercase to match with (?i) case insensitive
-    const LINE_WITH_GAMENAME_RE: &str =
+    const LINE_WITH_CGAMENAME_RE: &str =
         r#"(?i)(?:.*?)*cgamename\s*=\s*\"([^"\\]*(?:\\.[^"\\]*)*)\""#;
-    let re = regex::Regex::new(LINE_WITH_GAMENAME_RE).unwrap();
+    const LINE_WITH_DOT_GAMENAME_RE: &str =
+        r#"(?i)(?:.*?)\.gamename\s*=\s*\"([^"\\]*(?:\\.[^"\\]*)*)\""#;
+    let cgamename_re = regex::Regex::new(LINE_WITH_CGAMENAME_RE).unwrap();
+    let dot_gamename_re = regex::Regex::new(LINE_WITH_DOT_GAMENAME_RE).unwrap();
     let unified = unify_line_endings(code.as_ref());
     unified
         .lines()
         // skip rows that start with ' or whitespace followed by '
         .filter(|line| !line.trim().starts_with('\''))
-        .filter(|line| line.to_lowercase().trim().contains("cgamename"))
+        .filter(|line| {
+            let lower: String = line.to_owned().to_lowercase().trim().to_string();
+            (&lower).contains("cgamename") || (&lower).contains(".gamename")
+        })
         .flat_map(|line| {
-            let caps = re.captures(line)?;
+            let caps = cgamename_re
+                .captures(line)
+                .or(dot_gamename_re.captures(line))?;
             let first = caps.get(1)?;
             Some(first.as_str().to_string())
         })
@@ -752,6 +760,20 @@ Const UseSolenoids=2,UseLamps=0,UseSync=1,UseGI=0,SCoin="coin",cGameName="barbwi
         .to_string();
         let game_name = extract_game_name(code);
         assert_eq!(game_name, Some("barbwire".to_string()));
+    }
+
+    /// https://github.com/francisdb/vpxtool/issues/203
+    #[test]
+    fn test_extract_game_name_in_controller() {
+        let code = r#"
+        Sub Gorgar_Init
+    LoadLUT
+	On Error Resume Next
+	With Controller
+	.GameName="grgar_l1"
+        "#;
+        let game_name = extract_game_name(code);
+        assert_eq!(game_name, Some("grgar_l1".to_string()));
     }
 
     #[test]
