@@ -41,6 +41,7 @@ is_executable = "1.0.1"
 regex = { version = "1.10.4", features = [] }
 vpin = { version = "0.10.1" }
 rust-ini = "0.21.0"
+edit = "0.1.5"
 
 [dev-dependencies]
 pretty_assertions = "1.4.0"
