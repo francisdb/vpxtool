@@ -13,10 +13,10 @@ use std::fs::{metadata, File};
 use std::io;
 use std::io::{BufReader, Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::{exit, ExitCode, ExitStatus};
+use std::process::{exit, ExitCode};
 use vpin::directb2s::read;
 use vpin::vpx;
-use vpin::vpx::jsonmodel::{info_to_json, json_to_info};
+use vpin::vpx::jsonmodel::info_to_json;
 use vpin::vpx::{expanded, extractvbs, importvbs, tableinfo, verify, ExtractResult, VerifyResult};
 
 pub mod config;
@@ -619,12 +619,8 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             },
             Some((CMD_CONFIG_EDIT, _)) => match config::config_path() {
                 Some(config_path) => {
-                    let status = open_editor(&config_path)?;
-                    if !status.success() {
-                        fail("Failed to edit config file")
-                    } else {
-                        Ok(ExitCode::SUCCESS)
-                    }
+                    open_editor(&config_path)?;
+                    Ok(ExitCode::SUCCESS)
                 }
                 None => fail("No config file found"),
             },
@@ -1191,44 +1187,35 @@ fn info_edit(vpx_file_path: &PathBuf) -> io::Result<PathBuf> {
     if !info_file_path.exists() {
         write_info_json(vpx_file_path, &info_file_path)?;
     }
-    let status = open_editor(&info_file_path)?;
-    if !status.success() {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!("Failed to open editor for {}", info_file_path.display()),
-        ))
-    } else {
-        Ok(info_file_path)
-    }
+    open_editor(&info_file_path)?;
+    Ok(info_file_path)
 }
 
-fn open_editor(file_to_edit: &PathBuf) -> io::Result<ExitStatus> {
-    let editor = std::env::var("EDITOR").expect("EDITOR not set");
-    std::process::Command::new(editor)
-        .arg(file_to_edit)
-        .status()
+fn open_editor(file_to_edit: &PathBuf) -> io::Result<()> {
+    // TODO add a default editor override to the config file
+    edit::edit_file(file_to_edit)
 }
 
-fn info_import(vpx_file_path: &PathBuf) -> io::Result<ExitCode> {
-    let info_file_path = vpx_file_path.with_extension("info.json");
-    if !info_file_path.exists() {
-        let warning = format!("File \"{}\" does not exist", info_file_path.display());
-        return Err(io::Error::new(io::ErrorKind::NotFound, warning));
-    }
-    let mut info_file = File::open(&info_file_path)?;
-    let json = serde_json::from_reader(&mut info_file).map_err(|e| {
-        io::Error::new(
-            io::ErrorKind::Other,
-            format!(
-                "Failed to parse/read json {}: {}",
-                info_file_path.display(),
-                e
-            ),
-        )
-    })?;
+fn info_import(_vpx_file_path: &PathBuf) -> io::Result<ExitCode> {
+    // let info_file_path = vpx_file_path.with_extension("info.json");
+    // if !info_file_path.exists() {
+    //     let warning = format!("File \"{}\" does not exist", info_file_path.display());
+    //     return Err(io::Error::new(io::ErrorKind::NotFound, warning));
+    // }
+    // let mut info_file = File::open(&info_file_path)?;
+    // let json = serde_json::from_reader(&mut info_file).map_err(|e| {
+    //     io::Error::new(
+    //         io::ErrorKind::Other,
+    //         format!(
+    //             "Failed to parse/read json {}: {}",
+    //             info_file_path.display(),
+    //             e
+    //         ),
+    //     )
+    // })?;
 
-    let (table_info, custom_info_tags) = json_to_info(json, None)?;
-    let mut vpx_file = vpx::open(vpx_file_path)?;
+    // let (table_info, custom_info_tags) = json_to_info(json, None)?;
+    // let mut vpx_file = vpx::open(vpx_file_path)?;
     // vpx_file.write_custominfotags(&custom_info_tags)?;
     // vpx_file.write_tableinfo(&table_info)?;
     // println!("Imported table info from {}", info_file_path.display())?;
