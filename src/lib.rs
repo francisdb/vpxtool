@@ -1247,44 +1247,31 @@ pub fn extract(vpx_file_path: &Path, yes: bool) -> io::Result<ExitCode> {
     if root_dir_path.exists() && !yes {
         let confirmed = confirm(
             format!("Directory \"{}\" already exists", root_dir_path.display()),
-            "Do you want to continue extracting?".to_string(),
+            "Do you want to remove the existing directory?".to_string(),
         )?;
         if !confirmed {
             println!("Aborted")?;
-            Ok(ExitCode::SUCCESS)
-        } else {
-            let result = {
-                let vpx = vpx::read(&vpx_file_path.to_path_buf())?;
-                expanded::write(&vpx, &root_dir_path)
-            };
-            match result {
-                Ok(_) => {
-                    println!("Successfully extracted to {}", root_dir_path.display())?;
-                    Ok(ExitCode::SUCCESS)
-                }
-                Err(e) => {
-                    println!("Failed to extract: {}", e)?;
-                    Ok(ExitCode::FAILURE)
-                }
-            }
+            return Ok(ExitCode::SUCCESS);
         }
-    } else {
-        let result = {
-            let mut root_dir = std::fs::DirBuilder::new();
-            root_dir.recursive(true);
-            root_dir.create(root_dir_path)?;
-            let vpx = vpx::read(&vpx_file_path.to_path_buf())?;
-            expanded::write(&vpx, &root_dir_path)
-        };
-        match result {
-            Ok(_) => {
-                println!("Successfully extracted to {}", root_dir_path.display())?;
-                Ok(ExitCode::SUCCESS)
-            }
-            Err(e) => {
-                println!("Failed to extract: {}", e)?;
-                Ok(ExitCode::FAILURE)
-            }
+    }
+    if root_dir_path.exists() {
+        std::fs::remove_dir_all(root_dir_path)?;
+    }
+    let mut root_dir = std::fs::DirBuilder::new();
+    root_dir.recursive(true);
+    root_dir.create(root_dir_path)?;
+    let result = {
+        let vpx = vpx::read(&vpx_file_path.to_path_buf())?;
+        expanded::write(&vpx, &root_dir_path)
+    };
+    match result {
+        Ok(_) => {
+            println!("Successfully extracted to \"{}\"", root_dir_path.display())?;
+            Ok(ExitCode::SUCCESS)
+        }
+        Err(e) => {
+            println!("Failed to extract: {}", e)?;
+            Ok(ExitCode::FAILURE)
         }
     }
 }
