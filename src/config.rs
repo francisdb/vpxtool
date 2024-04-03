@@ -65,12 +65,12 @@ impl ResolvedConfig {
     pub fn vpinball_ini_file(&self) -> PathBuf {
         if cfg!(target_os = "windows") {
             // in the same directory as the vpx executable
-            return self.vpx_executable.parent().unwrap().join("VPinballX.ini");
+            self.vpx_executable.parent().unwrap().join("VPinballX.ini")
         } else {
-            return dirs::home_dir()
+            dirs::home_dir()
                 .unwrap()
                 .join(".vpinball")
-                .join("VPinballX.ini");
+                .join("VPinballX.ini")
         }
     }
 }
@@ -128,8 +128,8 @@ pub fn load_config() -> io::Result<Option<(PathBuf, ResolvedConfig)>> {
     }
 }
 
-fn read_config(config_path: &PathBuf) -> io::Result<ResolvedConfig> {
-    let figment = Figment::new().merge(Toml::file(&config_path));
+fn read_config(config_path: &Path) -> io::Result<ResolvedConfig> {
+    let figment = Figment::new().merge(Toml::file(config_path));
 
     // TODO avoid unwrap
     let config: Config = figment.extract().map_err(|e| {
@@ -151,7 +151,7 @@ fn read_config(config_path: &PathBuf) -> io::Result<ResolvedConfig> {
     Ok(resolved_config)
 }
 
-pub(crate) fn tables_index_path(tables_folder: &PathBuf) -> PathBuf {
+pub(crate) fn tables_index_path(tables_folder: &Path) -> PathBuf {
     tables_folder.join("vpxtool_index.json")
 }
 
@@ -236,7 +236,7 @@ fn create_default_config() -> io::Result<(PathBuf, ResolvedConfig)> {
     let index_path = tables_index_path(&tables_root);
 
     let resolved_config = ResolvedConfig {
-        vpx_executable: vpx_executable,
+        vpx_executable,
         tables_folder: tables_root,
         tables_index_path: index_path,
     };
@@ -247,16 +247,16 @@ fn create_default_config() -> io::Result<(PathBuf, ResolvedConfig)> {
     Ok((config_file, resolved_config))
 }
 
-fn write_config(config_file: &PathBuf, config: &Config) -> io::Result<()> {
+fn write_config(config_file: &Path, config: &Config) -> io::Result<()> {
     let toml = toml::to_string(&config).unwrap();
     let mut file = File::create(config_file)?;
     file.write_all(toml.as_bytes())
 }
 
-pub fn default_tables_root(vpx_executable: &PathBuf) -> PathBuf {
+pub fn default_tables_root(vpx_executable: &Path) -> PathBuf {
     // when on macos we assume that the tables are in ~/.vpinball/tables
     if cfg!(target_os = "macos") {
-        return dirs::home_dir().unwrap().join(".vpinball").join("tables");
+        dirs::home_dir().unwrap().join(".vpinball").join("tables")
     } else {
         vpx_executable.parent().unwrap().join("tables")
     }

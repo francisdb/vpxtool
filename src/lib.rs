@@ -32,36 +32,36 @@ const GIT_VERSION: &str = git_version!(args = ["--tags", "--always", "--dirty=-m
 const OK: Emoji = Emoji("✅", "[launch]");
 const NOK: Emoji = Emoji("❌", "[crash]");
 
-const CMD_FRONTEND: &'static str = "frontend";
-const CMD_DIFF: &'static str = "diff";
-const CMD_EXTRACT: &'static str = "extract";
-const CMD_ASSEMBLE: &'static str = "assemble";
-const CMD_EXTRACT_VBS: &'static str = "extractvbs";
-const CMD_IMPORT_VBS: &'static str = "importvbs";
+const CMD_FRONTEND: &str = "frontend";
+const CMD_DIFF: &str = "diff";
+const CMD_EXTRACT: &str = "extract";
+const CMD_ASSEMBLE: &str = "assemble";
+const CMD_EXTRACT_VBS: &str = "extractvbs";
+const CMD_IMPORT_VBS: &str = "importvbs";
 
-const CMD_SIMPLE_FRONTEND: &'static str = "simplefrontend";
+const CMD_SIMPLE_FRONTEND: &str = "simplefrontend";
 
-const CMD_CONFIG: &'static str = "config";
-const CMD_CONFIG_SETUP: &'static str = "setup";
-const CMD_CONFIG_PATH: &'static str = "path";
-const CMD_CONFIG_SHOW: &'static str = "show";
-const CMD_CONFIG_CLEAR: &'static str = "clear";
-const CMD_CONFIG_EDIT: &'static str = "edit";
+const CMD_CONFIG: &str = "config";
+const CMD_CONFIG_SETUP: &str = "setup";
+const CMD_CONFIG_PATH: &str = "path";
+const CMD_CONFIG_SHOW: &str = "show";
+const CMD_CONFIG_CLEAR: &str = "clear";
+const CMD_CONFIG_EDIT: &str = "edit";
 
-const CMD_SCRIPT: &'static str = "script";
-const CMD_SCRIPT_SHOW: &'static str = "show";
-const CMD_SCRIPT_EXTRACT: &'static str = "extract";
-const CMD_SCRIPT_IMPORT: &'static str = "import";
-const CMD_SCRIPT_PATCH: &'static str = "patch";
-const CMD_SCRIPT_EDIT: &'static str = "edit";
-const CMD_SCRIPT_DIFF: &'static str = "diff";
+const CMD_SCRIPT: &str = "script";
+const CMD_SCRIPT_SHOW: &str = "show";
+const CMD_SCRIPT_EXTRACT: &str = "extract";
+const CMD_SCRIPT_IMPORT: &str = "import";
+const CMD_SCRIPT_PATCH: &str = "patch";
+const CMD_SCRIPT_EDIT: &str = "edit";
+const CMD_SCRIPT_DIFF: &str = "diff";
 
-const CMD_INFO: &'static str = "info";
-const CMD_INFO_SHOW: &'static str = "show";
-const CMD_INFO_EXTRACT: &'static str = "extract";
-const CMD_INFO_IMPORT: &'static str = "import";
-const CMD_INFO_EDIT: &'static str = "edit";
-const CMD_INFO_DIFF: &'static str = "diff";
+const CMD_INFO: &str = "info";
+const CMD_INFO_SHOW: &str = "show";
+const CMD_INFO_EXTRACT: &str = "extract";
+const CMD_INFO_IMPORT: &str = "import";
+const CMD_INFO_EDIT: &str = "edit";
+const CMD_INFO_DIFF: &str = "diff";
 
 pub struct ProgressBarProgress {
     pb: ProgressBar,
@@ -146,7 +146,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
             let path = path.unwrap_or("");
             let expanded_path = expand_path(path)?;
-            match script_diff(PathBuf::from(expanded_path)) {
+            match script_diff(expanded_path) {
                 Ok(output) => {
                     println!("{}", output)?;
                     Ok(ExitCode::SUCCESS)
@@ -161,7 +161,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
         Some((CMD_FRONTEND, _sub_matches)) => {
             let (config_path, config) = config::load_or_setup_config()?;
             println!("Using config file {}", config_path.display())?;
-            let roms = indexer::find_roms(&config.global_pinmame_rom_folder())?;
+            let roms = indexer::find_roms(config.global_pinmame_rom_folder())?;
             if roms.is_empty() {
                 let warning = format!(
                     "No roms found in {}",
@@ -189,7 +189,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                         &config,
                         vpx_files_with_tableinfo,
                         &roms,
-                        &vpinball_executable,
+                        vpinball_executable,
                     );
                     Ok(ExitCode::SUCCESS)
                 }
@@ -212,7 +212,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
         Some((CMD_SIMPLE_FRONTEND, _sub_matches)) => {
             let (config_path, config) = config::load_or_setup_config()?;
             println!("Using config file {}", config_path.display())?;
-            let roms = indexer::find_roms(&config.global_pinmame_rom_folder())?;
+            let roms = indexer::find_roms(config.global_pinmame_rom_folder())?;
             if roms.is_empty() {
                 let warning = format!(
                     "No roms found in {}",
@@ -240,7 +240,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                         &config,
                         vpx_files_with_tableinfo,
                         &roms,
-                        &vpinball_executable,
+                        vpinball_executable,
                     );
                     Ok(ExitCode::SUCCESS)
                 }
@@ -315,7 +315,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     .unwrap_or_default();
 
                 let expanded_path = expand_path(path)?;
-                let mut vpx_file = vpx::open(&expanded_path)?;
+                let mut vpx_file = vpx::open(expanded_path)?;
                 let game_data = vpx_file.read_gamedata()?;
                 let code = game_data.code.string;
 
@@ -413,8 +413,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 } else {
                     applied
                         .iter()
-                        .map(|patch| println!("Applied patch: {}", patch))
-                        .collect::<io::Result<()>>()?;
+                        .try_for_each(|patch| println!("Applied patch: {}", patch))?;
                 }
                 Ok(ExitCode::SUCCESS)
             }
@@ -595,7 +594,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             },
             Some((CMD_CONFIG_SHOW, _)) => match config::config_path() {
                 Some(config_path) => {
-                    let mut file = File::open(&config_path).unwrap();
+                    let mut file = File::open(config_path).unwrap();
                     let mut text = String::new();
                     file.read_to_string(&mut text).unwrap();
                     println!("{}", text)?;
@@ -880,8 +879,8 @@ fn build_command() -> Command {
         )
 }
 
-fn open_or_fail(vbs_path: &PathBuf) -> io::Result<ExitCode> {
-    match open::that(&vbs_path) {
+fn open_or_fail(vbs_path: &Path) -> io::Result<ExitCode> {
+    match open::that(vbs_path) {
         Ok(_) => Ok(ExitCode::SUCCESS),
         Err(err) => {
             let msg = format!("Unable to open {}", vbs_path.to_string_lossy());
@@ -1177,7 +1176,7 @@ fn write_info_json(vpx_file_path: &PathBuf, info_file_path: &PathBuf) -> io::Res
     let table_info = vpx_file.read_tableinfo()?;
     let custom_info_tags = vpx_file.read_custominfotags()?;
     let table_info_json = info_to_json(&table_info, &custom_info_tags);
-    let info_file = File::create(&info_file_path)?;
+    let info_file = File::create(info_file_path)?;
     serde_json::to_writer_pretty(info_file, &table_info_json)?;
     Ok(())
 }
@@ -1196,7 +1195,7 @@ fn open_editor(file_to_edit: &PathBuf) -> io::Result<()> {
     edit::edit_file(file_to_edit)
 }
 
-fn info_import(_vpx_file_path: &PathBuf) -> io::Result<ExitCode> {
+fn info_import(_vpx_file_path: &Path) -> io::Result<ExitCode> {
     // let info_file_path = vpx_file_path.with_extension("info.json");
     // if !info_file_path.exists() {
     //     let warning = format!("File \"{}\" does not exist", info_file_path.display());
@@ -1226,8 +1225,7 @@ fn info_import(_vpx_file_path: &PathBuf) -> io::Result<ExitCode> {
 pub fn ls(vpx_file_path: &Path) -> io::Result<()> {
     expanded::extract_directory_list(vpx_file_path)
         .iter()
-        .map(|file_path| println!("{}", file_path))
-        .collect()
+        .try_for_each(|file_path| println!("{}", file_path))
 }
 
 pub fn confirm(msg: String, yes_no_question: String) -> io::Result<bool> {
@@ -1274,7 +1272,7 @@ pub fn extract(vpx_file_path: &Path, yes: bool) -> io::Result<ExitCode> {
         let result = {
             let mut root_dir = std::fs::DirBuilder::new();
             root_dir.recursive(true);
-            root_dir.create(&root_dir_path)?;
+            root_dir.create(root_dir_path)?;
             let vpx = vpx::read(&vpx_file_path.to_path_buf())?;
             expanded::write(&vpx, &root_dir_path)
         };

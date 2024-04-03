@@ -1,0 +1,16 @@
+on: push
+name: Clippy check
+
+# Make sure CI fails on all warnings, including Clippy lints
+env:
+  RUSTFLAGS: "-Dwarnings"
+
+jobs:
+  clippy_check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run clippy
+        run: cargo clippy --color always --all-targets --all-features
+      - name: Run fmt check
+        run: cargo fmt --all --check -- --color=always

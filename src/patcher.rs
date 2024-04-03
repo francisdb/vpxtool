@@ -30,13 +30,13 @@ impl Display for PatchType {
 
 pub fn patch_vbs_file(vbs_path: &Path) -> io::Result<HashSet<PatchType>> {
     // TODO we probably need to ensure proper encoding here in stead of going for utf8
-    let mut file = File::open(&vbs_path)?;
+    let mut file = File::open(vbs_path)?;
     let mut text = String::new();
     file.read_to_string(&mut text)?;
 
     let (patched_text, applied) = patch_script(text);
 
-    let mut file = File::create(&vbs_path)?;
+    let mut file = File::create(vbs_path)?;
     file.write_all(patched_text.as_bytes())?;
     Ok(applied)
 }
@@ -49,13 +49,13 @@ pub fn patch_vbs_file(vbs_path: &Path) -> io::Result<HashSet<PatchType>> {
  */
 pub fn unify_line_endings_vbs_file(vbs_path: &Path) -> io::Result<LineEndingsResult> {
     // TODO we probably need to ensure proper encoding here in stead of going for utf8
-    let mut file = File::open(&vbs_path)?;
+    let mut file = File::open(vbs_path)?;
     let mut text = String::new();
     file.read_to_string(&mut text)?;
 
     let patched_text = unify_line_endings(&text);
 
-    let mut file = File::create(&vbs_path)?;
+    let mut file = File::create(vbs_path)?;
     file.write_all(patched_text.as_bytes())?;
 
     if text != patched_text {
@@ -85,14 +85,14 @@ pub fn patch_script(script: String) -> (String, HashSet<PatchType>) {
     (patched_script, applied_patches)
 }
 
-fn unify_line_endings(script: &String) -> String {
+fn unify_line_endings(script: &str) -> String {
     // first replace all \r\n with \n
     // then replace all \r with \n (this is the main issue, as some files have mixed \r\n and \r)
     // then go back to standard vbs line endings \r\n
     script
         .replace("\r\n", "\n")
-        .replace("\r", "\n")
-        .replace("\n", "\r\n")
+        .replace('\r', "\n")
+        .replace('\n', "\r\n")
 }
 
 fn patch_standup_target_array(script: String) -> String {
@@ -193,7 +193,7 @@ mod tests {
         let script = "first\nsecond\r\nthird\rfourth";
         let expected = "first\r\nsecond\r\nthird\r\nfourth";
 
-        let result = unify_line_endings(&script.to_string());
+        let result = unify_line_endings(script);
 
         assert_eq!(expected, result);
     }
@@ -216,8 +216,8 @@ End Class
 this is the line
 this is the other line
 end"#;
-        let script = script.replace("\n", "\r\n");
-        let expected = expected.replace("\n", "\r\n");
+        let script = script.replace('\n', "\r\n");
+        let expected = expected.replace('\n', "\r\n");
 
         let result = introduce_class(script.to_string(), marker, fallback_marker, class_def);
 
@@ -242,8 +242,8 @@ End Class
 
 this is the other line
 end"#;
-        let script = script.replace("\n", "\r\n");
-        let expected = expected.replace("\n", "\r\n");
+        let script = script.replace('\n', "\r\n");
+        let expected = expected.replace('\n', "\r\n");
 
         let result = introduce_class(script.to_string(), marker, fallback_marker, class_def);
 
@@ -264,8 +264,8 @@ end
 Class Foo
 End Class
 "#;
-        let script = script.replace("\n", "\r\n");
-        let expected = expected.replace("\n", "\r\n");
+        let script = script.replace('\n', "\r\n");
+        let expected = expected.replace('\n', "\r\n");
 
         let result = introduce_class(script.to_string(), marker, fallback_marker, class_def);
 
@@ -310,7 +310,7 @@ Sub DoSTAnim()
 End Sub
 "#;
         // vbs files should have windows line endings
-        let script = script.replace("\n", "\r\n");
+        let script = script.replace('\n', "\r\n");
 
         let expected = r#"
 Class DropTarget
@@ -406,7 +406,7 @@ Sub DoSTAnim()
 End Sub
 "#;
         // vbs files should have windows line endings
-        let expected = expected.replace("\n", "\r\n");
+        let expected = expected.replace('\n', "\r\n");
 
         let (result, applied) = patch_script(script.to_string());
 

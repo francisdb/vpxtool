@@ -126,7 +126,7 @@ pub fn frontend_index(
     let index = index?;
 
     let mut tables: Vec<IndexedTable> = index.tables();
-    tables.sort_by_key(|indexed| display_table_line(&indexed).to_lowercase());
+    tables.sort_by_key(|indexed| display_table_line(indexed).to_lowercase());
     Ok(tables)
 }
 
@@ -442,14 +442,12 @@ fn display_table_line_full(table: &IndexedTable, roms: &HashSet<String>) -> Stri
             let rom_found = table.local_rom_path.is_some() || roms.contains(&name.to_lowercase());
             if rom_found {
                 format!(" - [{}]", name.dimmed())
+            } else if table.requires_pinmame {
+                format!(" - {} [{}]", Emoji("⚠️", "!"), &name)
+                    .yellow()
+                    .to_string()
             } else {
-                if table.requires_pinmame {
-                    format!(" - {} [{}]", Emoji("⚠️", "!"), &name)
-                        .yellow()
-                        .to_string()
-                } else {
-                    format!(" - [{}]", name.dimmed())
-                }
+                format!(" - [{}]", name.dimmed())
             }
         }
         None => "".to_string(),
