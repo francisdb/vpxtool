@@ -137,7 +137,7 @@ impl TablesIndex {
     }
 
     pub fn tables(&self) -> Vec<IndexedTable> {
-        self.tables.values().map(|t| t.clone()).collect()
+        self.tables.values().cloned().collect()
     }
 
     pub(crate) fn should_index(&self, path_with_metadata: &PathWithMetadata) -> bool {
@@ -366,7 +366,7 @@ pub fn index_vpx_files(vpx_files: &[PathWithMetadata], progress: &impl Progress)
         .iter()
         .enumerate()
         .flat_map(|(i, vpx_file)| {
-            let optional = match index_vpx_file(&vpx_file) {
+            let optional = match index_vpx_file(vpx_file) {
                 Ok(indexed_table) => Some(indexed_table),
                 Err(e) => {
                     // TODO we want to return any failures instead of printing here
@@ -421,8 +421,8 @@ fn index_vpx_file(vpx_file_path: &PathWithMetadata) -> io::Result<(PathBuf, Inde
     Ok((indexed.path.clone(), indexed))
 }
 
-fn read_table_info_json(info_file_path: &PathBuf) -> io::Result<TableInfo> {
-    let mut info_file = File::open(&info_file_path)?;
+fn read_table_info_json(info_file_path: &Path) -> io::Result<TableInfo> {
+    let mut info_file = File::open(info_file_path)?;
     let json = serde_json::from_reader(&mut info_file).map_err(|e| {
         io::Error::new(
             io::ErrorKind::Other,
@@ -475,7 +475,7 @@ fn find_b2s_path(vpx_file_path: &PathWithMetadata) -> Option<PathBuf> {
 /// instead of the code in the vpx file.
 ///
 /// TODO if this file changes the index entry is currently not invalidated
-fn consider_sidecar_vbs(path: &PathBuf, game_data: GameData) -> io::Result<String> {
+fn consider_sidecar_vbs(path: &Path, game_data: GameData) -> io::Result<String> {
     let vbs_path = path.with_extension("vbs");
     let code = if vbs_path.exists() {
         let mut vbs_file = File::open(vbs_path)?;
@@ -539,7 +539,7 @@ fn extract_game_name<S: AsRef<str>>(code: S) -> Option<String> {
         .filter(|line| !line.trim().starts_with('\''))
         .filter(|line| {
             let lower: String = line.to_owned().to_lowercase().trim().to_string();
-            (&lower).contains("cgamename") || (&lower).contains(".gamename")
+            lower.contains("cgamename") || lower.contains(".gamename")
         })
         .flat_map(|line| {
             let caps = cgamename_re
@@ -559,13 +559,13 @@ fn requires_pinmame<S: AsRef<str>>(code: S) -> bool {
     lower
         .lines()
         .filter(|line| !line.trim().starts_with('\''))
-        .any(|line| line.contains("loadvpm") && !re.is_match(&line))
+        .any(|line| line.contains("loadvpm") && !re.is_match(line))
 }
 
 /// Some scripts contain only CR as line separator. Eg "Monte Carlo (Premier 1987) (10.7) 1.6.vpx"
 /// Therefore we replace first all CRLF and then all leftover CR with LF
 fn unify_line_endings(code: &str) -> String {
-    code.replace("\r\n", "\n").replace("\r", "\n")
+    code.replace("\r\n", "\n").replace('\r', "\n")
 }
 
 #[cfg(test)]
@@ -680,7 +680,7 @@ mod tests {
     #[test]
     fn test_read_index_missing() -> io::Result<()> {
         let index_path = PathBuf::from("missing_index_file.json");
-        let read = read_index_json(&index_path)?;
+        let read = read_index_json(index_path)?;
         assert_eq!(read, None);
         Ok(())
     }
@@ -793,7 +793,7 @@ cGameName = "abv106"
   LoadVPM "01210000", "sys80.VBS", 3.1
 "#
         .to_string();
-        assert_eq!(requires_pinmame(code), true);
+        assert!(requires_pinmame(code));
     }
 
     #[test]
@@ -802,7 +802,7 @@ cGameName = "abv106"
   loadVpm "01210000", \"sys80.VBS\", 3.1
 "#
         .to_string();
-        assert_eq!(requires_pinmame(code), true);
+        assert!(requires_pinmame(code));
     }
 
     #[test]
@@ -811,7 +811,7 @@ cGameName = "abv106"
 Const cGameName = "GTB_4Square_1971"
 "#
         .to_string();
-        assert_eq!(requires_pinmame(code), false);
+        assert!(!requires_pinmame(code));
     }
 
     #[test]
@@ -824,7 +824,7 @@ Sub LoadVPM(VPMver, VBSfile, VBSver)
 End Sub
 "#
         .to_string();
-        assert_eq!(requires_pinmame(code), false);
+        assert!(!requires_pinmame(code));
     }
 
     #[test]
@@ -837,7 +837,7 @@ Dim UseVPMDMD, VRRoom, DesktopMode
 If RenderingMode = 2 Then VRRoom = VRRoomChoice Else VRRoom = 0
 "#
         .to_string();
-        assert_eq!(requires_pinmame(code), false);
+        assert!(!requires_pinmame(code));
     }
 
     #[test]
@@ -852,7 +852,7 @@ LoadVPM "01210000","sys80.vbs",3.10
 '	On Error Resume Next
 "#
         .to_string();
-        assert_eq!(requires_pinmame(code), true);
+        assert!(requires_pinmame(code));
     }
 
     #[test]
@@ -860,6 +860,6 @@ LoadVPM "01210000","sys80.vbs",3.10
         // This code was taken from "Monte Carlo (Premier 1987) (10.7) 1.6.vpx"
         let code =
             "LoadVPM \"01210000\", \"sys80.VBS\", 3.1\r\r'Sub LoadVPM(VPMver, VBSfile, VBSver)\r";
-        assert_eq!(requires_pinmame(code), true);
+        assert!(requires_pinmame(code));
     }
 }
