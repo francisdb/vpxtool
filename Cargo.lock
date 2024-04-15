@@ -215,9 +215,9 @@ checksum = "50d30906286121d95be3d479533b458f87493b30a4b5f79a607db8f5d11aa91f"
 
 [[package]]
 name = "cfb"
-version = "0.9.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b390793e912300f1aa713429f7fd0c391024e6c18b988962558bc4f96a349b1f"
+checksum = "d8a4f8e55be323b378facfcf1f06aa97f6ec17cf4ac84fb17325093aaf62da41"
 dependencies = [
  "byteorder",
  "fnv",
@@ -1531,9 +1531,9 @@ checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 
 [[package]]
 name = "vpin"
-version = "0.11.1"
+version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84faa3e88b0c1c6f24cb9a0caac082e77b810e08dead99ae61f8d7f2e1f51ca1"
+checksum = "9721305ceedfdf4a225113b04df4831d9e9fb8729275cc91e4e7e8b321c81bea"
 dependencies = [
  "byteorder",
  "bytes",
