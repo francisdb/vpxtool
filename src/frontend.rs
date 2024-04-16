@@ -10,7 +10,7 @@ use std::{
 use colored::Colorize;
 use console::Emoji;
 use dialoguer::theme::ColorfulTheme;
-use dialoguer::{Input, Select};
+use dialoguer::{FuzzySelect, Input, Select};
 use indicatif::{ProgressBar, ProgressStyle};
 use is_executable::IsExecutable;
 
@@ -26,6 +26,9 @@ use crate::{
 
 const LAUNCH: Emoji = Emoji("🚀", "[launch]");
 const CRASH: Emoji = Emoji("💥", "[crash]");
+
+const SEARCH: &str = "-- Search --";
+const SEARCH_INDEX: usize = 0;
 
 enum TableOption {
     Launch,
@@ -136,175 +139,212 @@ pub fn frontend(
     roms: &HashSet<String>,
     vpinball_executable: &Path,
 ) {
-    let mut selection_opt = None;
+    let mut main_selection_opt = None;
     loop {
-        let selections = vpx_files_with_tableinfo
+        let tables: Vec<String> = vpx_files_with_tableinfo
             .iter()
-            // TODO can we expand the tuple to args?
             .map(|indexed| display_table_line_full(indexed, roms))
-            .collect::<Vec<String>>();
+            .collect();
 
-        // TODO check FuzzySelect, requires feature to be enabled
-        selection_opt = Select::with_theme(&ColorfulTheme::default())
+        let mut selections = vec![SEARCH.to_string()];
+        selections.extend(tables.clone());
+
+        main_selection_opt = Select::with_theme(&ColorfulTheme::default())
             .with_prompt("Select a table to launch")
-            .default(selection_opt.unwrap_or(0))
+            .default(main_selection_opt.unwrap_or(0))
             .items(&selections[..])
             .interact_opt()
             .unwrap();
 
-        match selection_opt {
+        match main_selection_opt {
             Some(selection) => {
-                let info = vpx_files_with_tableinfo.get(selection).unwrap();
-                let selected_path = &info.path;
-                match choose_table_option() {
-                    Some(TableOption::Launch) => {
-                        launch(selected_path, vpinball_executable, None);
-                    }
-                    Some(TableOption::LaunchFullscreen) => {
-                        launch(selected_path, vpinball_executable, Some(true));
-                    }
-                    Some(TableOption::LaunchWindowed) => {
-                        launch(selected_path, vpinball_executable, Some(false));
-                    }
-                    Some(TableOption::ForceReload) => {
-                        match frontend_index(config, true, vec![selected_path.clone()]) {
-                            Ok(index) => {
-                                vpx_files_with_tableinfo = index;
-                            }
-                            Err(err) => {
-                                let msg = format!("Unable to reload tables: {:?}", err);
-                                prompt(msg.truecolor(255, 125, 0).to_string());
-                            }
-                        }
-                    }
-                    Some(TableOption::EditVBS) => {
-                        let path = vbs_path_for(selected_path);
-                        if path.exists() {
-                            open(path);
-                        } else {
-                            extractvbs(selected_path, false, None);
-                            open(path);
-                        }
-                    }
-                    Some(TableOption::ExtractVBS) => match extractvbs(selected_path, false, None) {
-                        ExtractResult::Extracted(path) => {
-                            prompt(format!("VBS extracted to {}", path.to_string_lossy()));
-                        }
-                        ExtractResult::Existed(path) => {
-                            let msg = format!("VBS already exists at {}", path.to_string_lossy());
-                            prompt(msg.truecolor(255, 125, 0).to_string());
-                        }
-                    },
-                    Some(TableOption::ShowVBSDiff) => match script_diff(selected_path) {
-                        Ok(diff) => {
-                            prompt(diff);
-                        }
-                        Err(err) => {
-                            let msg = format!("Unable to diff VBS: {}", err);
-                            prompt(msg.truecolor(255, 125, 0).to_string());
-                        }
-                    },
-                    Some(TableOption::PatchVBS) => {
-                        let vbs_path = match extractvbs(selected_path, false, Some("vbs")) {
-                            ExtractResult::Existed(path) => path,
-                            ExtractResult::Extracted(path) => path,
-                        };
-                        match patch_vbs_file(&vbs_path) {
-                            Ok(applied) => {
-                                if applied.is_empty() {
-                                    prompt("No patches applied.".to_string());
-                                } else {
-                                    applied.iter().for_each(|patch| {
-                                        println!("Applied patch: {}", patch);
-                                    });
-                                    prompt(format!(
-                                        "Patched VBS file at {}",
-                                        vbs_path.to_string_lossy()
-                                    ));
-                                }
-                            }
-                            Err(err) => {
-                                let msg = format!("Unable to patch VBS: {}", err);
-                                prompt(msg.truecolor(255, 125, 0).to_string());
-                            }
-                        }
-                    }
-                    Some(TableOption::UnifyLineEndings) => {
-                        let vbs_path = match extractvbs(selected_path, false, Some("vbs")) {
-                            ExtractResult::Existed(path) => path,
-                            ExtractResult::Extracted(path) => path,
-                        };
-                        match unify_line_endings_vbs_file(&vbs_path) {
-                            Ok(NoChanges) => {
-                                prompt(
-                                    "No changes applied as file has correct line endings"
-                                        .to_string(),
-                                );
-                            }
-                            Ok(Unified) => {
-                                prompt(format!(
-                                    "Unified line endings in VBS file at {}",
-                                    vbs_path.to_string_lossy()
-                                ));
-                            }
-                            Err(err) => {
-                                let msg = format!("Unable to patch VBS: {}", err);
-                                prompt(msg.truecolor(255, 125, 0).to_string());
-                            }
-                        }
-                    }
-                    Some(TableOption::CreateVBSPatch) => {
-                        let original_path =
-                            match extractvbs(selected_path, true, Some("vbs.original")) {
-                                ExtractResult::Existed(path) => path,
-                                ExtractResult::Extracted(path) => path,
-                            };
-                        let vbs_path = vbs_path_for(selected_path);
-                        let patch_path = vbs_path.with_extension("vbs.patch");
+                // search
+                if selection == SEARCH_INDEX {
+                    // show a fuzzy search
+                    let selected = FuzzySelect::with_theme(&ColorfulTheme::default())
+                        .with_prompt("Search a table:")
+                        .items(&tables)
+                        .interact_opt()
+                        .unwrap();
 
-                        match run_diff(&original_path, &vbs_path, DiffColor::Never) {
-                            Ok(diff) => {
-                                let mut file = File::create(&patch_path).unwrap();
-                                file.write_all(&diff).unwrap();
-                            }
-                            Err(err) => {
-                                let msg = format!("Unable to diff VBS: {}", err);
-                                prompt(msg.truecolor(255, 125, 0).to_string());
-                            }
-                        }
+                    if let Some(selected_index) = selected {
+                        let info = vpx_files_with_tableinfo
+                            .get(selected_index)
+                            .unwrap()
+                            .clone();
+                        table_menu(
+                            config,
+                            &mut vpx_files_with_tableinfo,
+                            vpinball_executable,
+                            &info,
+                        );
                     }
-                    Some(TableOption::InfoShow) => match info_gather(selected_path) {
-                        Ok(info) => {
-                            prompt(info);
-                        }
-                        Err(err) => {
-                            let msg = format!("Unable to gather table info: {}", err);
-                            prompt(msg.truecolor(255, 125, 0).to_string());
-                        }
-                    },
-                    Some(TableOption::InfoEdit) => match do_info_edit(selected_path) {
-                        Ok(path) => {
-                            println!("Launched editor for {}", path.display());
-                        }
-                        Err(err) => {
-                            let msg = format!("Unable to edit table info: {}", err);
-                            prompt(msg.truecolor(255, 125, 0).to_string());
-                        }
-                    },
-                    Some(TableOption::InfoDiff) => match info_diff(selected_path) {
-                        Ok(diff) => {
-                            prompt(diff);
-                        }
-                        Err(err) => {
-                            let msg = format!("Unable to diff info: {}", err);
-                            prompt(msg.truecolor(255, 125, 0).to_string());
-                        }
-                    },
-                    None => (),
+                } else {
+                    let index = selection - 1;
+
+                    let info = vpx_files_with_tableinfo.get(index).unwrap().clone();
+                    table_menu(
+                        config,
+                        &mut vpx_files_with_tableinfo,
+                        vpinball_executable,
+                        &info,
+                    );
                 }
             }
             None => break,
         };
+    }
+}
+
+fn table_menu(
+    config: &ResolvedConfig,
+    vpx_files_with_tableinfo: &mut Vec<IndexedTable>,
+    vpinball_executable: &Path,
+    info: &IndexedTable,
+) {
+    let selected_path = &info.path;
+    match choose_table_option() {
+        Some(TableOption::Launch) => {
+            launch(selected_path, vpinball_executable, None);
+        }
+        Some(TableOption::LaunchFullscreen) => {
+            launch(selected_path, vpinball_executable, Some(true));
+        }
+        Some(TableOption::LaunchWindowed) => {
+            launch(selected_path, vpinball_executable, Some(false));
+        }
+        Some(TableOption::ForceReload) => {
+            match frontend_index(config, true, vec![selected_path.clone()]) {
+                Ok(index) => {
+                    vpx_files_with_tableinfo.clear();
+                    vpx_files_with_tableinfo.extend(index);
+                }
+                Err(err) => {
+                    let msg = format!("Unable to reload tables: {:?}", err);
+                    prompt(msg.truecolor(255, 125, 0).to_string());
+                }
+            }
+        }
+        Some(TableOption::EditVBS) => {
+            let path = vbs_path_for(selected_path);
+            if path.exists() {
+                open(path);
+            } else {
+                extractvbs(selected_path, false, None);
+                open(path);
+            }
+        }
+        Some(TableOption::ExtractVBS) => match extractvbs(selected_path, false, None) {
+            ExtractResult::Extracted(path) => {
+                prompt(format!("VBS extracted to {}", path.to_string_lossy()));
+            }
+            ExtractResult::Existed(path) => {
+                let msg = format!("VBS already exists at {}", path.to_string_lossy());
+                prompt(msg.truecolor(255, 125, 0).to_string());
+            }
+        },
+        Some(TableOption::ShowVBSDiff) => match script_diff(selected_path) {
+            Ok(diff) => {
+                prompt(diff);
+            }
+            Err(err) => {
+                let msg = format!("Unable to diff VBS: {}", err);
+                prompt(msg.truecolor(255, 125, 0).to_string());
+            }
+        },
+        Some(TableOption::PatchVBS) => {
+            let vbs_path = match extractvbs(selected_path, false, Some("vbs")) {
+                ExtractResult::Existed(path) => path,
+                ExtractResult::Extracted(path) => path,
+            };
+            match patch_vbs_file(&vbs_path) {
+                Ok(applied) => {
+                    if applied.is_empty() {
+                        prompt("No patches applied.".to_string());
+                    } else {
+                        applied.iter().for_each(|patch| {
+                            println!("Applied patch: {}", patch);
+                        });
+                        prompt(format!(
+                            "Patched VBS file at {}",
+                            vbs_path.to_string_lossy()
+                        ));
+                    }
+                }
+                Err(err) => {
+                    let msg = format!("Unable to patch VBS: {}", err);
+                    prompt(msg.truecolor(255, 125, 0).to_string());
+                }
+            }
+        }
+        Some(TableOption::UnifyLineEndings) => {
+            let vbs_path = match extractvbs(selected_path, false, Some("vbs")) {
+                ExtractResult::Existed(path) => path,
+                ExtractResult::Extracted(path) => path,
+            };
+            match unify_line_endings_vbs_file(&vbs_path) {
+                Ok(NoChanges) => {
+                    prompt("No changes applied as file has correct line endings".to_string());
+                }
+                Ok(Unified) => {
+                    prompt(format!(
+                        "Unified line endings in VBS file at {}",
+                        vbs_path.to_string_lossy()
+                    ));
+                }
+                Err(err) => {
+                    let msg = format!("Unable to patch VBS: {}", err);
+                    prompt(msg.truecolor(255, 125, 0).to_string());
+                }
+            }
+        }
+        Some(TableOption::CreateVBSPatch) => {
+            let original_path = match extractvbs(selected_path, true, Some("vbs.original")) {
+                ExtractResult::Existed(path) => path,
+                ExtractResult::Extracted(path) => path,
+            };
+            let vbs_path = vbs_path_for(selected_path);
+            let patch_path = vbs_path.with_extension("vbs.patch");
+
+            match run_diff(&original_path, &vbs_path, DiffColor::Never) {
+                Ok(diff) => {
+                    let mut file = File::create(patch_path).unwrap();
+                    file.write_all(&diff).unwrap();
+                }
+                Err(err) => {
+                    let msg = format!("Unable to diff VBS: {}", err);
+                    prompt(msg.truecolor(255, 125, 0).to_string());
+                }
+            }
+        }
+        Some(TableOption::InfoShow) => match info_gather(selected_path) {
+            Ok(info) => {
+                prompt(info);
+            }
+            Err(err) => {
+                let msg = format!("Unable to gather table info: {}", err);
+                prompt(msg.truecolor(255, 125, 0).to_string());
+            }
+        },
+        Some(TableOption::InfoEdit) => match do_info_edit(selected_path) {
+            Ok(path) => {
+                println!("Launched editor for {}", path.display());
+            }
+            Err(err) => {
+                let msg = format!("Unable to edit table info: {}", err);
+                prompt(msg.truecolor(255, 125, 0).to_string());
+            }
+        },
+        Some(TableOption::InfoDiff) => match info_diff(selected_path) {
+            Ok(diff) => {
+                prompt(diff);
+            }
+            Err(err) => {
+                let msg = format!("Unable to diff info: {}", err);
+                prompt(msg.truecolor(255, 125, 0).to_string());
+            }
+        },
+        None => (),
     }
 }
 
