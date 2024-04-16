@@ -63,7 +63,7 @@ pub struct PathWithMetadata {
     pub last_modified: SystemTime,
 }
 
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Debug, Eq, Ord, PartialOrd)]
 pub struct IsoSystemTime(SystemTime);
 impl From<SystemTime> for IsoSystemTime {
     fn from(system_time: SystemTime) -> Self {

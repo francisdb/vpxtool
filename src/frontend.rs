@@ -27,8 +27,10 @@ use crate::{
 const LAUNCH: Emoji = Emoji("🚀", "[launch]");
 const CRASH: Emoji = Emoji("💥", "[crash]");
 
-const SEARCH: &str = "-- Search --";
+const SEARCH: &str = "> Search";
+const RECENT: &str = "> Recent";
 const SEARCH_INDEX: usize = 0;
+const RECENT_INDEX: usize = 1;
 
 enum TableOption {
     Launch,
@@ -146,11 +148,11 @@ pub fn frontend(
             .map(|indexed| display_table_line_full(indexed, roms))
             .collect();
 
-        let mut selections = vec![SEARCH.to_string()];
+        let mut selections = vec![SEARCH.bold().to_string(), RECENT.bold().to_string()];
         selections.extend(tables.clone());
 
         main_selection_opt = Select::with_theme(&ColorfulTheme::default())
-            .with_prompt("Select a table to launch")
+            .with_prompt("Select a table")
             .default(main_selection_opt.unwrap_or(0))
             .items(&selections[..])
             .interact_opt()
@@ -159,36 +161,72 @@ pub fn frontend(
         match main_selection_opt {
             Some(selection) => {
                 // search
-                if selection == SEARCH_INDEX {
-                    // show a fuzzy search
-                    let selected = FuzzySelect::with_theme(&ColorfulTheme::default())
-                        .with_prompt("Search a table:")
-                        .items(&tables)
-                        .interact_opt()
-                        .unwrap();
 
-                    if let Some(selected_index) = selected {
-                        let info = vpx_files_with_tableinfo
-                            .get(selected_index)
-                            .unwrap()
-                            .clone();
+                match selection {
+                    SEARCH_INDEX => {
+                        // show a fuzzy search
+                        let selected = FuzzySelect::with_theme(&ColorfulTheme::default())
+                            .with_prompt("Search a table:")
+                            .items(&tables)
+                            .interact_opt()
+                            .unwrap();
+
+                        if let Some(selected_index) = selected {
+                            let info = vpx_files_with_tableinfo
+                                .get(selected_index)
+                                .unwrap()
+                                .clone();
+                            let info_str = display_table_line_full(&info, roms);
+                            table_menu(
+                                config,
+                                &mut vpx_files_with_tableinfo,
+                                vpinball_executable,
+                                &info,
+                                &info_str,
+                            );
+                        }
+                    }
+                    RECENT_INDEX => {
+                        // take the last 10 most recent tables
+                        let mut recent: Vec<IndexedTable> = vpx_files_with_tableinfo.clone();
+                        recent.sort_by_key(|indexed| indexed.last_modified);
+                        let last_modified = recent.iter().rev().take(50).collect::<Vec<_>>();
+                        let last_modified_str: Vec<String> = last_modified
+                            .iter()
+                            .map(|indexed| display_table_line_full(indexed, roms))
+                            .collect();
+
+                        let selected = Select::with_theme(&ColorfulTheme::default())
+                            .with_prompt("Select a table")
+                            .items(&last_modified_str)
+                            .interact_opt()
+                            .unwrap();
+
+                        if let Some(selected_index) = selected {
+                            let info = last_modified.get(selected_index).unwrap();
+                            let info_str = display_table_line_full(info, roms);
+                            table_menu(
+                                config,
+                                &mut vpx_files_with_tableinfo,
+                                vpinball_executable,
+                                info,
+                                &info_str,
+                            );
+                        }
+                    }
+                    _ => {
+                        let index = selection - 2;
+
+                        let info = vpx_files_with_tableinfo.get(index).unwrap().clone();
+                        let info_str = display_table_line_full(&info, roms);
                         table_menu(
                             config,
                             &mut vpx_files_with_tableinfo,
                             vpinball_executable,
                             &info,
+                            &info_str,
                         );
                     }
-                } else {
-                    let index = selection - 1;
-
-                    let info = vpx_files_with_tableinfo.get(index).unwrap().clone();
-                    table_menu(
-                        config,
-                        &mut vpx_files_with_tableinfo,
-                        vpinball_executable,
-                        &info,
-                    );
                 }
             }
             None => break,
@@ -201,9 +239,10 @@ fn table_menu(
     vpx_files_with_tableinfo: &mut Vec<IndexedTable>,
     vpinball_executable: &Path,
     info: &IndexedTable,
+    info_str: &str,
 ) {
     let selected_path = &info.path;
-    match choose_table_option() {
+    match choose_table_option(info_str) {
         Some(TableOption::Launch) => {
             launch(selected_path, vpinball_executable, None);
         }
@@ -366,7 +405,7 @@ fn prompt<S: Into<String>>(msg: S) {
         .unwrap();
 }
 
-fn choose_table_option() -> Option<TableOption> {
+fn choose_table_option(table_name: &str) -> Option<TableOption> {
     // iterate over table options
     let selections = TableOption::ALL
         .iter()
@@ -374,7 +413,7 @@ fn choose_table_option() -> Option<TableOption> {
         .collect::<Vec<String>>();
 
     let selection_opt = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt("Choose an option")
+        .with_prompt(table_name)
         .default(0)
         .items(&selections[..])
         .interact_opt()
