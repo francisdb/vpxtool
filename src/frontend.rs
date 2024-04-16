@@ -308,7 +308,7 @@ fn table_menu(
 
             match run_diff(&original_path, &vbs_path, DiffColor::Never) {
                 Ok(diff) => {
-                    let mut file = File::create(&patch_path).unwrap();
+                    let mut file = File::create(patch_path).unwrap();
                     file.write_all(&diff).unwrap();
                 }
                 Err(err) => {
