@@ -72,7 +72,19 @@ launch them.
 
 A configuration file will be written to store the Visual Pinball executable location.
 
-Tables are assummed to be in the same directory as the executable for now.
+To show the current config location use the following command
+```
+vpxtool config show
+```
+
+### Configuring a custom editor
+
+When actions are invoked that open an editor the default editor configured for your system will be used. In case you want to override this with a specific editor you can add the following line to the config file:
+
+```yaml
+# use Visual Studio Code as default editor
+editor = "code"
+```
 
 ## References / Research
 

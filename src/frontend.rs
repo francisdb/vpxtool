@@ -19,7 +19,7 @@ use crate::indexer::{IndexError, IndexedTable, Progress};
 use crate::patcher::LineEndingsResult::{NoChanges, Unified};
 use crate::patcher::{patch_vbs_file, unify_line_endings_vbs_file};
 use crate::{
-    indexer, info_diff, info_edit, info_gather, run_diff, script_diff,
+    indexer, info_diff, info_edit, info_gather, open_editor, run_diff, script_diff,
     vpx::{extractvbs, vbs_path_for, ExtractResult},
     DiffColor, ProgressBarProgress,
 };
@@ -266,11 +266,20 @@ fn table_menu(
         }
         Some(TableOption::EditVBS) => {
             let path = vbs_path_for(selected_path);
-            if path.exists() {
-                open(path);
+            let result = if path.exists() {
+                open_editor(&path, Some(config))
             } else {
                 extractvbs(selected_path, false, None);
-                open(path);
+                open_editor(&path, Some(config))
+            };
+            match result {
+                Ok(_) => {
+                    println!("Launched editor for {}", path.display());
+                }
+                Err(err) => {
+                    let msg = format!("Unable to edit VBS: {}", err);
+                    prompt(msg.truecolor(255, 125, 0).to_string());
+                }
             }
         }
         Some(TableOption::ExtractVBS) => match extractvbs(selected_path, false, None) {
@@ -365,7 +374,7 @@ fn table_menu(
                 prompt(msg.truecolor(255, 125, 0).to_string());
             }
         },
-        Some(TableOption::InfoEdit) => match do_info_edit(selected_path) {
+        Some(TableOption::InfoEdit) => match info_edit(selected_path, Some(config)) {
             Ok(path) => {
                 println!("Launched editor for {}", path.display());
             }
@@ -385,15 +394,6 @@ fn table_menu(
         },
         None => (),
     }
-}
-
-fn do_info_edit(selected_path: &PathBuf) -> io::Result<PathBuf> {
-    info_edit(selected_path)
-}
-
-fn open(path: PathBuf) {
-    open::that(&path)
-        .unwrap_or_else(|err| prompt(format!("Unable to open {} {err}", path.to_string_lossy())));
 }
 
 fn prompt<S: Into<String>>(msg: S) {
