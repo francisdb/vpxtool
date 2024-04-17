@@ -18,12 +18,14 @@ const CONFIGURATION_FILE_NAME: &str = "vpxtool.cfg";
 pub struct Config {
     pub vpx_executable: PathBuf,
     pub tables_folder: Option<PathBuf>,
+    pub editor: Option<String>,
 }
 impl Config {
     fn from(resolved_config: &ResolvedConfig) -> Self {
         Config {
             vpx_executable: resolved_config.vpx_executable.clone(),
             tables_folder: Some(resolved_config.tables_folder.clone()),
+            editor: resolved_config.editor.clone(),
         }
     }
 }
@@ -33,6 +35,7 @@ pub struct ResolvedConfig {
     pub vpx_executable: PathBuf,
     pub tables_folder: PathBuf,
     pub tables_index_path: PathBuf,
+    pub editor: Option<String>,
 }
 
 impl ResolvedConfig {
@@ -147,6 +150,7 @@ fn read_config(config_path: &Path) -> io::Result<ResolvedConfig> {
         vpx_executable: config.vpx_executable,
         tables_folder: tables_folder.clone(),
         tables_index_path: tables_index_path(&tables_folder),
+        editor: config.editor,
     };
     Ok(resolved_config)
 }
@@ -239,6 +243,7 @@ fn create_default_config() -> io::Result<(PathBuf, ResolvedConfig)> {
         vpx_executable,
         tables_folder: tables_root,
         tables_index_path: index_path,
+        editor: None,
     };
     let config = Config::from(&resolved_config);
 
@@ -328,6 +333,7 @@ mod tests {
                     vpx_executable: PathBuf::from("/tmp/test/vpinball"),
                     tables_folder: expected_tables_dir.clone(),
                     tables_index_path: expected_tables_dir.join("vpxtool_index.json"),
+                    editor: None,
                 }
             );
         } else {
@@ -337,6 +343,7 @@ mod tests {
                     vpx_executable: PathBuf::from("/tmp/test/vpinball"),
                     tables_folder: PathBuf::from("/tmp/test/tables"),
                     tables_index_path: PathBuf::from("/tmp/test/tables/vpxtool_index.json"),
+                    editor: None,
                 }
             );
         }

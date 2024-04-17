@@ -1,4 +1,4 @@
-use crate::config::SetupConfigResult;
+use crate::config::{ResolvedConfig, SetupConfigResult};
 use crate::indexer::{IndexError, Progress};
 use crate::patcher::patch_vbs_file;
 use base64::Engine;
@@ -126,8 +126,10 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
                 let path = path.unwrap_or("");
                 let expanded_path = expand_path(path)?;
+                let loaded_config = config::load_config()?;
+                let config = loaded_config.as_ref().map(|c| &c.1);
                 println!("editing info for {}", expanded_path.display())?;
-                info_edit(&expanded_path)?;
+                info_edit(&expanded_path, config)?;
                 Ok(ExitCode::SUCCESS)
             }
             Some((CMD_INFO_DIFF, sub_matches)) => {
@@ -368,12 +370,14 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
 
                 let expanded_vpx_path = expand_path(path)?;
 
+                let loaded_config = config::load_config()?;
+                let config = loaded_config.as_ref().map(|c| &c.1);
                 let vbs_path = vpx::vbs_path_for(&expanded_vpx_path);
                 if vbs_path.exists() {
-                    open_or_fail(&vbs_path)
+                    open_or_fail(&vbs_path, config)
                 } else {
                     extractvbs(&expanded_vpx_path, false, None);
-                    open_or_fail(&vbs_path)
+                    open_or_fail(&vbs_path, config)
                 }
             }
             Some((CMD_SCRIPT_DIFF, sub_matches)) => {
@@ -618,7 +622,9 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             },
             Some((CMD_CONFIG_EDIT, _)) => match config::config_path() {
                 Some(config_path) => {
-                    open_editor(&config_path)?;
+                    let loaded_config = config::load_config()?;
+                    let config = loaded_config.as_ref().map(|c| &c.1);
+                    open_editor(config_path, config)?;
                     Ok(ExitCode::SUCCESS)
                 }
                 None => fail("No config file found"),
@@ -879,8 +885,8 @@ fn build_command() -> Command {
         )
 }
 
-fn open_or_fail(vbs_path: &Path) -> io::Result<ExitCode> {
-    match open::that(vbs_path) {
+fn open_or_fail(vbs_path: &Path, config: Option<&ResolvedConfig>) -> io::Result<ExitCode> {
+    match open_editor(vbs_path, config) {
         Ok(_) => Ok(ExitCode::SUCCESS),
         Err(err) => {
             let msg = format!("Unable to open {}", vbs_path.to_string_lossy());
@@ -1181,18 +1187,41 @@ fn write_info_json(vpx_file_path: &PathBuf, info_file_path: &PathBuf) -> io::Res
     Ok(())
 }
 
-fn info_edit(vpx_file_path: &PathBuf) -> io::Result<PathBuf> {
+fn info_edit(vpx_file_path: &PathBuf, config: Option<&ResolvedConfig>) -> io::Result<PathBuf> {
     let info_file_path = vpx_file_path.with_extension("info.json");
     if !info_file_path.exists() {
         write_info_json(vpx_file_path, &info_file_path)?;
     }
-    open_editor(&info_file_path)?;
+    open_editor(&info_file_path, config)?;
     Ok(info_file_path)
 }
 
-fn open_editor(file_to_edit: &PathBuf) -> io::Result<()> {
-    // TODO add a default editor override to the config file
-    edit::edit_file(file_to_edit)
+fn open_editor<P: AsRef<Path>>(file_to_edit: P, config: Option<&ResolvedConfig>) -> io::Result<()> {
+    match config.iter().flat_map(|c| c.editor.clone()).next() {
+        Some(editor) => open_configured_editor(&file_to_edit, &editor),
+        None => edit::edit_file(file_to_edit),
+    }
+}
+
+fn open_configured_editor<P: AsRef<Path>>(file_to_edit: &P, editor: &String) -> io::Result<()> {
+    let mut command = std::process::Command::new(editor);
+    command.arg(file_to_edit.as_ref());
+    command.stdout(std::process::Stdio::inherit());
+    command.stderr(std::process::Stdio::inherit());
+    match command.status() {
+        Ok(status) => {
+            if status.success() {
+                Ok(())
+            } else {
+                let warning = format!("Failed to open editor {}: {}", editor, status);
+                Err(io::Error::new(io::ErrorKind::Other, warning))
+            }
+        }
+        Err(e) => {
+            let warning = format!("Failed to open editor {}: {}", &editor, e);
+            Err(io::Error::new(io::ErrorKind::Other, warning))
+        }
+    }
 }
 
 fn info_import(_vpx_file_path: &Path) -> io::Result<ExitCode> {
