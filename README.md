@@ -86,6 +86,11 @@ When actions are invoked that open an editor the default editor configured for y
 editor = "code"
 ```
 
+## Projects using vpxtool
+
+* https://github.com/syd711/vpin-studio
+* https://github.com/mpcarr/aztec-quest
+
 ## References / Research
 
 Other related projects that read assemble vpx files:
