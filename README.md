@@ -2,6 +2,8 @@
 
 Cross-platform console based utility for the vpinball ecosystem
 
+Join [#vpxtool on "Virtual Pinball Chat" discord](https://discord.gg/eYsvyMu8) for support and questions.
+
 ## Install
 
 Download the latest release for your operating system at https://github.com/francisdb/vpxtool/releases, extract it and
