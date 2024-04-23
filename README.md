@@ -92,6 +92,7 @@ editor = "code"
 
 * https://github.com/syd711/vpin-studio
 * https://github.com/mpcarr/aztec-quest
+* https://github.com/francisdb/vpinball-example-table-extracted
 
 ## References / Research
 
