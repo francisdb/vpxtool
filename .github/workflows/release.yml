@@ -38,14 +38,14 @@ jobs:
             cargo_command: cargo
 
           - os_name: macOS-x86_64
-            os: macOS-latest
+            os: macOS-13
             target: x86_64-apple-darwin
             bin: vpxtool
             name: vpxtool-macOS-x86_64
             cargo_command: cargo
 
           - os_name: macOS-aarch64
-            os: macOS-latest
+            os: macOS-13
             target: aarch64-apple-darwin
             bin: vpxtool
             name: vpxtool-macOS-aarch64
