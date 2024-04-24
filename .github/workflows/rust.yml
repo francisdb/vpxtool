@@ -16,7 +16,7 @@ jobs:
         platform:
           - os: ubuntu-latest
           - os: windows-latest
-          - os: macOS-latest
+          - os: macOS-13
 
     runs-on: ${{ matrix.platform.os }}
 
