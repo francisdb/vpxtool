@@ -272,13 +272,6 @@ pub trait Progress {
     fn set_position(&self, i: u64);
     fn finish_and_clear(&self);
 }
-// void progress
-struct VoidProgress;
-impl Progress for VoidProgress {
-    fn set_length(&self, _len: u64) {}
-    fn set_position(&self, _i: u64) {}
-    fn finish_and_clear(&self) {}
-}
 
 pub enum IndexError {
     FolderDoesNotExist(PathBuf),
@@ -574,6 +567,13 @@ mod tests {
     use crate::vpx;
     use serde_json::json;
     use testdir::testdir;
+
+    struct VoidProgress;
+    impl Progress for VoidProgress {
+        fn set_length(&self, _len: u64) {}
+        fn set_position(&self, _i: u64) {}
+        fn finish_and_clear(&self) {}
+    }
 
     #[test]
     fn test_index_vpx_files() -> io::Result<()> {
