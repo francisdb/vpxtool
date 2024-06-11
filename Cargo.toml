@@ -37,7 +37,7 @@ wild = "2.2.1"
 figment = { version = "0.10", features = ["toml", "env"] }
 toml = "0.8.13"
 is_executable = "1.0.1"
-regex = { version = "1.10.4", features = [] }
+regex = { version = "1.10.5", features = [] }
 vpin = { version = "0.15.0" }
 rust-ini = "0.21.0"
 edit = "0.1.5"
