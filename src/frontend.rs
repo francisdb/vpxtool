@@ -199,6 +199,7 @@ pub fn frontend(
                         let selected = Select::with_theme(&ColorfulTheme::default())
                             .with_prompt("Select a table")
                             .items(&last_modified_str)
+                            .default(0)
                             .interact_opt()
                             .unwrap();
 
