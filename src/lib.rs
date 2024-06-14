@@ -63,6 +63,9 @@ const CMD_INFO_IMPORT: &str = "import";
 const CMD_INFO_EDIT: &str = "edit";
 const CMD_INFO_DIFF: &str = "diff";
 
+const CMD_IMAGES: &str = "images";
+const CMD_IMAGES_WEBP: &str = "webp";
+
 pub struct ProgressBarProgress {
     pb: ProgressBar,
 }
@@ -631,6 +634,31 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             },
             _ => unreachable!(),
         },
+        Some((CMD_IMAGES, sub_matches)) => match sub_matches.subcommand() {
+            Some((CMD_IMAGES_WEBP, sub_matches)) => {
+                let path = sub_matches
+                    .get_one::<String>("VPXPATH")
+                    .map(|s| s.as_str())
+                    .unwrap_or_default();
+                let expanded_path = expand_path(path)?;
+                let mut vpx_file = vpx::open_rw(&expanded_path)?;
+                let images = vpx_file.images_to_webp()?;
+                if !images.is_empty() {
+                    for image in images.iter() {
+                        println!(
+                            "Updated {} from {} to {}",
+                            image.name, image.old_extension, image.new_extension
+                        )?;
+                    }
+                    println!("Compacting vpx file")?;
+                    vpx::compact(&expanded_path)?;
+                } else {
+                    println!("No images to update")?;
+                }
+                Ok(ExitCode::SUCCESS)
+            }
+            _ => unreachable!(),
+        },
         _ => unreachable!(), // If all subcommands are defined above, anything else is unreachable!()
     }
 }
@@ -882,6 +910,19 @@ fn build_command() -> Command {
                     Command::new(CMD_CONFIG_EDIT)
                         .about("Edits the config file using the default editor"),
                 )
+        )
+        .subcommand(
+            Command::new(CMD_IMAGES)
+                .subcommand_required(true)
+                .about("Vpx image related commands")
+                .subcommand(
+                    Command::new(CMD_IMAGES_WEBP)
+                        .about("Converts lossless (bmp/png) images in a vpx file to webp")
+                        .arg(
+                            arg!(<VPXPATH> "The path to the vpx file")
+                                .required(true),
+                        ),
+                ),
         )
 }
 
