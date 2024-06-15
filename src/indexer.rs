@@ -14,7 +14,7 @@ use std::{
 use colored::Colorize;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use vpin::vpx::jsonmodel::json_to_info;
-use walkdir::WalkDir;
+use walkdir::{DirEntry, FilterEntry, IntoIter, WalkDir};
 
 use crate::tableinfo::TableInfo;
 use crate::vpx;
@@ -229,7 +229,7 @@ pub fn find_vpx_files<P: AsRef<Path>>(
 ) -> io::Result<Vec<PathWithMetadata>> {
     if recursive {
         let mut vpx_files = Vec::new();
-        let mut entries = WalkDir::new(tables_path).into_iter();
+        let mut entries = walk_dir_filtered(&tables_path);
         entries.try_for_each(|entry| {
             let dir_entry = entry?;
             let path = dir_entry.path();
@@ -265,6 +265,18 @@ pub fn find_vpx_files<P: AsRef<Path>>(
         })?;
         Ok(vpx_files)
     }
+}
+
+/// Walks the directory and filters out .git and __MACOSX folders
+fn walk_dir_filtered<P: AsRef<Path>>(
+    tables_path: &P,
+) -> FilterEntry<IntoIter, fn(&DirEntry) -> bool> {
+    WalkDir::new(tables_path).into_iter().filter_entry(|entry| {
+        let path = entry.path();
+        let git = std::path::Component::Normal(".git".as_ref());
+        let macosx = std::path::Component::Normal("__MACOSX".as_ref());
+        !path.components().any(|c| c == git) && !path.components().any(|c| c == macosx)
+    })
 }
 
 pub trait Progress {
@@ -578,6 +590,14 @@ mod tests {
     #[test]
     fn test_index_vpx_files() -> io::Result<()> {
         let test_dir = testdir!();
+        // the next two folders should be ignored
+        let macosx = test_dir.join("__MACOSX");
+        fs::create_dir(&macosx)?;
+        File::create(macosx.join("ignored.vpx"))?;
+        let git = test_dir.join(".git");
+        fs::create_dir(&git)?;
+        File::create(git.join("ignored2.vpx"))?;
+        // actual vpx files to index
         let vpx_1_path = test_dir.join("test.vpx");
         let vpx_2_path = test_dir.join("test2.vpx");
         vpx::new_minimal_vpx(&vpx_1_path)?;
