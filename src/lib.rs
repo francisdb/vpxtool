@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 use std::process::{exit, ExitCode};
 use vpin::directb2s::read;
 use vpin::vpx;
-use vpin::vpx::jsonmodel::info_to_json;
+use vpin::vpx::jsonmodel::{game_data_to_json, info_to_json};
 use vpin::vpx::{expanded, extractvbs, importvbs, tableinfo, verify, ExtractResult, VerifyResult};
 
 pub mod config;
@@ -65,6 +65,9 @@ const CMD_INFO_DIFF: &str = "diff";
 
 const CMD_IMAGES: &str = "images";
 const CMD_IMAGES_WEBP: &str = "webp";
+
+const CMD_GAMEDATA: &str = "gamedata";
+const CMD_GAMEDATA_SHOW: &str = "show";
 
 pub struct ProgressBarProgress {
     pb: ProgressBar,
@@ -659,6 +662,22 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             }
             _ => unreachable!(),
         },
+        Some((CMD_GAMEDATA, sub_matches)) => match sub_matches.subcommand() {
+            Some((CMD_GAMEDATA_SHOW, sub_matches)) => {
+                let path = sub_matches
+                    .get_one::<String>("VPXPATH")
+                    .map(|s| s.as_str())
+                    .unwrap_or_default();
+                let expanded_path = expand_path(path)?;
+                let mut vpx_file = vpx::open(expanded_path)?;
+                let game_data = vpx_file.read_gamedata()?;
+                let json = game_data_to_json(&game_data);
+                let pretty = serde_json::to_string_pretty(&json)?;
+                println!("{}", pretty)?;
+                Ok(ExitCode::SUCCESS)
+            }
+            _ => unreachable!(),
+        },
         _ => unreachable!(), // If all subcommands are defined above, anything else is unreachable!()
     }
 }
@@ -918,6 +937,19 @@ fn build_command() -> Command {
                 .subcommand(
                     Command::new(CMD_IMAGES_WEBP)
                         .about("Converts lossless (bmp/png) images in a vpx file to webp")
+                        .arg(
+                            arg!(<VPXPATH> "The path to the vpx file")
+                                .required(true),
+                        ),
+                ),
+        )
+        .subcommand(
+            Command::new(CMD_GAMEDATA)
+                .subcommand_required(true)
+                .about("Vpx gamedata related commands")
+                .subcommand(
+                    Command::new(CMD_GAMEDATA_SHOW)
+                        .about("Show the gamedata for a vpx file")
                         .arg(
                             arg!(<VPXPATH> "The path to the vpx file")
                                 .required(true),
