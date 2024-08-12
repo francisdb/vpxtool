@@ -39,7 +39,7 @@ toml = "0.8.19"
 is_executable = "1.0.1"
 regex = { version = "1.10.5", features = [] }
 vpin = { version = "0.15.3" }
-rust-ini = "0.21.0"
+rust-ini = "0.21.1"
 edit = "0.1.5"
 
 [dev-dependencies]
