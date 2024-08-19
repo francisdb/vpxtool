@@ -108,3 +108,8 @@ An example vpx managed in github with some imagemagick scripts to compose textur
 
 https://github.com/vbousquet/flexdmd/tree/master/FlexDemo
 
+## Building
+
+The project uses the default [rust](https://www.rust-lang.org/) build tool `cargo`. To get going read the docs on installation and first steps at https://doc.rust-lang.org/cargo/
+
+`cargo build --release`
