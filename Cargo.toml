@@ -38,7 +38,7 @@ figment = { version = "0.10", features = ["toml", "env"] }
 toml = "0.8.19"
 is_executable = "1.0.1"
 regex = { version = "1.10.6", features = [] }
-vpin = { version = "0.15.4" }
+vpin = { version = "0.15.5" }
 rust-ini = "0.21.1"
 edit = "0.1.5"
 
