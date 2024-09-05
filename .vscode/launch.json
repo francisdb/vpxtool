@@ -11,11 +11,11 @@
             "cargo": {
                 "args": [
                     "build",
-                    "--bin=vxtool",
-                    "--package=vxtool"
+                    "--bin=vpxtool",
+                    "--package=vpxtool"
                 ],
                 "filter": {
-                    "name": "vxtool",
+                    "name": "vpxtool",
                     "kind": "bin"
                 }
             },
@@ -33,11 +33,11 @@
                 "args": [
                     "test",
                     "--no-run",
-                    "--bin=vxtool",
-                    "--package=vxtool"
+                    "--bin=vpxtool",
+                    "--package=vpxtool"
                 ],
                 "filter": {
-                    "name": "vxtool",
+                    "name": "vpxtool",
                     "kind": "bin"
                 }
             },
