@@ -18,7 +18,7 @@ name = "vpxtool"
 base64 = "0.22.1"
 #see https://github.com/chronotope/chrono/issues/602#issuecomment-1242149249
 chrono = { version = "0.4.38", default-features = false, features = ["clock"] }
-clap = { version = "4.5.16", features = ["derive", "string"] }
+clap = { version = "4.5.17", features = ["derive", "string"] }
 colored = "2.1.0"
 console = "0.15.8"
 dialoguer = { version = "0.11.0", features = ["fuzzy-select"] }
