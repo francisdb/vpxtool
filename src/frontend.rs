@@ -270,8 +270,8 @@ fn table_menu(
             let result = if path.exists() {
                 open_editor(&path, Some(config))
             } else {
-                extractvbs(selected_path, false, None);
-                open_editor(&path, Some(config))
+                extractvbs(selected_path, false, None)
+                    .and_then(|_| open_editor(&path, Some(config)))
             };
             match result {
                 Ok(_) => {
@@ -284,11 +284,15 @@ fn table_menu(
             }
         }
         Some(TableOption::ExtractVBS) => match extractvbs(selected_path, false, None) {
-            ExtractResult::Extracted(path) => {
+            Ok(ExtractResult::Extracted(path)) => {
                 prompt(format!("VBS extracted to {}", path.to_string_lossy()));
             }
-            ExtractResult::Existed(path) => {
+            Ok(ExtractResult::Existed(path)) => {
                 let msg = format!("VBS already exists at {}", path.to_string_lossy());
+                prompt(msg.truecolor(255, 125, 0).to_string());
+            }
+            Err(err) => {
+                let msg = format!("Unable to extract VBS: {}", err);
                 prompt(msg.truecolor(255, 125, 0).to_string());
             }
         },
@@ -303,8 +307,13 @@ fn table_menu(
         },
         Some(TableOption::PatchVBS) => {
             let vbs_path = match extractvbs(selected_path, false, Some("vbs")) {
-                ExtractResult::Existed(path) => path,
-                ExtractResult::Extracted(path) => path,
+                Ok(ExtractResult::Existed(path)) => path,
+                Ok(ExtractResult::Extracted(path)) => path,
+                Err(err) => {
+                    let msg = format!("Unable to extract VBS: {}", err);
+                    prompt(msg.truecolor(255, 125, 0).to_string());
+                    return;
+                }
             };
             match patch_vbs_file(&vbs_path) {
                 Ok(applied) => {
@@ -328,8 +337,13 @@ fn table_menu(
         }
         Some(TableOption::UnifyLineEndings) => {
             let vbs_path = match extractvbs(selected_path, false, Some("vbs")) {
-                ExtractResult::Existed(path) => path,
-                ExtractResult::Extracted(path) => path,
+                Ok(ExtractResult::Existed(path)) => path,
+                Ok(ExtractResult::Extracted(path)) => path,
+                Err(err) => {
+                    let msg = format!("Unable to extract VBS: {}", err);
+                    prompt(msg.truecolor(255, 125, 0).to_string());
+                    return;
+                }
             };
             match unify_line_endings_vbs_file(&vbs_path) {
                 Ok(NoChanges) => {
@@ -349,8 +363,13 @@ fn table_menu(
         }
         Some(TableOption::CreateVBSPatch) => {
             let original_path = match extractvbs(selected_path, true, Some("vbs.original")) {
-                ExtractResult::Existed(path) => path,
-                ExtractResult::Extracted(path) => path,
+                Ok(ExtractResult::Existed(path)) => path,
+                Ok(ExtractResult::Extracted(path)) => path,
+                Err(err) => {
+                    let msg = format!("Unable to extract VBS: {}", err);
+                    prompt(msg.truecolor(255, 125, 0).to_string());
+                    return;
+                }
             };
             let vbs_path = vbs_path_for(selected_path);
             let patch_path = vbs_path.with_extension("vbs.patch");
