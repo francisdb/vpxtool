@@ -1136,10 +1136,10 @@ fn strip_cr_lf(s: &str) -> String {
 fn os_independent_file_name(file_path: String) -> Option<String> {
     // we can't use path here as this uses the system path encoding
     // we might have to parse windows paths on mac/linux
-    file_path
-        .rsplit(|c| c == '/' || c == '\\')
-        .next()
-        .map(|f| f.to_string())
+    if file_path.is_empty() {
+        return None;
+    }
+    file_path.rsplit(['/', '\\']).next().map(|f| f.to_string())
 }
 
 fn expand_path(path: &str) -> io::Result<PathBuf> {
@@ -1484,4 +1484,51 @@ pub fn run_diff(
         .arg(vbs_filename)
         .output()
         .map(|o| o.stdout)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_os_independent_file_name_windows() {
+        let file_path = "C:\\Users\\user\\Desktop\\file.txt";
+        let result = os_independent_file_name(file_path.to_string());
+        assert_eq!(result, Some("file.txt".to_string()));
+    }
+
+    #[test]
+    fn test_os_independent_file_unix() {
+        let file_path = "/users/joe/file.txt";
+        let result = os_independent_file_name(file_path.to_string());
+        assert_eq!(result, Some("file.txt".to_string()));
+    }
+
+    #[test]
+    fn test_os_independent_file_name_no_extension() {
+        let file_path = "C:\\Users\\user\\Desktop\\file";
+        let result = os_independent_file_name(file_path.to_string());
+        assert_eq!(result, Some("file".to_string()));
+    }
+
+    #[test]
+    fn test_os_independent_file_name_no_path() {
+        let file_path = "file.txt";
+        let result = os_independent_file_name(file_path.to_string());
+        assert_eq!(result, Some("file.txt".to_string()));
+    }
+
+    #[test]
+    fn test_os_independent_file_name_no_path_no_extension() {
+        let file_path = "file";
+        let result = os_independent_file_name(file_path.to_string());
+        assert_eq!(result, Some("file".to_string()));
+    }
+
+    #[test]
+    fn test_os_independent_file_name_empty() {
+        let file_path = "";
+        let result = os_independent_file_name(file_path.to_string());
+        assert_eq!(result, None);
+    }
 }
