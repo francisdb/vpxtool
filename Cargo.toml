@@ -36,7 +36,7 @@ walkdir = "2.5.0"
 wild = "2.2.1"
 figment = { version = "0.10", features = ["toml", "env"] }
 toml = "0.8.19"
-is_executable = "1.0.1"
+is_executable = "1.0.3"
 regex = { version = "1.10.6", features = [] }
 vpin = { version = "0.15.5" }
 rust-ini = "0.21.1"
