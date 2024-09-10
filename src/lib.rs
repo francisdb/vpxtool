@@ -338,16 +338,22 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
 
                 let expanded_path = expand_path(path)?;
                 match extractvbs(&expanded_path, false, None) {
-                    ExtractResult::Existed(vbs_path) => {
+                    Ok(ExtractResult::Existed(vbs_path)) => {
                         let warning =
                             format!("EXISTED {}", vbs_path.display()).truecolor(255, 125, 0);
                         println!("{}", warning)?;
+                        Ok(ExitCode::SUCCESS)
                     }
-                    ExtractResult::Extracted(vbs_path) => {
+                    Ok(ExtractResult::Extracted(vbs_path)) => {
                         println!("CREATED {}", vbs_path.display())?;
+                        Ok(ExitCode::SUCCESS)
+                    }
+                    Err(e) => {
+                        let warning = format!("Error extracting vbs: {}", e).red();
+                        eprintln!("{}", warning)?;
+                        Ok(ExitCode::FAILURE)
                     }
                 }
-                Ok(ExitCode::SUCCESS)
             }
             Some((CMD_SCRIPT_IMPORT, sub_matches)) => {
                 let path = sub_matches
@@ -382,7 +388,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 if vbs_path.exists() {
                     open_or_fail(&vbs_path, config)
                 } else {
-                    extractvbs(&expanded_vpx_path, false, None);
+                    extractvbs(&expanded_vpx_path, false, None)?;
                     open_or_fail(&vbs_path, config)
                 }
             }
@@ -405,16 +411,17 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
 
                 let expanded_path = expand_path(path)?;
                 let vbs_path = match extractvbs(&expanded_path, false, None) {
-                    ExtractResult::Existed(vbs_path) => {
+                    Ok(ExtractResult::Existed(vbs_path)) => {
                         let warning =
                             format!("EXISTED {}", vbs_path.display()).truecolor(255, 125, 0);
                         println!("{}", warning)?;
                         vbs_path
                     }
-                    ExtractResult::Extracted(vbs_path) => {
+                    Ok(ExtractResult::Extracted(vbs_path)) => {
                         println!("CREATED {}", vbs_path.display())?;
                         vbs_path
                     }
+                    Err(e) => return fail_with_error("Error extracting vbs", e),
                 };
 
                 let applied = patch_vbs_file(&vbs_path)?;
@@ -511,13 +518,17 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             for path in paths {
                 let expanded_path = expand_path(path)?;
                 match extractvbs(&expanded_path, overwrite, None) {
-                    ExtractResult::Existed(vbs_path) => {
+                    Ok(ExtractResult::Existed(vbs_path)) => {
                         let warning =
                             format!("EXISTED {}", vbs_path.display()).truecolor(255, 125, 0);
                         println!("{}", warning)?;
                     }
-                    ExtractResult::Extracted(vbs_path) => {
+                    Ok(ExtractResult::Extracted(vbs_path)) => {
                         println!("CREATED {}", vbs_path.display())?;
+                    }
+                    Err(e) => {
+                        let warning = format!("Error extracting vbs: {}", e).red();
+                        eprintln!("{}", warning)?;
                     }
                 }
             }
@@ -1125,10 +1136,10 @@ fn strip_cr_lf(s: &str) -> String {
 fn os_independent_file_name(file_path: String) -> Option<String> {
     // we can't use path here as this uses the system path encoding
     // we might have to parse windows paths on mac/linux
-    file_path
-        .rsplit(|c| c == '/' || c == '\\')
-        .next()
-        .map(|f| f.to_string())
+    if file_path.is_empty() {
+        return None;
+    }
+    file_path.rsplit(['/', '\\']).next().map(|f| f.to_string())
 }
 
 fn expand_path(path: &str) -> io::Result<PathBuf> {
@@ -1371,10 +1382,7 @@ pub fn extract(vpx_file_path: &Path, yes: bool) -> io::Result<ExitCode> {
             println!("Successfully extracted to \"{}\"", root_dir_path.display())?;
             Ok(ExitCode::SUCCESS)
         }
-        Err(e) => {
-            println!("Failed to extract: {}", e)?;
-            Ok(ExitCode::FAILURE)
-        }
+        Err(e) => fail(format!("Failed to extract: {}", e)),
     }
 }
 
@@ -1476,4 +1484,51 @@ pub fn run_diff(
         .arg(vbs_filename)
         .output()
         .map(|o| o.stdout)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_os_independent_file_name_windows() {
+        let file_path = "C:\\Users\\user\\Desktop\\file.txt";
+        let result = os_independent_file_name(file_path.to_string());
+        assert_eq!(result, Some("file.txt".to_string()));
+    }
+
+    #[test]
+    fn test_os_independent_file_unix() {
+        let file_path = "/users/joe/file.txt";
+        let result = os_independent_file_name(file_path.to_string());
+        assert_eq!(result, Some("file.txt".to_string()));
+    }
+
+    #[test]
+    fn test_os_independent_file_name_no_extension() {
+        let file_path = "C:\\Users\\user\\Desktop\\file";
+        let result = os_independent_file_name(file_path.to_string());
+        assert_eq!(result, Some("file".to_string()));
+    }
+
+    #[test]
+    fn test_os_independent_file_name_no_path() {
+        let file_path = "file.txt";
+        let result = os_independent_file_name(file_path.to_string());
+        assert_eq!(result, Some("file.txt".to_string()));
+    }
+
+    #[test]
+    fn test_os_independent_file_name_no_path_no_extension() {
+        let file_path = "file";
+        let result = os_independent_file_name(file_path.to_string());
+        assert_eq!(result, Some("file".to_string()));
+    }
+
+    #[test]
+    fn test_os_independent_file_name_empty() {
+        let file_path = "";
+        let result = os_independent_file_name(file_path.to_string());
+        assert_eq!(result, None);
+    }
 }
