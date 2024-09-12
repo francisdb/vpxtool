@@ -13,16 +13,18 @@ pub mod tui;
 /// Application updater.
 pub mod update;
 
+use crate::indexer::IndexedTable;
 use anyhow::Result;
 use app::App;
 use event::{Event, EventHandler};
 use ratatui::{backend::CrosstermBackend, Terminal};
+use std::collections::HashSet;
 use tui::Tui;
 use update::update;
 
-pub fn main() -> Result<()> {
+pub fn main(items: Vec<IndexedTable>, roms: HashSet<String>) -> Result<()> {
     // Create an application.
-    let mut app = App::new();
+    let mut app = App::new(roms, items);
 
     // Initialize the terminal user interface.
     let backend = CrosstermBackend::new(std::io::stderr());
@@ -39,8 +41,8 @@ pub fn main() -> Result<()> {
         match tui.events.next()? {
             Event::Tick => {}
             Event::Key(key_event) => update(&mut app, key_event),
-            Event::Mouse(_) => {}
-            Event::Resize(_, _) => {}
+            // Event::Mouse(_) => {}
+            // Event::Resize(_, _) => {}
         };
     }
 

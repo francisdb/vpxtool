@@ -26,6 +26,8 @@ pub mod indexer;
 
 pub mod patcher;
 
+mod simplefrontend;
+
 // see https://github.com/fusion-engineering/rust-git-version/issues/21
 const GIT_VERSION: &str = git_version!(args = ["--tags", "--always", "--dirty=-modified"]);
 
@@ -184,7 +186,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     config.global_pinmame_rom_folder().display()
                 )?;
             }
-            match frontend::frontend_index(&config, true, vec![]) {
+            match simplefrontend::frontend_index(&config, true, vec![]) {
                 Ok(tables) if tables.is_empty() => {
                     let warning =
                         format!("No tables found in {}", config.tables_folder.display()).red();
@@ -192,14 +194,15 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     Ok(ExitCode::FAILURE)
                 }
                 Ok(vpx_files_with_tableinfo) => {
-                    let vpinball_executable = &config.vpx_executable;
-                    frontend::frontend(
-                        &config,
-                        vpx_files_with_tableinfo,
-                        &roms,
-                        vpinball_executable,
-                    );
-                    Ok(ExitCode::SUCCESS)
+                    //let vpinball_executable = &config.vpx_executable;
+                    match frontend::main(vpx_files_with_tableinfo, roms) {
+                        Ok(()) => Ok(ExitCode::SUCCESS),
+                        Err(e) => {
+                            let warning = format!("Error running frontend: {}", e).red();
+                            eprintln!("{}", warning)?;
+                            Ok(ExitCode::FAILURE)
+                        }
+                    }
                 }
                 Err(IndexError::FolderDoesNotExist(path)) => {
                     let warning = format!(
@@ -235,7 +238,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     config.global_pinmame_rom_folder().display()
                 )?;
             }
-            match frontend::frontend_index(&config, true, vec![]) {
+            match simplefrontend::frontend_index(&config, true, vec![]) {
                 Ok(tables) if tables.is_empty() => {
                     let warning =
                         format!("No tables found in {}", config.tables_folder.display()).red();
@@ -244,7 +247,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 }
                 Ok(vpx_files_with_tableinfo) => {
                     let vpinball_executable = &config.vpx_executable;
-                    frontend::frontend(
+                    simplefrontend::frontend(
                         &config,
                         vpx_files_with_tableinfo,
                         &roms,

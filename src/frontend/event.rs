@@ -5,7 +5,7 @@ use std::{
 };
 
 use anyhow::Result;
-use crossterm::event::{self, Event as CrosstermEvent, KeyEvent, MouseEvent};
+use crossterm::event::{self, Event as CrosstermEvent, KeyEvent};
 
 /// Terminal events.
 #[derive(Clone, Copy, Debug)]
@@ -14,21 +14,21 @@ pub enum Event {
     Tick,
     /// Key press.
     Key(KeyEvent),
-    /// Mouse click/scroll.
-    Mouse(MouseEvent),
-    /// Terminal resize.
-    Resize(u16, u16),
+    // Mouse click/scroll.
+    // Mouse(MouseEvent),
+    // Terminal resize.
+    // Resize(u16, u16),
 }
 
 /// Terminal event handler.
 #[derive(Debug)]
 pub struct EventHandler {
     /// Event sender channel.
-    sender: mpsc::Sender<Event>,
+    _sender: mpsc::Sender<Event>,
     /// Event receiver channel.
     receiver: mpsc::Receiver<Event>,
     /// Event handler thread.
-    handler: thread::JoinHandle<()>,
+    _handler: thread::JoinHandle<()>,
 }
 
 impl EventHandler {
@@ -48,8 +48,8 @@ impl EventHandler {
                     if event::poll(timeout).expect("no events available") {
                         match event::read().expect("unable to read event") {
                             CrosstermEvent::Key(e) => sender.send(Event::Key(e)),
-                            CrosstermEvent::Mouse(e) => sender.send(Event::Mouse(e)),
-                            CrosstermEvent::Resize(w, h) => sender.send(Event::Resize(w, h)),
+                            CrosstermEvent::Mouse(_e) => Ok(()), //sender.send(Event::Mouse(e)),
+                            CrosstermEvent::Resize(_w, _h) => Ok(()), //sender.send(Event::Resize(w, h)),
                             _ => unimplemented!(),
                         }
                         .expect("failed to send terminal event")
@@ -63,9 +63,9 @@ impl EventHandler {
             })
         };
         Self {
-            sender,
+            _sender: sender,
             receiver,
-            handler,
+            _handler: handler,
         }
     }
 

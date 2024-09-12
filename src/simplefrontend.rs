@@ -514,7 +514,7 @@ fn launch_table(
     Ok(result)
 }
 
-fn display_table_line(table: &IndexedTable) -> String {
+pub fn display_table_line(table: &IndexedTable) -> String {
     let file_name = table
         .path
         .file_stem()
@@ -558,6 +558,6 @@ fn display_table_line_full(table: &IndexedTable, roms: &HashSet<String>) -> Stri
     format!("{}{}{}", base, gamename_suffix, b2s_suffix)
 }
 
-fn capitalize_first_letter(s: &str) -> String {
+pub fn capitalize_first_letter(s: &str) -> String {
     s[0..1].to_uppercase() + &s[1..]
 }
