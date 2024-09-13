@@ -5,14 +5,18 @@ use std::collections::HashSet;
 /// Application.
 
 #[derive(Debug, Default)]
-pub struct App {
+pub struct State {
     /// should the application exit?
     pub should_quit: bool,
-    /// counter
-    pub counter: u8,
-    #[deprecated(note = "The indexer should handle this rom check")]
     pub roms: HashSet<String>,
     pub tables: TableList,
+}
+
+#[derive(Debug, Default)]
+pub enum TablesSort {
+    #[default]
+    Name,
+    LastModified,
 }
 
 #[derive(Debug, Default)]
@@ -20,6 +24,7 @@ pub struct TableList {
     pub items: Vec<IndexedTable>,
     pub state: ListState,
     pub vertical_scroll_state: ScrollbarState,
+    pub sort: TablesSort,
 }
 
 impl TableList {
@@ -34,6 +39,7 @@ impl TableList {
             items,
             state,
             vertical_scroll_state,
+            sort: TablesSort::Name,
         }
     }
 
@@ -43,7 +49,7 @@ impl TableList {
             None => 0,
         };
         self.state.select(Some(i));
-        self.vertical_scroll_state = self.vertical_scroll_state.position(i);
+        self.sync_list_scoll();
     }
 
     pub fn up(&mut self, amount: usize) {
@@ -57,16 +63,38 @@ impl TableList {
             None => 0,
         };
         self.state.select(Some(i));
-        self.vertical_scroll_state = self.vertical_scroll_state.position(i);
+        self.sync_list_scoll();
+    }
+
+    pub fn switch_sort(&mut self) {
+        match self.sort {
+            TablesSort::Name => {
+                self.sort = TablesSort::LastModified;
+                self.items
+                    .sort_by(|a, b| b.last_modified.cmp(&a.last_modified));
+            }
+            TablesSort::LastModified => {
+                self.sort = TablesSort::Name;
+                self.items
+                    .sort_by(|a, b| a.displayed_name().cmp(&b.displayed_name()));
+            }
+        }
+        self.state.select_first();
+        self.sync_list_scoll();
+    }
+
+    fn sync_list_scoll(&mut self) {
+        self.vertical_scroll_state = self
+            .vertical_scroll_state
+            .position(self.state.selected().unwrap_or(0));
     }
 }
 
-impl App {
+impl State {
     pub fn new(roms: HashSet<String>, tables: Vec<IndexedTable>) -> Self {
         let tables = TableList::new(tables);
         Self {
             should_quit: false,
-            counter: 0,
             roms,
             tables,
         }
@@ -80,41 +108,33 @@ impl App {
         self.should_quit = true;
     }
 
-    pub fn increment_counter(&mut self) {
-        if let Some(res) = self.counter.checked_add(1) {
-            self.counter = res;
-        }
-    }
-
-    pub fn decrement_counter(&mut self) {
-        if let Some(res) = self.counter.checked_sub(1) {
-            self.counter = res;
-        }
+    /// Returns the key bindings.
+    pub fn get_key_bindings(&self) -> Vec<(&str, &str)> {
+        // match self.tab {
+        //     Tab::List => {
+        vec![
+            ("⏎", "Table actions"),
+            ("↑↓", "Select"),
+            ("←→", "Scroll"),
+            ("s", "Sort"),
+            ("f", "Filter"),
+            ("q", "Quit"),
+        ]
+        // }
+        // }
     }
 }
 
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::indexer::{IndexedTableInfo, IsoSystemTime};
     use std::time::SystemTime;
-    #[test]
-    fn test_app_increment_counter() {
-        let mut app = App::default();
-        app.increment_counter();
-        assert_eq!(app.counter, 1);
-    }
-
-    #[test]
-    fn test_app_decrement_counter() {
-        let mut app = App::default();
-        app.decrement_counter();
-        assert_eq!(app.counter, 0);
-    }
 
     #[test]
     fn test_app_scroll_down() {
         let items = vec![test_table(), test_table(), test_table()];
-        let mut app = App::new(Default::default(), items);
+        let mut app = State::new(Default::default(), items);
         assert_eq!(app.tables.state.selected(), Some(0));
         app.tables.down(1);
         assert_eq!(app.tables.state.selected(), Some(1));
@@ -123,7 +143,7 @@ mod tests {
     #[test]
     fn test_app_scroll_up() {
         let items = vec![test_table(), test_table(), test_table()];
-        let mut app = App::new(Default::default(), items);
+        let mut app = State::new(Default::default(), items);
         assert_eq!(app.tables.state.selected(), Some(0));
         app.tables.up(1);
         assert_eq!(app.tables.state.selected(), Some(2));
@@ -132,7 +152,7 @@ mod tests {
     #[test]
     fn test_app_scroll_down_more_than_length() {
         let items = vec![test_table(), test_table(), test_table()];
-        let mut app = App::new(Default::default(), items);
+        let mut app = State::new(Default::default(), items);
         assert_eq!(app.tables.state.selected(), Some(0));
         app.tables.down(10);
         assert_eq!(app.tables.state.selected(), Some(1));
@@ -141,7 +161,7 @@ mod tests {
     #[test]
     fn test_app_scroll_up_more_than_length() {
         let items = vec![test_table(), test_table(), test_table()];
-        let mut app = App::new(Default::default(), items);
+        let mut app = State::new(Default::default(), items);
         assert_eq!(app.tables.state.selected(), Some(0));
         app.tables.up(10);
         assert_eq!(app.tables.state.selected(), Some(2));

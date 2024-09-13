@@ -45,6 +45,7 @@ edit = "0.1.5"
 ratatui = "0.28.1"
 crossterm = "0.28.1"
 anyhow = "1.0.75"
+timeago = "0.4.2"
 
 [dev-dependencies]
 pretty_assertions = "1.4.0"

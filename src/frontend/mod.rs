@@ -1,5 +1,5 @@
 /// Application.
-pub mod app;
+pub mod state;
 
 /// Terminal events handler.
 pub mod event;
@@ -15,16 +15,16 @@ pub mod update;
 
 use crate::indexer::IndexedTable;
 use anyhow::Result;
-use app::App;
 use event::{Event, EventHandler};
 use ratatui::{backend::CrosstermBackend, Terminal};
+use state::State;
 use std::collections::HashSet;
 use tui::Tui;
 use update::update;
 
 pub fn main(items: Vec<IndexedTable>, roms: HashSet<String>) -> Result<()> {
     // Create an application.
-    let mut app = App::new(roms, items);
+    let mut app = State::new(roms, items);
 
     // Initialize the terminal user interface.
     let backend = CrosstermBackend::new(std::io::stderr());
