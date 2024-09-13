@@ -42,12 +42,7 @@ pub fn render(state: &mut State, f: &mut Frame) {
         .split(chunks[0]);
 
     // Iterate through all elements in the `items` app and append some debug text to it.
-    let items: Vec<ListItem> = state
-        .tables
-        .items
-        .iter()
-        .map(|i| ListItem::from(i))
-        .collect();
+    let items: Vec<ListItem> = state.tables.items.iter().map(ListItem::from).collect();
 
     let sorting = match state.tables.sort {
         TablesSort::Name => "Alphabetical",

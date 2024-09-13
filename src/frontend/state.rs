@@ -75,8 +75,7 @@ impl TableList {
             }
             TablesSort::LastModified => {
                 self.sort = TablesSort::Name;
-                self.items
-                    .sort_by(|a, b| a.displayed_name().cmp(&b.displayed_name()));
+                self.items.sort_by_key(|a| a.displayed_name());
             }
         }
         self.state.select_first();
