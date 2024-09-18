@@ -28,7 +28,7 @@ use update::update;
 type Terminal = ratatui::Terminal<CrosstermBackend<std::io::Stderr>>;
 
 pub enum Action {
-    Action(TableOption),
+    External(TableOption),
     Quit,
     None,
 }
@@ -54,18 +54,18 @@ pub fn main(config: ResolvedConfig, items: Vec<IndexedTable>, roms: HashSet<Stri
     Ok(())
 }
 
-fn run(mut state: &mut State, tui: &mut Tui) -> Result<()> {
+fn run(state: &mut State, tui: &mut Tui) -> Result<()> {
     loop {
         // Render the user interface.
-        tui.draw(&mut state)?;
+        tui.draw(state)?;
         // Handle events.
         let action = match tui.events.next()? {
             Event::Tick => Action::None,
-            Event::Key(key_event) => update(&mut state, key_event),
+            Event::Key(key_event) => update(state, key_event),
             // Event::Mouse(_) => {}
             // Event::Resize(_, _) => {}
         };
-        let done = run_action(&mut state, tui, action)?;
+        let done = run_action(state, tui, action)?;
         if done {
             break;
         }
@@ -77,7 +77,7 @@ fn run_action(state: &mut State, tui: &mut Tui, action: Action) -> Result<bool> 
     let selected_path = &state.tables.items[state.tables.state.selected().unwrap()].path;
     let vpinball_executable = &state.config.vpx_executable;
     match action {
-        Action::Action(table_action) => {
+        Action::External(table_action) => {
             match table_action {
                 TableOption::Launch => run_external(tui, || {
                     launch(selected_path, vpinball_executable, None);

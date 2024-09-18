@@ -22,7 +22,7 @@ pub fn update(state: &mut State, key_event: KeyEvent) -> Action {
                 let selected = dialog.items.selected().and_then(TableOption::from_index);
                 if let Some(selected) = selected {
                     state.table_dialog = None;
-                    Action::Action(selected)
+                    Action::External(selected)
                 } else {
                     Action::None
                 }
