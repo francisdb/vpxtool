@@ -1,15 +1,14 @@
+use crate::config::ResolvedConfig;
 use crate::indexer::IndexedTable;
 use ratatui::widgets::{ListState, ScrollbarState};
 use std::collections::HashSet;
 
-/// Application.
-
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct State {
-    /// should the application exit?
-    pub should_quit: bool,
+    pub config: ResolvedConfig,
     pub roms: HashSet<String>,
     pub tables: TableList,
+    pub table_dialog: Option<TableActionsDialog>,
 }
 
 #[derive(Debug, Default)]
@@ -25,6 +24,23 @@ pub struct TableList {
     pub state: ListState,
     pub vertical_scroll_state: ScrollbarState,
     pub sort: TablesSort,
+}
+
+#[derive(Debug, Default)]
+pub struct TableActionsDialog {
+    pub items: ListState,
+    pub vertical_scroll_state: ScrollbarState,
+    pub selected: usize,
+}
+
+impl TableActionsDialog {
+    pub fn new(selected: usize) -> Self {
+        Self {
+            items: ListState::default(),
+            vertical_scroll_state: ScrollbarState::default(),
+            selected,
+        }
+    }
 }
 
 impl TableList {
@@ -90,37 +106,44 @@ impl TableList {
 }
 
 impl State {
-    pub fn new(roms: HashSet<String>, tables: Vec<IndexedTable>) -> Self {
+    pub fn new(
+        resolved_config: ResolvedConfig,
+        roms: HashSet<String>,
+        tables: Vec<IndexedTable>,
+    ) -> Self {
         let tables = TableList::new(tables);
         Self {
-            should_quit: false,
+            config: resolved_config,
             roms,
             tables,
+            table_dialog: None,
         }
     }
 
     /// Handles the tick event of the terminal.
     //pub fn tick(&self) {}
 
-    /// Set running to false to quit the application.
-    pub fn quit(&mut self) {
-        self.should_quit = true;
-    }
-
     /// Returns the key bindings.
     pub fn get_key_bindings(&self) -> Vec<(&str, &str)> {
-        // match self.tab {
-        //     Tab::List => {
-        vec![
-            ("⏎", "Table actions"),
-            ("↑↓", "Select"),
-            ("←→", "Scroll"),
-            ("s", "Sort"),
-            ("f", "Filter"),
-            ("q", "Quit"),
-        ]
-        // }
-        // }
+        match self.table_dialog {
+            Some(_) => vec![("⏎", "Select"), ("↑↓", "Navigate"), ("q/esc", "Back")],
+            None => vec![
+                ("⏎", "Table actions"),
+                ("↑↓", "Select"),
+                ("←→", "Scroll"),
+                ("s", "Sort"),
+                ("f", "Filter"),
+                ("q/esc", "Quit"),
+            ],
+        }
+    }
+
+    pub(crate) fn open_dialog(&mut self) {
+        if let Some(selected) = self.tables.state.selected() {
+            let mut dialog = TableActionsDialog::new(selected);
+            dialog.items.select(Some(0));
+            self.table_dialog = Some(dialog);
+        }
     }
 }
 
@@ -128,12 +151,22 @@ impl State {
 mod tests {
     use super::*;
     use crate::indexer::{IndexedTableInfo, IsoSystemTime};
+    use std::path::PathBuf;
     use std::time::SystemTime;
+
+    fn test_config() -> ResolvedConfig {
+        ResolvedConfig {
+            vpx_executable: PathBuf::from("vpinball"),
+            tables_folder: Default::default(),
+            tables_index_path: Default::default(),
+            editor: None,
+        }
+    }
 
     #[test]
     fn test_app_scroll_down() {
         let items = vec![test_table(), test_table(), test_table()];
-        let mut app = State::new(Default::default(), items);
+        let mut app = State::new(test_config(), Default::default(), items);
         assert_eq!(app.tables.state.selected(), Some(0));
         app.tables.down(1);
         assert_eq!(app.tables.state.selected(), Some(1));
@@ -142,7 +175,7 @@ mod tests {
     #[test]
     fn test_app_scroll_up() {
         let items = vec![test_table(), test_table(), test_table()];
-        let mut app = State::new(Default::default(), items);
+        let mut app = State::new(test_config(), Default::default(), items);
         assert_eq!(app.tables.state.selected(), Some(0));
         app.tables.up(1);
         assert_eq!(app.tables.state.selected(), Some(2));
@@ -151,7 +184,7 @@ mod tests {
     #[test]
     fn test_app_scroll_down_more_than_length() {
         let items = vec![test_table(), test_table(), test_table()];
-        let mut app = State::new(Default::default(), items);
+        let mut app = State::new(test_config(), Default::default(), items);
         assert_eq!(app.tables.state.selected(), Some(0));
         app.tables.down(10);
         assert_eq!(app.tables.state.selected(), Some(1));
@@ -160,7 +193,7 @@ mod tests {
     #[test]
     fn test_app_scroll_up_more_than_length() {
         let items = vec![test_table(), test_table(), test_table()];
-        let mut app = State::new(Default::default(), items);
+        let mut app = State::new(test_config(), Default::default(), items);
         assert_eq!(app.tables.state.selected(), Some(0));
         app.tables.up(10);
         assert_eq!(app.tables.state.selected(), Some(2));

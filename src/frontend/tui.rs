@@ -74,4 +74,21 @@ impl Tui {
         self.terminal.show_cursor()?;
         Ok(())
     }
+
+    pub fn disable(&mut self) -> Result<()> {
+        self.terminal.show_cursor()?;
+        terminal::disable_raw_mode()?;
+        crossterm::execute!(io::stderr(), LeaveAlternateScreen, DisableMouseCapture)?;
+        Ok(())
+    }
+
+    pub fn enable(&mut self) -> Result<()> {
+        terminal::enable_raw_mode()?;
+        crossterm::execute!(io::stderr(), EnterAlternateScreen, EnableMouseCapture)?;
+        self.terminal.hide_cursor()?;
+        self.terminal.clear()?;
+        // TODO somehow the ui size is not always correct at this point?
+        //self.terminal.autoresize()?;
+        Ok(())
+    }
 }

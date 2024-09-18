@@ -195,7 +195,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 }
                 Ok(vpx_files_with_tableinfo) => {
                     //let vpinball_executable = &config.vpx_executable;
-                    match frontend::main(vpx_files_with_tableinfo, roms) {
+                    match frontend::main(config, vpx_files_with_tableinfo, roms) {
                         Ok(()) => Ok(ExitCode::SUCCESS),
                         Err(e) => {
                             let warning = format!("Error running frontend: {}", e).red();

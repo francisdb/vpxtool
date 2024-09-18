@@ -1,12 +1,12 @@
-use crate::frontend::state::{State, TablesSort};
+use crate::frontend::state::{State, TableActionsDialog, TablesSort};
 use crate::indexer::IndexedTable;
-use crate::simplefrontend::capitalize_first_letter;
-use ratatui::layout::{Constraint, Direction, Layout, Rect};
+use crate::simplefrontend::{capitalize_first_letter, TableOption};
+use ratatui::layout::{Constraint, Direction, Flex, Layout, Rect};
 use ratatui::prelude::*;
 use ratatui::style::palette::tailwind::{AMBER, CYAN, SLATE};
 use ratatui::style::Modifier;
 use ratatui::text::Line;
-use ratatui::widgets::{HighlightSpacing, ListItem, Wrap};
+use ratatui::widgets::{Clear, HighlightSpacing, ListItem, Wrap};
 use ratatui::{
     layout::Alignment,
     style::{Color, Style},
@@ -28,6 +28,11 @@ const INFO_ITEM_HEADER_STYLE: Style = Style::new().fg(CYAN.c500);
 const KEY_BINDING_STYLE: Style = Style::new().fg(AMBER.c500);
 
 pub fn render(state: &mut State, f: &mut Frame) {
+    let mut main_enabled = true;
+    if state.table_dialog.is_some() {
+        main_enabled = false;
+    }
+
     let chunks = Layout::new(
         Direction::Vertical,
         [Constraint::Fill(1), Constraint::Length(1)],
@@ -36,10 +41,21 @@ pub fn render(state: &mut State, f: &mut Frame) {
     .margin(1)
     .split(f.area());
 
+    render_main(state, f, main_enabled, chunks[0]);
+
+    if let Some(ref mut table_dialog) = state.table_dialog {
+        let table = &state.tables.items[table_dialog.selected];
+        render_action_dialog(table_dialog, f, table);
+    }
+
+    render_key_bindings(state, f, chunks[1]);
+}
+
+fn render_main(state: &mut State, f: &mut Frame, enabled: bool, area: Rect) {
     let main_chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Percentage(40), Constraint::Percentage(60)].as_ref())
-        .split(chunks[0]);
+        .split(area);
 
     // Iterate through all elements in the `items` app and append some debug text to it.
     let items: Vec<ListItem> = state.tables.items.iter().map(ListItem::from).collect();
@@ -50,10 +66,13 @@ pub fn render(state: &mut State, f: &mut Frame) {
     };
     let title =
         Span::from("Tables") + Span::from(format!(" ({}) ", sorting)).add_modifier(Modifier::DIM);
-    let items_block = Block::default()
+    let mut items_block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .title(title);
+    if !enabled {
+        items_block = items_block.dim();
+    }
     let tables = ratatui::widgets::List::new(items)
         .block(items_block)
         .highlight_symbol("> ")
@@ -61,10 +80,13 @@ pub fn render(state: &mut State, f: &mut Frame) {
         .highlight_style(LIST_SELECTED_STYLE);
     let tables_scrollbar = ratatui::widgets::Scrollbar::default().style(Style::default());
 
-    let paragraph_block = Block::default()
+    let mut paragraph_block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .title("Table Info");
+    if !enabled {
+        paragraph_block = paragraph_block.dim();
+    }
     let selected = state.tables.state.selected();
     let paragraph_text = match selected {
         Some(i) => {
@@ -87,10 +109,6 @@ pub fn render(state: &mut State, f: &mut Frame) {
 
     // Table Info
     f.render_widget(paragraph, main_chunks[1]);
-
-    render_key_bindings(state, f, chunks[1]);
-
-    //dialog(state, f);
 }
 
 /// Renders the key bindings.
@@ -120,8 +138,7 @@ fn table_to_paragraph<'a>(table: &IndexedTable, roms: &HashSet<String>) -> Text<
     // table name rendered as header
     // centered bold table name
     let table_name = table.displayed_name();
-    let name_line =
-        Line::from(table_name).style(Style::default().add_modifier(Modifier::BOLD).fg(AMBER.c500));
+    let name_line = Line::from(table_name).style(Style::default().bold().fg(AMBER.c500));
     let name_text = Text::from(name_line);
 
     let warnings: Vec<Line> = table
@@ -199,53 +216,32 @@ impl From<&IndexedTable> for ListItem<'_> {
     }
 }
 
-// fn dialog(app: &mut State, f: &mut Frame) {
-//     let dialog_rect = centered_rect(f.area(), 50, 50);
-//     f.render_widget(Clear, dialog_rect);
-//     f.render_widget(
-//         Paragraph::new(format!(
-//             "
-//         Press `Esc`, `Ctrl-C` or `q` to stop running.\n\
-//         Press `j` and `k` to increment and decrement the counter respectively.\n\
-//         Counter: {}
-//       ",
-//             app.counter
-//         ))
-//         .block(
-//             Block::default()
-//                 .title("Counter App")
-//                 .title_alignment(Alignment::Center)
-//                 .borders(Borders::ALL)
-//                 .border_type(BorderType::Rounded),
-//         )
-//         .style(Style::default().fg(Color::Yellow))
-//         .alignment(Alignment::Center),
-//         dialog_rect,
-//     )
-// }
+fn render_action_dialog(state: &mut TableActionsDialog, frame: &mut Frame, table: &IndexedTable) {
+    let area = frame.area();
+    let block = Block::bordered().title(table.displayed_name());
+    let area = popup_area(area, 50, 60);
+    frame.render_widget(Clear, area); //this clears out the background
+    frame.render_widget(block, area);
 
-// fn centered_rect(r: Rect, percent_x: u16, percent_y: u16) -> Rect {
-//     let popup_layout = Layout::default()
-//         .direction(Direction::Vertical)
-//         .constraints(
-//             [
-//                 Constraint::Percentage((100 - percent_y) / 2),
-//                 Constraint::Percentage(percent_y),
-//                 Constraint::Percentage((100 - percent_y) / 2),
-//             ]
-//             .as_ref(),
-//         )
-//         .split(r);
-//
-//     Layout::default()
-//         .direction(Direction::Horizontal)
-//         .constraints(
-//             [
-//                 Constraint::Percentage((100 - percent_x) / 2),
-//                 Constraint::Percentage(percent_x),
-//                 Constraint::Percentage((100 - percent_x) / 2),
-//             ]
-//             .as_ref(),
-//         )
-//         .split(popup_layout[1])[1]
-// }
+    // add a list of actions and a scrollbar
+    let actions = TableOption::ALL
+        .iter()
+        .map(|action| ListItem::new(Span::from(action.display())))
+        .collect::<Vec<_>>();
+    let actions = ratatui::widgets::List::new(actions)
+        .block(Block::default().borders(Borders::ALL).title("Actions"))
+        .highlight_symbol("> ")
+        .highlight_style(LIST_SELECTED_STYLE);
+    let actions_scrollbar = ratatui::widgets::Scrollbar::default().style(Style::default());
+    frame.render_stateful_widget(actions, area, &mut state.items);
+    frame.render_stateful_widget(actions_scrollbar, area, &mut state.vertical_scroll_state);
+}
+
+/// helper function to create a centered rect using up certain percentage of the available rect `r`
+fn popup_area(area: Rect, width: u16, /*percent_x: u16,*/ percent_y: u16) -> Rect {
+    let vertical = Layout::vertical([Constraint::Percentage(percent_y)]).flex(Flex::Center);
+    let horizontal = Layout::horizontal([Constraint::Length(width)]).flex(Flex::Center);
+    let [area] = vertical.areas(area);
+    let [area] = horizontal.areas(area);
+    area
+}

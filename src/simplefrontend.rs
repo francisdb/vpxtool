@@ -32,7 +32,7 @@ const RECENT: &str = "> Recent";
 const SEARCH_INDEX: usize = 0;
 const RECENT_INDEX: usize = 1;
 
-enum TableOption {
+pub enum TableOption {
     Launch,
     LaunchFullscreen,
     LaunchWindowed,
@@ -50,7 +50,7 @@ enum TableOption {
 }
 
 impl TableOption {
-    const ALL: [TableOption; 13] = [
+    pub const ALL: [TableOption; 13] = [
         TableOption::Launch,
         TableOption::LaunchFullscreen,
         TableOption::LaunchWindowed,
@@ -67,7 +67,7 @@ impl TableOption {
         // TableOption::ClearNVRAM,
     ];
 
-    fn from_index(index: usize) -> Option<TableOption> {
+    pub fn from_index(index: usize) -> Option<TableOption> {
         match index {
             0 => Some(TableOption::Launch),
             1 => Some(TableOption::LaunchFullscreen),
@@ -87,7 +87,7 @@ impl TableOption {
         }
     }
 
-    fn display(&self) -> String {
+    pub fn display(&self) -> String {
         match self {
             TableOption::Launch => "Launch".to_string(),
             TableOption::LaunchFullscreen => "Launch fullscreen".to_string(),
@@ -442,7 +442,7 @@ fn choose_table_option(table_name: &str) -> Option<TableOption> {
     selection_opt.and_then(TableOption::from_index)
 }
 
-fn launch(selected_path: &PathBuf, vpinball_executable: &Path, fullscreen: Option<bool>) {
+pub fn launch(selected_path: &PathBuf, vpinball_executable: &Path, fullscreen: Option<bool>) {
     println!("{} {}", LAUNCH, selected_path.display());
 
     if !vpinball_executable.is_executable() {
