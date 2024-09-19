@@ -52,28 +52,27 @@ pub fn render(state: &mut State, f: &mut Frame) {
 }
 
 fn render_main(state: &mut State, f: &mut Frame, enabled: bool, area: Rect) {
-    let main_chunks = Layout::default()
+    let [list_filter_aea, info_area] = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Percentage(40), Constraint::Percentage(60)].as_ref())
-        .split(area);
+        .areas(area);
 
     // if filtering is enabled, render the filter above the list
     match state.tables.filter {
         Some(ref filter) => {
-            let filter_list_chunks = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([Constraint::Length(3), Constraint::Fill(1)].as_ref())
-                .split(main_chunks[0]);
+            let [filter_area, list_area] =
+                Layout::vertical([Constraint::Length(3), Constraint::Fill(1)])
+                    .areas(list_filter_aea);
 
             let input_enabled = state.table_dialog.is_none();
-            render_filter(filter, input_enabled, f, filter_list_chunks[0]);
-            render_list(state, f, enabled, filter_list_chunks[1]);
+            render_filter(filter, input_enabled, f, filter_area);
+            render_list(state, f, enabled, list_area);
         }
         None => {
-            render_list(state, f, enabled, main_chunks[0]);
+            render_list(state, f, enabled, list_filter_aea);
         }
     }
-    render_info(state, enabled, f, main_chunks[1]);
+    render_info(state, enabled, f, info_area);
 }
 
 fn render_list(state: &mut State, f: &mut Frame, enabled: bool, area: Rect) {
