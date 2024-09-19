@@ -65,7 +65,8 @@ fn render_main(state: &mut State, f: &mut Frame, enabled: bool, area: Rect) {
                 .constraints([Constraint::Length(3), Constraint::Fill(1)].as_ref())
                 .split(main_chunks[0]);
 
-            render_filter(filter, f, filter_list_chunks[0]);
+            let input_enabled = state.table_dialog.is_none();
+            render_filter(filter, input_enabled, f, filter_list_chunks[0]);
             render_list(state, f, enabled, filter_list_chunks[1]);
         }
         None => {
@@ -130,22 +131,27 @@ fn render_info(state: &State, enabled: bool, f: &mut Frame, area: Rect) {
     f.render_widget(paragraph, area);
 }
 
-pub fn render_filter(state: &FilterState, frame: &mut Frame, area: Rect) {
-    let block = Block::default().title("Filter").borders(Borders::ALL);
+pub fn render_filter(state: &FilterState, enabled: bool, frame: &mut Frame, area: Rect) {
+    let mut block = Block::default().title("Filter").borders(Borders::ALL);
+    if !enabled {
+        block = block.dim();
+    }
     let paragraph = Paragraph::new(Line::from(state.input.clone()))
         .block(block)
         .wrap(Wrap { trim: true });
     frame.render_widget(paragraph, area);
 
     // Make the cursor visible and ask ratatui to put it at the specified coordinates after
-    // rendering
-    frame.set_cursor_position(Position::new(
-        // Draw the cursor at the current position in the input field.
-        // Move one to the right to account for the border.
-        area.x + 1 + state.input.len() as u16,
-        // Move one line down, from the border to the input line
-        area.y + 1,
-    ));
+    // rendering. Only when no dialog is open.
+    if enabled {
+        frame.set_cursor_position(Position::new(
+            // Draw the cursor at the current position in the input field.
+            // Move one to the right to account for the border.
+            area.x + 1 + state.input.len() as u16,
+            // Move one line down, from the border to the input line
+            area.y + 1,
+        ));
+    }
 }
 
 /// Renders the key bindings.
