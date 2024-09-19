@@ -261,7 +261,7 @@ impl From<&IndexedTable> for ListItem<'_> {
 fn render_action_dialog(state: &mut TableActionsDialog, frame: &mut Frame, table: &IndexedTable) {
     let area = frame.area();
     let block = Block::bordered().title(table.displayed_name());
-    let area = popup_area(area, 50, 60);
+    let area = popup_area(area, 50, 15);
     frame.render_widget(Clear, area); //this clears out the background
     frame.render_widget(block, area);
 
@@ -271,7 +271,12 @@ fn render_action_dialog(state: &mut TableActionsDialog, frame: &mut Frame, table
         .map(|action| ListItem::new(Span::from(action.display())))
         .collect::<Vec<_>>();
     let actions = ratatui::widgets::List::new(actions)
-        .block(Block::default().borders(Borders::ALL).title("Actions"))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .title("Actions"),
+        )
         .highlight_symbol("> ")
         .highlight_style(LIST_SELECTED_STYLE);
     let actions_scrollbar = ratatui::widgets::Scrollbar::default().style(Style::default());
@@ -280,10 +285,15 @@ fn render_action_dialog(state: &mut TableActionsDialog, frame: &mut Frame, table
 }
 
 /// helper function to create a centered rect using up certain percentage of the available rect `r`
-fn popup_area(area: Rect, width: u16, /*percent_x: u16,*/ percent_y: u16) -> Rect {
-    let vertical = Layout::vertical([Constraint::Percentage(percent_y)]).flex(Flex::Center);
+fn popup_area(area: Rect, width: u16, /*percent_x: u16,*/ height: u16) -> Rect {
+    let vertical = Layout::vertical([
+        Constraint::Length(2),
+        Constraint::Max(height),
+        Constraint::Length(3),
+    ])
+    .flex(Flex::Center);
     let horizontal = Layout::horizontal([Constraint::Length(width)]).flex(Flex::Center);
-    let [area] = vertical.areas(area);
+    let [_, area, _] = vertical.areas(area);
     let [area] = horizontal.areas(area);
     area
 }
