@@ -44,8 +44,7 @@ pub fn update(state: &mut State, key_event: KeyEvent) -> Action {
                         Action::None
                     }
                     KeyCode::Esc => {
-                        state.tables.filter = None;
-                        state.tables.apply_filter();
+                        state.tables.disable_filter();
                         Action::None
                     }
                     KeyCode::Up => {

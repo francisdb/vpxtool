@@ -134,12 +134,22 @@ fn render_info(state: &State, enabled: bool, f: &mut Frame, area: Rect) {
     f.render_widget(paragraph, area);
 }
 
-pub fn render_filter(state: &FilterState, f: &mut Frame, area: Rect) {
+pub fn render_filter(state: &FilterState, frame: &mut Frame, area: Rect) {
     let block = Block::default().title("Filter").borders(Borders::ALL);
     let paragraph = Paragraph::new(Line::from(state.input.clone()))
         .block(block)
         .wrap(Wrap { trim: true });
-    f.render_widget(paragraph, area);
+    frame.render_widget(paragraph, area);
+
+    // Make the cursor visible and ask ratatui to put it at the specified coordinates after
+    // rendering
+    frame.set_cursor_position(Position::new(
+        // Draw the cursor at the current position in the input field.
+        // Move one to the right to account for the border.
+        area.x + 1 + state.input.len() as u16,
+        // Move one line down, from the border to the input line
+        area.y + 1,
+    ));
 }
 
 /// Renders the key bindings.

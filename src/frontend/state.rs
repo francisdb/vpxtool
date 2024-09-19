@@ -84,6 +84,11 @@ impl TableList {
         self.filter = Some(Default::default());
     }
 
+    pub(crate) fn disable_filter(&mut self) {
+        self.filter = None;
+        self.apply_filter();
+    }
+
     pub fn filtered_items(&self) -> Vec<&IndexedTable> {
         match &self.filter {
             Some(filter) => {
