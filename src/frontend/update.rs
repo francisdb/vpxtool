@@ -4,6 +4,12 @@ use crate::simplefrontend::TableOption;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 pub fn update(state: &mut State, key_event: KeyEvent) -> Action {
+    // always allow ctrl-c to quit
+    if (key_event.code == KeyCode::Char('c') || key_event.code == KeyCode::Char('C'))
+        && key_event.modifiers == KeyModifiers::CONTROL
+    {
+        return Action::Quit;
+    }
     match &mut state.table_dialog {
         Some(dialog) => match key_event.code {
             KeyCode::Esc | KeyCode::Char('q') => {
@@ -72,13 +78,6 @@ pub fn update(state: &mut State, key_event: KeyEvent) -> Action {
                 None => {
                     match key_event.code {
                         KeyCode::Esc | KeyCode::Char('q') => Action::Quit,
-                        KeyCode::Char('c') | KeyCode::Char('C') => {
-                            if key_event.modifiers == KeyModifiers::CONTROL {
-                                Action::Quit
-                            } else {
-                                Action::None
-                            }
-                        }
                         // KeyCode::Right | KeyCode::Char('j') => app.increment_counter(),
                         // KeyCode::Left | KeyCode::Char('k') => app.decrement_counter(),
                         KeyCode::Up => {
