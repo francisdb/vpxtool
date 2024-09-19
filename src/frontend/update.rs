@@ -30,42 +30,89 @@ pub fn update(state: &mut State, key_event: KeyEvent) -> Action {
             _ => Action::None,
         },
         None => {
-            match key_event.code {
-                KeyCode::Esc | KeyCode::Char('q') => Action::Quit,
-                KeyCode::Char('c') | KeyCode::Char('C') => {
-                    if key_event.modifiers == KeyModifiers::CONTROL {
-                        Action::Quit
-                    } else {
+            match &mut state.tables.filter {
+                Some(filter) => match key_event.code {
+                    //KeyCode::Enter => self.submit_message(),
+                    KeyCode::Char(to_insert) => {
+                        filter.enter_char(to_insert);
+                        state.tables.apply_filter();
                         Action::None
                     }
+                    KeyCode::Backspace => {
+                        filter.delete_char();
+                        state.tables.apply_filter();
+                        Action::None
+                    }
+                    KeyCode::Esc => {
+                        state.tables.filter = None;
+                        state.tables.apply_filter();
+                        Action::None
+                    }
+                    KeyCode::Up => {
+                        state.tables.up(1);
+                        Action::None
+                    }
+                    KeyCode::Down => {
+                        state.tables.down(1);
+                        Action::None
+                    }
+                    KeyCode::PageUp | KeyCode::Left => {
+                        state.tables.page_up();
+                        Action::None
+                    }
+                    KeyCode::PageDown | KeyCode::Right => {
+                        state.tables.page_down();
+                        Action::None
+                    }
+                    KeyCode::Enter => {
+                        state.open_dialog();
+                        Action::None
+                    }
+                    _ => Action::None,
+                },
+                None => {
+                    match key_event.code {
+                        KeyCode::Esc | KeyCode::Char('q') => Action::Quit,
+                        KeyCode::Char('c') | KeyCode::Char('C') => {
+                            if key_event.modifiers == KeyModifiers::CONTROL {
+                                Action::Quit
+                            } else {
+                                Action::None
+                            }
+                        }
+                        // KeyCode::Right | KeyCode::Char('j') => app.increment_counter(),
+                        // KeyCode::Left | KeyCode::Char('k') => app.decrement_counter(),
+                        KeyCode::Up => {
+                            state.tables.up(1);
+                            Action::None
+                        }
+                        KeyCode::Down => {
+                            state.tables.down(1);
+                            Action::None
+                        }
+                        KeyCode::PageUp | KeyCode::Left => {
+                            state.tables.page_up();
+                            Action::None
+                        }
+                        KeyCode::PageDown | KeyCode::Right => {
+                            state.tables.page_down();
+                            Action::None
+                        }
+                        KeyCode::Char('s') => {
+                            state.tables.switch_sort();
+                            Action::None
+                        }
+                        KeyCode::Char('f') => {
+                            state.tables.enable_filter();
+                            Action::None
+                        }
+                        KeyCode::Enter => {
+                            state.open_dialog();
+                            Action::None
+                        }
+                        _ => Action::None,
+                    }
                 }
-                // KeyCode::Right | KeyCode::Char('j') => app.increment_counter(),
-                // KeyCode::Left | KeyCode::Char('k') => app.decrement_counter(),
-                KeyCode::Up => {
-                    state.tables.up(1);
-                    Action::None
-                }
-                KeyCode::Down => {
-                    state.tables.down(1);
-                    Action::None
-                }
-                KeyCode::PageUp | KeyCode::Left => {
-                    state.tables.up(10);
-                    Action::None
-                }
-                KeyCode::PageDown | KeyCode::Right => {
-                    state.tables.down(10);
-                    Action::None
-                }
-                KeyCode::Char('s') => {
-                    state.tables.switch_sort();
-                    Action::None
-                }
-                KeyCode::Enter => {
-                    state.open_dialog();
-                    Action::None
-                }
-                _ => Action::None,
             }
         }
     }

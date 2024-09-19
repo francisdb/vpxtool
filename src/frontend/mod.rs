@@ -74,33 +74,37 @@ fn run(state: &mut State, tui: &mut Tui) -> Result<()> {
 }
 
 fn run_action(state: &mut State, tui: &mut Tui, action: Action) -> Result<bool> {
-    let selected_path = &state.tables.items[state.tables.state.selected().unwrap()].path;
-    let vpinball_executable = &state.config.vpx_executable;
     match action {
         Action::External(table_action) => {
-            match table_action {
-                TableOption::Launch => run_external(tui, || {
-                    launch(selected_path, vpinball_executable, None);
-                    Ok(())
-                }),
-                TableOption::LaunchFullscreen => run_external(tui, || {
-                    launch(selected_path, vpinball_executable, Some(true));
-                    Ok(())
-                }),
-                TableOption::LaunchWindowed => run_external(tui, || {
-                    launch(selected_path, vpinball_executable, Some(false));
-                    Ok(())
-                }),
-                not_implemented => run_external(tui, || {
-                    eprintln!(
-                        "Action not implemented: {:?}. Press enter to continue.",
-                        not_implemented.display()
-                    );
-                    // read line
-                    let _ = stdin().read_line(&mut String::new())?;
-                    Ok(())
-                }),
-            }?;
+            if let Some(selected) = state.tables.selected() {
+                let selected_path = &selected.path;
+                let vpinball_executable = &state.config.vpx_executable;
+                match table_action {
+                    TableOption::Launch => run_external(tui, || {
+                        launch(selected_path, vpinball_executable, None);
+                        Ok(())
+                    }),
+                    TableOption::LaunchFullscreen => run_external(tui, || {
+                        launch(selected_path, vpinball_executable, Some(true));
+                        Ok(())
+                    }),
+                    TableOption::LaunchWindowed => run_external(tui, || {
+                        launch(selected_path, vpinball_executable, Some(false));
+                        Ok(())
+                    }),
+                    not_implemented => run_external(tui, || {
+                        eprintln!(
+                            "Action not implemented: {:?}. Press enter to continue.",
+                            not_implemented.display()
+                        );
+                        // read line
+                        let _ = stdin().read_line(&mut String::new())?;
+                        Ok(())
+                    }),
+                }?;
+            } else {
+                unreachable!("At this point, a table should be selected.");
+            }
             Ok(false)
         }
         Action::Quit => Ok(true),

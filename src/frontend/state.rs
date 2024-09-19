@@ -10,7 +10,6 @@ pub struct State {
     pub tables: TableList,
     pub table_dialog: Option<TableActionsDialog>,
 }
-
 #[derive(Debug, Default)]
 pub enum TablesSort {
     #[default]
@@ -24,6 +23,25 @@ pub struct TableList {
     pub state: ListState,
     pub vertical_scroll_state: ScrollbarState,
     pub sort: TablesSort,
+    pub filter: Option<FilterState>,
+}
+
+#[derive(Debug, Default)]
+pub struct FilterState {
+    /// Current value of the input box
+    pub input: String,
+}
+
+impl FilterState {
+    pub(crate) fn delete_char(&mut self) {
+        self.input.pop();
+    }
+}
+
+impl FilterState {
+    pub(crate) fn enter_char(&mut self, c: char) {
+        self.input.push(c);
+    }
 }
 
 #[derive(Debug, Default)]
@@ -56,12 +74,59 @@ impl TableList {
             state,
             vertical_scroll_state,
             sort: TablesSort::Name,
+            filter: None,
         }
     }
 
+    pub(crate) fn enable_filter(&mut self) {
+        // in filtering mode only alphabetical sorting makes sense
+        self.sort_by_name();
+        self.filter = Some(Default::default());
+    }
+
+    pub fn filtered_items(&self) -> Vec<&IndexedTable> {
+        match &self.filter {
+            Some(filter) => {
+                let input = filter.input.to_lowercase();
+                self.items
+                    .iter()
+                    .filter(|t| t.displayed_name().to_lowercase().contains(&input))
+                    .collect()
+            }
+            None => self.items.iter().collect(),
+        }
+    }
+
+    fn filtered_len(&self) -> usize {
+        match &self.filter {
+            Some(filter) => {
+                let input = filter.input.to_lowercase();
+                self.items
+                    .iter()
+                    .filter(|t| t.displayed_name().to_lowercase().contains(&input))
+                    .count()
+            }
+            None => self.items.len(),
+        }
+    }
+
+    pub fn selected(&self) -> Option<&IndexedTable> {
+        self.state.selected().map(|i| self.filtered_items()[i])
+    }
+
+    pub(crate) fn apply_filter(&mut self) {
+        // update the list state
+        self.state.select_first();
+        self.vertical_scroll_state = self
+            .vertical_scroll_state
+            .content_length(self.filtered_items().len());
+        self.sync_list_scoll();
+    }
+
     pub fn down(&mut self, amount: usize) {
+        let filtered_len = self.filtered_len();
         let i = match self.state.selected() {
-            Some(i) => (i + amount) % self.items.len(),
+            Some(i) => (i + amount) % filtered_len,
             None => 0,
         };
         self.state.select(Some(i));
@@ -69,8 +134,9 @@ impl TableList {
     }
 
     pub fn up(&mut self, amount: usize) {
-        let amount_capped = if amount > self.items.len() {
-            amount % self.items.len()
+        let filtered_len = self.filtered_len();
+        let amount_capped = if amount > filtered_len {
+            amount % filtered_len
         } else {
             amount
         };
@@ -82,20 +148,41 @@ impl TableList {
         self.sync_list_scoll();
     }
 
+    pub(crate) fn page_up(&mut self) {
+        self.up(10)
+    }
+
+    pub(crate) fn page_down(&mut self) {
+        self.down(10)
+    }
+
     pub fn switch_sort(&mut self) {
         match self.sort {
             TablesSort::Name => {
-                self.sort = TablesSort::LastModified;
-                self.items
-                    .sort_by(|a, b| b.last_modified.cmp(&a.last_modified));
+                self.sort_by_lastmodified();
             }
             TablesSort::LastModified => {
-                self.sort = TablesSort::Name;
-                self.items.sort_by_key(|a| a.displayed_name());
+                self.sort_by_name();
             }
         }
+    }
+
+    fn select_first(&mut self) {
         self.state.select_first();
         self.sync_list_scoll();
+    }
+
+    fn sort_by_lastmodified(&mut self) {
+        self.sort = TablesSort::LastModified;
+        self.items
+            .sort_by(|a, b| b.last_modified.cmp(&a.last_modified));
+        self.select_first();
+    }
+
+    fn sort_by_name(&mut self) {
+        self.sort = TablesSort::Name;
+        self.items.sort_by_key(|a| a.displayed_name());
+        self.select_first();
     }
 
     fn sync_list_scoll(&mut self) {

@@ -1,4 +1,4 @@
-use crate::frontend::state::{State, TableActionsDialog, TablesSort};
+use crate::frontend::state::{FilterState, State, TableActionsDialog, TablesSort};
 use crate::indexer::IndexedTable;
 use crate::simplefrontend::{capitalize_first_letter, TableOption};
 use ratatui::layout::{Constraint, Direction, Flex, Layout, Rect};
@@ -57,8 +57,31 @@ fn render_main(state: &mut State, f: &mut Frame, enabled: bool, area: Rect) {
         .constraints([Constraint::Percentage(40), Constraint::Percentage(60)].as_ref())
         .split(area);
 
-    // Iterate through all elements in the `items` app and append some debug text to it.
-    let items: Vec<ListItem> = state.tables.items.iter().map(ListItem::from).collect();
+    // if filtering is enabled, render the filter above the list
+    match state.tables.filter {
+        Some(ref filter) => {
+            let filter_list_chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Length(3), Constraint::Fill(1)].as_ref())
+                .split(main_chunks[0]);
+
+            render_filter(filter, f, filter_list_chunks[0]);
+            render_list(state, f, enabled, filter_list_chunks[1]);
+        }
+        None => {
+            render_list(state, f, enabled, main_chunks[0]);
+        }
+    }
+    render_info(state, enabled, f, main_chunks[1]);
+}
+
+fn render_list(state: &mut State, f: &mut Frame, enabled: bool, area: Rect) {
+    let items: Vec<ListItem> = state
+        .tables
+        .filtered_items()
+        .iter()
+        .map(|i| ListItem::from(*i))
+        .collect();
 
     let sorting = match state.tables.sort {
         TablesSort::Name => "Alphabetical",
@@ -80,6 +103,16 @@ fn render_main(state: &mut State, f: &mut Frame, enabled: bool, area: Rect) {
         .highlight_style(LIST_SELECTED_STYLE);
     let tables_scrollbar = ratatui::widgets::Scrollbar::default().style(Style::default());
 
+    // Table List
+    f.render_stateful_widget(tables, area, &mut state.tables.state);
+    f.render_stateful_widget(
+        tables_scrollbar,
+        area,
+        &mut state.tables.vertical_scroll_state,
+    );
+}
+
+fn render_info(state: &State, enabled: bool, f: &mut Frame, area: Rect) {
     let mut paragraph_block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
@@ -98,17 +131,15 @@ fn render_main(state: &mut State, f: &mut Frame, enabled: bool, area: Rect) {
     let paragraph = Paragraph::new(paragraph_text)
         .wrap(Wrap { trim: true })
         .block(paragraph_block);
+    f.render_widget(paragraph, area);
+}
 
-    // Table List
-    f.render_stateful_widget(tables, main_chunks[0], &mut state.tables.state);
-    f.render_stateful_widget(
-        tables_scrollbar,
-        main_chunks[0],
-        &mut state.tables.vertical_scroll_state,
-    );
-
-    // Table Info
-    f.render_widget(paragraph, main_chunks[1]);
+pub fn render_filter(state: &FilterState, f: &mut Frame, area: Rect) {
+    let block = Block::default().title("Filter").borders(Borders::ALL);
+    let paragraph = Paragraph::new(Line::from(state.input.clone()))
+        .block(block)
+        .wrap(Wrap { trim: true });
+    f.render_widget(paragraph, area);
 }
 
 /// Renders the key bindings.
