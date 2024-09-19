@@ -120,12 +120,8 @@ fn render_info(state: &State, enabled: bool, f: &mut Frame, area: Rect) {
     if !enabled {
         paragraph_block = paragraph_block.dim();
     }
-    let selected = state.tables.state.selected();
-    let paragraph_text = match selected {
-        Some(i) => {
-            let table = &state.tables.items[i];
-            table_to_paragraph(table, &state.roms)
-        }
+    let paragraph_text = match state.tables.selected() {
+        Some(table) => table_to_paragraph(table, &state.roms),
         None => Text::from("No table selected").style(Style::default().italic()),
     };
     let paragraph = Paragraph::new(paragraph_text)
