@@ -23,6 +23,10 @@ colored = "2.1.0"
 console = "0.15.8"
 dialoguer = { version = "0.11.0", features = ["fuzzy-select"] }
 dirs = "5.0.1"
+egui = "0.29.1"
+eframe = "0.29.1"
+egui_extras = { version = "*", features = ["all_loaders"] }
+image = { version = "0.25", features = ["jpeg", "png"] }
 git-version = "0.3.9"
 indicatif = "0.17.8"
 log = "0.4.22"
@@ -38,9 +42,13 @@ figment = { version = "0.10", features = ["toml", "env"] }
 toml = "0.8.19"
 is_executable = "1.0.1"
 regex = { version = "1.10.6", features = [] }
+vleue_kinetoscope = "0.2.0"
 vpin = { version = "0.15.5" }
 rust-ini = "0.21.1"
 edit = "0.1.5"
+bevy = "0.14.2"
+bevy_asset = "0.14.2"
+bevy_asset_loader = "0.21.0"
 
 [dev-dependencies]
 pretty_assertions = "1.4.0"
