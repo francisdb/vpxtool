@@ -6,7 +6,8 @@ use std::{
     path::{Path, PathBuf},
     process::{exit, ExitStatus},
 };
-use bevy::prelude::*;
+use bevy::render::view::visibility;
+use bevy::{input::common_conditions::*,prelude::*};
 use bevy_asset_loader::prelude::*;
 use bevy_asset::*;
 use bevy::window::*;
@@ -14,9 +15,6 @@ use colored::Colorize;
 use console::Emoji;
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::{FuzzySelect, Input, Select};
-//use egui::*;
-//use egui_extras::{StripBuilder, Size};
-//use eframe::*;
 use indicatif::{ProgressBar, ProgressStyle};
 use is_executable::IsExecutable;
 use std::ffi::{OsStr, OsString};
@@ -31,9 +29,6 @@ use crate::{
     DiffColor, ProgressBarProgress,
 };
 
-use vleue_kinetoscope::{AnimatedImagePlugin,AnimatedImageBundle,AnimatedImageController};
-
-
 const LAUNCH: Emoji = Emoji("🚀", "[launch]");
 const CRASH: Emoji = Emoji("💥", "[crash]");
 
@@ -44,6 +39,14 @@ const RECENT_INDEX: usize = 1;
 const HORIZONTAL:bool = false;
 const VERTICAL:bool = true;
 
+#[derive(Component)]
+pub struct Wheel {
+    pub itemnumber: i16,
+    pub selected: bool,
+    pub launchpath:PathBuf,
+    pub vpxexecutable:PathBuf,
+}
+
 fn create_wheel(mut commands: Commands, asset_server: Res<AssetServer>, window_query: Query<&Window, With<PrimaryWindow>>)  
 {
     //config: &ResolvedConfig,
@@ -51,7 +54,7 @@ fn create_wheel(mut commands: Commands, asset_server: Res<AssetServer>, window_q
     //vpinball_executable: &Path,
     //info: &IndexedTable,
     //info_str: &str,
-    commands.spawn(Camera2dBundle::default());
+  
    //// commands.spawn(SpriteBundle {
    ////     texture: asset_server.load("/usr/tables/wheels/Sing Along (Gottlieb 1967).png"),
     ////    ..default()
@@ -68,9 +71,7 @@ fn create_wheel(mut commands: Commands, asset_server: Res<AssetServer>, window_q
     .map(|indexed| display_table_line_full(indexed, &roms1))
     .collect();
     let temporary_path_name="";   
-    println!("Last table {:?}",loaded_config.last_table);
-
-    
+    println!("Last table {:?}",&loaded_config.last_table);
     let window = window_query.get_single().unwrap();
     let mut width = window.width();
     let mut height = window.height();
@@ -82,11 +83,16 @@ fn create_wheel(mut commands: Commands, asset_server: Res<AssetServer>, window_q
     let mut scale = width/10.;
     let tables_len= tables.len();
     let mut entities=0.;
-    let mut counter=0;
+    let mut counter: usize=0;
     let mut xlocation =0;
     let locations = [-(width/2.)+scale,-(scale*2.),0.,(scale*2.),(width/2.) - (scale)];
     //let mut handles =[];
-    while counter < (tables_len & 5)
+
+    let mut transform = Transform::from_xyz(0., -(height-(height/2.+(scale*2.))), 0.);
+    //let mut transform = Transform::from_xyz(locations[xlocation], -(height-(height/2.+(scale*2.))), 0.);
+            transform.scale = Vec3::new(0.25, 0.25, 100.0);
+    
+    while counter < (tables_len)
         {
         if xlocation > 4 {xlocation = 0};
 
@@ -94,30 +100,41 @@ fn create_wheel(mut commands: Commands, asset_server: Res<AssetServer>, window_q
         .get(counter)
         .unwrap()
         .clone();
-
+        /*    match &info.wheel_path {
+                Some(path)=> println!("{}",&path.as_os_str().to_string_lossy()),
+                None => println!("NONE"),
+            };
+      */
         //let mut temporary_path_name= &info.wheel_path.unwrap();
-       let temporary_path_name = match &info.wheel_path {
-            Some(path) => PathBuf::from(path),
-            None => PathBuf::from("/usr/tables/Media/giphy.webp"),
+
+        let mut temporary_path_name = match &info.wheel_path {
+            Some(path) => {PathBuf::from(path)},
+            None => PathBuf::from("/usr/tables/wheels/Sing Along (Gottlieb 1967).png"),
             };
 
-        let mut temporary_table_name="None";
-
+            // let mut temporary_table_name="None";
+        //let mut handle =  asset_server.load(temporary_path_name);        
         let temporary_table_name = match &info.table_info.table_name {
             Some(tb) => &tb,
             None => "None",
             };
-            let mut transform = Transform::from_xyz(locations[xlocation], -(height-(height/2.+(scale*2.))), 0.);
-            transform.scale = Vec3::new(0.5, 0.5, 100.0);
-            commands.spawn(SpriteBundle {
-            texture: asset_server.load("/usr/tables/wheels/Sing Along (Gottlieb 1967).png"),
-            transform,
+       
+         commands.spawn( (SpriteBundle {
+           // texture: asset_server.load("/usr/tables/wheels/Sing Along (Gottlieb 1967).png"),
+            texture: asset_server.load(temporary_path_name),
+            transform: transform,
+            visibility: Visibility::Hidden,
             ..default()
-            }); 
+            },
+            Wheel {
+                itemnumber: counter as i16,
+                selected: false,
+                launchpath: info.path,
+                vpxexecutable: loaded_config.vpx_executable.clone(),
+            },
+        )); 
 
-//            let (mut h,mut w) = &temporary_table_name.logical_size;
-//    println!("{:?}",temporary_table_name);
-        commands.spawn((
+       /* commands.spawn((
                 // Create a TextBundle that has a Text with a single section.
                 TextBundle::from_section(
                     // Accepts a `String` or any type that converts into a `String`, such as `&str`
@@ -138,14 +155,15 @@ fn create_wheel(mut commands: Commands, asset_server: Res<AssetServer>, window_q
                     left: Val::Px((locations[xlocation]+(width/2.)-(scale/2.))),
                     ..default()
                 }),
-
-            ));
+              )); */
 
          
        //let image = image::load(BufReader::new(File::open("foo.png")?), ImageFormat::Jpeg)?;
         counter += 1;
         xlocation +=1;
         entities +=1. };
+        commands.spawn(Camera2dBundle::default());
+        println!("Wheels loaded");
         
   }
 
@@ -251,7 +269,85 @@ pub fn frontend_index(
     tables.sort_by_key(|indexed| display_table_line(indexed).to_lowercase());
     Ok(tables)
 }
-  //      println!("keyboard: {:?}", input.get_pressed().collect::<Vec<_>>());
+
+pub fn guiupdate(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>,time: Res<Time>, 
+                                mut query: Query<(&mut Transform,&mut Wheel)>,
+                                mut vis : Query<&mut Visibility,With<Wheel>>,
+                                )
+{
+    let mut selected_item:i16=-2;
+    // Count entities
+    let mut num =1;
+    let mut launchit = false;
+    for (mut transform,
+        mut wheel) in query.iter_mut()
+        {num +=1;}
+
+    // Find current selection
+    for (mut transform,
+        mut wheel) in query.iter_mut()
+        {
+        match wheel.selected {
+            true =>{selected_item = wheel.itemnumber;}, 
+            _ => ()
+            }
+        }
+        // If no selection, set it to item 3
+        if selected_item == -2 {
+            for (mut transform,
+                 mut wheel) in query.iter_mut()
+            {
+                match wheel.itemnumber {
+                    3 => {wheel.selected = true;selected_item=3;},
+                    _ => ()
+                }
+            }};
+         
+            // check for keypress right shift select next item, left shift select previous item         
+            for ev in keys.get_just_released() {
+                    match ev{
+                    KeyCode::ShiftRight => {selected_item +=1},
+                    KeyCode::ShiftLeft =>  {selected_item -=1},
+                    KeyCode::Enter => {launchit = true;},
+                   // KeyCode::Escape => {AppExit},
+                               _ => { println!("Key press: ({:?})", ev); },
+                    }};
+                
+           // Wrap around if one of the bounds are hit.
+           if selected_item == num-1 {selected_item=0;}
+           else {if selected_item == -1 {selected_item=num-2;};};
+
+           // update currently selected item to new value
+           for (mut transform, mut wheel) in query.iter_mut()
+                {
+                if wheel.itemnumber != selected_item {wheel.selected = false;}
+                else {wheel.selected = true;
+                    println!("current item:{} launchpath {}",selected_item,
+                    wheel.launchpath.clone().into_os_string().to_string_lossy());
+                }
+            };
+
+            let mut counter =0;
+            let x = Visibility::Hidden;
+            for (mut visibility) in vis.iter_mut()
+            {
+             if counter == selected_item {*visibility=Visibility::Visible;}
+             else {*visibility = x;};
+             counter +=1;
+            }           
+            let mut counter =0;
+
+       if launchit {
+       for (mut transform, mut wheel) in query.iter_mut()
+       {
+            if wheel.itemnumber == selected_item {
+                println!("Launching {}",wheel.launchpath.clone().into_os_string().to_string_lossy());
+                launch(&wheel.launchpath, &wheel.vpxexecutable, None);}
+       };
+    }
+     
+}
+ 
     
    // if ctrl && shift && input.just_pressed(KeyCode::KeyA) {
      //   info!("Just pressed Ctrl + Shift + A!"); }
@@ -273,11 +369,19 @@ pub fn guifrontend(
 //       ..Default::default()
  //   };
     App::new()
-        .add_plugins(DefaultPlugins)
+        .add_plugins(DefaultPlugins
+            .set(WindowPlugin {
+                primary_window: Some(Window {
+                    title: "VPXTOOL".to_string(),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }))
         .insert_resource(ClearColor(Color::srgb(0.9, 0.3, 0.6)))
         .add_systems(Startup,create_wheel)
+        .add_systems(Update,guiupdate)
      //   .add_systems(Update,create_wheel)
-        .run ();
+        .run();
 /*     eframe::run_native(
         "Image Viewer",
         options,
@@ -290,68 +394,7 @@ pub fn guifrontend(
 */
 }
 
-/* #[derive(Default)]
-struct MyApp {}
-
-impl MyApp {pub fn new(_cc:&eframe::CreationContext<'_>) -> Self {
-        Default::default()
-            }
-}
-
-impl eframe::App for MyApp {
-        fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame){
-            CentralPanel::default().show(ctx,|ui| {
-  
-                let path = PathBuf::from("/usr/tables/Wheels/Sing Along (Gottlieb 1967).png");
-                
-                StripBuilder::new(ui)
-                .size(Size::exact(500.0)) // bottom cell
-                .vertical(|mut strip| {
-                    strip.strip(|builder| {
-                        builder.sizes(Size::remainder(), 7).horizontal(|mut strip| {
-                            strip.cell(|ui| {
-                                ui.image(egui::include_image!("/usr/tables/Wheels/Sing Along (Gottlieb 1967).png"));
-
-                            });
-                            strip.cell(|ui| {
-                                ui.image(egui::include_image!("/usr/tables/Wheels/Sing Along (Gottlieb 1967).png"));
-
-                            });
-
-                            strip.cell(|ui| {
-                                ui.image(egui::include_image!("/usr/tables/Wheels/Sing Along (Gottlieb 1967).png"));
-
-                            });
-
-                            strip.cell(|ui| {
-                                ui.image(egui::include_image!("/usr/tables/Wheels/Sing Along (Gottlieb 1967).png"));
-
-                            });
-
-                            strip.cell(|ui| {
-                                ui.image(egui::include_image!("/usr/tables/Wheels/Sing Along (Gottlieb 1967).png"));
-
-                            });
-
-                            strip.cell(|ui| {
-                                ui.image(egui::include_image!("/usr/tables/Wheels/Sing Along (Gottlieb 1967).png"));
-
-                            });
-
-                            strip.cell(|ui| {
-                                ui.image(egui::include_image!("/usr/tables/Wheels/Sing Along (Gottlieb 1967).png"));
-
-                            });
-
-
-                        });
-                    });
-                    });
-                });
-        }
-    }
-    */ 
-fn table_menu(
+/*fn table_menu(
     config: &ResolvedConfig,
     vpx_files_with_tableinfo: &mut Vec<IndexedTable>,
     vpinball_executable: &Path,
@@ -512,7 +555,7 @@ fn table_menu(
         None => (),
     }
 }
-
+*/
 fn prompt<S: Into<String>>(msg: S) {
     Input::<String>::new()
         .with_prompt(format!("{} - Press enter to continue.", msg.into()))

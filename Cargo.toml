@@ -40,16 +40,9 @@ walkdir = "2.5.0"
 wild = "2.2.1"
 figment = { version = "0.10", features = ["toml", "env"] }
 toml = "0.8.19"
-<<<<<<< HEAD
-is_executable = "1.0.1"
-regex = { version = "1.10.6", features = [] }
-vleue_kinetoscope = "0.2.0"
-vpin = { version = "0.15.5" }
-=======
 is_executable = "1.0.4"
 regex = { version = "1.11.0", features = [] }
 vpin = { version = "0.15.6" }
->>>>>>> f498814960d2c9f423792b9b37af4ce898499dab
 rust-ini = "0.21.1"
 edit = "0.1.5"
 bevy = "0.14.2"

@@ -19,7 +19,7 @@ pub struct Config {
     pub vpx_executable: PathBuf,
     pub tables_folder: Option<PathBuf>,
     pub editor: Option<String>,
-    pub last_table: String,
+    pub last_table: Option<String>,
 }
 impl Config {
     fn from(resolved_config: &ResolvedConfig) -> Self {
@@ -38,7 +38,7 @@ pub struct ResolvedConfig {
     pub tables_folder: PathBuf,
     pub tables_index_path: PathBuf,
     pub editor: Option<String>,
-    pub last_table: String,
+    pub last_table: Option<String>,
 }
 
 impl ResolvedConfig {
@@ -136,7 +136,6 @@ pub fn load_config() -> io::Result<Option<(PathBuf, ResolvedConfig)>> {
 
 fn read_config(config_path: &Path) -> io::Result<ResolvedConfig> {
     let figment = Figment::new().merge(Toml::file(config_path));
-    println!("config_path {:?}",config_path);
     // TODO avoid unwrap
     let config: Config = figment.extract().map_err(|e| {
         io::Error::new(
@@ -249,7 +248,7 @@ fn create_default_config() -> io::Result<(PathBuf, ResolvedConfig)> {
         tables_folder: tables_root,
         tables_index_path: index_path,
         editor: None,
-        last_table: "_None_".to_owned(),
+        last_table: None,
     };
     let config = Config::from(&resolved_config);
 
@@ -340,7 +339,7 @@ mod tests {
                     tables_folder: expected_tables_dir.clone(),
                     tables_index_path: expected_tables_dir.join("vpxtool_index.json"),
                     editor: None,
-                    last_table: "_None_".to_owned(),
+                    last_table: None,
                 }
             );
         } else {
@@ -351,7 +350,7 @@ mod tests {
                     tables_folder: PathBuf::from("/tmp/test/tables"),
                     tables_index_path: PathBuf::from("/tmp/test/tables/vpxtool_index.json"),
                     editor: None,
-                    last_table: "_None_".to_owned(),
+                    last_table: None,
                 }
             );
         }
