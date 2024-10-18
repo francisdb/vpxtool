@@ -447,7 +447,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             Ok(ExitCode::SUCCESS)
         }
         Some((CMD_EXTRACT, sub_matches)) => {
-            let yes = sub_matches.get_flag("FORCE");
+            let force = sub_matches.get_flag("FORCE");
             let paths: Vec<&str> = sub_matches
                 .get_many::<String>("VPXPATH")
                 .unwrap_or_default()
@@ -464,7 +464,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     }
                     Some(ext) if ext == "vpx" => {
                         println!("extracting from {}", expanded_path.display())?;
-                        extract(expanded_path.as_ref(), yes)?;
+                        extract(expanded_path.as_ref(), force)?;
                         Ok(())
                     }
                     _ => Err(io::Error::new(
@@ -476,6 +476,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             Ok(ExitCode::SUCCESS)
         }
         Some((CMD_ASSEMBLE, sub_matches)) => {
+            let force = sub_matches.get_flag("FORCE");
             let dir_path = sub_matches
                 .get_one::<String>("DIRPATH")
                 .map(|s| s.as_str())
@@ -498,15 +499,19 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 }
             };
             if vpx_path.exists() {
-                let confirmed = confirm(
-                    format!("\"{}\" already exists.", vpx_path.display()),
-                    "Do you want to overwrite it?".to_string(),
-                )?;
-                if !confirmed {
-                    println!("Aborted")?;
-                    return Ok(ExitCode::SUCCESS);
+                if force {
+                    std::fs::remove_file(&vpx_path)?;
+                } else {
+                    let confirmed = confirm(
+                        format!("\"{}\" already exists.", vpx_path.display()),
+                        "Do you want to overwrite it?".to_string(),
+                    )?;
+                    if !confirmed {
+                        println!("Aborted")?;
+                        return Ok(ExitCode::SUCCESS);
+                    }
+                    std::fs::remove_file(&vpx_path)?;
                 }
-                std::fs::remove_file(&vpx_path)?;
             }
             let result = {
                 let vpx = expanded::read(&expanded_dir_path)?;
@@ -871,7 +876,7 @@ fn build_command() -> Command {
                 ),
         )
         .subcommand(
-            Command::new("extract")
+            Command::new(CMD_EXTRACT)
                 .about("Extracts a vpx file")
                 .arg(
                     Arg::new("FORCE")
@@ -924,6 +929,13 @@ fn build_command() -> Command {
         .subcommand(
             Command::new(CMD_ASSEMBLE)
                 .about("Assembles a vpx file")
+                .arg(
+                    Arg::new("FORCE")
+                        .short('f')
+                        .long("force")
+                        .num_args(0)
+                        .help("Do not ask for confirmation before overwriting existing files"),
+                )
                 .arg(arg!(<DIRPATH> "The path to the extracted vpx structure").required(true))
                 .arg(arg!([VPXPATH] "Optional path of the VPX file to assemble to. Defaults to <DIRPATH>.vpx.")),
         )
