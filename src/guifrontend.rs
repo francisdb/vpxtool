@@ -88,7 +88,9 @@ fn create_wheel(mut commands: Commands, asset_server: Res<AssetServer>, window_q
     let locations = [-(width/2.)+scale,-(scale*2.),0.,(scale*2.),(width/2.) - (scale)];
     //let mut handles =[];
 
-    let mut transform = Transform::from_xyz(0., -(height-(height/2.+(scale*2.))), 0.);
+    let mut transform = Transform::from_xyz(0., 0., 0.);
+
+    //let mut transform = Transform::from_xyz(0., -(height-(height/2.+(scale*2.))), 0.);
     //let mut transform = Transform::from_xyz(locations[xlocation], -(height-(height/2.+(scale*2.))), 0.);
             transform.scale = Vec3::new(0.25, 0.25, 100.0);
     
@@ -123,7 +125,6 @@ fn create_wheel(mut commands: Commands, asset_server: Res<AssetServer>, window_q
            // texture: asset_server.load("/usr/tables/wheels/Sing Along (Gottlieb 1967).png"),
             texture: asset_server.load(temporary_path_name),
             transform: transform,
-            visibility: Visibility::Hidden,
             ..default()
             },
             Wheel {
@@ -271,16 +272,27 @@ pub fn frontend_index(
 }
 
 pub fn guiupdate(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>,time: Res<Time>, 
-                                mut query: Query<(&mut Transform,&mut Wheel)>,
-                                mut vis : Query<&mut Visibility,With<Wheel>>,
+                                mut query: Query<(&mut Transform, &mut Wheel)>,
+                                window_query: Query<&Window, With<PrimaryWindow>>
                                 )
 {
+    let window = window_query.get_single().unwrap();
+
+    let mut width = window.width();
+    let mut height = window.height();
+
+    let mut orentation = HORIZONTAL;
+    if height > width {orentation=VERTICAL;}
+        else {orentation=HORIZONTAL};
+    
+    let mut scale = width/10.;
+
     let mut selected_item:i16=-2;
     // Count entities
     let mut num =1;
     let mut launchit = false;
     for (mut transform,
-        mut wheel) in query.iter_mut()
+        mut wheel ) in query.iter_mut()
         {num +=1;}
 
     // Find current selection
@@ -318,27 +330,19 @@ pub fn guiupdate(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>,time: R
            else {if selected_item == -1 {selected_item=num-2;};};
 
            // update currently selected item to new value
-           for (mut transform, mut wheel) in query.iter_mut()
+           for (mut transform,mut wheel) in query.iter_mut()
                 {
-                if wheel.itemnumber != selected_item {wheel.selected = false;}
+                if wheel.itemnumber != selected_item {wheel.selected = false;transform.translation = Vec3::new(0., width, 0.);}
                 else {wheel.selected = true;
+                    transform.translation = Vec3::new(0., -(height-(height/2.+(scale*2.))), 0.);
                     println!("current item:{} launchpath {}",selected_item,
                     wheel.launchpath.clone().into_os_string().to_string_lossy());
+                    
                 }
             };
-
-            let mut counter =0;
-            let x = Visibility::Hidden;
-            for (mut visibility) in vis.iter_mut()
-            {
-             if counter == selected_item {*visibility=Visibility::Visible;}
-             else {*visibility = x;};
-             counter +=1;
-            }           
-            let mut counter =0;
-
+           
        if launchit {
-       for (mut transform, mut wheel) in query.iter_mut()
+       for (mut transform,  mut wheel) in query.iter_mut()
        {
             if wheel.itemnumber == selected_item {
                 println!("Launching {}",wheel.launchpath.clone().into_os_string().to_string_lossy());
