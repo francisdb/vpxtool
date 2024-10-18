@@ -1,4 +1,4 @@
-use crate::frontend::state::{FilterState, State, TableActionsDialog, TablesSort};
+use crate::frontend::state::{FilterState, MessageDialog, State, TableActionsDialog, TablesSort};
 use crate::indexer::IndexedTable;
 use crate::simplefrontend::{capitalize_first_letter, TableOption};
 use ratatui::layout::{Constraint, Direction, Flex, Layout, Rect};
@@ -29,7 +29,7 @@ const KEY_BINDING_STYLE: Style = Style::new().fg(AMBER.c500);
 
 pub fn render(state: &mut State, f: &mut Frame) {
     let mut main_enabled = true;
-    if state.table_dialog.is_some() {
+    if state.table_dialog.is_some() || state.message_dialog.is_some() {
         main_enabled = false;
     }
 
@@ -48,7 +48,35 @@ pub fn render(state: &mut State, f: &mut Frame) {
         render_action_dialog(table_dialog, f, table);
     }
 
+    // render the message dialog on top
+    if let Some(dialog) = &state.message_dialog {
+        render_message_dialog(f, dialog);
+    }
+
     render_key_bindings(state, f, chunks[1]);
+}
+
+fn render_message_dialog(frame: &mut Frame, dialog: &MessageDialog) {
+    let (msg, style, title) = match dialog {
+        MessageDialog::Error(message) => (message, Style::default().fg(Color::Red), "Error"),
+        MessageDialog::Warning(message) => {
+            (message, Style::default().fg(Color::Yellow), "⚠ Warning")
+        }
+        MessageDialog::Info(message) => (message, Style::default(), "Info"),
+    };
+
+    let text = Text::styled(msg.clone(), style);
+    let area = frame.area();
+    let block = Block::bordered()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(style)
+        .title(title)
+        .style(style);
+    let area = popup_area_percent(area, 80, 10);
+    frame.render_widget(Clear, area); //this clears out the background
+    let paragraph = Paragraph::new(text).wrap(Wrap { trim: true }).block(block);
+    frame.render_widget(paragraph, area);
 }
 
 fn render_main(state: &mut State, f: &mut Frame, enabled: bool, area: Rect) {
@@ -293,6 +321,19 @@ fn popup_area(area: Rect, width: u16, /*percent_x: u16,*/ height: u16) -> Rect {
     ])
     .flex(Flex::Center);
     let horizontal = Layout::horizontal([Constraint::Length(width)]).flex(Flex::Center);
+    let [_, area, _] = vertical.areas(area);
+    let [area] = horizontal.areas(area);
+    area
+}
+
+fn popup_area_percent(area: Rect, percent_x: u16, max_height: u16) -> Rect {
+    let vertical = Layout::vertical([
+        Constraint::Length(2),
+        Constraint::Max(max_height),
+        Constraint::Length(3),
+    ])
+    .flex(Flex::Center);
+    let horizontal = Layout::horizontal([Constraint::Percentage(percent_x)]).flex(Flex::Center);
     let [_, area, _] = vertical.areas(area);
     let [area] = horizontal.areas(area);
     area

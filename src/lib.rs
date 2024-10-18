@@ -17,6 +17,8 @@ use std::process::{exit, ExitCode};
 use vpin::directb2s::read;
 use vpin::vpx;
 use vpin::vpx::jsonmodel::{game_data_to_json, info_to_json};
+use vpin::vpx::tableinfo::TableInfo;
+use vpin::vpx::version::Version;
 use vpin::vpx::{expanded, extractvbs, importvbs, tableinfo, verify, ExtractResult, VerifyResult};
 
 pub mod config;
@@ -112,8 +114,9 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 let path = path.unwrap_or("");
                 let expanded_path = expand_path(path)?;
                 println!("showing info for {}", expanded_path.display())?;
-                let info = info_gather(&expanded_path)?;
-                println!("{}", info)?;
+                let (version, info) = info_gather(&expanded_path)?;
+                let txt = info_format(&version, info);
+                println!("{}", txt)?;
                 Ok(ExitCode::SUCCESS)
             }
             Some((CMD_INFO_EXTRACT, sub_matches)) => {
@@ -1166,13 +1169,17 @@ fn expand_path(path: &str) -> io::Result<PathBuf> {
     }
 }
 
-fn info_gather(vpx_file_path: &PathBuf) -> io::Result<String> {
+fn info_gather(vpx_file_path: &PathBuf) -> io::Result<(Version, TableInfo)> {
     let mut vpx_file = vpx::open(vpx_file_path)?;
     let version = vpx_file.read_version()?;
     // GameData also has a name field that we might want to display here
     // where is this shown in the UI?
     let table_info = vpx_file.read_tableinfo()?;
 
+    Ok((version, table_info))
+}
+
+fn info_format(version: &Version, table_info: TableInfo) -> String {
     let mut buffer = String::new();
 
     buffer.push_str(&format!("{:>18} {}\n", "VPX Version:".green(), version));
@@ -1243,8 +1250,7 @@ fn info_gather(vpx_file_path: &PathBuf) -> io::Result<String> {
     for (prop, value) in &table_info.properties {
         buffer.push_str(&format!("{:>18}: {}\n", prop.green(), value));
     }
-
-    Ok(buffer)
+    buffer
 }
 
 fn info_extract(vpx_file_path: &PathBuf) -> io::Result<ExitCode> {
@@ -1259,25 +1265,29 @@ fn info_extract(vpx_file_path: &PathBuf) -> io::Result<ExitCode> {
             return Ok(ExitCode::SUCCESS);
         }
     }
-    write_info_json(vpx_file_path, &info_file_path)?;
+    write_info_json_file(vpx_file_path, &info_file_path)?;
     println!("Extracted table info to {}", info_file_path.display())?;
     Ok(ExitCode::SUCCESS)
 }
 
-fn write_info_json(vpx_file_path: &PathBuf, info_file_path: &PathBuf) -> io::Result<()> {
+fn write_info_json_file(vpx_file_path: &PathBuf, info_file_path: &PathBuf) -> io::Result<()> {
+    let mut info_file = File::create(info_file_path)?;
+    write_info_json(vpx_file_path, &mut info_file)
+}
+
+fn write_info_json<W: Write>(vpx_file_path: &PathBuf, writer: &mut W) -> io::Result<()> {
     let mut vpx_file = vpx::open(vpx_file_path)?;
     let table_info = vpx_file.read_tableinfo()?;
     let custom_info_tags = vpx_file.read_custominfotags()?;
     let table_info_json = info_to_json(&table_info, &custom_info_tags);
-    let info_file = File::create(info_file_path)?;
-    serde_json::to_writer_pretty(info_file, &table_info_json)?;
+    serde_json::to_writer_pretty(writer, &table_info_json)?;
     Ok(())
 }
 
 fn info_edit(vpx_file_path: &PathBuf, config: Option<&ResolvedConfig>) -> io::Result<PathBuf> {
     let info_file_path = vpx_file_path.with_extension("info.json");
     if !info_file_path.exists() {
-        write_info_json(vpx_file_path, &info_file_path)?;
+        write_info_json_file(vpx_file_path, &info_file_path)?;
     }
     open_editor(&info_file_path, config)?;
     Ok(info_file_path)
@@ -1394,7 +1404,7 @@ pub fn info_diff<P: AsRef<Path>>(vpx_file_path: P) -> io::Result<String> {
     let info_file_path = expanded_vpx_path.with_extension("info.json");
     let original_info_path = vpx_file_path.as_ref().with_extension("info.original.tmp");
     if info_file_path.exists() {
-        write_info_json(&expanded_vpx_path, &original_info_path)?;
+        write_info_json_file(&expanded_vpx_path, &original_info_path)?;
         let diff_color = if colored::control::SHOULD_COLORIZE.should_colorize() {
             DiffColor::Always
         } else {

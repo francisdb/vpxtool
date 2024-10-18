@@ -7,22 +7,23 @@ use std::{
     process::{exit, ExitStatus},
 };
 
+use crate::config::ResolvedConfig;
+use crate::indexer::{IndexError, IndexedTable, Progress};
+use crate::patcher::LineEndingsResult::{NoChanges, Unified};
+use crate::patcher::{patch_vbs_file, unify_line_endings_vbs_file};
+use crate::{
+    indexer, info_diff, info_edit, info_format, info_gather, open_editor, run_diff, script_diff,
+    vpx::{extractvbs, vbs_path_for, ExtractResult},
+    DiffColor, ProgressBarProgress,
+};
 use colored::Colorize;
 use console::Emoji;
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::{FuzzySelect, Input, Select};
 use indicatif::{ProgressBar, ProgressStyle};
 use is_executable::IsExecutable;
-
-use crate::config::ResolvedConfig;
-use crate::indexer::{IndexError, IndexedTable, Progress};
-use crate::patcher::LineEndingsResult::{NoChanges, Unified};
-use crate::patcher::{patch_vbs_file, unify_line_endings_vbs_file};
-use crate::{
-    indexer, info_diff, info_edit, info_gather, open_editor, run_diff, script_diff,
-    vpx::{extractvbs, vbs_path_for, ExtractResult},
-    DiffColor, ProgressBarProgress,
-};
+use vpin::vpx::tableinfo::TableInfo;
+use vpin::vpx::version::Version;
 
 const LAUNCH: Emoji = Emoji("🚀", "[launch]");
 const CRASH: Emoji = Emoji("💥", "[crash]");
@@ -386,8 +387,9 @@ fn table_menu(
             }
         }
         Some(TableOption::InfoShow) => match info_gather(selected_path) {
-            Ok(info) => {
-                prompt(info);
+            Ok((version, info)) => {
+                let txt = info_format(&version, info);
+                prompt(txt);
             }
             Err(err) => {
                 let msg = format!("Unable to gather table info: {}", err);
@@ -416,7 +418,7 @@ fn table_menu(
     }
 }
 
-fn prompt<S: Into<String>>(msg: S) {
+pub fn prompt<S: Into<String>>(msg: S) {
     Input::<String>::new()
         .with_prompt(format!("{} - Press enter to continue.", msg.into()))
         .default("".to_string())

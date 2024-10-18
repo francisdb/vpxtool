@@ -1,7 +1,16 @@
 use crate::frontend::state::State;
 use crate::frontend::Action;
+use crate::indexer::IndexedTable;
+use crate::info_gather;
 use crate::simplefrontend::TableOption;
+use colored::Colorize;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use ratatui::prelude::{Color, Text};
+use ratatui::style::Style;
+use ratatui::text::Span;
+use ratatui::widgets::{ListItem, Paragraph};
+use vpin::vpx::tableinfo::TableInfo;
+use vpin::vpx::version::Version;
 
 pub fn update(state: &mut State, key_event: KeyEvent) -> Action {
     // always allow ctrl-c to quit
@@ -10,10 +19,23 @@ pub fn update(state: &mut State, key_event: KeyEvent) -> Action {
     {
         return Action::Quit;
     }
+
+    // give priority to the message dialog
+    if let Some(_dialog) = &mut state.message_dialog {
+        return match key_event.code {
+            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Enter => {
+                state.message_dialog = None;
+                Action::None
+            }
+            _ => Action::None,
+        };
+    }
+
+    // handle the table dialog
     match &mut state.table_dialog {
         Some(dialog) => match key_event.code {
             KeyCode::Esc | KeyCode::Char('q') => {
-                state.table_dialog = None;
+                state.close_dialog();
                 Action::None
             }
             KeyCode::Up => {

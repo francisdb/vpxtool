@@ -9,7 +9,20 @@ pub struct State {
     pub roms: HashSet<String>,
     pub tables: TableList,
     pub table_dialog: Option<TableActionsDialog>,
+    /// Dialog to display messages to the user.
+    /// It can be a warning or an error.
+    /// It will be displayed until the user dismisses it.
+    /// It will be displayed on top of everything else.
+    pub message_dialog: Option<MessageDialog>,
 }
+
+#[derive(Debug)]
+pub enum MessageDialog {
+    Info(String),
+    Warning(String),
+    Error(String),
+}
+
 #[derive(Debug, Default)]
 pub enum TablesSort {
     #[default]
@@ -209,6 +222,7 @@ impl State {
             roms,
             tables,
             table_dialog: None,
+            message_dialog: None,
         }
     }
 
@@ -217,6 +231,9 @@ impl State {
 
     /// Returns the key bindings.
     pub fn get_key_bindings(&self) -> Vec<(&str, &str)> {
+        if let Some(_) = self.message_dialog {
+            return vec![("⏎", "Dismiss")];
+        }
         match self.table_dialog {
             Some(_) => vec![("⏎", "Select"), ("↑↓", "Navigate"), ("q/esc", "Back")],
             None => vec![
@@ -236,6 +253,22 @@ impl State {
             dialog.items.select(Some(0));
             self.table_dialog = Some(dialog);
         }
+    }
+
+    pub(crate) fn close_dialog(&mut self) {
+        self.table_dialog = None;
+    }
+
+    pub(crate) fn prompt_info(&mut self, message: String) {
+        self.message_dialog = Some(MessageDialog::Info(message));
+    }
+
+    pub(crate) fn prompt_warning(&mut self, message: String) {
+        self.message_dialog = Some(MessageDialog::Warning(message));
+    }
+
+    pub(crate) fn prompt_error(&mut self, message: String) {
+        self.message_dialog = Some(MessageDialog::Error(message));
     }
 }
 
