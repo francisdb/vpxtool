@@ -7,22 +7,23 @@ use std::{
     process::{exit, ExitStatus},
 };
 
+use crate::config::ResolvedConfig;
+use crate::indexer::{IndexError, IndexedTable, Progress};
+use crate::patcher::LineEndingsResult::{NoChanges, Unified};
+use crate::patcher::{patch_vbs_file, unify_line_endings_vbs_file};
+use crate::{
+    indexer, info_diff, info_edit, info_format, info_gather, open_editor, run_diff, script_diff,
+    vpx::{extractvbs, vbs_path_for, ExtractResult},
+    DiffColor, ProgressBarProgress,
+};
 use colored::Colorize;
 use console::Emoji;
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::{FuzzySelect, Input, Select};
 use indicatif::{ProgressBar, ProgressStyle};
 use is_executable::IsExecutable;
-
-use crate::config::ResolvedConfig;
-use crate::indexer::{IndexError, IndexedTable, Progress};
-use crate::patcher::LineEndingsResult::{NoChanges, Unified};
-use crate::patcher::{patch_vbs_file, unify_line_endings_vbs_file};
-use crate::{
-    indexer, info_diff, info_edit, info_gather, open_editor, run_diff, script_diff,
-    vpx::{extractvbs, vbs_path_for, ExtractResult},
-    DiffColor, ProgressBarProgress,
-};
+use vpin::vpx::tableinfo::TableInfo;
+use vpin::vpx::version::Version;
 
 const LAUNCH: Emoji = Emoji("🚀", "[launch]");
 const CRASH: Emoji = Emoji("💥", "[crash]");
@@ -32,7 +33,7 @@ const RECENT: &str = "> Recent";
 const SEARCH_INDEX: usize = 0;
 const RECENT_INDEX: usize = 1;
 
-enum TableOption {
+pub enum TableOption {
     Launch,
     LaunchFullscreen,
     LaunchWindowed,
@@ -50,7 +51,7 @@ enum TableOption {
 }
 
 impl TableOption {
-    const ALL: [TableOption; 13] = [
+    pub const ALL: [TableOption; 13] = [
         TableOption::Launch,
         TableOption::LaunchFullscreen,
         TableOption::LaunchWindowed,
@@ -67,7 +68,7 @@ impl TableOption {
         // TableOption::ClearNVRAM,
     ];
 
-    fn from_index(index: usize) -> Option<TableOption> {
+    pub fn from_index(index: usize) -> Option<TableOption> {
         match index {
             0 => Some(TableOption::Launch),
             1 => Some(TableOption::LaunchFullscreen),
@@ -87,7 +88,7 @@ impl TableOption {
         }
     }
 
-    fn display(&self) -> String {
+    pub fn display(&self) -> String {
         match self {
             TableOption::Launch => "Launch".to_string(),
             TableOption::LaunchFullscreen => "Launch fullscreen".to_string(),
@@ -386,8 +387,9 @@ fn table_menu(
             }
         }
         Some(TableOption::InfoShow) => match info_gather(selected_path) {
-            Ok(info) => {
-                prompt(info);
+            Ok((version, info)) => {
+                let txt = info_format(&version, info);
+                prompt(txt);
             }
             Err(err) => {
                 let msg = format!("Unable to gather table info: {}", err);
@@ -416,7 +418,7 @@ fn table_menu(
     }
 }
 
-fn prompt<S: Into<String>>(msg: S) {
+pub fn prompt<S: Into<String>>(msg: S) {
     Input::<String>::new()
         .with_prompt(format!("{} - Press enter to continue.", msg.into()))
         .default("".to_string())
@@ -442,7 +444,7 @@ fn choose_table_option(table_name: &str) -> Option<TableOption> {
     selection_opt.and_then(TableOption::from_index)
 }
 
-fn launch(selected_path: &PathBuf, vpinball_executable: &Path, fullscreen: Option<bool>) {
+pub fn launch(selected_path: &PathBuf, vpinball_executable: &Path, fullscreen: Option<bool>) {
     println!("{} {}", LAUNCH, selected_path.display());
 
     if !vpinball_executable.is_executable() {
@@ -514,7 +516,7 @@ fn launch_table(
     Ok(result)
 }
 
-fn display_table_line(table: &IndexedTable) -> String {
+pub fn display_table_line(table: &IndexedTable) -> String {
     let file_name = table
         .path
         .file_stem()
@@ -558,6 +560,6 @@ fn display_table_line_full(table: &IndexedTable, roms: &HashSet<String>) -> Stri
     format!("{}{}{}", base, gamename_suffix, b2s_suffix)
 }
 
-fn capitalize_first_letter(s: &str) -> String {
+pub fn capitalize_first_letter(s: &str) -> String {
     s[0..1].to_uppercase() + &s[1..]
 }

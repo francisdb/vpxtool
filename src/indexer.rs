@@ -11,14 +11,14 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use crate::simplefrontend::capitalize_first_letter;
+use crate::tableinfo::TableInfo;
+use crate::vpx;
+use crate::vpx::gamedata::GameData;
 use colored::Colorize;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use vpin::vpx::jsonmodel::json_to_info;
 use walkdir::{DirEntry, FilterEntry, IntoIter, WalkDir};
-
-use crate::tableinfo::TableInfo;
-use crate::vpx;
-use crate::vpx::gamedata::GameData;
 
 /// Introduced because we want full control over serialization
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
@@ -38,6 +38,7 @@ pub struct IndexedTableInfo {
     // the keys (and ordering) for these are defined in "GameStg/CustomInfoTags"
     pub properties: HashMap<String, String>,
 }
+
 impl From<TableInfo> for IndexedTableInfo {
     fn from(table_info: TableInfo) -> Self {
         IndexedTableInfo {
@@ -109,6 +110,30 @@ pub struct IndexedTable {
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub struct TablesIndex {
     tables: HashMap<PathBuf, IndexedTable>,
+}
+
+impl IndexedTable {
+    pub fn displayed_name(&self) -> String {
+        let file_stem = self.path.file_stem().unwrap().to_str().unwrap().to_string();
+        Some(self.table_info.table_name.to_owned())
+            .filter(|s| !s.clone().unwrap_or_default().is_empty())
+            .map(|s| capitalize_first_letter(s.unwrap_or_default().as_str()))
+            .unwrap_or(file_stem)
+    }
+
+    pub fn warnings(&self, roms: &HashSet<String>) -> Vec<String> {
+        let mut warnings = Vec::new();
+        if self.requires_pinmame {
+            if let Some(game_name) = &self.game_name {
+                let rom_found =
+                    self.local_rom_path.is_some() || roms.contains(&game_name.to_lowercase());
+                if !rom_found {
+                    warnings.push("ROM file is missing".to_string());
+                }
+            };
+        };
+        warnings
+    }
 }
 
 impl TablesIndex {
