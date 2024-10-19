@@ -3581,6 +3581,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "029d73f573d8e8d63e6d5020011d3255b28c3ba85d6cf870a07184ed23de9284"
 
 [[package]]
+name = "imagesize"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "edcd27d72f2f071c64249075f42e205ff93c9a4c5f6c6da53e79ed9f9832c285"
+
+[[package]]
 name = "imgref"
 version = "1.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6199,7 +6205,7 @@ checksum = "9bd4e3c291f45d152929a31f0f6c819245e2921bfd01e7bd91201a9af39a2bdc"
 dependencies = [
  "data-url",
  "flate2",
- "imagesize",
+ "imagesize 0.12.0",
  "kurbo",
  "log",
  "roxmltree",
@@ -6328,6 +6334,7 @@ dependencies = [
  "figment",
  "git-version",
  "image",
+ "imagesize 0.13.0",
  "indicatif",
  "is_executable",
  "log",

@@ -6,6 +6,7 @@ use std::{
     path::{Path, PathBuf},
     process::{exit, ExitStatus},
 };
+use image::ImageReader;
 use bevy::render::view::visibility;
 use bevy::{input::common_conditions::*,prelude::*};
 use bevy_asset_loader::prelude::*;
@@ -42,12 +43,13 @@ const VERTICAL:bool = true;
 #[derive(Component)]
 pub struct Wheel {
     pub itemnumber: i16,
+    pub image_handle: Handle<Image>,
     pub selected: bool,
     pub launchpath:PathBuf,
     pub vpxexecutable:PathBuf,
 }
 
-fn create_wheel(mut commands: Commands, asset_server: Res<AssetServer>, window_query: Query<&Window, With<PrimaryWindow>>)  
+fn create_wheel(mut commands: Commands, asset_server: Res<AssetServer>, window_query: Query<&Window, With<PrimaryWindow>>,assets: Res<Assets<Image>>,)  
 {
     //config: &ResolvedConfig,
     //vpx_files_with_tableinfo: &mut Vec<IndexedTable>,
@@ -92,7 +94,6 @@ fn create_wheel(mut commands: Commands, asset_server: Res<AssetServer>, window_q
 
     //let mut transform = Transform::from_xyz(0., -(height-(height/2.+(scale*2.))), 0.);
     //let mut transform = Transform::from_xyz(locations[xlocation], -(height-(height/2.+(scale*2.))), 0.);
-            transform.scale = Vec3::new(0.25, 0.25, 100.0);
     
     while counter < (tables_len)
         {
@@ -113,26 +114,43 @@ fn create_wheel(mut commands: Commands, asset_server: Res<AssetServer>, window_q
             Some(path) => {PathBuf::from(path)},
             None => PathBuf::from("/usr/tables/wheels/Sing Along (Gottlieb 1967).png"),
             };
-
-            // let mut temporary_table_name="None";
+         // let mut temporary_table_name="None";
         //let mut handle =  asset_server.load(temporary_path_name);        
         let temporary_table_name = match &info.table_info.table_name {
             Some(tb) => &tb,
             None => "None",
             };
-       
+
+         let mut handle = asset_server.load(temporary_path_name.clone());
+         
+         // Normalizing the dimentions of wheels so they are all the same size.
+         //  using imagesize crate as it is a very fast way to get the dimentions.
+
+         match imagesize::size(&temporary_path_name) {
+            Ok(size) => {
+                // Normalize icons to 1/3 the screen height
+                transform.scale = Vec3::new((height/3.)/(size.height as f32),
+                                            (height/3.)/(size.height as f32), 100.0);
+                        println!("Initializing:  {}",&temporary_path_name.as_os_str().to_string_lossy());},
+                        Err(why) => println!("Error getting dimensions: {:?}", why)
+            };
+
+            
+
          commands.spawn( (SpriteBundle {
            // texture: asset_server.load("/usr/tables/wheels/Sing Along (Gottlieb 1967).png"),
-            texture: asset_server.load(temporary_path_name),
+            texture: handle.clone(),
             transform: transform,
             ..default()
             },
             Wheel {
                 itemnumber: counter as i16,
+                image_handle: handle.clone(),
                 selected: false,
                 launchpath: info.path,
                 vpxexecutable: loaded_config.vpx_executable.clone(),
             },
+            
         )); 
 
        /* commands.spawn((
@@ -162,9 +180,12 @@ fn create_wheel(mut commands: Commands, asset_server: Res<AssetServer>, window_q
        //let image = image::load(BufReader::new(File::open("foo.png")?), ImageFormat::Jpeg)?;
         counter += 1;
         xlocation +=1;
-        entities +=1. };
-        commands.spawn(Camera2dBundle::default());
-        println!("Wheels loaded");
+        entities +=1. ;
+     
+     };
+
+     commands.spawn(Camera2dBundle::default());
+     println!("Wheels loaded");
         
   }
 
@@ -271,10 +292,11 @@ pub fn frontend_index(
     Ok(tables)
 }
 
+
 pub fn guiupdate(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>,time: Res<Time>, 
                                 mut query: Query<(&mut Transform, &mut Wheel)>,
-                                window_query: Query<&Window, With<PrimaryWindow>>
-                                )
+                                window_query: Query<&Window, With<PrimaryWindow>>,
+                                mut app_exit_events: ResMut<Events<bevy::app::AppExit>>)
 {
     let window = window_query.get_single().unwrap();
 
@@ -287,10 +309,15 @@ pub fn guiupdate(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>,time: R
     
     let mut scale = width/10.;
 
+    // arbitrary number to indicate there is no selected item.
     let mut selected_item:i16=-2;
-    // Count entities
-    let mut num =1;
+    
+    // set a flag indicating if we are ready to launch a game
     let mut launchit = false;
+
+    // Count entities - there is probably a function call to do the same thing but this was
+    // quick and dirty.
+    let mut num =1;
     for (mut transform,
         mut wheel ) in query.iter_mut()
         {num +=1;}
@@ -318,11 +345,11 @@ pub fn guiupdate(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>,time: R
             // check for keypress right shift select next item, left shift select previous item         
             for ev in keys.get_just_released() {
                     match ev{
-                    KeyCode::ShiftRight => {selected_item +=1},
-                    KeyCode::ShiftLeft =>  {selected_item -=1},
+                    KeyCode::ShiftRight => {selected_item +=1;},
+                    KeyCode::ShiftLeft =>  {selected_item -=1;},
                     KeyCode::Enter => {launchit = true;},
-                   // KeyCode::Escape => {AppExit},
-                               _ => { println!("Key press: ({:?})", ev); },
+                    KeyCode::KeyQ => {app_exit_events.send(bevy::app::AppExit::Success);},
+                           _ => { println!("Key press: ({:?})", ev); },
                     }};
                 
            // Wrap around if one of the bounds are hit.
@@ -330,16 +357,15 @@ pub fn guiupdate(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>,time: R
            else {if selected_item == -1 {selected_item=num-2;};};
 
            // update currently selected item to new value
-           for (mut transform,mut wheel) in query.iter_mut()
+           for (mut transform, mut wheel) in query.iter_mut()
                 {
-                if wheel.itemnumber != selected_item {wheel.selected = false;transform.translation = Vec3::new(0., width, 0.);}
+                if wheel.itemnumber != selected_item 
+                    { wheel.selected = false;transform.translation = Vec3::new(0., width, 0.);}
                 else {wheel.selected = true;
                     transform.translation = Vec3::new(0., -(height-(height/2.+(scale*2.))), 0.);
-                    println!("current item:{} launchpath {}",selected_item,
-                    wheel.launchpath.clone().into_os_string().to_string_lossy());
-                    
+
                 }
-            };
+                };
            
        if launchit {
        for (mut transform,  mut wheel) in query.iter_mut()

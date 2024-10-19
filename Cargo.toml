@@ -48,6 +48,7 @@ edit = "0.1.5"
 bevy = "0.14.2"
 bevy_asset = "0.14.2"
 bevy_asset_loader = "0.21.0"
+imagesize = "0.13.0"
 
 [dev-dependencies]
 pretty_assertions = "1.4.1"
