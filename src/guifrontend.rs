@@ -21,7 +21,7 @@ use is_executable::IsExecutable;
 use std::ffi::{OsStr, OsString};
 use crate::config;
 use crate::config::ResolvedConfig;
-use crate::indexer::{IndexError, IndexedTable, Progress};
+use crate::indexer::{find_vpx_files, IndexError, IndexedTable, Progress};
 use crate::patcher::LineEndingsResult::{NoChanges, Unified};
 use crate::patcher::{patch_vbs_file, unify_line_endings_vbs_file};
 use crate::{
@@ -73,10 +73,12 @@ fn create_wheel(mut commands: Commands, asset_server: Res<AssetServer>, window_q
     .map(|indexed| display_table_line_full(indexed, &roms1))
     .collect();
     let temporary_path_name="";   
+    
     println!("Last table {:?}",&loaded_config.last_table);
     let window = window_query.get_single().unwrap();
     let mut width = window.width();
     let mut height = window.height();
+    let table_path  = loaded_config.tables_folder;
 
     let mut orentation = HORIZONTAL;
     if height > width {orentation=VERTICAL;}
@@ -109,12 +111,17 @@ fn create_wheel(mut commands: Commands, asset_server: Res<AssetServer>, window_q
             };
       */
         //let mut temporary_path_name= &info.wheel_path.unwrap();
-
+        // create blank wheel
+        let mut blank_path = table_path.clone().into_os_string();
+        blank_path.push("/wheels/blankwheel.png");
+        //blank_path.into();
+        
         let mut temporary_path_name = match &info.wheel_path {
+            // get handle from path
             Some(path) => {PathBuf::from(path)},
-            None => PathBuf::from("/usr/tables/wheels/Sing Along (Gottlieb 1967).png"),
+            None => {PathBuf::from(blank_path)},
             };
-         // let mut temporary_table_name="None";
+        // let mut temporary_table_name="None";
         //let mut handle =  asset_server.load(temporary_path_name);        
         let temporary_table_name = match &info.table_info.table_name {
             Some(tb) => &tb,
@@ -122,8 +129,7 @@ fn create_wheel(mut commands: Commands, asset_server: Res<AssetServer>, window_q
             };
 
          let mut handle = asset_server.load(temporary_path_name.clone());
-         
-         // Normalizing the dimentions of wheels so they are all the same size.
+          // Normalizing the dimentions of wheels so they are all the same size.
          //  using imagesize crate as it is a very fast way to get the dimentions.
 
          match imagesize::size(&temporary_path_name) {
@@ -132,10 +138,9 @@ fn create_wheel(mut commands: Commands, asset_server: Res<AssetServer>, window_q
                 transform.scale = Vec3::new((height/3.)/(size.height as f32),
                                             (height/3.)/(size.height as f32), 100.0);
                         println!("Initializing:  {}",&temporary_path_name.as_os_str().to_string_lossy());},
-                        Err(why) => println!("Error getting dimensions: {:?}", why)
+                        Err(why) => println!("Error getting dimensions: {} {:?}",
+                                                &temporary_path_name.as_os_str().to_string_lossy(),why)
             };
-
-            
 
          commands.spawn( (SpriteBundle {
            // texture: asset_server.load("/usr/tables/wheels/Sing Along (Gottlieb 1967).png"),
@@ -153,7 +158,7 @@ fn create_wheel(mut commands: Commands, asset_server: Res<AssetServer>, window_q
             
         )); 
 
-       /* commands.spawn((
+       commands.spawn((
                 // Create a TextBundle that has a Text with a single section.
                 TextBundle::from_section(
                     // Accepts a `String` or any type that converts into a `String`, such as `&str`
@@ -171,10 +176,10 @@ fn create_wheel(mut commands: Commands, asset_server: Res<AssetServer>, window_q
                 .with_style(Style {
                     position_type: PositionType::Absolute,
                     bottom: Val::Px(scale-25.),//-(height-(height/2.+(scale*2.)))),
-                    left: Val::Px((locations[xlocation]+(width/2.)-(scale/2.))),
+                    left: Val::Px((0.)),
                     ..default()
                 }),
-              )); */
+              ));
 
          
        //let image = image::load(BufReader::new(File::open("foo.png")?), ImageFormat::Jpeg)?;
@@ -349,6 +354,7 @@ pub fn guiupdate(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>,time: R
                     KeyCode::ShiftLeft =>  {selected_item -=1;},
                     KeyCode::Enter => {launchit = true;},
                     KeyCode::KeyQ => {app_exit_events.send(bevy::app::AppExit::Success);},
+                    KeyCode::Space => {println!("current table {}",selected_item);},
                            _ => { println!("Key press: ({:?})", ev); },
                     }};
                 
@@ -363,7 +369,7 @@ pub fn guiupdate(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>,time: R
                     { wheel.selected = false;transform.translation = Vec3::new(0., width, 0.);}
                 else {wheel.selected = true;
                     transform.translation = Vec3::new(0., -(height-(height/2.+(scale*2.))), 0.);
-
+                //    println!("Selected {}",&wheel.launchpath.as_os_str().to_string_lossy());
                 }
                 };
            
