@@ -111,7 +111,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             Some((CMD_INFO_SHOW, sub_matches)) => {
                 let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
                 let path = path.unwrap_or("");
-                let expanded_path = expand_path(path)?;
+                let expanded_path = expand_path_exists(path)?;
                 println!("showing info for {}", expanded_path.display())?;
                 let info = info_gather(&expanded_path)?;
                 Ok(ExitCode::SUCCESS)
@@ -119,21 +119,21 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             Some((CMD_INFO_EXTRACT, sub_matches)) => {
                 let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
                 let path = path.unwrap_or("");
-                let expanded_path = expand_path(path)?;
+                let expanded_path = expand_path_exists(path)?;
                 println!("extracting info for {}", expanded_path.display())?;
                 info_extract(&expanded_path)
             }
             Some((CMD_INFO_IMPORT, sub_matches)) => {
                 let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
                 let path = path.unwrap_or("");
-                let expanded_path = expand_path(path)?;
+                let expanded_path = expand_path_exists(path)?;
                 println!("importing info for {}", expanded_path.display())?;
                 info_import(&expanded_path)
             }
             Some((CMD_INFO_EDIT, sub_matches)) => {
                 let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
                 let path = path.unwrap_or("");
-                let expanded_path = expand_path(path)?;
+                let expanded_path = expand_path_exists(path)?;
                 let loaded_config = config::load_config()?;
                 let config = loaded_config.as_ref().map(|c| &c.1);
                 println!("editing info for {}", expanded_path.display())?;
@@ -143,7 +143,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             Some((CMD_INFO_DIFF, sub_matches)) => {
                 let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
                 let path = path.unwrap_or("");
-                let expanded_path = expand_path(path)?;
+                let expanded_path = expand_path_exists(path)?;
                 println!("diffing info for {}", expanded_path.display())?;
                 let diff = info_diff(&expanded_path)?;
                 println!("{}", diff)?;
@@ -155,7 +155,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             // TODO this should diff more than only the script
             let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
             let path = path.unwrap_or("");
-            let expanded_path = expand_path(path)?;
+            let expanded_path = expand_path_exists(path)?;
             match script_diff(expanded_path) {
                 Ok(output) => {
                     println!("{}", output)?;
@@ -332,7 +332,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
 
             let (tables_folder_path, tables_index_path) = match path {
                 Some(path) => {
-                    let tables_path = expand_path(path)?;
+                    let tables_path = expand_path_exists(path)?;
                     let tables_index_path = config::tables_index_path(&tables_path);
                     (tables_path, tables_index_path)
                 }
@@ -378,7 +378,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     .map(|s| s.as_str())
                     .unwrap_or_default();
 
-                let expanded_path = expand_path(path)?;
+                let expanded_path = expand_path_exists(path)?;
                 let mut vpx_file = vpx::open(expanded_path)?;
                 let game_data = vpx_file.read_gamedata()?;
                 let code = game_data.code.string;
@@ -392,7 +392,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     .map(|s| s.as_str())
                     .unwrap_or_default();
 
-                let expanded_path = expand_path(path)?;
+                let expanded_path = expand_path_exists(path)?;
                 match extractvbs(&expanded_path, false, None) {
                     Ok(ExtractResult::Existed(vbs_path)) => {
                         let warning =
@@ -417,7 +417,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     .map(|s| s.as_str())
                     .unwrap_or_default();
 
-                let expanded_path = expand_path(path)?;
+                let expanded_path = expand_path_exists(path)?;
                 match importvbs(&expanded_path, None) {
                     Ok(vbs_path) => {
                         println!("IMPORTED {}", vbs_path.display())?;
@@ -436,7 +436,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     .map(|s| s.as_str())
                     .unwrap_or_default();
 
-                let expanded_vpx_path = expand_path(path)?;
+                let expanded_vpx_path = expand_path_exists(path)?;
 
                 let loaded_config = config::load_config()?;
                 let config = loaded_config.as_ref().map(|c| &c.1);
@@ -454,7 +454,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     .map(|s| s.as_str())
                     .unwrap_or_default();
 
-                let expanded_path = expand_path(path)?;
+                let expanded_path = expand_path_exists(path)?;
                 let diff = script_diff(expanded_path)?;
                 println!("{}", diff)?;
                 Ok(ExitCode::SUCCESS)
@@ -465,7 +465,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     .map(|s| s.as_str())
                     .unwrap_or_default();
 
-                let expanded_path = expand_path(path)?;
+                let expanded_path = expand_path_exists(path)?;
                 let vbs_path = match extractvbs(&expanded_path, false, None) {
                     Ok(ExtractResult::Existed(vbs_path)) => {
                         let warning =
@@ -498,19 +498,19 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 .map(|s| s.as_str())
                 .unwrap_or_default();
 
-            let expanded_path = expand_path(path)?;
+            let expanded_path = expand_path_exists(path)?;
             ls(expanded_path.as_ref())?;
             Ok(ExitCode::SUCCESS)
         }
         Some((CMD_EXTRACT, sub_matches)) => {
-            let yes = sub_matches.get_flag("FORCE");
+            let force = sub_matches.get_flag("FORCE");
             let paths: Vec<&str> = sub_matches
                 .get_many::<String>("VPXPATH")
                 .unwrap_or_default()
                 .map(|v| v.as_str())
                 .collect();
             paths.iter().try_for_each(|path| {
-                let expanded_path = expand_path(path)?;
+                let expanded_path = expand_path_exists(path)?;
                 let ext = expanded_path.extension().map(|e| e.to_ascii_lowercase());
                 match ext {
                     Some(ext) if ext == "directb2s" => {
@@ -520,7 +520,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     }
                     Some(ext) if ext == "vpx" => {
                         println!("extracting from {}", expanded_path.display())?;
-                        extract(expanded_path.as_ref(), yes)?;
+                        extract(expanded_path.as_ref(), force)?;
                         Ok(())
                     }
                     _ => Err(io::Error::new(
@@ -532,22 +532,42 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             Ok(ExitCode::SUCCESS)
         }
         Some((CMD_ASSEMBLE, sub_matches)) => {
+            let force = sub_matches.get_flag("FORCE");
             let dir_path = sub_matches
                 .get_one::<String>("DIRPATH")
                 .map(|s| s.as_str())
                 .unwrap_or_default();
-            let expanded_dir_path = expand_path(dir_path)?;
-            let vpx_path = expanded_dir_path.with_extension("vpx");
-            if vpx_path.exists() {
-                let confirmed = confirm(
-                    format!("\"{}\" already exists.", vpx_path.display()),
-                    "Do you want to overwrite it?".to_string(),
-                )?;
-                if !confirmed {
-                    println!("Aborted")?;
-                    return Ok(ExitCode::SUCCESS);
+            let vpx_path_arg = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
+            let expanded_dir_path = expand_path_exists(dir_path)?;
+            let vpx_path = match vpx_path_arg {
+                Some(path) => expand_path(path),
+                None => {
+                    let file_name = match expanded_dir_path.file_name() {
+                        Some(name) => format!("{}.vpx", name.to_string_lossy()),
+                        None => {
+                            return Err(io::Error::new(
+                                io::ErrorKind::InvalidInput,
+                                "Invalid directory path",
+                            ))
+                        }
+                    };
+                    expanded_dir_path.with_file_name(file_name)
                 }
-                std::fs::remove_file(&vpx_path)?;
+            };
+            if vpx_path.exists() {
+                if force {
+                    std::fs::remove_file(&vpx_path)?;
+                } else {
+                    let confirmed = confirm(
+                        format!("\"{}\" already exists.", vpx_path.display()),
+                        "Do you want to overwrite it?".to_string(),
+                    )?;
+                    if !confirmed {
+                        println!("Aborted")?;
+                        return Ok(ExitCode::SUCCESS);
+                    }
+                    std::fs::remove_file(&vpx_path)?;
+                }
             }
             let result = {
                 let vpx = expanded::read(&expanded_dir_path)?;
@@ -572,7 +592,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 .map(|v| v.as_str())
                 .collect::<Vec<_>>();
             for path in paths {
-                let expanded_path = expand_path(path)?;
+                let expanded_path = expand_path_exists(path)?;
                 match extractvbs(&expanded_path, overwrite, None) {
                     Ok(ExtractResult::Existed(vbs_path)) => {
                         let warning =
@@ -592,7 +612,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
         }
         Some((CMD_IMPORT_VBS, sub_matches)) => {
             let path: &str = sub_matches.get_one::<String>("VPXPATH").unwrap().as_str();
-            let expanded_path = expand_path(path)?;
+            let expanded_path = expand_path_exists(path)?;
             match importvbs(&expanded_path, None) {
                 Ok(vbs_path) => {
                     println!("IMPORTED {}", vbs_path.display())?;
@@ -613,7 +633,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 .map(|v| v.as_str())
                 .collect::<Vec<_>>();
             for path in paths {
-                let expanded_path = expand_path(path)?;
+                let expanded_path = expand_path_exists(path)?;
                 match verify(&expanded_path) {
                     VerifyResult::Ok(vbs_path) => {
                         println!("{OK} {}", vbs_path.display())?;
@@ -710,7 +730,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     .get_one::<String>("VPXPATH")
                     .map(|s| s.as_str())
                     .unwrap_or_default();
-                let expanded_path = expand_path(path)?;
+                let expanded_path = expand_path_exists(path)?;
                 let mut vpx_file = vpx::open_rw(&expanded_path)?;
                 let images = vpx_file.images_to_webp()?;
                 if !images.is_empty() {
@@ -735,7 +755,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     .get_one::<String>("VPXPATH")
                     .map(|s| s.as_str())
                     .unwrap_or_default();
-                let expanded_path = expand_path(path)?;
+                let expanded_path = expand_path_exists(path)?;
                 let mut vpx_file = vpx::open(expanded_path)?;
                 let game_data = vpx_file.read_gamedata()?;
                 let json = game_data_to_json(&game_data);
@@ -924,7 +944,7 @@ fn build_command() -> Command {
                 ),
         )
         .subcommand(
-            Command::new("extract")
+            Command::new(CMD_EXTRACT)
                 .about("Extracts a vpx file")
                 .arg(
                     Arg::new("FORCE")
@@ -975,9 +995,17 @@ fn build_command() -> Command {
                 ),
         )
         .subcommand(
-            Command::new(CMD_ASSEMBLE)
+            Command::new(CMD_ASSEMBLE)            
                 .about("Assembles a vpx file")
-                .arg(arg!(<DIRPATH> "The path to the vpx structure").required(true)),
+                .arg(
+                    Arg::new("FORCE")
+                        .short('f')
+                        .long("force")
+                        .num_args(0)
+                        .help("Do not ask for confirmation before overwriting existing files"),
+                )
+                .arg(arg!(<DIRPATH> "The path to the extracted vpx structure").required(true))
+                .arg(arg!([VPXPATH] "Optional path of the VPX file to assemble to. Defaults to <DIRPATH>.vpx.")),
         )
         .subcommand(
             Command::new("new")
@@ -1234,7 +1262,11 @@ fn os_independent_file_name(file_path: String) -> Option<String> {
     file_path.rsplit(['/', '\\']).next().map(|f| f.to_string())
 }
 
-pub fn expand_path(path: &str) -> io::Result<PathBuf> {
+fn expand_path(path: &str) -> PathBuf {
+    shellexpand::tilde(path).to_string().into()
+}
+
+fn expand_path_exists(path: &str) -> io::Result<PathBuf> {
     // TODO expand all instead of only tilde?
     let expanded_path = shellexpand::tilde(path);
     match metadata(expanded_path.as_ref()) {
@@ -1479,7 +1511,7 @@ pub fn extract(vpx_file_path: &Path, yes: bool) -> io::Result<ExitCode> {
 }
 
 pub fn info_diff<P: AsRef<Path>>(vpx_file_path: P) -> io::Result<String> {
-    let expanded_vpx_path = expand_path(vpx_file_path.as_ref().to_str().unwrap())?;
+    let expanded_vpx_path = expand_path_exists(vpx_file_path.as_ref().to_str().unwrap())?;
     let info_file_path = expanded_vpx_path.with_extension("info.json");
     let original_info_path = vpx_file_path.as_ref().with_extension("info.original.tmp");
     if info_file_path.exists() {
