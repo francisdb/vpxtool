@@ -9,6 +9,7 @@ use std::{
 use image::ImageReader;
 use bevy::render::view::visibility;
 use bevy::{input::common_conditions::*,prelude::*};
+use bevy::color::palettes::css::*;
 use bevy_asset_loader::prelude::*;
 use bevy_asset::*;
 use bevy::window::*;
@@ -48,6 +49,12 @@ pub struct Wheel {
     pub launchpath:PathBuf,
     pub vpxexecutable:PathBuf,
 }
+
+#[derive(Component,Debug)]
+pub struct TableText {
+    pub itemnumber: i16,
+    pub has_wheel: bool,
+    }
 
 fn create_wheel(mut commands: Commands, asset_server: Res<AssetServer>, window_query: Query<&Window, With<PrimaryWindow>>,assets: Res<Assets<Image>>,)  
 {
@@ -110,6 +117,7 @@ fn create_wheel(mut commands: Commands, asset_server: Res<AssetServer>, window_q
                 None => println!("NONE"),
             };
       */
+        let mut haswheel = true;
         //let mut temporary_path_name= &info.wheel_path.unwrap();
         // create blank wheel
         let mut blank_path = table_path.clone().into_os_string();
@@ -118,11 +126,11 @@ fn create_wheel(mut commands: Commands, asset_server: Res<AssetServer>, window_q
         
         let mut temporary_path_name = match &info.wheel_path {
             // get handle from path
-            Some(path) => {PathBuf::from(path)},
-            None => {PathBuf::from(blank_path)},
+            Some(path) => {haswheel = false;PathBuf::from(path)},
+            None => {haswheel = true; PathBuf::from(blank_path)},
             };
         // let mut temporary_table_name="None";
-        //let mut handle =  asset_server.load(temporary_path_name);        
+        //let mut handle =  asset_server.load(temporary_path_name);  
         let temporary_table_name = match &info.table_info.table_name {
             Some(tb) => &tb,
             None => "None",
@@ -158,7 +166,7 @@ fn create_wheel(mut commands: Commands, asset_server: Res<AssetServer>, window_q
             
         )); 
 
-       commands.spawn((
+       commands.spawn( (
                 // Create a TextBundle that has a Text with a single section.
                 TextBundle::from_section(
                     // Accepts a `String` or any type that converts into a `String`, such as `&str`
@@ -166,19 +174,25 @@ fn create_wheel(mut commands: Commands, asset_server: Res<AssetServer>, window_q
                         temporary_table_name,
                         TextStyle {
                         // This font is loaded and will be used instead of the default font.
-                        font: asset_server.load("fonts/FiraSans-Bold.ttf"),
-                        font_size: 14.0,
+                        font_size: 30.0,
+                        color: GOLD.into(),
                         ..default()
                     },
                 ) // Set the justification of the Text
-                .with_text_justify(JustifyText::Left)
+                //.with_text_justify(JustifyText::Center)
                 // Set the style of the TextBundle itself.
                 .with_style(Style {
+                    display: Display::None,
                     position_type: PositionType::Absolute,
-                    bottom: Val::Px(scale-25.),//-(height-(height/2.+(scale*2.)))),
-                    left: Val::Px((0.)),
+                    left: Val::Px(20.),
+                    top: Val::Px(height*0.025),//-(height-(height/2.+(scale*2.)))),
+                   // right: Val::Px((0.)),
                     ..default()
                 }),
+                TableText {
+                    itemnumber: counter as i16,
+                    has_wheel: haswheel,
+                },
               ));
 
          
@@ -301,7 +315,8 @@ pub fn frontend_index(
 pub fn guiupdate(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>,time: Res<Time>, 
                                 mut query: Query<(&mut Transform, &mut Wheel)>,
                                 window_query: Query<&Window, With<PrimaryWindow>>,
-                                mut app_exit_events: ResMut<Events<bevy::app::AppExit>>)
+                                mut app_exit_events: ResMut<Events<bevy::app::AppExit>>,
+                                mut tabletext: Query<(&mut Style, &mut TableText)>,)
 {
     let window = window_query.get_single().unwrap();
 
@@ -365,14 +380,24 @@ pub fn guiupdate(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>,time: R
            // update currently selected item to new value
            for (mut transform, mut wheel) in query.iter_mut()
                 {
-                if wheel.itemnumber != selected_item 
+                 if wheel.itemnumber != selected_item 
                     { wheel.selected = false;transform.translation = Vec3::new(0., width, 0.);}
                 else {wheel.selected = true;
                     transform.translation = Vec3::new(0., -(height-(height/2.+(scale*2.))), 0.);
                 //    println!("Selected {}",&wheel.launchpath.as_os_str().to_string_lossy());
                 }
                 };
-           
+   
+            for (mut textstyle, mut items) in tabletext.iter_mut()
+           {
+            if items.itemnumber != selected_item
+                {textstyle.display=Display::None;}
+                else {
+                        textstyle.display=Display::Block;
+                }
+   
+            };
+
        if launchit {
        for (mut transform,  mut wheel) in query.iter_mut()
        {
