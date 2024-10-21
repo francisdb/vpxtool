@@ -56,6 +56,15 @@ pub struct TableText {
     pub has_wheel: bool,
     }
 
+#[derive(Component,Debug)]
+    pub struct TableBlurb {
+        pub itemnumber: i16,
+        }
+#[derive(Resource)]
+pub struct vpx
+{
+     pub vpx_files_with_tables:Vec<IndexedTable>,
+}
 fn create_wheel(mut commands: Commands, asset_server: Res<AssetServer>, window_query: Query<&Window, With<PrimaryWindow>>,assets: Res<Assets<Image>>,)  
 {
     //config: &ResolvedConfig,
@@ -70,12 +79,12 @@ fn create_wheel(mut commands: Commands, asset_server: Res<AssetServer>, window_q
    //// });
 
     let (_config_path,loaded_config) = config::load_config().unwrap().unwrap();
-    let vpx_files_with_tableinfo = frontend_index(&loaded_config, true, vec![]); 
+    //vpx_files_with_tableinfo = frontend_index(&loaded_config, true, vec![]); 
     let vpx_files_with_tableinfo1 = frontend_index(&loaded_config, true, vec![]).unwrap(); 
     let mut temporary_path_name= PathBuf::from("");
     let roms = indexer::find_roms(loaded_config.global_pinmame_rom_folder());
     let roms1 = roms.unwrap();
-    let tables: Vec<String> = vpx_files_with_tableinfo.unwrap()
+    let tables: Vec<String> = vpx_files_with_tableinfo1
     .iter()
     .map(|indexed| display_table_line_full(indexed, &roms1))
     .collect();
@@ -107,12 +116,11 @@ fn create_wheel(mut commands: Commands, asset_server: Res<AssetServer>, window_q
     while counter < (tables_len)
         {
         if xlocation > 4 {xlocation = 0};
-
-        let info = vpx_files_with_tableinfo1
+            let info = vpx_files_with_tableinfo1
         .get(counter)
         .unwrap()
         .clone();
-        /*    match &info.wheel_path {
+            /*    match &info.wheel_path {
                 Some(path)=> println!("{}",&path.as_os_str().to_string_lossy()),
                 None => println!("NONE"),
             };
@@ -135,6 +143,11 @@ fn create_wheel(mut commands: Commands, asset_server: Res<AssetServer>, window_q
             Some(tb) => &tb,
             None => "None",
             };
+        
+            let table_info = match &info.table_info.table_rules {
+                Some(tb) => &tb,
+                None => "None",
+                };        
 
          let mut handle = asset_server.load(temporary_path_name.clone());
           // Normalizing the dimentions of wheels so they are all the same size.
@@ -150,6 +163,7 @@ fn create_wheel(mut commands: Commands, asset_server: Res<AssetServer>, window_q
                                                 &temporary_path_name.as_os_str().to_string_lossy(),why)
             };
 
+// Wheel 
          commands.spawn( (SpriteBundle {
            // texture: asset_server.load("/usr/tables/wheels/Sing Along (Gottlieb 1967).png"),
             texture: handle.clone(),
@@ -166,6 +180,7 @@ fn create_wheel(mut commands: Commands, asset_server: Res<AssetServer>, window_q
             
         )); 
 
+// Game Name
        commands.spawn( (
                 // Create a TextBundle that has a Text with a single section.
                 TextBundle::from_section(
@@ -195,6 +210,34 @@ fn create_wheel(mut commands: Commands, asset_server: Res<AssetServer>, window_q
                 },
               ));
 
+              // game info text
+        commands.spawn( (
+                // Create a TextBundle that has a Text with a single section.
+                TextBundle::from_section(
+                    // Accepts a `String` or any type that converts into a `String`, such as `&str`
+                   
+                    temporary_table_name,
+                        TextStyle {
+                        // This font is loaded and will be used instead of the default font.
+                        font_size: 20.0,
+                        color: BLACK.into(),
+                        ..default()
+                    },
+                ) // Set the justification of the Text
+                //.with_text_justify(JustifyText::Center)
+                // Set the style of the TextBundle itself.
+                .with_style(Style {
+                    display: Display::None,
+                    position_type: PositionType::Absolute,
+                    left: Val::Px(20.),
+                    top: Val::Px(height*0.2),//-(height-(height/2.+(scale*2.)))),
+                   // right: Val::Px((0.)),
+                    ..default()
+                }),
+                TableBlurb {
+                    itemnumber: counter as i16,
+                },
+              ));
          
        //let image = image::load(BufReader::new(File::open("foo.png")?), ImageFormat::Jpeg)?;
         counter += 1;
@@ -316,9 +359,13 @@ pub fn guiupdate(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>,time: R
                                 mut query: Query<(&mut Transform, &mut Wheel)>,
                                 window_query: Query<&Window, With<PrimaryWindow>>,
                                 mut app_exit_events: ResMut<Events<bevy::app::AppExit>>,
-                                mut tabletext: Query<(&mut Style, &mut TableText)>,)
+                                mut set: ParamSet<(
+                                Query<(&mut TableText, &mut Style), With<TableText>>,
+                                Query<(&mut TableBlurb, &mut Style), With<TableBlurb>>,)>)
 {
-    let window = window_query.get_single().unwrap();
+    
+    let mut window = window_query.get_single().unwrap().clone();
+    window.window_level = WindowLevel::Normal;
 
     let mut width = window.width();
     let mut height = window.height();
@@ -387,16 +434,29 @@ pub fn guiupdate(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>,time: R
                 //    println!("Selected {}",&wheel.launchpath.as_os_str().to_string_lossy());
                 }
                 };
-   
-            for (mut textstyle, mut items) in tabletext.iter_mut()
+   // change name of game
+            for (mut items, mut textstyle) in set.p0().iter_mut()
            {
             if items.itemnumber != selected_item
                 {textstyle.display=Display::None;}
                 else {
                         textstyle.display=Display::Block;
                 }
-   
             };
+
+    // table scroll
+            let mut counter = 0;
+            for (mut items, mut textstyle) in set.p1().iter_mut()
+            {   
+                match items.itemnumber {
+                    0..10 => {textstyle.top = Val::Px(40.+(10.*counter as f32));textstyle.display = Display::Block;},
+                    12..22 => {textstyle.top = Val::Px(40.+(10.*counter as f32));textstyle.display = Display::Block;},
+                    selected_item => textstyle.display = Display::Block,
+                    _ => textstyle.display=Display::None,
+                    }
+                counter += 1;
+             };
+
 
        if launchit {
        for (mut transform,  mut wheel) in query.iter_mut()
@@ -420,7 +480,7 @@ pub fn guifrontend(
     vpinball_executable: &Path,
 ) {
     let tables: Vec<String> = vpx_files_with_tableinfo
-    .iter()
+        .iter()
     .map(|indexed| display_table_line_full(indexed, roms))
     .collect();
     let path = "/usr/tables/wheels/Sing Along (Gottlieb 1967).png";
