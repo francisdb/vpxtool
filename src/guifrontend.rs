@@ -65,6 +65,10 @@ pub struct vpx
 {
      pub vpx_files_with_tables:Vec<IndexedTable>,
 }
+pub struct MusicBox
+{
+}
+
 fn create_wheel(mut commands: Commands, asset_server: Res<AssetServer>, window_query: Query<&Window, With<PrimaryWindow>>,assets: Res<Assets<Image>>,)  
 {
     //config: &ResolvedConfig,
@@ -200,7 +204,8 @@ fn create_wheel(mut commands: Commands, asset_server: Res<AssetServer>, window_q
                     display: Display::None,
                     position_type: PositionType::Absolute,
                     left: Val::Px(20.),
-                    top: Val::Px(height*0.025),//-(height-(height/2.+(scale*2.)))),
+                    top: Val::Px(245.),
+                   // top: Val::Px(height*0.025),//-(height-(height/2.+(scale*2.)))),
                    // right: Val::Px((0.)),
                     ..default()
                 }),
@@ -227,6 +232,8 @@ fn create_wheel(mut commands: Commands, asset_server: Res<AssetServer>, window_q
                 //.with_text_justify(JustifyText::Center)
                 // Set the style of the TextBundle itself.
                 .with_style(Style {
+                    flex_direction: FlexDirection::Row,
+                    align_content: AlignContent::FlexEnd,
                     display: Display::None,
                     position_type: PositionType::Absolute,
                     left: Val::Px(20.),
@@ -361,7 +368,8 @@ pub fn guiupdate(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>,time: R
                                 mut app_exit_events: ResMut<Events<bevy::app::AppExit>>,
                                 mut set: ParamSet<(
                                 Query<(&mut TableText, &mut Style), With<TableText>>,
-                                Query<(&mut TableBlurb, &mut Style), With<TableBlurb>>,)>)
+                                Query<(&mut TableBlurb, &mut Style), With<TableBlurb>>,)>,
+                                music_box_query: Query<&AudioSink> )
 {
     
     let mut window = window_query.get_single().unwrap().clone();
@@ -408,7 +416,19 @@ pub fn guiupdate(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>,time: R
                     _ => ()
                 }
             }};
-         
+            
+            if let Ok(sink) = music_box_query.get_single() {
+                if keys.just_pressed(KeyCode::Equal) {
+                    sink.set_volume(sink.volume() + 0.1);
+                } else if keys.just_pressed(KeyCode::Minus) {
+                    sink.set_volume(sink.volume() - 0.1);
+                } else if keys.just_pressed(KeyCode::KeyM) {
+                    sink.pause();
+                } else if keys.just_pressed(KeyCode::KeyN) {
+                    sink.play();
+                }
+            }
+
             // check for keypress right shift select next item, left shift select previous item         
             for ev in keys.get_just_released() {
                     match ev{
@@ -430,7 +450,7 @@ pub fn guiupdate(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>,time: R
                  if wheel.itemnumber != selected_item 
                     { wheel.selected = false;transform.translation = Vec3::new(0., width, 0.);}
                 else {wheel.selected = true;
-                    transform.translation = Vec3::new(0., -(height-(height/2.+(scale*2.))), 0.);
+                    transform.translation = Vec3::new(0., -(height-(height/2.75+(scale*2.))), 0.);
                 //    println!("Selected {}",&wheel.launchpath.as_os_str().to_string_lossy());
                 }
                 };
@@ -445,26 +465,209 @@ pub fn guiupdate(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>,time: R
             };
 
     // table scroll
-            let mut counter = 0;
+            let mut counter = 11;
+            let mut names = [0;21];
+
+            // item # less than 10
+            for count in 2..=11 {
+                if num+(selected_item-counter)<num-1 {
+            names[count-2] = num+(selected_item-counter);}
+                    else if selected_item-counter>num {
+                        names[count-2] = num-(selected_item-counter)}
+                    else  {names[count-2] = (selected_item+1)-counter;};
+            counter-=1;
+            // item number over num-10
+            // item number not over 10 or less than num-10
+            }
+            names[10] = selected_item;
+            
+            counter=0;
+            for count in 12..=22 {
+                if (selected_item+counter)<num-1 { 
+            names[count-2] = (selected_item+counter);}
+                    else if selected_item+counter+3>num {
+                    names[count-2] = (selected_item+counter-num)+1}
+            //        else  {names[count-2] = (selected_item+1)-counter;};
+            counter +=1;
+            // item number over num-10
+            // item number not over 10 or less than num-10
+            }
+           // println!("=={:?}",names);
+            
+            /* let mut cleartop = names[0]-1;
+            if cleartop<0 {cleartop=num-1;};
+
+            let mut clearbottom = names[names.len()-1]+1;
+            if clearbottom>num {clearbottom=names[0]};
+*/
+            counter=0;
+
+            // clear all game name assets
             for (mut items, mut textstyle) in set.p1().iter_mut()
             {   
-                match items.itemnumber {
-                    0..10 => {textstyle.top = Val::Px(40.+(10.*counter as f32));textstyle.display = Display::Block;},
-                    12..22 => {textstyle.top = Val::Px(40.+(10.*counter as f32));textstyle.display = Display::Block;},
-                    selected_item => textstyle.display = Display::Block,
-                    _ => textstyle.display=Display::None,
-                    }
-                counter += 1;
+                textstyle.display = Display::None;   
+            }
+            
+            for tables1 in names {
+                 for (mut items, mut textstyle) in set.p1().iter_mut()
+            {   
+
+            /*    if (items.itemnumber == cleartop) 
+                   {println!("clearedtop {}",items.itemnumber);textstyle.display = Display::None;};
+                if (items.itemnumber == clearbottom) {
+                    println!("clearedbottom {}",items.itemnumber);textstyle.display = Display::None;};
+              */      
+//                println!("tables {} itemnumber {}",tables1,&items.itemnumber);
+
+                        /*if items.itemnumber == names[0] { println!("got one"); 
+               // println!("names: {}",names[counter]);
+                       // textstyle.top = Val::Auto;
+                        textstyle.top = Val::Px(45.);textstyle.display = Display::Block;
+                //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
+                        }
+
+                        if items.itemnumber == names[1] { println!("got one"); 
+                        // println!("names: {}",names[counter]);
+                                // textstyle.top = Val::Auto;
+                        textstyle.top = Val::Px(65.);textstyle.display = Display::Block;
+                         //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
+                        }
+
+                        if items.itemnumber == names[2] { println!("got one"); 
+                                 // println!("names: {}",names[counter]);
+                                         // textstyle.top = Val::Auto;
+                        textstyle.top = Val::Px(85.);textstyle.display = Display::Block;
+                                  //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
+                        }
+
+                        if items.itemnumber == names[3] { println!("got one"); 
+                                 // println!("names: {}",names[counter]);
+                                         // textstyle.top = Val::Auto;
+                        textstyle.top = Val::Px(105.);textstyle.display = Display::Block;
+                                  //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
+                        }
+
+                        if items.itemnumber == names[4] { println!("got one"); 
+                        // println!("names: {}",names[counter]);
+                                // textstyle.top = Val::Auto;
+                       textstyle.top = Val::Px(125.);textstyle.display = Display::Block;
+                         //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
+                        }
+                        if items.itemnumber == names[5] { println!("got one"); 
+                        // println!("names: {}",names[counter]);
+                                // textstyle.top = Val::Auto;
+                       textstyle.top = Val::Px(145.);textstyle.display = Display::Block;
+                         //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
+                        }
+                        if items.itemnumber == names[6] { println!("got one"); 
+                        // println!("names: {}",names[counter]);
+                                // textstyle.top = Val::Auto;
+                       textstyle.top = Val::Px(165.);textstyle.display = Display::Block;
+                         //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
+                        }
+                        if items.itemnumber == names[7] { println!("got one"); 
+                        // println!("names: {}",names[counter]);
+                                // textstyle.top = Val::Auto;
+                       textstyle.top = Val::Px(185.);textstyle.display = Display::Block;
+                         //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
+                        }
+                        if items.itemnumber == names[8] { println!("got one"); 
+                        // println!("names: {}",names[counter]);
+                                // textstyle.top = Val::Auto;
+                       textstyle.top = Val::Px(205.);textstyle.display = Display::Block;
+                        //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
+                        }
+                        if items.itemnumber == names[9] { println!("got one"); 
+                        // println!("names: {}",names[counter]);
+                                // textstyle.top = Val::Auto;
+                       textstyle.top = Val::Px(225.);textstyle.display = Display::Block;
+                         //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
+                        } */
+                        for index in 0..= 9 {
+                            if items.itemnumber == names[index] { 
+                              textstyle.top = Val::Px(25.+(((index as f32)+1.)*20.));textstyle.display = Display::Block;
+                             //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
+                            }
+                            } 
+
+                        for index in 11..=20 {
+                        if items.itemnumber == names[index] { 
+                          textstyle.top = Val::Px(255.+(((index as f32)-10.)*20.));textstyle.display = Display::Block;
+                         //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
+                        }
+                        }   
+                       /*
+                        if items.itemnumber == names[12] { println!("got one"); 
+                        // println!("names: {}",names[counter]);
+                                // textstyle.top = Val::Auto;
+                       textstyle.top = Val::Px(290.);textstyle.display = Display::Block;
+                         //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
+                        }
+                        if items.itemnumber == names[13] { println!("got one"); 
+                        // println!("names: {}",names[counter]);
+                                // textstyle.top = Val::Auto;
+                       textstyle.top = Val::Px(310.);textstyle.display = Display::Block;
+                         //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
+                        }
+                        if items.itemnumber == names[14] { println!("got one"); 
+                        // println!("names: {}",names[counter]);
+                                // textstyle.top = Val::Auto;
+                       textstyle.top = Val::Px(330.);textstyle.display = Display::Block;
+                         //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
+                        }
+                        if items.itemnumber == names[15] { println!("got one"); 
+                        // println!("names: {}",names[counter]);
+                                // textstyle.top = Val::Auto;
+                       textstyle.top = Val::Px(350.);textstyle.display = Display::Block;
+                         //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
+                        }
+                        if items.itemnumber == names[16] { println!("got one"); 
+                        // println!("names: {}",names[counter]);
+                                // textstyle.top = Val::Auto;
+                       textstyle.top = Val::Px(370.);textstyle.display = Display::Block;
+                         //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
+                        }
+                        if items.itemnumber == names[17] { println!("got one"); 
+                        // println!("names: {}",names[counter]);
+                                // textstyle.top = Val::Auto;
+                       textstyle.top = Val::Px(390.);textstyle.display = Display::Block;
+                         //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
+                        }
+                        if items.itemnumber == names[18] { println!("got one"); 
+                        // println!("names: {}",names[counter]);
+                                // textstyle.top = Val::Auto;
+                       textstyle.top = Val::Px(410.);textstyle.display = Display::Block;
+                         //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
+                        }
+                        if items.itemnumber == names[19] { println!("got one"); 
+                        // println!("names: {}",names[counter]);
+                                // textstyle.top = Val::Auto;
+                       textstyle.top = Val::Px(430.);textstyle.display = Display::Block;
+                         //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
+                        }
+*/
+                        //else {textstyle.display = Display::None;}
+                        //    12..22 => {textstyle.top = Val::Px(40.+(10.*counter as f32));textstyle.display = Display::Block;},
+                         //   selected_item => textstyle.display = Display::Block,
+                         //   _ => textstyle.display=Display::None,
+                        
+                        counter += 1;
+                     };
              };
 
-
        if launchit {
+        let mut ispaused:bool = false;
+        if let Ok(sink) = music_box_query.get_single(){
+            ispaused = sink.is_paused();
+            sink.pause();};
        for (mut transform,  mut wheel) in query.iter_mut()
        {
             if wheel.itemnumber == selected_item {
                 println!("Launching {}",wheel.launchpath.clone().into_os_string().to_string_lossy());
                 launch(&wheel.launchpath, &wheel.vpxexecutable, None);}
        };
+       if let Ok(sink) = music_box_query.get_single(){
+            if !ispaused {sink.play();}};
     }
      
 }
@@ -500,7 +703,10 @@ pub fn guifrontend(
             }))
         .insert_resource(ClearColor(Color::srgb(0.9, 0.3, 0.6)))
         .add_systems(Startup,create_wheel)
+        .add_systems(Startup, play_background_audio)
         .add_systems(Update,guiupdate)
+        //.add_systems(Update, volume_system)
+        
      //   .add_systems(Update,create_wheel)
         .run();
 /*     eframe::run_native(
@@ -514,6 +720,40 @@ pub fn guifrontend(
     );
 */
 }
+
+fn play_background_audio(
+    asset_server: Res<AssetServer>,
+    mut commands: Commands,
+    
+) {
+    // Create an entity dedicated to playing our background music
+    let initialsettings = PlaybackSettings {
+        mode: bevy::audio::PlaybackMode::Loop,
+        paused:true,
+        ..default()
+    };
+
+    commands.spawn(
+        AudioBundle {
+        source: asset_server.load("/home/tom/Downloads/vpinball/gitclone/vpxtool/src/assets/Pinball.ogg"),
+        settings: initialsettings,
+    });
+
+    
+}
+
+/*fn volume_system(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    music_box_query: Query<&AudioSink, With<MusicBox>>
+) {
+    if let Ok(sink) = music_box_query.get_single() {
+        if keyboard_input.just_pressed(KeyCode::Equal) {
+            sink.set_volume(sink.volume() + 0.1);
+        } else if keyboard_input.just_pressed(KeyCode::Minus) {
+            sink.set_volume(sink.volume() - 0.1);
+        }
+    }
+} */
 
 /*fn table_menu(
     config: &ResolvedConfig,
