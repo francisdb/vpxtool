@@ -489,8 +489,7 @@ pub fn guiupdate(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>,time: R
                     names[count-2] = (selected_item+counter-num)+1}
             //        else  {names[count-2] = (selected_item+1)-counter;};
             counter +=1;
-            // item number over num-10
-            // item number not over 10 or less than num-10
+
             }
            // println!("=={:?}",names);
             
@@ -735,7 +734,7 @@ fn play_background_audio(
 
     commands.spawn(
         AudioBundle {
-        source: asset_server.load("/home/tom/Downloads/vpinball/gitclone/vpxtool/src/assets/Pinball.ogg"),
+        source: asset_server.load("Pinball.ogg"),
         settings: initialsettings,
     });
 
