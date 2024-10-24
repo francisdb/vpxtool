@@ -46,6 +46,7 @@ edit = "0.1.5"
 bevy = "0.14.2"
 bevy_asset = "0.14.2"
 bevy_asset_loader = "0.21.0"
+bevy_egui = "0.30"
 
 [dev-dependencies]
 pretty_assertions = "1.4.1"

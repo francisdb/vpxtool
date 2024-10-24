@@ -12,6 +12,13 @@ use bevy::{input::common_conditions::*,prelude::*};
 use bevy::color::palettes::css::*;
 use bevy_asset_loader::prelude::*;
 use bevy_asset::*;
+use bevy::{core_pipeline::{
+        bloom::{BloomCompositeMode, BloomSettings},
+        tonemapping::Tonemapping,}};
+use bevy_egui::{egui, EguiContexts, EguiPlugin};
+use bevy::sprite::{Wireframe2dConfig, Wireframe2dPlugin,
+    MaterialMesh2dBundle, Mesh2dHandle};
+
 use bevy::window::*;
 use colored::Colorize;
 use console::Emoji;
@@ -48,7 +55,8 @@ pub struct Wheel {
     pub selected: bool,
     pub launchpath:PathBuf,
     pub vpxexecutable:PathBuf,
-}
+    pub tableinfo: IndexedTable,
+    }
 
 #[derive(Component,Debug)]
 pub struct TableText {
@@ -65,11 +73,15 @@ pub struct vpx
 {
      pub vpx_files_with_tables:Vec<IndexedTable>,
 }
-pub struct MusicBox
+#[derive(Component,Debug)]
+
+pub struct InfoBox
 {
+    infostring: String,
 }
 
-fn create_wheel(mut commands: Commands, asset_server: Res<AssetServer>, window_query: Query<&Window, With<PrimaryWindow>>,assets: Res<Assets<Image>>,)  
+fn create_wheel(mut commands: Commands, asset_server: Res<AssetServer>, window_query: Query<&Window, With<PrimaryWindow>>,assets: Res<Assets<Image>>,
+            )  
 {
     //config: &ResolvedConfig,
     //vpx_files_with_tableinfo: &mut Vec<IndexedTable>,
@@ -167,6 +179,23 @@ fn create_wheel(mut commands: Commands, asset_server: Res<AssetServer>, window_q
                                                 &temporary_path_name.as_os_str().to_string_lossy(),why)
             };
 
+            commands.spawn(SpriteBundle {
+                texture: asset_server.load("left-flipper.png"),
+                transform: Transform {translation: Vec3::new((width as f32)-(width as f32*0.60)-225., (height as f32*0.25)+ 60., 0.),
+                           scale: (Vec3::new((0.5),(0.5), 1.0)),
+                           rotation: Quat::from_rotation_z(-0.25),
+                        ..default()},
+                ..default()
+            });
+            commands.spawn(SpriteBundle {
+                texture: asset_server.load("right-flipper.png"),
+                transform: Transform { translation: Vec3::new((width as f32)-(width as f32*0.60), (height as f32*0.25)+ 60., 0.),
+                           scale: (Vec3::new(0.5, 0.5, 1.0)),
+                           rotation: Quat::from_rotation_z(0.25),
+                        ..default()},
+                ..default()
+            });
+
 // Wheel 
          commands.spawn( (SpriteBundle {
            // texture: asset_server.load("/usr/tables/wheels/Sing Along (Gottlieb 1967).png"),
@@ -178,11 +207,13 @@ fn create_wheel(mut commands: Commands, asset_server: Res<AssetServer>, window_q
                 itemnumber: counter as i16,
                 image_handle: handle.clone(),
                 selected: false,
-                launchpath: info.path,
+                launchpath: info.path.clone(),
                 vpxexecutable: loaded_config.vpx_executable.clone(),
+                tableinfo: info.clone(),
             },
             
         )); 
+
 
 // Game Name
        commands.spawn( (
@@ -215,6 +246,7 @@ fn create_wheel(mut commands: Commands, asset_server: Res<AssetServer>, window_q
                 },
               ));
 
+
               // game info text
         commands.spawn( (
                 // Create a TextBundle that has a Text with a single section.
@@ -225,7 +257,7 @@ fn create_wheel(mut commands: Commands, asset_server: Res<AssetServer>, window_q
                         TextStyle {
                         // This font is loaded and will be used instead of the default font.
                         font_size: 20.0,
-                        color: BLACK.into(),
+                        color: GHOST_WHITE.into(),
                         ..default()
                     },
                 ) // Set the justification of the Text
@@ -253,7 +285,9 @@ fn create_wheel(mut commands: Commands, asset_server: Res<AssetServer>, window_q
      
      };
 
-     commands.spawn(Camera2dBundle::default());
+    
+     commands.spawn((Camera2dBundle
+                    {..default()},));
      println!("Wheels loaded");
         
   }
@@ -361,6 +395,35 @@ pub fn frontend_index(
     Ok(tables)
 }
 
+fn createinfobox(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut materials: ResMut<Assets<ColorMaterial>>,
+                window_query: Query<&Window, With<PrimaryWindow>>
+)
+{ 
+    // info box
+    let window = window_query.get_single().unwrap();
+    let mut width = window.width();
+    let mut height = window.height();
+    commands.spawn((
+        MaterialMesh2dBundle {
+            mesh: Mesh2dHandle(meshes
+                     .add(Rectangle::new(width*0.75,height*0.75))),
+            material: materials.add(Color::hsl(0.,0.,0.3)),
+            transform: Transform::from_xyz(
+                // Distribute shapes from -X_EXTENT/2 to +X_EXTENT/2.
+                width*0.5,
+                height*0.5,
+                101.0,
+            ),
+            ..default()
+        },
+        InfoBox {
+            infostring: "blah".to_owned(),
+           // infostring: table_blurb,    
+        },
+
+    ));
+}
+
 
 pub fn guiupdate(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>,time: Res<Time>, 
                                 mut query: Query<(&mut Transform, &mut Wheel)>,
@@ -369,7 +432,8 @@ pub fn guiupdate(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>,time: R
                                 mut set: ParamSet<(
                                 Query<(&mut TableText, &mut Style), With<TableText>>,
                                 Query<(&mut TableBlurb, &mut Style), With<TableBlurb>>,)>,
-                                music_box_query: Query<&AudioSink> )
+                                music_box_query: Query<&AudioSink>,
+                                mut meshes: ResMut<Assets<Mesh>>, mut materials: ResMut<Assets<ColorMaterial>> )
 {
     
     let mut window = window_query.get_single().unwrap().clone();
@@ -412,7 +476,7 @@ pub fn guiupdate(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>,time: R
                  mut wheel) in query.iter_mut()
             {
                 match wheel.itemnumber {
-                    3 => {wheel.selected = true;selected_item=3;},
+                    0 => {wheel.selected = true;selected_item=0;},
                     _ => ()
                 }
             }};
@@ -426,19 +490,14 @@ pub fn guiupdate(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>,time: R
                     sink.pause();
                 } else if keys.just_pressed(KeyCode::KeyN) {
                     sink.play();
-                }
-            }
-
-            // check for keypress right shift select next item, left shift select previous item         
-            for ev in keys.get_just_released() {
-                    match ev{
-                    KeyCode::ShiftRight => {selected_item +=1;},
-                    KeyCode::ShiftLeft =>  {selected_item -=1;},
-                    KeyCode::Enter => {launchit = true;},
-                    KeyCode::KeyQ => {app_exit_events.send(bevy::app::AppExit::Success);},
-                    KeyCode::Space => {println!("current table {}",selected_item);},
-                           _ => { println!("Key press: ({:?})", ev); },
-                    }};
+                } else if keys.pressed(KeyCode::Digit1) {
+                    createinfobox(commands,meshes,materials, window_query)
+                }  else if keys.just_pressed(KeyCode::ShiftRight)  {selected_item +=1;}
+                   else if keys.just_pressed(KeyCode::ShiftLeft)  {selected_item -=1;}
+                   else if keys.just_pressed(KeyCode::Enter)  {launchit = true;}
+                   else if keys.just_pressed(KeyCode::KeyQ)  {app_exit_events.send(bevy::app::AppExit::Success);}
+                   else if keys.just_pressed(KeyCode::Space)  {println!("current table {}",selected_item);}
+                };
                 
            // Wrap around if one of the bounds are hit.
            if selected_item == num-1 {selected_item=0;}
@@ -488,172 +547,46 @@ pub fn guiupdate(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>,time: R
                     else if selected_item+counter+3>num {
                     names[count-2] = (selected_item+counter-num)+1}
             //        else  {names[count-2] = (selected_item+1)-counter;};
-            counter +=1;
-
+             counter +=1;
             }
-           // println!("=={:?}",names);
-            
-            /* let mut cleartop = names[0]-1;
-            if cleartop<0 {cleartop=num-1;};
-
-            let mut clearbottom = names[names.len()-1]+1;
-            if clearbottom>num {clearbottom=names[0]};
-*/
+  
             counter=0;
 
             // clear all game name assets
             for (mut items, mut textstyle) in set.p1().iter_mut()
             {   
-                textstyle.display = Display::None;   
+                if num >21 {textstyle.display = Display::None;}
+                else {
+                        textstyle.display = Display::Block;
+                        textstyle.top = Val::Px(255.+(((counter as f32)+1.)*20.));
+                        counter += 1;}
             }
+                
             
-            for tables1 in names {
-                 for (mut items, mut textstyle) in set.p1().iter_mut()
-            {   
-
-            /*    if (items.itemnumber == cleartop) 
-                   {println!("clearedtop {}",items.itemnumber);textstyle.display = Display::None;};
-                if (items.itemnumber == clearbottom) {
-                    println!("clearedbottom {}",items.itemnumber);textstyle.display = Display::None;};
-              */      
-//                println!("tables {} itemnumber {}",tables1,&items.itemnumber);
-
-                        /*if items.itemnumber == names[0] { println!("got one"); 
-               // println!("names: {}",names[counter]);
-                       // textstyle.top = Val::Auto;
-                        textstyle.top = Val::Px(45.);textstyle.display = Display::Block;
-                //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
-                        }
-
-                        if items.itemnumber == names[1] { println!("got one"); 
-                        // println!("names: {}",names[counter]);
-                                // textstyle.top = Val::Auto;
-                        textstyle.top = Val::Px(65.);textstyle.display = Display::Block;
-                         //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
-                        }
-
-                        if items.itemnumber == names[2] { println!("got one"); 
-                                 // println!("names: {}",names[counter]);
-                                         // textstyle.top = Val::Auto;
-                        textstyle.top = Val::Px(85.);textstyle.display = Display::Block;
-                                  //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
-                        }
-
-                        if items.itemnumber == names[3] { println!("got one"); 
-                                 // println!("names: {}",names[counter]);
-                                         // textstyle.top = Val::Auto;
-                        textstyle.top = Val::Px(105.);textstyle.display = Display::Block;
-                                  //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
-                        }
-
-                        if items.itemnumber == names[4] { println!("got one"); 
-                        // println!("names: {}",names[counter]);
-                                // textstyle.top = Val::Auto;
-                       textstyle.top = Val::Px(125.);textstyle.display = Display::Block;
-                         //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
-                        }
-                        if items.itemnumber == names[5] { println!("got one"); 
-                        // println!("names: {}",names[counter]);
-                                // textstyle.top = Val::Auto;
-                       textstyle.top = Val::Px(145.);textstyle.display = Display::Block;
-                         //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
-                        }
-                        if items.itemnumber == names[6] { println!("got one"); 
-                        // println!("names: {}",names[counter]);
-                                // textstyle.top = Val::Auto;
-                       textstyle.top = Val::Px(165.);textstyle.display = Display::Block;
-                         //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
-                        }
-                        if items.itemnumber == names[7] { println!("got one"); 
-                        // println!("names: {}",names[counter]);
-                                // textstyle.top = Val::Auto;
-                       textstyle.top = Val::Px(185.);textstyle.display = Display::Block;
-                         //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
-                        }
-                        if items.itemnumber == names[8] { println!("got one"); 
-                        // println!("names: {}",names[counter]);
-                                // textstyle.top = Val::Auto;
-                       textstyle.top = Val::Px(205.);textstyle.display = Display::Block;
-                        //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
-                        }
-                        if items.itemnumber == names[9] { println!("got one"); 
-                        // println!("names: {}",names[counter]);
-                                // textstyle.top = Val::Auto;
-                       textstyle.top = Val::Px(225.);textstyle.display = Display::Block;
-                         //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
-                        } */
-                        for index in 0..= 9 {
-                            if items.itemnumber == names[index] { 
-                              textstyle.top = Val::Px(25.+(((index as f32)+1.)*20.));textstyle.display = Display::Block;
+        if num> 21  {
+                for tables1 in names {
+                    for (mut items, mut textstyle) in set.p1().iter_mut()
+                        {   
+                            for index in 0..= 9 {
+                                if items.itemnumber == names[index] { 
+                                   textstyle.top = Val::Px(25.+(((index as f32)+1.)*20.));
+                                   textstyle.display = Display::Block;
                              //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
-                            }
+                                }
                             } 
 
-                        for index in 11..=20 {
-                        if items.itemnumber == names[index] { 
-                          textstyle.top = Val::Px(255.+(((index as f32)-10.)*20.));textstyle.display = Display::Block;
+                            for index in 11..=20 {
+                                if items.itemnumber == names[index] { 
+                                   textstyle.top = Val::Px(255.+(((index as f32)-10.)*20.));
+                                   textstyle.display = Display::Block;
                          //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
-                        }
-                        }   
-                       /*
-                        if items.itemnumber == names[12] { println!("got one"); 
-                        // println!("names: {}",names[counter]);
-                                // textstyle.top = Val::Auto;
-                       textstyle.top = Val::Px(290.);textstyle.display = Display::Block;
-                         //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
-                        }
-                        if items.itemnumber == names[13] { println!("got one"); 
-                        // println!("names: {}",names[counter]);
-                                // textstyle.top = Val::Auto;
-                       textstyle.top = Val::Px(310.);textstyle.display = Display::Block;
-                         //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
-                        }
-                        if items.itemnumber == names[14] { println!("got one"); 
-                        // println!("names: {}",names[counter]);
-                                // textstyle.top = Val::Auto;
-                       textstyle.top = Val::Px(330.);textstyle.display = Display::Block;
-                         //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
-                        }
-                        if items.itemnumber == names[15] { println!("got one"); 
-                        // println!("names: {}",names[counter]);
-                                // textstyle.top = Val::Auto;
-                       textstyle.top = Val::Px(350.);textstyle.display = Display::Block;
-                         //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
-                        }
-                        if items.itemnumber == names[16] { println!("got one"); 
-                        // println!("names: {}",names[counter]);
-                                // textstyle.top = Val::Auto;
-                       textstyle.top = Val::Px(370.);textstyle.display = Display::Block;
-                         //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
-                        }
-                        if items.itemnumber == names[17] { println!("got one"); 
-                        // println!("names: {}",names[counter]);
-                                // textstyle.top = Val::Auto;
-                       textstyle.top = Val::Px(390.);textstyle.display = Display::Block;
-                         //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
-                        }
-                        if items.itemnumber == names[18] { println!("got one"); 
-                        // println!("names: {}",names[counter]);
-                                // textstyle.top = Val::Auto;
-                       textstyle.top = Val::Px(410.);textstyle.display = Display::Block;
-                         //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
-                        }
-                        if items.itemnumber == names[19] { println!("got one"); 
-                        // println!("names: {}",names[counter]);
-                                // textstyle.top = Val::Auto;
-                       textstyle.top = Val::Px(430.);textstyle.display = Display::Block;
-                         //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
-                        }
-*/
-                        //else {textstyle.display = Display::None;}
-                        //    12..22 => {textstyle.top = Val::Px(40.+(10.*counter as f32));textstyle.display = Display::Block;},
-                         //   selected_item => textstyle.display = Display::Block,
-                         //   _ => textstyle.display=Display::None,
-                        
-                        counter += 1;
-                     };
-             };
-
+                               }
+                            }   
+                     } 
+                }
+            }
+               //  counter += 1;
+                   
        if launchit {
         let mut ispaused:bool = false;
         if let Ok(sink) = music_box_query.get_single(){
@@ -700,7 +633,8 @@ pub fn guifrontend(
                 }),
                 ..Default::default()
             }))
-        .insert_resource(ClearColor(Color::srgb(0.9, 0.3, 0.6)))
+        .insert_resource(ClearColor(Color::srgb(0.1, 0.1, 0.1)))
+ //       .insert_resource(ClearColor(Color::srgb(0.9, 0.3, 0.6)))
         .add_systems(Startup,create_wheel)
         .add_systems(Startup, play_background_audio)
         .add_systems(Update,guiupdate)
