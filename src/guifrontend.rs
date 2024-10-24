@@ -490,7 +490,9 @@ pub fn guiupdate(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>,time: R
                     sink.pause();
                 } else if keys.just_pressed(KeyCode::KeyN) {
                     sink.play();
-                } else if keys.pressed(KeyCode::Digit1) {
+                }
+                
+                if keys.pressed(KeyCode::Digit1) {
                     createinfobox(commands,meshes,materials, window_query)
                 }  else if keys.just_pressed(KeyCode::ShiftRight)  {selected_item +=1;}
                    else if keys.just_pressed(KeyCode::ShiftLeft)  {selected_item -=1;}
