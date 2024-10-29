@@ -29,8 +29,8 @@ indicatif = "0.17.8"
 log = "0.4.22"
 logging_timer = "1.1.1"
 pretty_env_logger = "0.5.0"
-quick-xml = { version = "0.36.2", features = ["serialize"] }
-serde = { version = "1.0.210", features = ["derive"] }
+quick-xml = { version = "0.37.0", features = ["serialize"] }
+serde = { version = "1.0.213", features = ["derive"] }
 serde_json = { version = "1.0.132", features = ["preserve_order"] }
 shellexpand = "3.1.0"
 walkdir = "2.5.0"
@@ -39,7 +39,7 @@ figment = { version = "0.10", features = ["toml", "env"] }
 toml = "0.8.19"
 is_executable = "1.0.4"
 imagesize = "0.13.0"
-regex = { version = "1.11.0", features = [] }
+regex = { version = "1.11.1", features = [] }
 vpin = { version = "0.15.6" }
 rust-ini = "0.21.1"
 edit = "0.1.5"
