@@ -1,3 +1,5 @@
+mod menus;
+use menus::*;
 use std::collections::HashSet;
 use std::{
     fs::File,
@@ -15,6 +17,7 @@ use bevy_asset::*;
 use bevy::{core_pipeline::{
         bloom::{BloomCompositeMode, BloomSettings},
         tonemapping::Tonemapping,}};
+use bevy::{ecs::system::SystemId};
 use bevy_egui::{egui, EguiContexts, EguiPlugin};
 use bevy::sprite::{Wireframe2dConfig, Wireframe2dPlugin,
     MaterialMesh2dBundle, Mesh2dHandle};
@@ -26,6 +29,7 @@ use dialoguer::theme::ColorfulTheme;
 use dialoguer::{FuzzySelect, Input, Select};
 use indicatif::{ProgressBar, ProgressStyle};
 use is_executable::IsExecutable;
+use pipelines_ready::*;
 use std::ffi::{OsStr, OsString};
 use crate::config;
 use crate::config::ResolvedConfig;
@@ -288,10 +292,13 @@ fn create_wheel(mut commands: Commands, asset_server: Res<AssetServer>, window_q
     
      commands.spawn((Camera2dBundle
                     {..default()},));
+
+
      println!("Wheels loaded");
         
   }
 
+  
 enum TableOption {
     Launch,
     LaunchFullscreen,
@@ -395,34 +402,18 @@ pub fn frontend_index(
     Ok(tables)
 }
 
-fn createinfobox(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut materials: ResMut<Assets<ColorMaterial>>,
-                window_query: Query<&Window, With<PrimaryWindow>>
-)
+/*fn createinfobox(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut materials: ResMut<Assets<ColorMaterial>>,
+                window_query: Query<&Window, With<PrimaryWindow>>,
+                mut contexts: EguiContexts, wtitle: String, wtext: String)
 { 
-    // info box
-    let window = window_query.get_single().unwrap();
-    let mut width = window.width();
-    let mut height = window.height();
-    commands.spawn((
-        MaterialMesh2dBundle {
-            mesh: Mesh2dHandle(meshes
-                     .add(Rectangle::new(width*0.75,height*0.75))),
-            material: materials.add(Color::hsl(0.,0.,0.3)),
-            transform: Transform::from_xyz(
-                // Distribute shapes from -X_EXTENT/2 to +X_EXTENT/2.
-                width*0.5,
-                height*0.5,
-                101.0,
-            ),
-            ..default()
-        },
-        InfoBox {
-            infostring: "blah".to_owned(),
-           // infostring: table_blurb,    
-        },
+    egui::Window::new(wtitle).show(contexts.ctx_mut(), |ui| {
+        ui.label(wtext);
 
-    ));
-}
+    });  
+
+    // info box
+   
+} */
 
 
 pub fn guiupdate(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>,time: Res<Time>, 
@@ -433,6 +424,7 @@ pub fn guiupdate(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>,time: R
                                 Query<(&mut TableText, &mut Style), With<TableText>>,
                                 Query<(&mut TableBlurb, &mut Style), With<TableBlurb>>,)>,
                                 music_box_query: Query<&AudioSink>,
+                                mut contexts: EguiContexts,
                                 mut meshes: ResMut<Assets<Mesh>>, mut materials: ResMut<Assets<ColorMaterial>> )
 {
     
@@ -487,18 +479,21 @@ pub fn guiupdate(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>,time: R
                 } else if keys.just_pressed(KeyCode::Minus) {
                     sink.set_volume(sink.volume() - 0.1);
                 } else if keys.just_pressed(KeyCode::KeyM) {
-                    sink.pause();
-                } else if keys.just_pressed(KeyCode::KeyN) {
-                    sink.play();
+                    if sink.is_paused() {sink.play()}
+                       else {sink.pause()}
+             //   } else if keys.just_pressed(KeyCode::KeyN) {
+             //       sink.play();
                 }
-                
+
                 if keys.pressed(KeyCode::Digit1) {
-                    createinfobox(commands,meshes,materials, window_query)
-                }  else if keys.just_pressed(KeyCode::ShiftRight)  {selected_item +=1;}
-                   else if keys.just_pressed(KeyCode::ShiftLeft)  {selected_item -=1;}
-                   else if keys.just_pressed(KeyCode::Enter)  {launchit = true;}
-                   else if keys.just_pressed(KeyCode::KeyQ)  {app_exit_events.send(bevy::app::AppExit::Success);}
-                   else if keys.just_pressed(KeyCode::Space)  {println!("current table {}",selected_item);}
+                    createinfobox(commands,keys, meshes,materials, window_query,contexts,
+                        "Game rules".to_owned(),"rulesblah blah".to_owned()
+            )
+                }  else if keys.pressed(KeyCode::ShiftRight)  {selected_item +=1;}
+                   else if keys.pressed(KeyCode::ShiftLeft)  {selected_item -=1;}
+                   else if keys.pressed(KeyCode::Enter)  {launchit = true;}
+                   else if keys.pressed(KeyCode::KeyQ)  {app_exit_events.send(bevy::app::AppExit::Success);}
+                   else if keys.pressed(KeyCode::Space)  {println!("current table {}",selected_item);}
                 };
                 
            // Wrap around if one of the bounds are hit.
@@ -605,8 +600,192 @@ pub fn guiupdate(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>,time: R
     }
      
 }
- 
-    
+#[derive(Resource, Default)]
+enum LoadingState {
+    #[default]
+    LevelReady,
+    LevelLoading,
+}
+
+#[derive(Resource, Debug, Default)]
+struct LoadingData {
+    // This will hold the currently unloaded/loading assets.
+    loading_assets: Vec<UntypedHandle>,
+    // Number of frames that everything needs to be ready for.
+    // This is to prevent going into the fully loaded state in instances
+    // where there might be a some frames between certain loading/pipelines action.
+    confirmation_frames_target: usize,
+    // Current number of confirmation frames.
+    confirmation_frames_count: usize,
+}
+
+
+impl LoadingData {
+    fn new(confirmation_frames_target: usize) -> Self {
+        Self {
+            loading_assets: Vec::new(),
+            confirmation_frames_target,
+            confirmation_frames_count: 0,
+        }
+    }
+}
+
+// This resource will hold the level related systems ID for later use.
+#[derive(Resource)]
+struct LevelData {
+    unload_level_id: SystemId,
+    level_1_id: SystemId,
+    level_2_id: SystemId,
+}
+
+// Marker component for easier deletion of entities.
+#[derive(Component)]
+struct LevelComponents;
+
+
+// Removes all currently loaded level assets from the game World.
+fn unload_current_level(
+    mut commands: Commands,
+    mut loading_state: ResMut<LoadingState>,
+    entities: Query<Entity, With<LevelComponents>>,
+) {
+    *loading_state = LoadingState::LevelLoading;
+    for entity in entities.iter() {
+        commands.entity(entity).despawn_recursive();
+    }
+}
+
+// Monitors current loading status of assets.
+fn update_loading_data(
+    mut loading_data: ResMut<LoadingData>,
+    mut loading_state: ResMut<LoadingState>,
+    asset_server: Res<AssetServer>,
+    pipelines_ready: Res<PipelinesReady>,
+) {
+    if !loading_data.loading_assets.is_empty() || !pipelines_ready.0 {
+        // If we are still loading assets / pipelines are not fully compiled,
+        // we reset the confirmation frame count.
+        loading_data.confirmation_frames_count = 0;
+
+        // Go through each asset and verify their load states.
+        // Any assets that are loaded are then added to the pop list for later removal.
+        let mut pop_list: Vec<usize> = Vec::new();
+        for (index, asset) in loading_data.loading_assets.iter().enumerate() {
+            if let Some(state) = asset_server.get_load_states(asset) {
+                if let bevy::asset::RecursiveDependencyLoadState::Loaded = state.2 {
+                    pop_list.push(index);
+                }
+            }
+        }
+
+        // Remove all loaded assets from the loading_assets list.
+        for i in pop_list.iter() {
+            loading_data.loading_assets.remove(*i);
+        }
+
+        // If there are no more assets being monitored, and pipelines
+        // are compiled, then start counting confirmation frames.
+        // Once enough confirmations have passed, everything will be
+        // considered to be fully loaded.
+    } else {
+        loading_data.confirmation_frames_count += 1;
+        if loading_data.confirmation_frames_count == loading_data.confirmation_frames_target {
+            *loading_state = LoadingState::LevelReady;
+        }
+    }
+}
+
+// Marker tag for loading screen components.
+#[derive(Component)]
+struct LoadingScreen;
+
+// Spawns the necessary components for the loading screen.
+fn load_loading_screen(mut commands: Commands) {
+    let text_style = TextStyle {
+        font_size: 80.0,
+        ..default()
+    };
+
+    // Spawn the UI and Loading screen camera.
+    commands.spawn((
+        Camera2dBundle {
+            camera: Camera {
+                order: 1,
+                ..default()
+            },
+            ..default()
+        },
+        LoadingScreen,
+    ));
+
+    // Spawn the UI that will make up the loading screen.
+    commands
+        .spawn((
+            NodeBundle {
+                background_color: BackgroundColor(Color::BLACK),
+                style: Style {
+                    height: Val::Percent(100.0),
+                    width: Val::Percent(100.0),
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    ..default()
+                },
+                ..default()
+            },
+            LoadingScreen,
+        ))
+        .with_children(|parent| {
+            parent.spawn(TextBundle::from_sections([TextSection::new(
+                "Loading...",
+                text_style.clone(),
+            )]));
+        });
+}
+
+// Determines when to show the loading screen
+fn display_loading_screen(
+    mut loading_screen: Query<&mut Visibility, With<LoadingScreen>>,
+    loading_state: Res<LoadingState>,
+) {
+    match loading_state.as_ref() {
+        LoadingState::LevelLoading => {
+            *loading_screen.get_single_mut().unwrap() = Visibility::Visible;
+        }
+        LoadingState::LevelReady => *loading_screen.get_single_mut().unwrap() = Visibility::Hidden,
+    };
+}
+
+mod pipelines_ready {
+    use bevy::{prelude::*, render::render_resource::*, render::*};
+
+    pub struct PipelinesReadyPlugin;
+    impl Plugin for PipelinesReadyPlugin {
+        fn build(&self, app: &mut App) {
+            app.insert_resource(PipelinesReady::default());
+
+            // In order to gain access to the pipelines status, we have to
+            // go into the `RenderApp`, grab the resource from the main App
+            // and then update the pipelines status from there.
+            // Writing between these Apps can only be done through the
+            // `ExtractSchedule`.
+            app.sub_app_mut(bevy::render::RenderApp)
+                .add_systems(ExtractSchedule, update_pipelines_ready);
+        }
+    }
+
+    #[derive(Resource, Debug, Default)]
+    pub struct PipelinesReady(pub bool);
+
+    fn update_pipelines_ready(mut main_world: ResMut<MainWorld>, pipelines: Res<PipelineCache>) {
+        if let Some(mut pipelines_ready) = main_world.get_resource_mut::<PipelinesReady>() {
+            pipelines_ready.0 = pipelines.waiting_pipelines().count() == 0;
+        }
+    }
+}
+
+
+
+
    // if ctrl && shift && input.just_pressed(KeyCode::KeyA) {
      //   info!("Just pressed Ctrl + Shift + A!"); }
 
@@ -635,11 +814,17 @@ pub fn guifrontend(
                 }),
                 ..Default::default()
             }))
+        .add_plugins(EguiPlugin)
+        .add_plugins(PipelinesReadyPlugin)
         .insert_resource(ClearColor(Color::srgb(0.1, 0.1, 0.1)))
+        .insert_resource(LoadingState::default())
+        .insert_resource(LoadingData::new(5))
  //       .insert_resource(ClearColor(Color::srgb(0.9, 0.3, 0.6)))
         .add_systems(Startup,create_wheel)
+        .add_systems(Startup,(load_loading_screen))
         .add_systems(Startup, play_background_audio)
-        .add_systems(Update,guiupdate)
+        //.add_systems(Update,(guiupdate,update_loading_data, level_selection,display_loading_screen),)
+        .add_systems(Update,(guiupdate,update_loading_data,display_loading_screen),)
         //.add_systems(Update, volume_system)
         
      //   .add_systems(Update,create_wheel)
