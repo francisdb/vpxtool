@@ -92,8 +92,7 @@ fn create_wheel(
     //let temporary_path_name = "";
 
     let window = window_query.single();
-    let width = window.width();
-    let height = window.height();
+    let window_height = window.height();
     let table_path = &config.config.tables_folder;
 
     // let mut orentation = Horizontal;
@@ -171,8 +170,8 @@ fn create_wheel(
             Ok(size) => {
                 // Normalize icons to 1/3 the screen height
                 transform.scale = Vec3::new(
-                    (height / 3.) / (size.height as f32),
-                    (height / 3.) / (size.height as f32),
+                    (window_height / 3.) / (size.height as f32),
+                    (window_height / 3.) / (size.height as f32),
                     100.0,
                 );
                 println!(
@@ -255,7 +254,7 @@ fn create_wheel(
                 display: Display::None,
                 position_type: PositionType::Absolute,
                 left: Val::Px(20.),
-                top: Val::Px(height * 0.2), //-(height-(height/2.+(scale*2.)))),
+                top: Val::Px(window_height * 0.2), //-(height-(height/2.+(scale*2.)))),
                 // right: Val::Px((0.)),
                 ..default()
             }),
@@ -269,10 +268,25 @@ fn create_wheel(
         //entities += 1.;
     }
 
+    println!("Wheels loaded");
+}
+
+fn create_flippers(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    window_query: Query<&Window, With<PrimaryWindow>>,
+) {
+    let window = window_query.single();
+    let window_width = window.width();
+    let window_height = window.height();
     commands.spawn(SpriteBundle {
         texture: asset_server.load("left-flipper.png"),
         transform: Transform {
-            translation: Vec3::new(width - (width * 0.60) - 225., (height * 0.25) + 60., 0.),
+            translation: Vec3::new(
+                window_width - (window_width * 0.60) - 225.,
+                (window_height * 0.25) + 60.,
+                0.,
+            ),
             scale: (Vec3::new(0.5, 0.5, 1.0)),
             rotation: Quat::from_rotation_z(-0.25),
         },
@@ -281,16 +295,17 @@ fn create_wheel(
     commands.spawn(SpriteBundle {
         texture: asset_server.load("right-flipper.png"),
         transform: Transform {
-            translation: Vec3::new(width - (width * 0.60), height * 0.25 + 60., 0.),
+            translation: Vec3::new(
+                window_width - (window_width * 0.60),
+                window_height * 0.25 + 60.,
+                0.,
+            ),
             scale: (Vec3::new(0.5, 0.5, 1.0)),
             rotation: Quat::from_rotation_z(0.25),
         },
         ..default()
     });
-
-    println!("Wheels loaded");
 }
-
 // pub fn frontend_index(
 //     resolved_config: &ResolvedConfig,
 //     recursive: bool,
@@ -594,7 +609,7 @@ pub fn guifrontend(
         //       .insert_resource(ClearColor(Color::srgb(0.9, 0.3, 0.6)))
         .add_event::<StreamEvent>()
         .add_systems(Startup, setup)
-        .add_systems(Startup, create_wheel)
+        .add_systems(Startup, (create_wheel, create_flippers))
         .add_systems(Startup, play_background_audio)
         .add_systems(Update, gui_update)
         //.add_systems(Update, volume_system)
