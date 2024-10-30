@@ -154,7 +154,7 @@ fn create_wheel(
         // let mut temporary_table_name="None";
         //let mut handle =  asset_server.load(temporary_path_name);
         let temporary_table_name = match &info.table_info.table_name {
-            Some(tb) => &tb,
+            Some(tb) => tb,
             None => "None",
         };
 
@@ -193,21 +193,15 @@ fn create_wheel(
                 translation: Vec3::new(width - (width * 0.60) - 225., (height * 0.25) + 60., 0.),
                 scale: (Vec3::new(0.5, 0.5, 1.0)),
                 rotation: Quat::from_rotation_z(-0.25),
-                ..default()
             },
             ..default()
         });
         commands.spawn(SpriteBundle {
             texture: asset_server.load("right-flipper.png"),
             transform: Transform {
-                translation: Vec3::new(
-                    (width as f32) - (width as f32 * 0.60),
-                    (height as f32 * 0.25) + 60.,
-                    0.,
-                ),
+                translation: Vec3::new(width - (width * 0.60), height * 0.25 + 60., 0.),
                 scale: (Vec3::new(0.5, 0.5, 1.0)),
                 rotation: Quat::from_rotation_z(0.25),
-                ..default()
             },
             ..default()
         });
@@ -353,7 +347,9 @@ fn createinfobox(
     ));
 }
 
-fn guiupdate(
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::type_complexity)]
+fn gui_update(
     commands: Commands,
     keys: Res<ButtonInput<KeyCode>>,
     //time: Res<Time>,
@@ -396,22 +392,16 @@ fn guiupdate(
 
     // Find current selection
     for (_transform, wheel) in query.iter() {
-        match wheel.selected {
-            true => {
-                selected_item = wheel.item_number;
-            }
-            _ => (),
+        if wheel.selected {
+            selected_item = wheel.item_number;
         }
     }
     // If no selection, set it to item 3
     if selected_item == -2 {
         for (_transform, mut wheel) in query.iter_mut() {
-            match wheel.item_number {
-                0 => {
-                    wheel.selected = true;
-                    selected_item = 0;
-                }
-                _ => (),
+            if wheel.item_number == 0 {
+                wheel.selected = true;
+                selected_item = 0;
             }
         }
     };
@@ -445,11 +435,9 @@ fn guiupdate(
     // Wrap around if one of the bounds are hit.
     if selected_item == num - 1 {
         selected_item = 0;
-    } else {
-        if selected_item == -1 {
-            selected_item = num - 2;
-        };
-    };
+    } else if selected_item == -1 {
+        selected_item = num - 2;
+    }
 
     // update currently selected item to new value
     for (mut transform, mut wheel) in query.iter_mut() {
@@ -517,16 +505,16 @@ fn guiupdate(
     if num > 21 {
         for _name in names {
             for (items, mut text_style) in set.p1().iter_mut() {
-                for index in 0..=9 {
-                    if items.item_number == names[index] {
+                for (index, item) in names.iter().enumerate().take(9 + 1) {
+                    if items.item_number == *item {
                         text_style.top = Val::Px(25. + (((index as f32) + 1.) * 20.));
                         text_style.display = Display::Block;
                         //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
                     }
                 }
 
-                for index in 11..=20 {
-                    if items.item_number == names[index] {
+                for (index, item) in names.iter().enumerate().skip(11) {
+                    if items.item_number == *item {
                         text_style.top = Val::Px(255. + (((index as f32) - 10.) * 20.));
                         text_style.display = Display::Block;
                         //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
@@ -608,7 +596,7 @@ pub fn guifrontend(
         .add_systems(Startup, setup)
         .add_systems(Startup, create_wheel)
         .add_systems(Startup, play_background_audio)
-        .add_systems(Update, guiupdate)
+        .add_systems(Update, gui_update)
         //.add_systems(Update, volume_system)
         //   .add_systems(Update,create_wheel
         .add_systems(Update, (read_stream, spawn_text, move_text))
