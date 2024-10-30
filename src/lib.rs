@@ -11,8 +11,7 @@ use std::error::Error;
 use std::fmt::Display;
 use std::fs::{metadata, File};
 use std::io;
-use std::time::Duration;
-use std::io::{BufReader, Read, Write, stdout};
+use std::io::{BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{exit, ExitCode};
 use vpin::directb2s::read;
@@ -23,8 +22,8 @@ use vpin::vpx::{expanded, extractvbs, importvbs, tableinfo, verify, ExtractResul
 pub mod config;
 pub mod fixprint;
 mod frontend;
-pub mod indexer;
 mod guifrontend;
+pub mod indexer;
 pub mod patcher;
 
 // see https://github.com/fusion-engineering/rust-git-version/issues/21
@@ -98,7 +97,6 @@ impl Progress for ProgressBarProgress {
     }
 }
 
-
 pub fn run() -> io::Result<ExitCode> {
     let command = build_command();
     let matches = command.get_matches_from(wild::args());
@@ -114,6 +112,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 let expanded_path = expand_path_exists(path)?;
                 println!("showing info for {}", expanded_path.display())?;
                 let info = info_gather(&expanded_path)?;
+                println!("{}", info)?;
                 Ok(ExitCode::SUCCESS)
             }
             Some((CMD_INFO_EXTRACT, sub_matches)) => {
@@ -296,13 +295,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     Ok(ExitCode::FAILURE)
                 }
                 Ok(vpx_files_with_tableinfo) => {
-                    let vpinball_executable = &config.vpx_executable;
-                    guifrontend::guifrontend(
-                        &config,
-                        vpx_files_with_tableinfo,
-                        &roms,
-                        vpinball_executable,
-                    );
+                    guifrontend::guifrontend(config.clone(), vpx_files_with_tableinfo);
                     Ok(ExitCode::SUCCESS)
                 }
                 Err(IndexError::FolderDoesNotExist(path)) => {
@@ -320,9 +313,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     Ok(ExitCode::FAILURE)
                 }
             }
-
         }
-
 
         Some(("index", sub_matches)) => {
             let recursive = sub_matches.get_flag("RECURSIVE");
@@ -864,7 +855,7 @@ fn build_command() -> Command {
                         .num_args(0)
                         .help("Recursivly index subdirectories")
                         .default_value("true"),
-                 )
+                )
         )
         .subcommand(
             Command::new("index")
@@ -995,7 +986,7 @@ fn build_command() -> Command {
                 ),
         )
         .subcommand(
-            Command::new(CMD_ASSEMBLE)            
+            Command::new(CMD_ASSEMBLE)
                 .about("Assembles a vpx file")
                 .arg(
                     Arg::new("FORCE")

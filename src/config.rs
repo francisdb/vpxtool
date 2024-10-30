@@ -19,7 +19,6 @@ pub struct Config {
     pub vpx_executable: PathBuf,
     pub tables_folder: Option<PathBuf>,
     pub editor: Option<String>,
-    pub last_table: Option<String>,
 }
 impl Config {
     fn from(resolved_config: &ResolvedConfig) -> Self {
@@ -27,18 +26,16 @@ impl Config {
             vpx_executable: resolved_config.vpx_executable.clone(),
             tables_folder: Some(resolved_config.tables_folder.clone()),
             editor: resolved_config.editor.clone(),
-            last_table: resolved_config.last_table.clone(),
         }
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct ResolvedConfig {
     pub vpx_executable: PathBuf,
     pub tables_folder: PathBuf,
     pub tables_index_path: PathBuf,
     pub editor: Option<String>,
-    pub last_table: Option<String>,
 }
 
 impl ResolvedConfig {
@@ -148,13 +145,11 @@ fn read_config(config_path: &Path) -> io::Result<ResolvedConfig> {
     let tables_folder = config
         .tables_folder
         .unwrap_or(default_tables_root(&config.vpx_executable));
-    let last_table = config.last_table;
     let resolved_config = ResolvedConfig {
         vpx_executable: config.vpx_executable,
         tables_folder: tables_folder.clone(),
         tables_index_path: tables_index_path(&tables_folder),
         editor: config.editor,
-        last_table: last_table.clone(),
     };
     Ok(resolved_config)
 }
@@ -185,7 +180,6 @@ fn home_config_path() -> PathBuf {
 fn create_default_config() -> io::Result<(PathBuf, ResolvedConfig)> {
     let local_configuration_path = local_config_path();
     let home_directory_configuration_path = home_config_path();
-    let last_table="";
     let choices: Vec<(&str, String)> = vec![
         (
             "Home",
@@ -248,7 +242,6 @@ fn create_default_config() -> io::Result<(PathBuf, ResolvedConfig)> {
         tables_folder: tables_root,
         tables_index_path: index_path,
         editor: None,
-        last_table: None,
     };
     let config = Config::from(&resolved_config);
 
@@ -339,7 +332,6 @@ mod tests {
                     tables_folder: expected_tables_dir.clone(),
                     tables_index_path: expected_tables_dir.join("vpxtool_index.json"),
                     editor: None,
-                    last_table: None,
                 }
             );
         } else {
@@ -350,7 +342,6 @@ mod tests {
                     tables_folder: PathBuf::from("/tmp/test/tables"),
                     tables_index_path: PathBuf::from("/tmp/test/tables/vpxtool_index.json"),
                     editor: None,
-                    last_table: None,
                 }
             );
         }

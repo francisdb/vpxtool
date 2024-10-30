@@ -478,16 +478,24 @@ fn find_b2s_path(vpx_file_path: &PathWithMetadata) -> Option<PathBuf> {
     }
 }
 
+/// Tries to find a wheel image for the given vpx file.
+/// 2 locations are tried:
+/// * ../wheels/<vpx_file_name>.png
+/// * <vpx_file_name>.wheel.png
 fn find_wheel_path(vpx_file_path: &PathWithMetadata) -> Option<PathBuf> {
     let wheel_file_name = format!(
         "wheels/{}.png",
-        vpx_file_path.path.file_stem().unwrap().to_string_lossy() );
+        vpx_file_path.path.file_stem().unwrap().to_string_lossy()
+    );
     let wheel_path = vpx_file_path.path.parent().unwrap().join(wheel_file_name);
     if wheel_path.exists() {
-        Some(wheel_path)
-    } else {
-        None
+        return Some(wheel_path);
     }
+    let wheel_path = vpx_file_path.path.with_extension("wheel.png");
+    if wheel_path.exists() {
+        return Some(wheel_path);
+    }
+    None
 }
 
 /// If there is a file with the same name and extension .vbs we pick that code
