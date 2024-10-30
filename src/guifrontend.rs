@@ -187,25 +187,6 @@ fn create_wheel(
             ),
         };
 
-        commands.spawn(SpriteBundle {
-            texture: asset_server.load("left-flipper.png"),
-            transform: Transform {
-                translation: Vec3::new(width - (width * 0.60) - 225., (height * 0.25) + 60., 0.),
-                scale: (Vec3::new(0.5, 0.5, 1.0)),
-                rotation: Quat::from_rotation_z(-0.25),
-            },
-            ..default()
-        });
-        commands.spawn(SpriteBundle {
-            texture: asset_server.load("right-flipper.png"),
-            transform: Transform {
-                translation: Vec3::new(width - (width * 0.60), height * 0.25 + 60., 0.),
-                scale: (Vec3::new(0.5, 0.5, 1.0)),
-                rotation: Quat::from_rotation_z(0.25),
-            },
-            ..default()
-        });
-
         // Wheel
         commands.spawn((
             SpriteBundle {
@@ -283,11 +264,30 @@ fn create_wheel(
             },
         ));
 
-        //let image = image::load(BufReader::new(File::open("foo.png")?), ImageFormat::Jpeg)?;
         counter += 1;
         xlocation += 1;
         //entities += 1.;
     }
+
+    commands.spawn(SpriteBundle {
+        texture: asset_server.load("left-flipper.png"),
+        transform: Transform {
+            translation: Vec3::new(width - (width * 0.60) - 225., (height * 0.25) + 60., 0.),
+            scale: (Vec3::new(0.5, 0.5, 1.0)),
+            rotation: Quat::from_rotation_z(-0.25),
+        },
+        ..default()
+    });
+    commands.spawn(SpriteBundle {
+        texture: asset_server.load("right-flipper.png"),
+        transform: Transform {
+            translation: Vec3::new(width - (width * 0.60), height * 0.25 + 60., 0.),
+            scale: (Vec3::new(0.5, 0.5, 1.0)),
+            rotation: Quat::from_rotation_z(0.25),
+        },
+        ..default()
+    });
+
     println!("Wheels loaded");
 }
 
