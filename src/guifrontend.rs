@@ -1,680 +1,642 @@
+use bevy::color::palettes::css::*;
+use bevy::prelude::*;
+use bevy::sprite::{MaterialMesh2dBundle, Mesh2dHandle};
+// use bevy_asset_loader::prelude::*;
+// use bevy_egui::{egui, EguiContexts, EguiPlugin};
+// use image::ImageReader;
 use std::collections::HashSet;
 use std::{
-    fs::File,
     io,
-    io::Write,
     path::{Path, PathBuf},
     process::{exit, ExitStatus},
 };
-use image::ImageReader;
-use bevy::render::view::visibility;
-use bevy::{input::common_conditions::*,prelude::*};
-use bevy::color::palettes::css::*;
-use bevy_asset_loader::prelude::*;
-use bevy_asset::*;
-use bevy::{core_pipeline::{
-        bloom::{BloomCompositeMode, BloomSettings},
-        tonemapping::Tonemapping,}};
-use bevy_egui::{egui, EguiContexts, EguiPlugin};
-use bevy::sprite::{Wireframe2dConfig, Wireframe2dPlugin,
-    MaterialMesh2dBundle, Mesh2dHandle};
 
+use crate::config::ResolvedConfig;
+use crate::indexer;
+use crate::indexer::IndexedTable;
 use bevy::window::*;
 use colored::Colorize;
 use console::Emoji;
-use dialoguer::theme::ColorfulTheme;
-use dialoguer::{FuzzySelect, Input, Select};
-use indicatif::{ProgressBar, ProgressStyle};
 use is_executable::IsExecutable;
-use std::ffi::{OsStr, OsString};
-use crate::config;
-use crate::config::ResolvedConfig;
-use crate::indexer::{find_vpx_files, IndexError, IndexedTable, Progress};
-use crate::patcher::LineEndingsResult::{NoChanges, Unified};
-use crate::patcher::{patch_vbs_file, unify_line_endings_vbs_file};
-use crate::{
-    indexer, info_diff, info_edit, info_gather, open_editor, run_diff, script_diff,
-    vpx::{extractvbs, vbs_path_for, ExtractResult},
-    DiffColor, ProgressBarProgress,
-};
 
-const LAUNCH: Emoji = Emoji("🚀", "[launch]");
-const CRASH: Emoji = Emoji("💥", "[crash]");
-
-const SEARCH: &str = "> Search";
-const RECENT: &str = "> Recent";
-const SEARCH_INDEX: usize = 0;
-const RECENT_INDEX: usize = 1;
-const HORIZONTAL:bool = false;
-const VERTICAL:bool = true;
+// enum Orientation {
+//     Horizontal,
+//     Vertical,
+// }
 
 #[derive(Component)]
 pub struct Wheel {
-    pub itemnumber: i16,
-    pub image_handle: Handle<Image>,
+    pub item_number: i16,
+    //pub image_handle: Handle<Image>,
     pub selected: bool,
-    pub launchpath:PathBuf,
-    pub vpxexecutable:PathBuf,
-    pub tableinfo: IndexedTable,
-    }
+    pub launch_path: PathBuf,
+    // pub table_info: IndexedTable,
+}
 
-#[derive(Component,Debug)]
+#[derive(Component, Debug)]
 pub struct TableText {
-    pub itemnumber: i16,
-    pub has_wheel: bool,
-    }
+    pub item_number: i16,
+    //pub has_wheel: bool,
+}
 
-#[derive(Component,Debug)]
-    pub struct TableBlurb {
-        pub itemnumber: i16,
-        }
+#[derive(Component, Debug)]
+pub struct TableBlurb {
+    pub item_number: i16,
+}
+
 #[derive(Resource)]
-pub struct vpx
-{
-     pub vpx_files_with_tables:Vec<IndexedTable>,
-}
-#[derive(Component,Debug)]
-
-pub struct InfoBox
-{
-    infostring: String,
+pub struct Config {
+    pub config: ResolvedConfig,
 }
 
-fn create_wheel(mut commands: Commands, asset_server: Res<AssetServer>, window_query: Query<&Window, With<PrimaryWindow>>,assets: Res<Assets<Image>>,
-            )  
-{
+#[derive(Resource)]
+pub struct VpxTables {
+    pub indexed_tables: Vec<IndexedTable>,
+}
+
+#[derive(Component, Debug)]
+
+pub struct InfoBox {
+    // info_string: String,
+}
+
+fn create_wheel(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    window_query: Query<&mut Window, With<PrimaryWindow>>,
+    //assets: Res<Assets<Image>>,
+    config: Res<Config>,
+    vpx_tables: Res<VpxTables>,
+) {
     //config: &ResolvedConfig,
     //vpx_files_with_tableinfo: &mut Vec<IndexedTable>,
     //vpinball_executable: &Path,
     //info: &IndexedTable,
     //info_str: &str,
-  
-   //// commands.spawn(SpriteBundle {
-   ////     texture: asset_server.load("/usr/tables/wheels/Sing Along (Gottlieb 1967).png"),
+
+    //// commands.spawn(SpriteBundle {
+    ////     texture: asset_server.load("/usr/tables/wheels/Sing Along (Gottlieb 1967).png"),
     ////    ..default()
-   //// });
+    //// });
 
-    let (_config_path,loaded_config) = config::load_config().unwrap().unwrap();
-    //vpx_files_with_tableinfo = frontend_index(&loaded_config, true, vec![]); 
-    let vpx_files_with_tableinfo1 = frontend_index(&loaded_config, true, vec![]).unwrap(); 
-    let mut temporary_path_name= PathBuf::from("");
-    let roms = indexer::find_roms(loaded_config.global_pinmame_rom_folder());
+    //vpx_files_with_tableinfo = frontend_index(&loaded_config, true, vec![]);
+    //let vpx_files_with_tableinfo = frontend_index(&config.config, true, vec![]).unwrap();
+    // let mut temporary_path_name = PathBuf::from("");
+    let roms = indexer::find_roms(config.config.global_pinmame_rom_folder());
     let roms1 = roms.unwrap();
-    let tables: Vec<String> = vpx_files_with_tableinfo1
-    .iter()
-    .map(|indexed| display_table_line_full(indexed, &roms1))
-    .collect();
-    let temporary_path_name="";   
-    
-    println!("Last table {:?}",&loaded_config.last_table);
-    let window = window_query.get_single().unwrap();
-    let mut width = window.width();
-    let mut height = window.height();
-    let table_path  = loaded_config.tables_folder;
+    let tables: Vec<String> = vpx_tables
+        .indexed_tables
+        .iter()
+        .map(|indexed| display_table_line_full(indexed, &roms1))
+        .collect();
+    //let temporary_path_name = "";
 
-    let mut orentation = HORIZONTAL;
-    if height > width {orentation=VERTICAL;}
-        else {orentation=HORIZONTAL};
-    
-    let mut scale = width/10.;
-    let tables_len= tables.len();
-    let mut entities=0.;
-    let mut counter: usize=0;
-    let mut xlocation =0;
-    let locations = [-(width/2.)+scale,-(scale*2.),0.,(scale*2.),(width/2.) - (scale)];
+    let window = window_query.single();
+    let width = window.width();
+    let height = window.height();
+    let table_path = &config.config.tables_folder;
+
+    // let mut orentation = Horizontal;
+    // if height > width {
+    //     orentation = Vertical;
+    // } else {
+    //     orentation = Horizontal;
+    // };
+
+    //let scale = width / 10.;
+    let tables_len = tables.len();
+    // let mut entities = 0.;
+    let mut counter: usize = 0;
+    let mut xlocation = 0;
+    // let locations = [
+    //     -(width / 2.) + scale,
+    //     -(scale * 2.),
+    //     0.,
+    //     (scale * 2.),
+    //     (width / 2.) - (scale),
+    // ];
     //let mut handles =[];
 
     let mut transform = Transform::from_xyz(0., 0., 0.);
 
     //let mut transform = Transform::from_xyz(0., -(height-(height/2.+(scale*2.))), 0.);
     //let mut transform = Transform::from_xyz(locations[xlocation], -(height-(height/2.+(scale*2.))), 0.);
-    
-    while counter < (tables_len)
-        {
-        if xlocation > 4 {xlocation = 0};
-            let info = vpx_files_with_tableinfo1
-        .get(counter)
-        .unwrap()
-        .clone();
-            /*    match &info.wheel_path {
-                Some(path)=> println!("{}",&path.as_os_str().to_string_lossy()),
-                None => println!("NONE"),
-            };
-      */
-        let mut haswheel = true;
+
+    // create blank wheel
+    let mut blank_path = table_path.clone().into_os_string();
+    blank_path.push("/wheels/blankwheel.png");
+
+    while counter < (tables_len) {
+        if xlocation > 4 {
+            xlocation = 0
+        };
+        let info = vpx_tables.indexed_tables.get(counter).unwrap().clone();
+        /*    match &info.wheel_path {
+                  Some(path)=> println!("{}",&path.as_os_str().to_string_lossy()),
+                  None => println!("NONE"),
+              };
+        */
+        //let mut haswheel = true;
         //let mut temporary_path_name= &info.wheel_path.unwrap();
-        // create blank wheel
-        let mut blank_path = table_path.clone().into_os_string();
-        blank_path.push("/wheels/blankwheel.png");
         //blank_path.into();
-        
-        let mut temporary_path_name = match &info.wheel_path {
+
+        let temporary_path_name = match &info.wheel_path {
             // get handle from path
-            Some(path) => {haswheel = false;PathBuf::from(path)},
-            None => {haswheel = true; PathBuf::from(blank_path)},
-            };
+            Some(path) => {
+                //haswheel = false;
+                PathBuf::from(path)
+            }
+            None => {
+                //haswheel = true;
+                PathBuf::from(blank_path.clone())
+            }
+        };
         // let mut temporary_table_name="None";
-        //let mut handle =  asset_server.load(temporary_path_name);  
+        //let mut handle =  asset_server.load(temporary_path_name);
         let temporary_table_name = match &info.table_info.table_name {
             Some(tb) => &tb,
             None => "None",
-            };
-        
-            let table_info = match &info.table_info.table_rules {
-                Some(tb) => &tb,
-                None => "None",
-                };        
+        };
 
-         let mut handle = asset_server.load(temporary_path_name.clone());
-          // Normalizing the dimentions of wheels so they are all the same size.
-         //  using imagesize crate as it is a very fast way to get the dimentions.
+        // let table_info = match &info.table_info.table_rules {
+        //     Some(tb) => &tb,
+        //     None => "None",
+        // };
 
-         match imagesize::size(&temporary_path_name) {
+        let handle = asset_server.load(temporary_path_name.clone());
+        // Normalizing the dimentions of wheels so they are all the same size.
+        //  using imagesize crate as it is a very fast way to get the dimentions.
+
+        match imagesize::size(&temporary_path_name) {
             Ok(size) => {
                 // Normalize icons to 1/3 the screen height
-                transform.scale = Vec3::new((height/3.)/(size.height as f32),
-                                            (height/3.)/(size.height as f32), 100.0);
-                        println!("Initializing:  {}",&temporary_path_name.as_os_str().to_string_lossy());},
-                        Err(why) => println!("Error getting dimensions: {} {:?}",
-                                                &temporary_path_name.as_os_str().to_string_lossy(),why)
-            };
+                transform.scale = Vec3::new(
+                    (height / 3.) / (size.height as f32),
+                    (height / 3.) / (size.height as f32),
+                    100.0,
+                );
+                println!(
+                    "Initializing:  {}",
+                    &temporary_path_name.as_os_str().to_string_lossy()
+                );
+            }
+            Err(why) => println!(
+                "Error getting dimensions: {} {:?}",
+                &temporary_path_name.as_os_str().to_string_lossy(),
+                why
+            ),
+        };
 
-            commands.spawn(SpriteBundle {
-                texture: asset_server.load("left-flipper.png"),
-                transform: Transform {translation: Vec3::new((width as f32)-(width as f32*0.60)-225., (height as f32*0.25)+ 60., 0.),
-                           scale: (Vec3::new((0.5),(0.5), 1.0)),
-                           rotation: Quat::from_rotation_z(-0.25),
-                        ..default()},
+        commands.spawn(SpriteBundle {
+            texture: asset_server.load("left-flipper.png"),
+            transform: Transform {
+                translation: Vec3::new(width - (width * 0.60) - 225., (height * 0.25) + 60., 0.),
+                scale: (Vec3::new(0.5, 0.5, 1.0)),
+                rotation: Quat::from_rotation_z(-0.25),
                 ..default()
-            });
-            commands.spawn(SpriteBundle {
-                texture: asset_server.load("right-flipper.png"),
-                transform: Transform { translation: Vec3::new((width as f32)-(width as f32*0.60), (height as f32*0.25)+ 60., 0.),
-                           scale: (Vec3::new(0.5, 0.5, 1.0)),
-                           rotation: Quat::from_rotation_z(0.25),
-                        ..default()},
-                ..default()
-            });
-
-// Wheel 
-         commands.spawn( (SpriteBundle {
-           // texture: asset_server.load("/usr/tables/wheels/Sing Along (Gottlieb 1967).png"),
-            texture: handle.clone(),
-            transform: transform,
+            },
             ..default()
+        });
+        commands.spawn(SpriteBundle {
+            texture: asset_server.load("right-flipper.png"),
+            transform: Transform {
+                translation: Vec3::new(
+                    (width as f32) - (width as f32 * 0.60),
+                    (height as f32 * 0.25) + 60.,
+                    0.,
+                ),
+                scale: (Vec3::new(0.5, 0.5, 1.0)),
+                rotation: Quat::from_rotation_z(0.25),
+                ..default()
+            },
+            ..default()
+        });
+
+        // Wheel
+        commands.spawn((
+            SpriteBundle {
+                // texture: asset_server.load("/usr/tables/wheels/Sing Along (Gottlieb 1967).png"),
+                texture: handle.clone(),
+                transform,
+                ..default()
             },
             Wheel {
-                itemnumber: counter as i16,
-                image_handle: handle.clone(),
+                item_number: counter as i16,
+                //image_handle: handle.clone(),
                 selected: false,
-                launchpath: info.path.clone(),
-                vpxexecutable: loaded_config.vpx_executable.clone(),
-                tableinfo: info.clone(),
+                launch_path: info.path.clone(),
+                // table_info: info.clone(),
             },
-            
-        )); 
+        ));
 
-
-// Game Name
-       commands.spawn( (
-                // Create a TextBundle that has a Text with a single section.
-                TextBundle::from_section(
-                    // Accepts a `String` or any type that converts into a `String`, such as `&str`
-                   
-                        temporary_table_name,
-                        TextStyle {
-                        // This font is loaded and will be used instead of the default font.
-                        font_size: 30.0,
-                        color: GOLD.into(),
-                        ..default()
-                    },
-                ) // Set the justification of the Text
-                //.with_text_justify(JustifyText::Center)
-                // Set the style of the TextBundle itself.
-                .with_style(Style {
-                    display: Display::None,
-                    position_type: PositionType::Absolute,
-                    left: Val::Px(20.),
-                    top: Val::Px(245.),
-                   // top: Val::Px(height*0.025),//-(height-(height/2.+(scale*2.)))),
-                   // right: Val::Px((0.)),
+        // Game Name
+        commands.spawn((
+            // Create a TextBundle that has a Text with a single section.
+            TextBundle::from_section(
+                // Accepts a `String` or any type that converts into a `String`, such as `&str`
+                temporary_table_name,
+                TextStyle {
+                    // This font is loaded and will be used instead of the default font.
+                    font_size: 30.0,
+                    color: GOLD.into(),
                     ..default()
-                }),
-                TableText {
-                    itemnumber: counter as i16,
-                    has_wheel: haswheel,
                 },
-              ));
+            ) // Set the justification of the Text
+            //.with_text_justify(JustifyText::Center)
+            // Set the style of the TextBundle itself.
+            .with_style(Style {
+                display: Display::None,
+                position_type: PositionType::Absolute,
+                left: Val::Px(20.),
+                top: Val::Px(245.),
+                // top: Val::Px(height*0.025),//-(height-(height/2.+(scale*2.)))),
+                // right: Val::Px((0.)),
+                ..default()
+            }),
+            TableText {
+                item_number: counter as i16,
+                //has_wheel: haswheel,
+            },
+        ));
 
-
-              // game info text
-        commands.spawn( (
-                // Create a TextBundle that has a Text with a single section.
-                TextBundle::from_section(
-                    // Accepts a `String` or any type that converts into a `String`, such as `&str`
-                   
-                    temporary_table_name,
-                        TextStyle {
-                        // This font is loaded and will be used instead of the default font.
-                        font_size: 20.0,
-                        color: GHOST_WHITE.into(),
-                        ..default()
-                    },
-                ) // Set the justification of the Text
-                //.with_text_justify(JustifyText::Center)
-                // Set the style of the TextBundle itself.
-                .with_style(Style {
-                    flex_direction: FlexDirection::Row,
-                    align_content: AlignContent::FlexEnd,
-                    display: Display::None,
-                    position_type: PositionType::Absolute,
-                    left: Val::Px(20.),
-                    top: Val::Px(height*0.2),//-(height-(height/2.+(scale*2.)))),
-                   // right: Val::Px((0.)),
+        // game info text
+        commands.spawn((
+            // Create a TextBundle that has a Text with a single section.
+            TextBundle::from_section(
+                // Accepts a `String` or any type that converts into a `String`, such as `&str`
+                temporary_table_name,
+                TextStyle {
+                    // This font is loaded and will be used instead of the default font.
+                    font_size: 20.0,
+                    color: GHOST_WHITE.into(),
                     ..default()
-                }),
-                TableBlurb {
-                    itemnumber: counter as i16,
                 },
-              ));
-         
-       //let image = image::load(BufReader::new(File::open("foo.png")?), ImageFormat::Jpeg)?;
+            ) // Set the justification of the Text
+            //.with_text_justify(JustifyText::Center)
+            // Set the style of the TextBundle itself.
+            .with_style(Style {
+                flex_direction: FlexDirection::Row,
+                align_content: AlignContent::FlexEnd,
+                display: Display::None,
+                position_type: PositionType::Absolute,
+                left: Val::Px(20.),
+                top: Val::Px(height * 0.2), //-(height-(height/2.+(scale*2.)))),
+                // right: Val::Px((0.)),
+                ..default()
+            }),
+            TableBlurb {
+                item_number: counter as i16,
+            },
+        ));
+
+        //let image = image::load(BufReader::new(File::open("foo.png")?), ImageFormat::Jpeg)?;
         counter += 1;
-        xlocation +=1;
-        entities +=1. ;
-     
-     };
-
-    
-     commands.spawn((Camera2dBundle
-                    {..default()},));
-     println!("Wheels loaded");
-        
-  }
-
-enum TableOption {
-    Launch,
-    LaunchFullscreen,
-    LaunchWindowed,
-    ForceReload,
-    InfoShow,
-    InfoEdit,
-    InfoDiff,
-    ExtractVBS,
-    EditVBS,
-    PatchVBS,
-    UnifyLineEndings,
-    ShowVBSDiff,
-    CreateVBSPatch,
-    // ClearNVRAM,
-}
-
-impl TableOption {
-    const ALL: [TableOption; 13] = [
-        TableOption::Launch,
-        TableOption::LaunchFullscreen,
-        TableOption::LaunchWindowed,
-        TableOption::ForceReload,
-        TableOption::InfoShow,
-        TableOption::InfoEdit,
-        TableOption::InfoDiff,
-        TableOption::ExtractVBS,
-        TableOption::EditVBS,
-        TableOption::PatchVBS,
-        TableOption::UnifyLineEndings,
-        TableOption::ShowVBSDiff,
-        TableOption::CreateVBSPatch,
-        // TableOption::ClearNVRAM,
-    ];
-
-    fn from_index(index: usize) -> Option<TableOption> {
-        match index {
-            0 => Some(TableOption::Launch),
-            1 => Some(TableOption::LaunchFullscreen),
-            2 => Some(TableOption::LaunchWindowed),
-            3 => Some(TableOption::ForceReload),
-            4 => Some(TableOption::InfoShow),
-            5 => Some(TableOption::InfoEdit),
-            6 => Some(TableOption::InfoDiff),
-            7 => Some(TableOption::ExtractVBS),
-            8 => Some(TableOption::EditVBS),
-            9 => Some(TableOption::PatchVBS),
-            10 => Some(TableOption::UnifyLineEndings),
-            11 => Some(TableOption::ShowVBSDiff),
-            12 => Some(TableOption::CreateVBSPatch),
-            // 13 => Some(TableOption::ClearNVRAM),
-            _ => None,
-        }
+        xlocation += 1;
+        //entities += 1.;
     }
-
-    fn display(&self) -> String {
-        match self {
-            TableOption::Launch => "Launch".to_string(),
-            TableOption::LaunchFullscreen => "Launch fullscreen".to_string(),
-            TableOption::LaunchWindowed => "Launch windowed".to_string(),
-            TableOption::ForceReload => "Force reload".to_string(),
-            TableOption::InfoShow => "Info > Show".to_string(),
-            TableOption::InfoEdit => "Info > Edit".to_string(),
-            TableOption::InfoDiff => "Info > Diff".to_string(),
-            TableOption::ExtractVBS => "VBScript > Extract".to_string(),
-            TableOption::EditVBS => "VBScript > Edit".to_string(),
-            TableOption::PatchVBS => "VBScript > Patch typical standalone issues".to_string(),
-            TableOption::UnifyLineEndings => "VBScript > Unify line endings".to_string(),
-            TableOption::ShowVBSDiff => "VBScript > Diff".to_string(),
-            TableOption::CreateVBSPatch => "VBScript > Create patch file".to_string(),
-            // TableOption::ClearNVRAM => "Clear NVRAM".to_string(),
-        }
-    }
+    println!("Wheels loaded");
 }
 
-pub fn frontend_index(
-    resolved_config: &ResolvedConfig,
-    recursive: bool,
-    force_reindex: Vec<PathBuf>,
-) -> Result<Vec<IndexedTable>, IndexError> {
-    let pb = ProgressBar::hidden();
-    pb.set_style(
-        ProgressStyle::with_template(
-            "{spinner:.green} [{bar:.cyan/blue}] {pos}/{human_len} ({eta})",
-        )
-        .unwrap(),
-    );
-    let progress = ProgressBarProgress::new(pb);
-    let index = indexer::index_folder(
-        recursive,
-        &resolved_config.tables_folder,
-        &resolved_config.tables_index_path,
-        &progress,
-        force_reindex,
-    );
-    progress.finish_and_clear();
-    let index = index?;
+// pub fn frontend_index(
+//     resolved_config: &ResolvedConfig,
+//     recursive: bool,
+//     force_reindex: Vec<PathBuf>,
+// ) -> Result<Vec<IndexedTable>, IndexError> {
+//     let pb = ProgressBar::hidden();
+//     pb.set_style(
+//         ProgressStyle::with_template(
+//             "{spinner:.green} [{bar:.cyan/blue}] {pos}/{human_len} ({eta})",
+//         )
+//         .unwrap(),
+//     );
+//     let progress = ProgressBarProgress::new(pb);
+//     let index = indexer::index_folder(
+//         recursive,
+//         &resolved_config.tables_folder,
+//         &resolved_config.tables_index_path,
+//         &progress,
+//         force_reindex,
+//     );
+//     progress.finish_and_clear();
+//     let index = index?;
+//
+//     let mut tables: Vec<IndexedTable> = index.tables();
+//     tables.sort_by_key(|indexed| display_table_line(indexed).to_lowercase());
+//     Ok(tables)
+// }
 
-    let mut tables: Vec<IndexedTable> = index.tables();
-    tables.sort_by_key(|indexed| display_table_line(indexed).to_lowercase());
-    Ok(tables)
-}
-
-fn createinfobox(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut materials: ResMut<Assets<ColorMaterial>>,
-                window_query: Query<&Window, With<PrimaryWindow>>
-)
-{ 
+fn createinfobox(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+    window: &Window,
+) {
     // info box
-    let window = window_query.get_single().unwrap();
-    let mut width = window.width();
-    let mut height = window.height();
+    let width = window.width();
+    let height = window.height();
     commands.spawn((
         MaterialMesh2dBundle {
-            mesh: Mesh2dHandle(meshes
-                     .add(Rectangle::new(width*0.75,height*0.75))),
-            material: materials.add(Color::hsl(0.,0.,0.3)),
+            mesh: Mesh2dHandle(meshes.add(Rectangle::new(width * 0.75, height * 0.75))),
+            material: materials.add(Color::hsl(0., 0., 0.3)),
             transform: Transform::from_xyz(
                 // Distribute shapes from -X_EXTENT/2 to +X_EXTENT/2.
-                width*0.5,
-                height*0.5,
+                width * 0.5,
+                height * 0.5,
                 101.0,
             ),
             ..default()
         },
         InfoBox {
-            infostring: "blah".to_owned(),
-           // infostring: table_blurb,    
+            // info_string: "blah".to_owned(),
+            // info_string: table_blurb,
         },
-
     ));
 }
 
+fn guiupdate(
+    commands: Commands,
+    keys: Res<ButtonInput<KeyCode>>,
+    //time: Res<Time>,
+    mut query: Query<(&mut Transform, &mut Wheel)>,
+    mut window_query: Query<&mut Window, With<PrimaryWindow>>,
+    mut app_exit_events: ResMut<Events<AppExit>>,
+    mut set: ParamSet<(
+        Query<(&mut TableText, &mut Style), With<TableText>>,
+        Query<(&mut TableBlurb, &mut Style), With<TableBlurb>>,
+    )>,
+    music_box_query: Query<&AudioSink>,
+    meshes: ResMut<Assets<Mesh>>,
+    materials: ResMut<Assets<ColorMaterial>>,
+    tx: Res<StreamSender>,
+    config: Res<Config>,
+) {
+    let mut window = window_query.single_mut();
 
-pub fn guiupdate(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>,time: Res<Time>, 
-                                mut query: Query<(&mut Transform, &mut Wheel)>,
-                                window_query: Query<&Window, With<PrimaryWindow>>,
-                                mut app_exit_events: ResMut<Events<bevy::app::AppExit>>,
-                                mut set: ParamSet<(
-                                Query<(&mut TableText, &mut Style), With<TableText>>,
-                                Query<(&mut TableBlurb, &mut Style), With<TableBlurb>>,)>,
-                                music_box_query: Query<&AudioSink>,
-                                mut meshes: ResMut<Assets<Mesh>>, mut materials: ResMut<Assets<ColorMaterial>> )
-{
-    
-    let mut window = window_query.get_single().unwrap().clone();
-    window.window_level = WindowLevel::Normal;
+    let width = window.width();
+    let height = window.height();
 
-    let mut width = window.width();
-    let mut height = window.height();
+    // let mut orentation = HORIZONTAL;
+    // if height > width {
+    //     orentation = VERTICAL;
+    // } else {
+    //     orentation = HORIZONTAL
+    // };
 
-    let mut orentation = HORIZONTAL;
-    if height > width {orentation=VERTICAL;}
-        else {orentation=HORIZONTAL};
-    
-    let mut scale = width/10.;
+    let scale = width / 10.;
 
     // arbitrary number to indicate there is no selected item.
-    let mut selected_item:i16=-2;
-    
+    let mut selected_item: i16 = -2;
+
     // set a flag indicating if we are ready to launch a game
     let mut launchit = false;
 
-    // Count entities - there is probably a function call to do the same thing but this was
-    // quick and dirty.
-    let mut num =1;
-    for (mut transform,
-        mut wheel ) in query.iter_mut()
-        {num +=1;}
+    // Count entities
+    let mut num = 1;
+    num += query.iter().count() as i16;
 
     // Find current selection
-    for (mut transform,
-        mut wheel) in query.iter_mut()
-        {
+    for (_transform, wheel) in query.iter() {
         match wheel.selected {
-            true =>{selected_item = wheel.itemnumber;}, 
-            _ => ()
+            true => {
+                selected_item = wheel.item_number;
+            }
+            _ => (),
+        }
+    }
+    // If no selection, set it to item 3
+    if selected_item == -2 {
+        for (_transform, mut wheel) in query.iter_mut() {
+            match wheel.item_number {
+                0 => {
+                    wheel.selected = true;
+                    selected_item = 0;
+                }
+                _ => (),
             }
         }
-        // If no selection, set it to item 3
-        if selected_item == -2 {
-            for (mut transform,
-                 mut wheel) in query.iter_mut()
-            {
-                match wheel.itemnumber {
-                    0 => {wheel.selected = true;selected_item=0;},
-                    _ => ()
-                }
-            }};
-            
-            if let Ok(sink) = music_box_query.get_single() {
-                if keys.just_pressed(KeyCode::Equal) {
-                    sink.set_volume(sink.volume() + 0.1);
-                } else if keys.just_pressed(KeyCode::Minus) {
-                    sink.set_volume(sink.volume() - 0.1);
-                } else if keys.just_pressed(KeyCode::KeyM) {
-                    sink.pause();
-                } else if keys.just_pressed(KeyCode::KeyN) {
-                    sink.play();
-                }
-                
-                if keys.pressed(KeyCode::Digit1) {
-                    createinfobox(commands,meshes,materials, window_query)
-                }  else if keys.just_pressed(KeyCode::ShiftRight)  {selected_item +=1;}
-                   else if keys.just_pressed(KeyCode::ShiftLeft)  {selected_item -=1;}
-                   else if keys.just_pressed(KeyCode::Enter)  {launchit = true;}
-                   else if keys.just_pressed(KeyCode::KeyQ)  {app_exit_events.send(bevy::app::AppExit::Success);}
-                   else if keys.just_pressed(KeyCode::Space)  {println!("current table {}",selected_item);}
-                };
-                
-           // Wrap around if one of the bounds are hit.
-           if selected_item == num-1 {selected_item=0;}
-           else {if selected_item == -1 {selected_item=num-2;};};
+    };
 
-           // update currently selected item to new value
-           for (mut transform, mut wheel) in query.iter_mut()
-                {
-                 if wheel.itemnumber != selected_item 
-                    { wheel.selected = false;transform.translation = Vec3::new(0., width, 0.);}
-                else {wheel.selected = true;
-                    transform.translation = Vec3::new(0., -(height-(height/2.75+(scale*2.))), 0.);
-                //    println!("Selected {}",&wheel.launchpath.as_os_str().to_string_lossy());
-                }
-                };
-   // change name of game
-            for (mut items, mut textstyle) in set.p0().iter_mut()
-           {
-            if items.itemnumber != selected_item
-                {textstyle.display=Display::None;}
-                else {
-                        textstyle.display=Display::Block;
-                }
-            };
+    if let Ok(sink) = music_box_query.get_single() {
+        if keys.just_pressed(KeyCode::Equal) {
+            sink.set_volume(sink.volume() + 0.1);
+        } else if keys.just_pressed(KeyCode::Minus) {
+            sink.set_volume(sink.volume() - 0.1);
+        } else if keys.just_pressed(KeyCode::KeyM) {
+            sink.pause();
+        } else if keys.just_pressed(KeyCode::KeyN) {
+            sink.play();
+        }
+    }
+
+    if keys.pressed(KeyCode::Digit1) {
+        createinfobox(commands, meshes, materials, &window.clone())
+    } else if keys.just_pressed(KeyCode::ShiftRight) {
+        selected_item += 1;
+    } else if keys.just_pressed(KeyCode::ShiftLeft) {
+        selected_item -= 1;
+    } else if keys.just_pressed(KeyCode::Enter) {
+        launchit = true;
+    } else if keys.just_pressed(KeyCode::KeyQ) {
+        app_exit_events.send(AppExit::Success);
+    } else if keys.just_pressed(KeyCode::Space) {
+        println!("current table {}", selected_item);
+    }
+
+    // Wrap around if one of the bounds are hit.
+    if selected_item == num - 1 {
+        selected_item = 0;
+    } else {
+        if selected_item == -1 {
+            selected_item = num - 2;
+        };
+    };
+
+    // update currently selected item to new value
+    for (mut transform, mut wheel) in query.iter_mut() {
+        if wheel.item_number != selected_item {
+            wheel.selected = false;
+            transform.translation = Vec3::new(0., width, 0.);
+        } else {
+            wheel.selected = true;
+            transform.translation = Vec3::new(0., -(height - (height / 2.75 + (scale * 2.))), 0.);
+            //    println!("Selected {}",&wheel.launchpath.as_os_str().to_string_lossy());
+        }
+    }
+    // change name of game
+    for (items, mut textstyle) in set.p0().iter_mut() {
+        if items.item_number != selected_item {
+            textstyle.display = Display::None;
+        } else {
+            textstyle.display = Display::Block;
+        }
+    }
 
     // table scroll
-            let mut counter = 11;
-            let mut names = [0;21];
+    let mut counter = 11;
+    let mut names = [0; 21];
 
-            // item # less than 10
-            for count in 2..=11 {
-                if num+(selected_item-counter)<num-1 {
-            names[count-2] = num+(selected_item-counter);}
-                    else if selected_item-counter>num {
-                        names[count-2] = num-(selected_item-counter)}
-                    else  {names[count-2] = (selected_item+1)-counter;};
-            counter-=1;
-            // item number over num-10
-            // item number not over 10 or less than num-10
-            }
-            names[10] = selected_item;
-            
-            counter=0;
-            for count in 12..=22 {
-                if (selected_item+counter)<num-1 { 
-            names[count-2] = (selected_item+counter);}
-                    else if selected_item+counter+3>num {
-                    names[count-2] = (selected_item+counter-num)+1}
-            //        else  {names[count-2] = (selected_item+1)-counter;};
-             counter +=1;
-            }
-  
-            counter=0;
+    // item # less than 10
+    for count in 2..=11 {
+        if num + (selected_item - counter) < num - 1 {
+            names[count - 2] = num + (selected_item - counter);
+        } else if selected_item - counter > num {
+            names[count - 2] = num - (selected_item - counter)
+        } else {
+            names[count - 2] = (selected_item + 1) - counter;
+        };
+        counter -= 1;
+        // item number over num-10
+        // item number not over 10 or less than num-10
+    }
+    names[10] = selected_item;
 
-            // clear all game name assets
-            for (mut items, mut textstyle) in set.p1().iter_mut()
-            {   
-                if num >21 {textstyle.display = Display::None;}
-                else {
-                        textstyle.display = Display::Block;
-                        textstyle.top = Val::Px(255.+(((counter as f32)+1.)*20.));
-                        counter += 1;}
-            }
-                
-            
-        if num> 21  {
-                for tables1 in names {
-                    for (mut items, mut textstyle) in set.p1().iter_mut()
-                        {   
-                            for index in 0..= 9 {
-                                if items.itemnumber == names[index] { 
-                                   textstyle.top = Val::Px(25.+(((index as f32)+1.)*20.));
-                                   textstyle.display = Display::Block;
-                             //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
-                                }
-                            } 
+    counter = 0;
+    for count in 12..=22 {
+        if (selected_item + counter) < num - 1 {
+            names[count - 2] = selected_item + counter;
+        } else if selected_item + counter + 3 > num {
+            names[count - 2] = (selected_item + counter - num) + 1
+        }
+        //        else  {names[count-2] = (selected_item+1)-counter;};
+        counter += 1;
+    }
 
-                            for index in 11..=20 {
-                                if items.itemnumber == names[index] { 
-                                   textstyle.top = Val::Px(255.+(((index as f32)-10.)*20.));
-                                   textstyle.display = Display::Block;
-                         //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
-                               }
-                            }   
-                     } 
+    counter = 0;
+
+    // clear all game name assets
+    for (_items, mut textstyle) in set.p1().iter_mut() {
+        if num > 21 {
+            textstyle.display = Display::None;
+        } else {
+            textstyle.display = Display::Block;
+            textstyle.top = Val::Px(255. + (((counter as f32) + 1.) * 20.));
+            counter += 1;
+        }
+    }
+
+    if num > 21 {
+        for _name in names {
+            for (items, mut text_style) in set.p1().iter_mut() {
+                for index in 0..=9 {
+                    if items.item_number == names[index] {
+                        text_style.top = Val::Px(25. + (((index as f32) + 1.) * 20.));
+                        text_style.display = Display::Block;
+                        //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
+                    }
+                }
+
+                for index in 11..=20 {
+                    if items.item_number == names[index] {
+                        text_style.top = Val::Px(255. + (((index as f32) - 10.) * 20.));
+                        text_style.display = Display::Block;
+                        //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
+                    }
                 }
             }
-               //  counter += 1;
-                   
-       if launchit {
-        let mut ispaused:bool = false;
-        if let Ok(sink) = music_box_query.get_single(){
-            ispaused = sink.is_paused();
-            sink.pause();};
-       for (mut transform,  mut wheel) in query.iter_mut()
-       {
-            if wheel.itemnumber == selected_item {
-                println!("Launching {}",wheel.launchpath.clone().into_os_string().to_string_lossy());
-                launch(&wheel.launchpath, &wheel.vpxexecutable, None);}
-       };
-       if let Ok(sink) = music_box_query.get_single(){
-            if !ispaused {sink.play();}};
+        }
     }
-     
+    //  counter += 1;
+
+    if launchit {
+        let mut ispaused: bool = false;
+        if let Ok(sink) = music_box_query.get_single() {
+            ispaused = sink.is_paused();
+            sink.pause();
+        };
+        for (_transform, wheel) in query.iter() {
+            if wheel.item_number == selected_item {
+                println!(
+                    "Launching {}",
+                    wheel.launch_path.clone().into_os_string().to_string_lossy()
+                );
+                println!("Hide window");
+                window.visible = false;
+
+                let tx = tx.clone();
+                let path = wheel.launch_path.clone();
+                let executable = config.config.vpx_executable.clone();
+                std::thread::spawn(move || {
+                    launch(&path, &executable, None);
+                    println!("Vpinball done, sending event");
+                    tx.send(1).unwrap();
+                });
+            }
+        }
+        if let Ok(sink) = music_box_query.get_single() {
+            if !ispaused {
+                sink.play();
+            }
+        };
+    }
 }
- 
-    
-   // if ctrl && shift && input.just_pressed(KeyCode::KeyA) {
-     //   info!("Just pressed Ctrl + Shift + A!"); }
+
+// if ctrl && shift && input.just_pressed(KeyCode::KeyA) {
+//   info!("Just pressed Ctrl + Shift + A!"); }
 
 pub fn guifrontend(
-    config: &ResolvedConfig,
-    mut vpx_files_with_tableinfo: Vec<IndexedTable>,
-    roms: &HashSet<String>,
-    vpinball_executable: &Path,
+    config: ResolvedConfig,
+    vpx_files_with_tableinfo: Vec<IndexedTable>,
+    //roms: &HashSet<String>,
+    //vpinball_executable: &Path,
 ) {
-    let tables: Vec<String> = vpx_files_with_tableinfo
-        .iter()
-    .map(|indexed| display_table_line_full(indexed, roms))
-    .collect();
-    let path = "/usr/tables/wheels/Sing Along (Gottlieb 1967).png";
-    
-//    let options = eframe::NativeOptions {
-//       viewport: egui::ViewportBuilder::default().with_inner_size([400.0, 800.0]),
-//       ..Default::default()
- //   };
+    // let tables: Vec<String> = vpx_files_with_tableinfo
+    //     .iter()
+    //     .map(|indexed| display_table_line_full(indexed, roms))
+    //     .collect();
+    // let path = "/usr/tables/wheels/Sing Along (Gottlieb 1967).png";
+
+    //    let options = eframe::NativeOptions {
+    //       viewport: egui::ViewportBuilder::default().with_inner_size([400.0, 800.0]),
+    //       ..Default::default()
+    //   };
     App::new()
-        .add_plugins(DefaultPlugins
-            .set(WindowPlugin {
-                primary_window: Some(Window {
-                    title: "VPXTOOL".to_string(),
-                    ..Default::default()
-                }),
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                title: "VPXTOOL".to_string(),
+                window_level: WindowLevel::AlwaysOnTop,
                 ..Default::default()
-            }))
+            }),
+            ..Default::default()
+        }))
+        .insert_resource(Config { config })
+        .insert_resource(VpxTables {
+            indexed_tables: vpx_files_with_tableinfo,
+        })
         .insert_resource(ClearColor(Color::srgb(0.1, 0.1, 0.1)))
- //       .insert_resource(ClearColor(Color::srgb(0.9, 0.3, 0.6)))
-        .add_systems(Startup,create_wheel)
+        //       .insert_resource(ClearColor(Color::srgb(0.9, 0.3, 0.6)))
+        .add_event::<StreamEvent>()
+        .add_systems(Startup, setup)
+        .add_systems(Startup, create_wheel)
         .add_systems(Startup, play_background_audio)
-        .add_systems(Update,guiupdate)
+        .add_systems(Update, guiupdate)
         //.add_systems(Update, volume_system)
-        
-     //   .add_systems(Update,create_wheel)
+        //   .add_systems(Update,create_wheel
+        .add_systems(Update, (read_stream, spawn_text, move_text))
         .run();
-/*     eframe::run_native(
-        "Image Viewer",
-        options,
-        Box::new(|cc| {
-            // This gives us image support:
-            egui_extras::install_image_loaders(&cc.egui_ctx);
-            Ok(Box::<MyApp>::default())
-        }),
-    );
-*/
+    /*     eframe::run_native(
+            "Image Viewer",
+            options,
+            Box::new(|cc| {
+                // This gives us image support:
+                egui_extras::install_image_loaders(&cc.egui_ctx);
+                Ok(Box::<MyApp>::default())
+            }),
+        );
+    */
 }
 
-fn play_background_audio(
-    asset_server: Res<AssetServer>,
-    mut commands: Commands,
-    
-) {
+fn play_background_audio(asset_server: Res<AssetServer>, mut commands: Commands) {
     // Create an entity dedicated to playing our background music
     let initialsettings = PlaybackSettings {
         mode: bevy::audio::PlaybackMode::Loop,
-        paused:true,
+        paused: true,
         ..default()
     };
 
-    commands.spawn(
-        AudioBundle {
+    commands.spawn(AudioBundle {
         source: asset_server.load("Pinball.ogg"),
         settings: initialsettings,
     });
-
-    
 }
 
 /*fn volume_system(
@@ -690,196 +652,73 @@ fn play_background_audio(
     }
 } */
 
-/*fn table_menu(
-    config: &ResolvedConfig,
-    vpx_files_with_tableinfo: &mut Vec<IndexedTable>,
-    vpinball_executable: &Path,
-    info: &IndexedTable,
-    info_str: &str,
-) {
-    let selected_path = &info.path;
-    match choose_table_option(info_str) {
-        Some(TableOption::Launch) => {
-            launch(selected_path, vpinball_executable, None);
-        }
-        Some(TableOption::LaunchFullscreen) => {
-            launch(selected_path, vpinball_executable, Some(true));
-        }
-        Some(TableOption::LaunchWindowed) => {
-            launch(selected_path, vpinball_executable, Some(false));
-        }
-        Some(TableOption::ForceReload) => {
-            match frontend_index(config, true, vec![selected_path.clone()]) {
-                Ok(index) => {
-                    vpx_files_with_tableinfo.clear();
-                    vpx_files_with_tableinfo.extend(index);
-                }
-                Err(err) => {
-                    let msg = format!("Unable to reload tables: {:?}", err);
-                    prompt(msg.truecolor(255, 125, 0).to_string());
-                }
-            }
-        }
-        Some(TableOption::EditVBS) => {
-            let path = vbs_path_for(selected_path);
-            let result = if path.exists() {
-                open_editor(&path, Some(config))
-            } else {
-                extractvbs(selected_path, false, None);
-                open_editor(&path, Some(config))
-            };
-            match result {
-                Ok(_) => {
-                    println!("Launched editor for {}", path.display());
-                }
-                Err(err) => {
-                    let msg = format!("Unable to edit VBS: {}", err);
-                    prompt(msg.truecolor(255, 125, 0).to_string());
-                }
-            }
-        }
-        Some(TableOption::ExtractVBS) => match extractvbs(selected_path, false, None) {
-            ExtractResult::Extracted(path) => {
-                prompt(format!("VBS extracted to {}", path.to_string_lossy()));
-            }
-            ExtractResult::Existed(path) => {
-                let msg = format!("VBS already exists at {}", path.to_string_lossy());
-                prompt(msg.truecolor(255, 125, 0).to_string());
-            }
-        },
-        Some(TableOption::ShowVBSDiff) => match script_diff(selected_path) {
-            Ok(diff) => {
-                prompt(diff);
-            }
-            Err(err) => {
-                let msg = format!("Unable to diff VBS: {}", err);
-                prompt(msg.truecolor(255, 125, 0).to_string());
-            }
-        },
-        Some(TableOption::PatchVBS) => {
-            let vbs_path = match extractvbs(selected_path, false, Some("vbs")) {
-                ExtractResult::Existed(path) => path,
-                ExtractResult::Extracted(path) => path,
-            };
-            match patch_vbs_file(&vbs_path) {
-                Ok(applied) => {
-                    if applied.is_empty() {
-                        prompt("No patches applied.".to_string());
-                    } else {
-                        applied.iter().for_each(|patch| {
-                            println!("Applied patch: {}", patch);
-                        });
-                        prompt(format!(
-                            "Patched VBS file at {}",
-                            vbs_path.to_string_lossy()
-                        ));
-                    }
-                }
-                Err(err) => {
-                    let msg = format!("Unable to patch VBS: {}", err);
-                    prompt(msg.truecolor(255, 125, 0).to_string());
-                }
-            }
-        }
-        Some(TableOption::UnifyLineEndings) => {
-            let vbs_path = match extractvbs(selected_path, false, Some("vbs")) {
-                ExtractResult::Existed(path) => path,
-                ExtractResult::Extracted(path) => path,
-            };
-            match unify_line_endings_vbs_file(&vbs_path) {
-                Ok(NoChanges) => {
-                    prompt("No changes applied as file has correct line endings".to_string());
-                }
-                Ok(Unified) => {
-                    prompt(format!(
-                        "Unified line endings in VBS file at {}",
-                        vbs_path.to_string_lossy()
-                    ));
-                }
-                Err(err) => {
-                    let msg = format!("Unable to patch VBS: {}", err);
-                    prompt(msg.truecolor(255, 125, 0).to_string());
-                }
-            }
-        }
-        Some(TableOption::CreateVBSPatch) => {
-            let original_path = match extractvbs(selected_path, true, Some("vbs.original")) {
-                ExtractResult::Existed(path) => path,
-                ExtractResult::Extracted(path) => path,
-            };
-            let vbs_path = vbs_path_for(selected_path);
-            let patch_path = vbs_path.with_extension("vbs.patch");
+#[derive(Resource, Deref)]
+struct StreamReceiver(Receiver<u32>);
 
-            match run_diff(&original_path, &vbs_path, DiffColor::Never) {
-                Ok(diff) => {
-                    let mut file = File::create(patch_path).unwrap();
-                    file.write_all(&diff).unwrap();
-                }
-                Err(err) => {
-                    let msg = format!("Unable to diff VBS: {}", err);
-                    prompt(msg.truecolor(255, 125, 0).to_string());
-                }
-            }
-        }
-        Some(TableOption::InfoShow) => match info_gather(selected_path) {
-            Ok(info) => {
-                prompt(info);
-            }
-            Err(err) => {
-                let msg = format!("Unable to gather table info: {}", err);
-                prompt(msg.truecolor(255, 125, 0).to_string());
-            }
-        },
-        Some(TableOption::InfoEdit) => match info_edit(selected_path, Some(config)) {
-            Ok(path) => {
-                println!("Launched editor for {}", path.display());
-            }
-            Err(err) => {
-                let msg = format!("Unable to edit table info: {}", err);
-                prompt(msg.truecolor(255, 125, 0).to_string());
-            }
-        },
-        Some(TableOption::InfoDiff) => match info_diff(selected_path) {
-            Ok(diff) => {
-                prompt(diff);
-            }
-            Err(err) => {
-                let msg = format!("Unable to diff info: {}", err);
-                prompt(msg.truecolor(255, 125, 0).to_string());
-            }
-        },
-        None => (),
+#[derive(Resource, Deref)]
+struct StreamSender(Sender<u32>);
+
+#[derive(Event)]
+struct StreamEvent(u32);
+
+use crossbeam_channel::{bounded, Receiver, Sender};
+
+fn setup(mut commands: Commands) {
+    commands.spawn(Camera2dBundle::default());
+
+    let (tx, rx) = bounded::<u32>(10);
+
+    commands.insert_resource(StreamSender(tx));
+    commands.insert_resource(StreamReceiver(rx));
+}
+
+// This system reads from the receiver and sends events to Bevy
+fn read_stream(
+    mut window: Query<&mut Window>,
+    receiver: Res<StreamReceiver>,
+    mut events: EventWriter<StreamEvent>,
+) {
+    let mut window = window.single_mut();
+    for from_stream in receiver.try_iter() {
+        println!("Window visibility: {}", window.visible);
+        println!("Showing window");
+        window.visible = true;
+        // bring window to front
+        window.window_level = WindowLevel::AlwaysOnTop;
+        // request focus
+        window.focused = true;
+        events.send(StreamEvent(from_stream));
     }
 }
-*/
-fn prompt<S: Into<String>>(msg: S) {
-    Input::<String>::new()
-        .with_prompt(format!("{} - Press enter to continue.", msg.into()))
-        .default("".to_string())
-        .show_default(false)
-        .interact()
-        .unwrap();
+
+fn spawn_text(mut commands: Commands, mut reader: EventReader<StreamEvent>) {
+    let text_style = TextStyle::default();
+
+    for (per_frame, event) in reader.read().enumerate() {
+        commands.spawn(Text2dBundle {
+            text: Text::from_section(event.0.to_string(), text_style.clone())
+                .with_justify(JustifyText::Center),
+            transform: Transform::from_xyz(per_frame as f32 * 100.0, 300.0, 0.0),
+            ..default()
+        });
+    }
 }
 
-fn choose_table_option(table_name: &str) -> Option<TableOption> {
-    // iterate over table options
-    let selections = TableOption::ALL
-        .iter()
-        .map(|option| option.display())
-        .collect::<Vec<String>>();
-
-    let selection_opt = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt(table_name)
-        .default(0)
-        .items(&selections[..])
-        .interact_opt()
-        .unwrap();
-
-    selection_opt.and_then(TableOption::from_index)
+fn move_text(
+    mut commands: Commands,
+    mut texts: Query<(Entity, &mut Transform), With<Text>>,
+    time: Res<Time>,
+) {
+    for (entity, mut position) in &mut texts {
+        position.translation -= Vec3::new(0.0, 100.0 * time.delta_seconds(), 0.0);
+        if position.translation.y < -300.0 {
+            commands.entity(entity).despawn();
+        }
+    }
 }
 
 fn launch(selected_path: &PathBuf, vpinball_executable: &Path, fullscreen: Option<bool>) {
-    println!("{} {}", LAUNCH, selected_path.display());
+    println!("Launching {}", selected_path.display());
 
     if !vpinball_executable.is_executable() {
         report_and_exit(format!(
@@ -894,19 +733,16 @@ fn launch(selected_path: &PathBuf, vpinball_executable: &Path, fullscreen: Optio
                 //println!("Table exited normally");
             }
             Some(11) => {
-                prompt(format!("{} Visual Pinball exited with segfault, you might want to report this to the vpinball team.", CRASH));
+                eprintln!("Visual Pinball exited with segfault, you might want to report this to the vpinball team.");
             }
             Some(139) => {
-                prompt(format!("{} Visual Pinball exited with segfault, you might want to report this to the vpinball team.", CRASH));
+                eprintln!("Visual Pinball exited with segfault, you might want to report this to the vpinball team.");
             }
             Some(code) => {
-                prompt(format!(
-                    "{} Visual Pinball exited with code {}",
-                    CRASH, code
-                ));
+                eprintln!("Visual Pinball exited with code {}", code);
             }
             None => {
-                prompt("Visual Pinball exited with unknown code");
+                eprintln!("Visual Pinball exited with unknown code");
             }
         },
         Err(e) => {
@@ -923,7 +759,7 @@ fn launch(selected_path: &PathBuf, vpinball_executable: &Path, fullscreen: Optio
 }
 
 fn report_and_exit(msg: String) -> ! {
-    eprintln!("{CRASH} {}", msg);
+    eprintln!("CRASH {}", msg);
     exit(1);
 }
 

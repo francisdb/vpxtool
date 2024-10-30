@@ -47,6 +47,7 @@ bevy = "0.14.2"
 bevy_asset = "0.14.2"
 bevy_asset_loader = "0.21.0"
 bevy_egui = "0.30"
+crossbeam-channel = "0.5.13"
 
 [dev-dependencies]
 pretty_assertions = "1.4.1"
