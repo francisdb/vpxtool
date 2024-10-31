@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::{env, io};
 
+use log::info;
 use std::io::Write;
 
 const CONFIGURATION_FILE_NAME: &str = "vpxtool.cfg";
@@ -38,14 +39,95 @@ pub struct ResolvedConfig {
     pub editor: Option<String>,
 }
 
+/// FullScreen = 0
+/// PlayfieldFullScreen = 0
+/// WindowPosX =
+/// PlayfieldWindowPosX =
+/// WindowPosY =
+/// PlayfieldWindowPosY =
+/// Width = 540
+/// PlayfieldWidth = 540
+/// Height = 960
+/// PlayfieldHeight = 960
+///
+/// Note: For macOS with hidpi screen this these are logical sizes/locations, not pixel sizes
+pub(crate) struct PlayfieldInfo {
+    pub(crate) fullscreen: bool,
+    pub(crate) x: Option<u32>,
+    pub(crate) y: Option<u32>,
+    pub(crate) width: Option<u32>,
+    pub(crate) height: Option<u32>,
+}
+
+pub(crate) struct VPinballConfig {
+    ini: ini::Ini,
+}
+
+impl VPinballConfig {
+    pub fn read(ini_path: &Path) -> Result<Self, ini::Error> {
+        info!("Reading vpinball ini file: {:?}", ini_path);
+        let ini = ini::Ini::load_from_file(ini_path)?;
+        Ok(VPinballConfig { ini })
+    }
+
+    pub fn get_pinmame_path(&self) -> Option<String> {
+        if let Some(standalone_section) = self.ini.section(Some("Standalone")) {
+            standalone_section.get("PinMAMEPath").map(|s| s.to_string())
+        } else {
+            None
+        }
+    }
+
+    pub fn get_playfield_info(&self) -> Option<PlayfieldInfo> {
+        if let Some(standalone_section) = self.ini.section(Some("Player")) {
+            // get all the values from PlayfieldXXX and fall back to the normal values
+            let fullscreen = match standalone_section.get("PlayfieldFullScreen") {
+                Some(value) => value == "1",
+                None => match standalone_section.get("FullScreen") {
+                    Some(value) => value == "1",
+                    None => true, // not sure if this is the correct default value for every os
+                },
+            };
+            let x = standalone_section
+                .get("PlayfieldWndX")
+                .or_else(|| standalone_section.get("WindowPosX"))
+                .and_then(|s| s.parse::<u32>().ok());
+
+            let y = standalone_section
+                .get("PlayfieldWndY")
+                .or_else(|| standalone_section.get("WindowPosY"))
+                .and_then(|s| s.parse::<u32>().ok());
+
+            let width = standalone_section
+                .get("PlayfieldWidth")
+                .or_else(|| standalone_section.get("Width"))
+                .and_then(|s| s.parse::<u32>().ok());
+
+            let height = standalone_section
+                .get("PlayfieldHeight")
+                .or_else(|| standalone_section.get("Height"))
+                .and_then(|s| s.parse::<u32>().ok());
+
+            Some(PlayfieldInfo {
+                fullscreen,
+                x,
+                y,
+                width,
+                height,
+            })
+        } else {
+            None
+        }
+    }
+}
+
 impl ResolvedConfig {
     pub fn global_pinmame_folder(&self) -> PathBuf {
         // first we try to read the ini file
         let ini_file = self.vpinball_ini_file();
         if ini_file.exists() {
-            let ini = ini::Ini::load_from_file(ini_file).unwrap();
-            let standalone_section = ini.section(Some("Standalone")).unwrap();
-            if let Some(value) = standalone_section.get("PinMAMEPath") {
+            let vpinball_config = VPinballConfig::read(&ini_file).unwrap();
+            if let Some(value) = vpinball_config.get_pinmame_path() {
                 // if the path exists we return it
                 let path = PathBuf::from(value);
                 if path.exists() {
