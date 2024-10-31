@@ -12,11 +12,10 @@ use bevy::sprite::{Wireframe2dConfig, Wireframe2dPlugin,
 use bevy::window::*;
 
 
-pub fn createinfobox(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>, mut meshes: ResMut<Assets<Mesh>>, mut materials: ResMut<Assets<ColorMaterial>>,
-    window_query: Query<&Window, With<PrimaryWindow>>,
+pub fn create_info_box(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>, mut meshes: ResMut<Assets<Mesh>>, mut materials: ResMut<Assets<ColorMaterial>>,
+    window: &Window,
     mut contexts: EguiContexts, wtitle: String, wtext: String)
 { 
-    let mut window = window_query.get_single().unwrap();
     let color = Color::hsl(20., 0.95, 0.7);
     commands.spawn(MaterialMesh2dBundle {
         mesh: Mesh2dHandle(meshes.add(Capsule2d::new((window.height()/2.)*0.75, 150.0))),
@@ -56,7 +55,7 @@ pub fn createinfobox(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>, mu
     println!("hello there");
 }   
     
-     
+pub fn gui_update() {}
 
 /*let options = eframe::NativeOptions {
     viewport: egui::ViewportBuilder::default()

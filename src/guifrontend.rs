@@ -1,22 +1,16 @@
-use bevy::color::palettes::css::*;
-use bevy::prelude::*;
-use bevy::sprite::{MaterialMesh2dBundle, Mesh2dHandle};
-// use bevy_asset_loader::prelude::*;
-// use bevy_egui::{egui, EguiContexts, EguiPlugin};
-// use image::ImageReader;
 mod menus;
 use menus::*;
 use std::collections::HashSet;
 use std::{
+    fs::File,
     io,
+    io::Write,
     path::{Path, PathBuf},
     process::{exit, ExitStatus},
 };
-
-use crate::config::ResolvedConfig;
-use crate::indexer;
-use crate::indexer::IndexedTable;
+use std::sync::mpsc;
 use image::ImageReader;
+use indicatif::{ProgressBar,ProgressStyle};
 use bevy::render::view::visibility;
 use bevy::{input::common_conditions::*,prelude::*};
 use bevy::color::palettes::css::*;
@@ -34,11 +28,6 @@ use bevy::window::*;
 use colored::Colorize;
 use console::Emoji;
 use is_executable::IsExecutable;
-
-// enum Orientation {
-//     Horizontal,
-//     Vertical,
-// }
 use pipelines_ready::*;
 use std::ffi::{OsStr, OsString};
 use crate::config;
@@ -67,20 +56,20 @@ pub struct Wheel {
     pub item_number: i16,
     //pub image_handle: Handle<Image>,
     pub selected: bool,
-    pub launch_path: PathBuf,
-    // pub table_info: IndexedTable,
-}
+    pub launch_path:PathBuf,
+    //pub table_info: IndexedTable,
+    }
 
-#[derive(Component, Debug)]
+#[derive(Component,Debug)]
 pub struct TableText {
     pub item_number: i16,
     //pub has_wheel: bool,
-}
+    }
 
-#[derive(Component, Debug)]
+#[derive(Component,Debug)]
 pub struct TableBlurb {
     pub item_number: i16,
-}
+    }
 
 #[derive(Resource)]
 pub struct Config {
@@ -92,18 +81,19 @@ pub struct VpxTables {
     pub indexed_tables: Vec<IndexedTable>,
 }
 
-#[derive(Component, Debug)]
+#[derive(Component,Debug)]
 
-pub struct InfoBox {
-    // info_string: String,
+pub struct InfoBox
+{
+    // infostring: String,
 }
 
 fn create_wheel(
-    mut commands: Commands,
-    asset_server: Res<AssetServer>,
-    window_query: Query<&mut Window, With<PrimaryWindow>>,
-    //assets: Res<Assets<Image>>,
-    config: Res<Config>,
+    mut commands: Commands, 
+    asset_server: Res<AssetServer>, 
+    window_query: Query<&Window, With<PrimaryWindow>>,
+    // assets: Res<Assets<Image>>,
+    config:Res<Config>,
     vpx_tables: Res<VpxTables>,
 ) {
     //config: &ResolvedConfig,
@@ -111,27 +101,26 @@ fn create_wheel(
     //vpinball_executable: &Path,
     //info: &IndexedTable,
     //info_str: &str,
-
+  
     //// commands.spawn(SpriteBundle {
     ////     texture: asset_server.load("/usr/tables/wheels/Sing Along (Gottlieb 1967).png"),
     ////    ..default()
     //// });
-
-    //vpx_files_with_tableinfo = frontend_index(&loaded_config, true, vec![]);
-    //let vpx_files_with_tableinfo = frontend_index(&config.config, true, vec![]).unwrap();
-    // let mut temporary_path_name = PathBuf::from("");
-    let roms = indexer::find_roms(config.config.global_pinmame_rom_folder());
+    /// 
+    //let (_config_path, loaded_config) = config::load_config().unwrap().unwrap();
+    let vpx_files_with_tableinfo1 = frontend_index(&config.config, true, vec![]).unwrap();
+    let roms = indexer::find_roms(&config.config.global_pinmame_rom_folder());
     let roms1 = roms.unwrap();
-    let tables: Vec<String> = vpx_tables
-        .indexed_tables
-        .iter()
-        .map(|indexed| display_table_line_full(indexed, &roms1))
-        .collect();
-    //let temporary_path_name = "";
-
+    let tables: Vec<String> = frontend_index(&config.config, true, vec![]).unwrap()
+    .iter()
+    .map(|indexed| display_table_line_full(indexed, &roms1))
+    .collect();
+    //let temporary_path_name="";   
+    
     let window = window_query.single();
-    let window_height = window.height();
-    let table_path = &config.config.tables_folder;
+    let width = window.width();
+    let height = window.height();
+    let table_path  = &config.config.tables_folder;
 
     // let mut orentation = Horizontal;
     // if height > width {
@@ -140,17 +129,17 @@ fn create_wheel(
     //     orentation = Horizontal;
     // };
 
-    //let scale = width / 10.;
-    let tables_len = tables.len();
-    // let mut entities = 0.;
-    let mut counter: usize = 0;
-    let mut xlocation = 0;
-    // let locations = [
-    //     -(width / 2.) + scale,
-    //     -(scale * 2.),
-    //     0.,
-    //     (scale * 2.),
-    //     (width / 2.) - (scale),
+    //let mut scale = width/10.;
+    let tables_len= tables.len();
+    //let mut entities=0.;
+    let mut counter: usize=0;
+    let mut xlocation =0;
+    //let locations = [
+    //    -(width/2.)+scale,
+    //    -(scale*2.),
+    //    0.,
+    //    (scale*2.),
+    //    (width/2.) - (scale),
     // ];
     //let mut handles =[];
 
@@ -163,20 +152,21 @@ fn create_wheel(
     let mut blank_path = table_path.clone().into_os_string();
     blank_path.push("/wheels/blankwheel.png");
 
-    while counter < (tables_len) {
+    while counter < (tables_len)
+        {
         if xlocation > 4 {
             xlocation = 0
         };
-        let info = vpx_tables.indexed_tables.get(counter).unwrap().clone();
-        /*    match &info.wheel_path {
-                  Some(path)=> println!("{}",&path.as_os_str().to_string_lossy()),
-                  None => println!("NONE"),
-              };
-        */
+        let info = vpx_files_with_tableinfo1.get(counter).unwrap().clone();
+            /*    match &info.wheel_path {
+                Some(path)=> println!("{}",&path.as_os_str().to_string_lossy()),
+                None => println!("NONE"),
+            };
+      */
         //let mut haswheel = true;
         //let mut temporary_path_name= &info.wheel_path.unwrap();
         //blank_path.into();
-
+        
         let temporary_path_name = match &info.wheel_path {
             // get handle from path
             Some(path) => {
@@ -184,130 +174,134 @@ fn create_wheel(
                 PathBuf::from(path)
             }
             None => {
-                //haswheel = true;
+                //haswheel = true; 
                 PathBuf::from(blank_path.clone())
             }
         };
         // let mut temporary_table_name="None";
-        //let mut handle =  asset_server.load(temporary_path_name);
+        //let mut handle =  asset_server.load(temporary_path_name);  
         let temporary_table_name = match &info.table_info.table_name {
-            Some(tb) => tb,
+            Some(tb) => &tb,
             None => "None",
-        };
-
-        // let table_info = match &info.table_info.table_rules {
-        //     Some(tb) => &tb,
-        //     None => "None",
-        // };
+            };
+        
+            // let table_info = match &info.table_info.table_rules {
+            //    Some(tb) => &tb,
+            //    None => "None",
+            //    };        
 
         let handle = asset_server.load(temporary_path_name.clone());
-        // Normalizing the dimentions of wheels so they are all the same size.
-        //  using imagesize crate as it is a very fast way to get the dimentions.
+         // Normalizing the dimentions of wheels so they are all the same size.
+         //  using imagesize crate as it is a very fast way to get the dimentions.
 
         match imagesize::size(&temporary_path_name) {
-            Ok(size) => {
-                // Normalize icons to 1/3 the screen height
-                transform.scale = Vec3::new(
-                    (window_height / 3.) / (size.height as f32),
-                    (window_height / 3.) / (size.height as f32),
-                    100.0,
-                );
-                println!(
-                    "Initializing:  {}",
-                    &temporary_path_name.as_os_str().to_string_lossy()
-                );
-            }
-            Err(why) => println!(
-                "Error getting dimensions: {} {:?}",
-                &temporary_path_name.as_os_str().to_string_lossy(),
-                why
+             Ok(size) => {
+                 // Normalize icons to 1/3 the screen height
+                 transform.scale = Vec3::new(
+                     (height/3.)/(size.height as f32),
+                     (height/3.)/(size.height as f32),
+                     100.0
+                 );
+                 println!(
+                     "Initializing:  {}",
+                     &temporary_path_name.as_os_str().to_string_lossy()
+                 );
+             }
+             Err(why) => println!(
+                 "Error getting dimensions: {} {:?}",
+                 &temporary_path_name.as_os_str().to_string_lossy(),
+                 why
             ),
-        };
+       };
 
-        // Wheel
-        commands.spawn((
-            SpriteBundle {
-                // texture: asset_server.load("/usr/tables/wheels/Sing Along (Gottlieb 1967).png"),
-                texture: handle.clone(),
-                transform,
-                ..default()
+        // Wheel 
+         commands.spawn( (SpriteBundle {
+           // texture: asset_server.load("/usr/tables/wheels/Sing Along (Gottlieb 1967).png"),
+            texture: handle.clone(),
+            transform,
+            ..default()
             },
             Wheel {
                 item_number: counter as i16,
                 //image_handle: handle.clone(),
                 selected: false,
                 launch_path: info.path.clone(),
-                // table_info: info.clone(),
+                //tableinfo: info.clone(),
             },
-        ));
+            
+        )); 
+
 
         // Game Name
         commands.spawn((
-            // Create a TextBundle that has a Text with a single section.
-            TextBundle::from_section(
-                // Accepts a `String` or any type that converts into a `String`, such as `&str`
-                temporary_table_name,
-                TextStyle {
-                    // This font is loaded and will be used instead of the default font.
-                    font_size: 30.0,
-                    color: GOLD.into(),
+                // Create a TextBundle that has a Text with a single section.
+                TextBundle::from_section(
+                    // Accepts a `String` or any type that converts into a `String`, such as `&str`
+                    temporary_table_name,
+                    TextStyle {
+                        // This font is loaded and will be used instead of the default font.
+                        font_size: 30.0,
+                        color: GOLD.into(),
+                        ..default()
+                    },
+                ) // Set the justification of the Text
+                //.with_text_justify(JustifyText::Center)
+                // Set the style of the TextBundle itself.
+                .with_style(Style {
+                    display: Display::None,
+                    position_type: PositionType::Absolute,
+                    left: Val::Px(20.),
+                    top: Val::Px(245.),
+                   // top: Val::Px(height*0.025),//-(height-(height/2.+(scale*2.)))),
+                   // right: Val::Px((0.)),
                     ..default()
+                }),
+                TableText {
+                    item_number: counter as i16,
+                    //has_wheel: haswheel,
                 },
-            ) // Set the justification of the Text
-            //.with_text_justify(JustifyText::Center)
-            // Set the style of the TextBundle itself.
-            .with_style(Style {
-                display: Display::None,
-                position_type: PositionType::Absolute,
-                left: Val::Px(20.),
-                top: Val::Px(245.),
-                // top: Val::Px(height*0.025),//-(height-(height/2.+(scale*2.)))),
-                // right: Val::Px((0.)),
-                ..default()
-            }),
-            TableText {
-                item_number: counter as i16,
-                //has_wheel: haswheel,
-            },
-        ));
+              ));
 
         // game info text
         commands.spawn((
-            // Create a TextBundle that has a Text with a single section.
-            TextBundle::from_section(
-                // Accepts a `String` or any type that converts into a `String`, such as `&str`
-                temporary_table_name,
-                TextStyle {
-                    // This font is loaded and will be used instead of the default font.
-                    font_size: 20.0,
-                    color: GHOST_WHITE.into(),
+                // Create a TextBundle that has a Text with a single section.
+                TextBundle::from_section(
+                    // Accepts a `String` or any type that converts into a `String`, such as `&str`
+                    temporary_table_name,
+                    TextStyle {
+                        // This font is loaded and will be used instead of the default font.
+                        font_size: 20.0,
+                        color: GHOST_WHITE.into(),
+                        ..default()
+                    },
+                ) // Set the justification of the Text
+                //.with_text_justify(JustifyText::Center)
+                // Set the style of the TextBundle itself.
+                .with_style(Style {
+                    flex_direction: FlexDirection::Row,
+                    align_content: AlignContent::FlexEnd,
+                    display: Display::None,
+                    position_type: PositionType::Absolute,
+                    left: Val::Px(20.),
+                    top: Val::Px(height*0.2),//-(height-(height/2.+(scale*2.)))),
+                   // right: Val::Px((0.)),
                     ..default()
+                }),
+                TableBlurb {
+                    item_number: counter as i16,
                 },
-            ) // Set the justification of the Text
-            //.with_text_justify(JustifyText::Center)
-            // Set the style of the TextBundle itself.
-            .with_style(Style {
-                flex_direction: FlexDirection::Row,
-                align_content: AlignContent::FlexEnd,
-                display: Display::None,
-                position_type: PositionType::Absolute,
-                left: Val::Px(20.),
-                top: Val::Px(window_height * 0.2), //-(height-(height/2.+(scale*2.)))),
-                // right: Val::Px((0.)),
-                ..default()
-            }),
-            TableBlurb {
-                item_number: counter as i16,
-            },
-        ));
-
+            ));
+         
+       //let image = image::load(BufReader::new(File::open("foo.png")?), ImageFormat::Jpeg)?;
         counter += 1;
-        xlocation += 1;
-        //entities += 1.;
-    }
+        xlocation +=1;
+        //entities +=1.;
+     }
+    // commands.spawn((Camera2dBundle
+    //                {..default()},));
 
-    println!("Wheels loaded");
-}
+     println!("Wheels loaded");
+  }
 
 fn create_flippers(
     mut commands: Commands,
@@ -344,48 +338,7 @@ fn create_flippers(
         ..default()
     });
 }
-// pub fn frontend_index(
-//     resolved_config: &ResolvedConfig,
-//     recursive: bool,
-//     force_reindex: Vec<PathBuf>,
-// ) -> Result<Vec<IndexedTable>, IndexError> {
-//     let pb = ProgressBar::hidden();
-//     pb.set_style(
-//         ProgressStyle::with_template(
-//             "{spinner:.green} [{bar:.cyan/blue}] {pos}/{human_len} ({eta})",
-//         )
-//         .unwrap(),
-//     );
-//     let progress = ProgressBarProgress::new(pb);
-//     let index = indexer::index_folder(
-//         recursive,
-//         &resolved_config.tables_folder,
-//         &resolved_config.tables_index_path,
-//         &progress,
-//         force_reindex,
-//     );
-//     progress.finish_and_clear();
-//     let index = index?;
-//
-//     let mut tables: Vec<IndexedTable> = index.tables();
-//     tables.sort_by_key(|indexed| display_table_line(indexed).to_lowercase());
-//     Ok(tables)
-// }
-        xlocation +=1;
-        entities +=1. ;
-     
-     };
 
-    
-     commands.spawn((Camera2dBundle
-                    {..default()},));
-
-
-     println!("Wheels loaded");
-        
-  }
-
-  
 enum TableOption {
     Launch,
     LaunchFullscreen,
@@ -488,14 +441,8 @@ pub fn frontend_index(
     tables.sort_by_key(|indexed| display_table_line(indexed).to_lowercase());
     Ok(tables)
 }
-
-fn createinfobox(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
-    window: &Window,
-) {
-/*fn createinfobox(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut materials: ResMut<Assets<ColorMaterial>>,
+/*
+fn create_info_box(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut materials: ResMut<Assets<ColorMaterial>>,
                 window_query: Query<&Window, With<PrimaryWindow>>,
                 mut contexts: EguiContexts, wtitle: String, wtext: String)
 { 
@@ -505,49 +452,9 @@ fn createinfobox(
     });  
 
     // info box
-    let width = window.width();
-    let height = window.height();
-    commands.spawn((
-        MaterialMesh2dBundle {
-            mesh: Mesh2dHandle(meshes.add(Rectangle::new(width * 0.75, height * 0.75))),
-            material: materials.add(Color::hsl(0., 0., 0.3)),
-            transform: Transform::from_xyz(
-                // Distribute shapes from -X_EXTENT/2 to +X_EXTENT/2.
-                width * 0.5,
-                height * 0.5,
-                101.0,
-            ),
-            ..default()
-        },
-        InfoBox {
-            // info_string: "blah".to_owned(),
-            // info_string: table_blurb,
-        },
-    ));
-}
    
-} */
-
-#[allow(clippy::too_many_arguments)]
-#[allow(clippy::type_complexity)]
-fn gui_update(
-    commands: Commands,
-    keys: Res<ButtonInput<KeyCode>>,
-    //time: Res<Time>,
-    mut query: Query<(&mut Transform, &mut Wheel)>,
-    mut window_query: Query<&mut Window, With<PrimaryWindow>>,
-    mut app_exit_events: ResMut<Events<AppExit>>,
-    mut set: ParamSet<(
-        Query<(&mut TableText, &mut Style), With<TableText>>,
-        Query<(&mut TableBlurb, &mut Style), With<TableBlurb>>,
-    )>,
-    music_box_query: Query<&AudioSink>,
-    meshes: ResMut<Assets<Mesh>>,
-    materials: ResMut<Assets<ColorMaterial>>,
-    tx: Res<StreamSender>,
-    config: Res<Config>,
-) {
-    let mut window = window_query.single_mut();
+} 
+*/
 
 pub fn guiupdate(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>,time: Res<Time>, 
                                 mut query: Query<(&mut Transform, &mut Wheel)>,
@@ -567,91 +474,38 @@ pub fn guiupdate(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>,time: R
     let width = window.width();
     let height = window.height();
 
-    // let mut orentation = HORIZONTAL;
-    // if height > width {
-    //     orentation = VERTICAL;
-    // } else {
-    //     orentation = HORIZONTAL
-    // };
-
-    let scale = width / 10.;
+    //let mut orentation = HORIZONTAL;
+    // if height > width {orentation=VERTICAL;}
+    //    else {orentation=HORIZONTAL};
+    
+    let mut scale = width/10.;
 
     // arbitrary number to indicate there is no selected item.
-    let mut selected_item: i16 = -2;
-
+    let mut selected_item:i16=-2;
+    
     // set a flag indicating if we are ready to launch a game
     let mut launchit = false;
 
     // Count entities
-    let mut num = 1;
+    let mut num =1;
     num += query.iter().count() as i16;
 
     // Find current selection
     for (_transform, wheel) in query.iter() {
         if wheel.selected {
-            selected_item = wheel.item_number;
-        }
-    }
-    // If no selection, set it to item 3
-    if selected_item == -2 {
-        for (_transform, mut wheel) in query.iter_mut() {
-            if wheel.item_number == 0 {
-                wheel.selected = true;
-                selected_item = 0;
+            selected_item = wheel.item_number; 
             }
         }
-    };
-
-    if let Ok(sink) = music_box_query.get_single() {
-        if keys.just_pressed(KeyCode::Equal) {
-            sink.set_volume(sink.volume() + 0.1);
-        } else if keys.just_pressed(KeyCode::Minus) {
-            sink.set_volume(sink.volume() - 0.1);
-        } else if keys.just_pressed(KeyCode::KeyM) {
-            sink.pause();
-        } else if keys.just_pressed(KeyCode::KeyN) {
-            sink.play();
-        }
-    }
-
-    if keys.pressed(KeyCode::Digit1) {
-        createinfobox(commands, meshes, materials, &window.clone())
-    } else if keys.just_pressed(KeyCode::ShiftRight) {
-        selected_item += 1;
-    } else if keys.just_pressed(KeyCode::ShiftLeft) {
-        selected_item -= 1;
-    } else if keys.just_pressed(KeyCode::Enter) {
-        launchit = true;
-    } else if keys.just_pressed(KeyCode::KeyQ) {
-        app_exit_events.send(AppExit::Success);
-    } else if keys.just_pressed(KeyCode::Space) {
-        println!("current table {}", selected_item);
-    }
-
-    // Wrap around if one of the bounds are hit.
-    if selected_item == num - 1 {
-        selected_item = 0;
-    } else if selected_item == -1 {
-        selected_item = num - 2;
-    }
-    for (mut transform,
-        mut wheel) in query.iter_mut()
-        {
-        match wheel.selected {
-            true =>{selected_item = wheel.itemnumber;}, 
-            _ => ()
-            }
-        }
-        // If no selection, set it to item 3
+        // If no selection, set it to item 0
         if selected_item == -2 {
-            for (mut transform,
-                 mut wheel) in query.iter_mut()
+            for (_transform, mut wheel) in query.iter_mut()
             {
-                match wheel.itemnumber {
-                    0 => {wheel.selected = true;selected_item=0;},
-                    _ => ()
+                if wheel.item_number == 0{
+                    wheel.selected = true;
+                    selected_item=0;
                 }
-            }};
+             }
+         };
             
             if let Ok(sink) = music_box_query.get_single() {
                 if keys.just_pressed(KeyCode::Equal) {
@@ -666,75 +520,90 @@ pub fn guiupdate(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>,time: R
                 }
 
                 if keys.pressed(KeyCode::Digit1) {
-                    createinfobox(commands,keys, meshes,materials, window_query,contexts,
-                        "Game rules".to_owned(),"rulesblah blah".to_owned()
-            )
-                }  else if keys.pressed(KeyCode::ShiftRight)  {selected_item +=1;}
-                   else if keys.pressed(KeyCode::ShiftLeft)  {selected_item -=1;}
-                   else if keys.pressed(KeyCode::Enter)  {launchit = true;}
-                   else if keys.pressed(KeyCode::KeyQ)  {app_exit_events.send(bevy::app::AppExit::Success);}
-                   else if keys.pressed(KeyCode::Space)  {println!("current table {}",selected_item);}
-                };
+                    create_info_box(
+                        commands,
+                        keys,
+                        meshes,
+                        materials,
+                        &window.clone(),
+                        contexts,
+                        "Window Title".to_owned(),
+                        "Window Text".to_owned()
+                    )
+                } else if keys.just_pressed(KeyCode::ShiftRight) {
+                    selected_item +=1;
+                } else if keys.just_pressed(KeyCode::ShiftLeft) {
+                    selected_item -=1;
+                } else if keys.just_pressed(KeyCode::Enter) {
+                    launchit = true;
+                } else if keys.just_pressed(KeyCode::KeyQ) {
+                    app_exit_events.send(bevy::app::AppExit::Success);
+                } else if keys.just_pressed(KeyCode::Space) {
+                    println!("current table {}",selected_item);
+                }
                 
            // Wrap around if one of the bounds are hit.
-           if selected_item == num-1 {selected_item=0;}
-           else {if selected_item == -1 {selected_item=num-2;};};
+           if selected_item == num-1 {
+               selected_item = 0;
+           } else if selected_item == -1 {
+               selected_item = num - 2;
+           }
 
-    // update currently selected item to new value
-    for (mut transform, mut wheel) in query.iter_mut() {
-        if wheel.item_number != selected_item {
-            wheel.selected = false;
-            transform.translation = Vec3::new(0., width, 0.);
-        } else {
-            wheel.selected = true;
-            transform.translation = Vec3::new(0., -(height - (height / 2.75 + (scale * 2.))), 0.);
-            //    println!("Selected {}",&wheel.launchpath.as_os_str().to_string_lossy());
-        }
-    }
-    // change name of game
-    for (items, mut textstyle) in set.p0().iter_mut() {
-        if items.item_number != selected_item {
-            textstyle.display = Display::None;
-        } else {
-            textstyle.display = Display::Block;
-        }
+           // update currently selected item to new value
+           for (mut transform, mut wheel) in query.iter_mut() {
+               if wheel.item_number != selected_item {
+                    wheel.selected = false;
+                    transform.translation = Vec3::new(0., width, 0.);
+               }
+               else {
+                   wheel.selected = true;
+                   transform.translation = Vec3::new(0., -(height - (height / 2.75 + (scale * 2.))), 0.);
+                //    println!("Selected {}",&wheel.launchpath.as_os_str().to_string_lossy());
+            }
+        };
+   // change name of game
+  for (mut items, mut textstyle) in set.p0().iter_mut() {
+      if items.item_number != selected_item {
+          textstyle.display=Display::None;
+      } else {
+           textstyle.display=Display::Block;
+      }
     }
 
     // table scroll
     let mut counter = 11;
     let mut names = [0; 21];
 
-    // item # less than 10
-    for count in 2..=11 {
-        if num + (selected_item - counter) < num - 1 {
-            names[count - 2] = num + (selected_item - counter);
-        } else if selected_item - counter > num {
-            names[count - 2] = num - (selected_item - counter)
-        } else {
-            names[count - 2] = (selected_item + 1) - counter;
-        };
-        counter -= 1;
-        // item number over num-10
-        // item number not over 10 or less than num-10
-    }
-    names[10] = selected_item;
-
-    counter = 0;
-    for count in 12..=22 {
-        if (selected_item + counter) < num - 1 {
-            names[count - 2] = selected_item + counter;
-        } else if selected_item + counter + 3 > num {
-            names[count - 2] = (selected_item + counter - num) + 1
-        }
-        //        else  {names[count-2] = (selected_item+1)-counter;};
-        counter += 1;
-    }
-
-    counter = 0;
+     // item # less than 10
+     for count in 2..=11 {
+         if num+(selected_item-counter)<num-1 {
+             names[count - 2] = num + (selected_item - counter);
+         } else if selected_item - counter > num {
+             names[count - 2] = num - (selected_item - counter)
+         } else {
+             names[count - 2] = (selected_item + 1) - counter;
+         };
+         counter -= 1;
+         // item number over num-10
+         // item number not over 10 or less than num-10
+      }
+      names[10] = selected_item;
+            
+      counter = 0;
+      for count in 12..=22 {
+          if (selected_item + counter) < num - 1 { 
+              names[count - 2] = (selected_item + counter);
+          } else if selected_item + counter + 3 > num {
+             names[count - 2] = (selected_item + counter - num) + 1
+          }
+            //        else  {names[count-2] = (selected_item+1)-counter;};
+           counter += 1;
+     }
+           counter = 0;
 
     // clear all game name assets
-    for (_items, mut textstyle) in set.p1().iter_mut() {
-        if num > 21 {
+    for (_items, mut textstyle) in set.p1().iter_mut() {   
+        if num  > 21 {
             textstyle.display = Display::None;
         } else {
             textstyle.display = Display::Block;
@@ -742,8 +611,8 @@ pub fn guiupdate(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>,time: R
             counter += 1;
         }
     }
-
-    if num > 21 {
+            
+if num > 21 {
         for _name in names {
             for (items, mut text_style) in set.p1().iter_mut() {
                 for (index, item) in names.iter().enumerate().take(9 + 1) {
@@ -780,10 +649,12 @@ pub fn guiupdate(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>,time: R
                 );
                 println!("Hide window");
                 window.visible = false;
-
+                
+                let (_config_path, loaded_config) = config::load_config().unwrap().unwrap();
+                let (tx, rx) = mpsc::channel();
                 let tx = tx.clone();
                 let path = wheel.launch_path.clone();
-                let executable = config.config.vpx_executable.clone();
+                let executable = loaded_config.vpx_executable; // .executable.clone();
                 std::thread::spawn(move || {
                     launch(&path, &executable, None);
                     println!("Vpinball done, sending event");
@@ -798,21 +669,8 @@ pub fn guiupdate(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>,time: R
         };
     }
 }
-
-// if ctrl && shift && input.just_pressed(KeyCode::KeyA) {
-//   info!("Just pressed Ctrl + Shift + A!"); }
-            sink.pause();};
-       for (mut transform,  mut wheel) in query.iter_mut()
-       {
-            if wheel.itemnumber == selected_item {
-                println!("Launching {}",wheel.launchpath.clone().into_os_string().to_string_lossy());
-                launch(&wheel.launchpath, &wheel.vpxexecutable, None);}
-       };
-       if let Ok(sink) = music_box_query.get_single(){
-            if !ispaused {sink.play();}};
-    }
-     
 }
+
 #[derive(Resource, Default)]
 enum LoadingState {
     #[default]
@@ -920,7 +778,7 @@ fn load_loading_screen(mut commands: Commands) {
     };
 
     // Spawn the UI and Loading screen camera.
-    commands.spawn((
+  /*   commands.spawn((
         Camera2dBundle {
             camera: Camera {
                 order: 1,
@@ -930,7 +788,7 @@ fn load_loading_screen(mut commands: Commands) {
         },
         LoadingScreen,
     ));
-
+*/
     // Spawn the UI that will make up the loading screen.
     commands
         .spawn((
@@ -1031,14 +889,6 @@ pub fn guifrontend(
         .insert_resource(VpxTables {
             indexed_tables: vpx_files_with_tableinfo,
         })
-        .add_plugins(DefaultPlugins
-            .set(WindowPlugin {
-                primary_window: Some(Window {
-                    title: "VPXTOOL".to_string(),
-                    ..Default::default()
-                }),
-                ..Default::default()
-            }))
         .add_plugins(EguiPlugin)
         .add_plugins(PipelinesReadyPlugin)
         .insert_resource(ClearColor(Color::srgb(0.1, 0.1, 0.1)))
@@ -1049,14 +899,13 @@ pub fn guifrontend(
         .insert_resource(LoadingState::default())
         .insert_resource(LoadingData::new(5))
  //       .insert_resource(ClearColor(Color::srgb(0.9, 0.3, 0.6)))
-        .add_systems(Startup,create_wheel)
         .add_systems(Startup,(load_loading_screen))
         .add_systems(Startup, play_background_audio)
         .add_systems(Update, gui_update)
         //.add_systems(Update,(guiupdate,update_loading_data, level_selection,display_loading_screen),)
         .add_systems(Update,(guiupdate,update_loading_data,display_loading_screen),)
         //.add_systems(Update, volume_system)
-        //   .add_systems(Update,create_wheel
+        //   .add_systems(Update,create_wheel)
         .add_systems(Update, (read_stream, spawn_text, move_text))
         .run();
     /*     eframe::run_native(
@@ -1279,3 +1128,4 @@ fn display_table_line_full(table: &IndexedTable, roms: &HashSet<String>) -> Stri
 fn capitalize_first_letter(s: &str) -> String {
     s[0..1].to_uppercase() + &s[1..]
 }
+
