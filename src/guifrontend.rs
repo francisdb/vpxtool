@@ -4,20 +4,19 @@ use bevy::sprite::{MaterialMesh2dBundle, Mesh2dHandle};
 // use bevy_asset_loader::prelude::*;
 // use bevy_egui::{egui, EguiContexts, EguiPlugin};
 // use image::ImageReader;
-use std::collections::HashSet;
-use std::{
-    io,
-    path::{Path, PathBuf},
-    process::{exit, ExitStatus},
-};
-
-use crate::config::ResolvedConfig;
+use crate::config::{ResolvedConfig, VPinballConfig};
 use crate::indexer;
 use crate::indexer::IndexedTable;
 use bevy::window::*;
 use colored::Colorize;
 use console::Emoji;
 use is_executable::IsExecutable;
+use std::collections::HashSet;
+use std::{
+    io,
+    path::{Path, PathBuf},
+    process::{exit, ExitStatus},
+};
 
 // enum Orientation {
 //     Horizontal,
@@ -50,6 +49,11 @@ pub struct Config {
 }
 
 #[derive(Resource)]
+pub struct VpxConfig {
+    pub config: VPinballConfig,
+}
+
+#[derive(Resource)]
 pub struct VpxTables {
     pub indexed_tables: Vec<IndexedTable>,
 }
@@ -58,6 +62,36 @@ pub struct VpxTables {
 
 pub struct InfoBox {
     // info_string: String,
+}
+
+fn correct_mac_window_size(
+    mut window_query: Query<&mut Window, With<PrimaryWindow>>,
+    vpx_config: Res<VpxConfig>,
+) {
+    // only on macOS
+    // #[cfg(target_os = "macos")] is annoying because it causes clippy to complain about dead code
+    if cfg!(target_os = "macos") {
+        let mut window = window_query.single_mut();
+        if window.resolution.scale_factor() != 1.0 {
+            info!(
+                "Resizing window for macOS with scale factor {}",
+                window.resolution.scale_factor(),
+            );
+            let vpinball_config = &vpx_config.config;
+            if let Some(playfield) = vpinball_config.get_playfield_info() {
+                if let (Some(logical_x), Some(logical_y)) = (playfield.x, playfield.y) {
+                    // For macOS with scales factor > 1 this is not correct but we don't know the scale
+                    // factor before the window is created.
+                    let physical_x = logical_x as f32 * window.resolution.scale_factor();
+                    let physical_y = logical_y as f32 * window.resolution.scale_factor();
+                    // this will apply the width as if it was set in logical pixels
+                    window.position =
+                        WindowPosition::At(IVec2::new(physical_x as i32, physical_y as i32));
+                    window.set_changed();
+                }
+            }
+        }
+    }
 }
 
 fn create_wheel(
@@ -381,7 +415,7 @@ fn gui_update(
     tx: Res<StreamSender>,
     config: Res<Config>,
 ) {
-    let mut window = window_query.single_mut();
+    let window = window_query.single_mut();
 
     let width = window.width();
     let height = window.height();
@@ -553,7 +587,7 @@ fn gui_update(
                     wheel.launch_path.clone().into_os_string().to_string_lossy()
                 );
                 println!("Hide window");
-                window.visible = false;
+                //window.visible = false;
 
                 let tx = tx.clone();
                 let path = wheel.launch_path.clone();
@@ -592,23 +626,54 @@ pub fn guifrontend(
     //       viewport: egui::ViewportBuilder::default().with_inner_size([400.0, 800.0]),
     //       ..Default::default()
     //   };
+
+    let vpinball_ini_path = config.vpinball_ini_file();
+    let vpinball_config = VPinballConfig::read(&vpinball_ini_path).unwrap();
+    let mut position = WindowPosition::default();
+    let mut mode = WindowMode::Fullscreen;
+    let mut resolution = WindowResolution::default();
+    if let Some(playfield) = vpinball_config.get_playfield_info() {
+        if let (Some(x), Some(y)) = (playfield.x, playfield.y) {
+            // For macOS with scale factor > 1 this is not correct but we don't know the scale
+            // factor before the window is created. We will correct the position later using the
+            // system "correct_mac_window_size".
+            let physical_x = x as i32;
+            let physical_y = y as i32;
+            position = WindowPosition::At(IVec2::new(physical_x, physical_y));
+        }
+        if let (Some(width), Some(height)) = (playfield.width, playfield.height) {
+            resolution = WindowResolution::new(width as f32, height as f32);
+        }
+        mode = if playfield.fullscreen {
+            WindowMode::Fullscreen
+        } else {
+            WindowMode::Windowed
+        };
+    }
+
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 title: "VPXTOOL".to_string(),
-                window_level: WindowLevel::AlwaysOnTop,
+                // window_level: WindowLevel::AlwaysOnTop,
+                resolution,
+                mode,
+                position,
                 ..Default::default()
             }),
             ..Default::default()
         }))
         .insert_resource(Config { config })
+        .insert_resource(VpxConfig {
+            config: vpinball_config,
+        })
         .insert_resource(VpxTables {
             indexed_tables: vpx_files_with_tableinfo,
         })
         .insert_resource(ClearColor(Color::srgb(0.1, 0.1, 0.1)))
         //       .insert_resource(ClearColor(Color::srgb(0.9, 0.3, 0.6)))
         .add_event::<StreamEvent>()
-        .add_systems(Startup, setup)
+        .add_systems(Startup, (correct_mac_window_size, setup))
         .add_systems(Startup, (create_wheel, create_flippers))
         .add_systems(Startup, play_background_audio)
         .add_systems(Update, gui_update)
@@ -687,7 +752,7 @@ fn read_stream(
         println!("Showing window");
         window.visible = true;
         // bring window to front
-        window.window_level = WindowLevel::AlwaysOnTop;
+        // window.window_level = WindowLevel::AlwaysOnTop;
         // request focus
         window.focused = true;
         events.send(StreamEvent(from_stream));
