@@ -82,10 +82,14 @@ pub struct VpxTables {
 }
 
 #[derive(Component,Debug)]
-
 pub struct InfoBox
 {
     // infostring: String,
+}
+
+#[derive(Resource,Debug)]
+pub struct WheelSize {
+    pub wheel_size: f32,
 }
 
 fn create_wheel(
@@ -189,19 +193,29 @@ fn create_wheel(
             //    Some(tb) => &tb,
             //    None => "None",
             //    };        
-
         let handle = asset_server.load(temporary_path_name.clone());
          // Normalizing the dimentions of wheels so they are all the same size.
          //  using imagesize crate as it is a very fast way to get the dimentions.
-
+        let (mut wheel_width,mut wheel_height) = (0.,0.);
         match imagesize::size(&temporary_path_name) {
              Ok(size) => {
+                wheel_width=size.width as f32;
+                wheel_height=size.height as f32;
+                commands.insert_resource(WheelSize { wheel_size: (height / 3.) });
+                // wheel_size.wheel_size = (height / 3.) / (size.height as f32);
                  // Normalize icons to 1/3 the screen height
                  transform.scale = Vec3::new(
-                     (height/3.)/(size.height as f32),
-                     (height/3.)/(size.height as f32),
+                     (height / 3.) / (size.height as f32),
+                     (height / 3.) / (size.height as f32),
                      100.0
                  );
+                 println!("height {} ",size.height);
+//                 transform.translation = Vec3::new(
+ //                   (width / 2.0) / (size.height as f32),
+  //                  (- (height)) + (size.height as f32),
+                  //  (0. - ((height / 2.0) - (height / 4.0))),
+ //                   0.0
+  //               );
                  println!(
                      "Initializing:  {}",
                      &temporary_path_name.as_os_str().to_string_lossy()
@@ -218,7 +232,8 @@ fn create_wheel(
          commands.spawn( (SpriteBundle {
            // texture: asset_server.load("/usr/tables/wheels/Sing Along (Gottlieb 1967).png"),
             texture: handle.clone(),
-            transform,
+            transform: transform,
+            visibility: Visibility::Hidden,
             ..default()
             },
             Wheel {
@@ -457,7 +472,7 @@ fn create_info_box(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut
 */
 
 pub fn guiupdate(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>,time: Res<Time>, 
-                                mut query: Query<(&mut Transform, &mut Wheel)>,
+                                mut query: Query<(&mut Visibility, &mut Wheel, &mut Transform), With<Wheel>>,
                                 window_query: Query<&Window, With<PrimaryWindow>>,
                                 mut app_exit_events: ResMut<Events<bevy::app::AppExit>>,
                                 mut set: ParamSet<(
@@ -465,7 +480,9 @@ pub fn guiupdate(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>,time: R
                                 Query<(&mut TableBlurb, &mut Style), With<TableBlurb>>,)>,
                                 music_box_query: Query<&AudioSink>,
                                 mut contexts: EguiContexts,
-                                mut meshes: ResMut<Assets<Mesh>>, mut materials: ResMut<Assets<ColorMaterial>> )
+                                mut meshes: ResMut<Assets<Mesh>>, mut materials: ResMut<Assets<ColorMaterial>>,
+                                mut wheel_size: ResMut<WheelSize>,
+                            )
 {
     
     let mut window = window_query.get_single().unwrap().clone();
@@ -478,10 +495,10 @@ pub fn guiupdate(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>,time: R
     // if height > width {orentation=VERTICAL;}
     //    else {orentation=HORIZONTAL};
     
-    let mut scale = width/10.;
+    let mut scale = width / 10.;
 
     // arbitrary number to indicate there is no selected item.
-    let mut selected_item:i16=-2;
+    let mut selected_item:i16 = -2;
     
     // set a flag indicating if we are ready to launch a game
     let mut launchit = false;
@@ -491,18 +508,18 @@ pub fn guiupdate(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>,time: R
     num += query.iter().count() as i16;
 
     // Find current selection
-    for (_transform, wheel) in query.iter() {
+    for (visibility, wheel, transform) in query.iter() {
         if wheel.selected {
             selected_item = wheel.item_number; 
             }
         }
         // If no selection, set it to item 0
         if selected_item == -2 {
-            for (_transform, mut wheel) in query.iter_mut()
+            for (visibility, mut wheel, transform) in query.iter_mut()
             {
                 if wheel.item_number == 0{
                     wheel.selected = true;
-                    selected_item=0;
+                    selected_item = 0;
                 }
              }
          };
@@ -550,14 +567,20 @@ pub fn guiupdate(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>,time: R
            }
 
            // update currently selected item to new value
-           for (mut transform, mut wheel) in query.iter_mut() {
+           for (mut visibility, mut wheel,mut transform) in query.iter_mut() {
                if wheel.item_number != selected_item {
                     wheel.selected = false;
-                    transform.translation = Vec3::new(0., width, 0.);
+                    *visibility = Visibility::Hidden;
+//                    transform.translation = Vec3::new(0., width, 0.);
                }
                else {
                    wheel.selected = true;
-                   transform.translation = Vec3::new(0., -(height - (height / 2.75 + (scale * 2.))), 0.);
+                   *visibility = Visibility::Visible;
+                  // *transform = Transform::from_xyz(0., 0., 0.);
+                  let wsize = wheel_size.wheel_size;
+                   println!("wheel size {}",&wsize);
+                   transform.translation = Vec3::new(0., (-(height / 2.0 )) + (wsize / 2.) + 20., 0.);
+                   //transform.translation = Vec3::new(0., -(height - (height / 2.75 + (scale * 2.))), 0.);
                 //    println!("Selected {}",&wheel.launchpath.as_os_str().to_string_lossy());
             }
         };
@@ -641,7 +664,7 @@ if num > 21 {
             ispaused = sink.is_paused();
             sink.pause();
         };
-        for (_transform, wheel) in query.iter() {
+        for (visibility, wheel,transform) in query.iter() {
             if wheel.item_number == selected_item {
                 println!(
                     "Launching {}",
