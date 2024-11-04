@@ -9,6 +9,10 @@ use std::{
     process::{exit, ExitStatus},
 };
 use std::sync::mpsc;
+use std::thread;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 use image::ImageReader;
 use indicatif::{ProgressBar,ProgressStyle};
 use bevy::render::view::visibility;
@@ -88,8 +92,9 @@ pub struct InfoBox
 }
 
 #[derive(Resource,Debug)]
-pub struct WheelSize {
+pub struct Globals {
     pub wheel_size: f32,
+    pub game_running: bool,
 }
 
 fn create_wheel(
@@ -201,7 +206,7 @@ fn create_wheel(
              Ok(size) => {
                 wheel_width=size.width as f32;
                 wheel_height=size.height as f32;
-                commands.insert_resource(WheelSize { wheel_size: (height / 3.) });
+                commands.insert_resource(Globals { wheel_size: (height / 3.),game_running: false });
                 // wheel_size.wheel_size = (height / 3.) / (size.height as f32);
                  // Normalize icons to 1/3 the screen height
                  transform.scale = Vec3::new(
@@ -481,7 +486,7 @@ pub fn guiupdate(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>,time: R
                                 music_box_query: Query<&AudioSink>,
                                 mut contexts: EguiContexts,
                                 mut meshes: ResMut<Assets<Mesh>>, mut materials: ResMut<Assets<ColorMaterial>>,
-                                mut wheel_size: ResMut<WheelSize>,
+                                mut globals: ResMut<Globals>,
                             )
 {
     
@@ -577,8 +582,7 @@ pub fn guiupdate(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>,time: R
                    wheel.selected = true;
                    *visibility = Visibility::Visible;
                   // *transform = Transform::from_xyz(0., 0., 0.);
-                  let wsize = wheel_size.wheel_size;
-                   println!("wheel size {}",&wsize);
+                  let wsize = globals.wheel_size;
                    transform.translation = Vec3::new(0., (-(height / 2.0 )) + (wsize / 2.) + 20., 0.);
                    //transform.translation = Vec3::new(0., -(height - (height / 2.75 + (scale * 2.))), 0.);
                 //    println!("Selected {}",&wheel.launchpath.as_os_str().to_string_lossy());
@@ -659,6 +663,10 @@ if num > 21 {
     //  counter += 1;
 
     if launchit {
+        if globals.game_running {
+            println!("Game running");return};
+        let mut game_running = globals.game_running;
+        globals.game_running =  true;
         let mut ispaused: bool = false;
         if let Ok(sink) = music_box_query.get_single() {
             ispaused = sink.is_paused();
@@ -677,12 +685,21 @@ if num > 21 {
                 let (tx, rx) = mpsc::channel();
                 let tx = tx.clone();
                 let path = wheel.launch_path.clone();
+                let mut global = globals.game_running.clone();
                 let executable = loaded_config.vpx_executable; // .executable.clone();
-                std::thread::spawn(move || {
+
+                let pin_thread =std::thread::spawn(move || {
                     launch(&path, &executable, None);
+                    thread::sleep(Duration::from_millis(2000  as u64 ));
+
                     println!("Vpinball done, sending event");
                     tx.send(1).unwrap();
+                    //tx.send(1);
+                    window.visible = true;
+                    true
                 });
+                    if pin_thread.join().unwrap() == true {globals.game_running = false;}
+                    println!("game_running {}",globals.game_running);    
             }
         }
         if let Ok(sink) = music_box_query.get_single() {
