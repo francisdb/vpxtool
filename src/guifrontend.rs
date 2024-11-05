@@ -129,7 +129,6 @@ fn create_wheel(
     let window = window_query.single();
     let width = window.width();
     let height = window.height();
-    let table_path = &config.config.tables_folder;
 
     // let mut orentation = Horizontal;
     // if height > width {
@@ -157,9 +156,14 @@ fn create_wheel(
     //let mut transform = Transform::from_xyz(0., -(height-(height/2.+(scale*2.))), 0.);
     //let mut transform = Transform::from_xyz(locations[xlocation], -(height-(height/2.+(scale*2.))), 0.);
 
-    // create blank wheel
-    let mut blank_path = table_path.clone().into_os_string();
+    // Create blank wheel
+    // tries [table_path]/wheels/blankwheel.png first
+    // fallbacks to assets/blankwheel.png
+    let mut blank_path = config.config.tables_folder.clone();
     blank_path.push("/wheels/blankwheel.png");
+    if !Path::new(&blank_path).exists() {
+        blank_path = PathBuf::from("assets/blankwheel.png");
+    }
 
     while counter < (tables_len) {
         if xlocation > 4 {
