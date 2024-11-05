@@ -16,8 +16,11 @@ use std::path::{Path, PathBuf};
 use std::process::{exit, ExitCode};
 use vpin::directb2s::read;
 use vpin::vpx;
+use vpin::vpx::image::ImageData;
 use vpin::vpx::jsonmodel::{game_data_to_json, info_to_json};
-use vpin::vpx::{expanded, extractvbs, importvbs, tableinfo, verify, ExtractResult, VerifyResult};
+use vpin::vpx::{
+    expanded, extractvbs, importvbs, tableinfo, verify, AddImageResult, ExtractResult, VerifyResult,
+};
 
 pub mod config;
 pub mod fixprint;
@@ -68,6 +71,9 @@ const CMD_IMAGES_WEBP: &str = "webp";
 
 const CMD_GAMEDATA: &str = "gamedata";
 const CMD_GAMEDATA_SHOW: &str = "show";
+
+const CMD_LUT: &str = "lut";
+const CMD_LUT_SET: &str = "set";
 
 pub struct ProgressBarProgress {
     pb: ProgressBar,
@@ -709,6 +715,35 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             }
             _ => unreachable!(),
         },
+        Some((CMD_LUT, sub_matches)) => match sub_matches.subcommand() {
+            Some((CMD_LUT_SET, sub_matches)) => {
+                let path = sub_matches
+                    .get_one::<String>("VPXPATH")
+                    .map(|s| s.as_str())
+                    .unwrap_or_default();
+                let lut_path = sub_matches
+                    .get_one::<String>("LUTPATH")
+                    .map(|s| s.as_str())
+                    .unwrap_or_default();
+                let expanded_path = expand_path(path);
+                let expanded_lut_path = expand_path(lut_path);
+                let lut_name = expanded_lut_path.file_stem().unwrap().to_string_lossy();
+                // TODO we might want to avoid reading the whole vpx file into memory
+                let mut vpx = vpx::read(&expanded_path)?;
+                let image_data: ImageData = todo!("loading image"); //ImageData::from_file(&expanded_lut_path)?;
+                match vpx.add_or_replace_image(image_data) {
+                    AddImageResult::Added => {
+                        println!("Added image {}", lut_name)?;
+                    }
+                    AddImageResult::Replaced(_old) => {
+                        println!("Replaced image {}", lut_name)?;
+                    }
+                }
+                println!("Set LUT to {}", vpx.gamedata.image_color_grade)?;
+                Ok(ExitCode::SUCCESS)
+            }
+            _ => unreachable!(),
+        },
         _ => unreachable!(), // If all subcommands are defined above, anything else is unreachable!()
     }
 }
@@ -991,6 +1026,23 @@ fn build_command() -> Command {
                         .about("Show the gamedata for a vpx file")
                         .arg(
                             arg!(<VPXPATH> "The path to the vpx file")
+                                .required(true),
+                        ),
+                ),
+        )
+        .subcommand(
+            Command::new(CMD_LUT)
+                .subcommand_required(true)
+                .about("Vpx LUT (color lookup table) related commands")
+                .subcommand(
+                    Command::new(CMD_LUT_SET)
+                        .about("Set the default LUT for a vpx file")
+                        .arg(
+                            arg!(<VPXPATH> "The path to the vpx file")
+                                .required(true),
+                        )
+                        .arg(
+                            arg!(<LUTPATH> "The path to the lut file")
                                 .required(true),
                         ),
                 ),
