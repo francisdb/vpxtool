@@ -29,7 +29,7 @@ use std::{
 };
 
 use crate::config;
-use crate::config::ResolvedConfig;
+use crate::config::{ResolvedConfig, VPinballConfig};
 use crate::indexer::{find_vpx_files, IndexError, IndexedTable, Progress};
 use crate::patcher::LineEndingsResult::{NoChanges, Unified};
 use crate::patcher::{patch_vbs_file, unify_line_endings_vbs_file};
@@ -38,6 +38,7 @@ use crate::{
     vpx::{extractvbs, vbs_path_for, ExtractResult},
     DiffColor, ProgressBarProgress,
 };
+use bevy::utils::info;
 use bevy::window::*;
 use colored::Colorize;
 use console::Emoji;
@@ -81,6 +82,11 @@ pub struct Config {
 }
 
 #[derive(Resource)]
+pub struct VpxConfig {
+    pub config: VPinballConfig,
+}
+
+#[derive(Resource)]
 pub struct VpxTables {
     pub indexed_tables: Vec<IndexedTable>,
 }
@@ -94,6 +100,67 @@ pub struct InfoBox {
 pub struct Globals {
     pub wheel_size: f32,
     pub game_running: bool,
+}
+
+fn correct_window_size_and_position(
+    mut window_query: Query<&mut Window, With<PrimaryWindow>>,
+    vpx_config: Res<VpxConfig>,
+) {
+    // only on Linux
+    // #[cfg(target_os = "linux")] is annoying because it causes clippy to complain about dead code
+    if cfg!(target_os = "linux") {
+        // Under wayland the window size is not correct, we need to scale it down.
+        // In vpinball the playfield window size is configured in physical pixels.
+        // The window constructor will create a window with the size in logical pixels.
+        let mut window = window_query.single_mut();
+        if window.resolution.scale_factor() != 1.0 {
+            info!(
+                "Resizing window for Linux with scale factor {}",
+                window.resolution.scale_factor(),
+            );
+            let vpinball_config = &vpx_config.config;
+            if let Some(playfield) = vpinball_config.get_playfield_info() {
+                if let (Some(physical_width), Some(physical_height)) =
+                    (playfield.width, playfield.height)
+                {
+                    let logical_width = physical_width as f32 / window.resolution.scale_factor();
+                    let logical_height = physical_height as f32 / window.resolution.scale_factor();
+                    info!(
+                        "Setting window size to {}x{}",
+                        logical_width, logical_height
+                    );
+                    window.resolution.set(logical_width, logical_height);
+                    window.set_changed();
+                }
+            }
+        }
+    }
+
+    // only on macOS
+    // #[cfg(target_os = "macos")] is annoying because it causes clippy to complain about dead code
+    if cfg!(target_os = "macos") {
+        let mut window = window_query.single_mut();
+        if window.resolution.scale_factor() != 1.0 {
+            info!(
+                "Repositioning window for macOS with scale factor {}",
+                window.resolution.scale_factor(),
+            );
+            let vpinball_config = &vpx_config.config;
+            if let Some(playfield) = vpinball_config.get_playfield_info() {
+                if let (Some(logical_x), Some(logical_y)) = (playfield.x, playfield.y) {
+                    // For macOS with scales factor > 1 this is not correct but we don't know the scale
+                    // factor before the window is created.
+                    let physical_x = logical_x as f32 * window.resolution.scale_factor();
+                    let physical_y = logical_y as f32 * window.resolution.scale_factor();
+                    info!("Setting window position to {}, {}", physical_x, physical_y,);
+                    // this will apply the width as if it was set in logical pixels
+                    window.position =
+                        WindowPosition::At(IVec2::new(physical_x as i32, physical_y as i32));
+                    window.set_changed();
+                }
+            }
+        }
+    }
 }
 
 fn create_wheel(
@@ -162,7 +229,8 @@ fn create_wheel(
     let mut blank_path = config.config.tables_folder.clone();
     blank_path.push("/wheels/blankwheel.png");
     if !Path::new(&blank_path).exists() {
-        blank_path = PathBuf::from("assets/blankwheel.png");
+        // will be loaded from assets
+        blank_path = PathBuf::from("blankwheel.png");
     }
 
     while counter < (tables_len) {
@@ -220,17 +288,17 @@ fn create_wheel(
                     (height / 3.) / (size.height as f32),
                     100.0,
                 );
-                println!("height {} ", size.height);
+                // println!("height {} ", size.height);
                 //                 transform.translation = Vec3::new(
                 //                   (width / 2.0) / (size.height as f32),
                 //                  (- (height)) + (size.height as f32),
                 //  (0. - ((height / 2.0) - (height / 4.0))),
                 //                   0.0
                 //               );
-                println!(
-                    "Initializing:  {}",
-                    &temporary_path_name.as_os_str().to_string_lossy()
-                );
+                // println!(
+                //     "Initializing:  {}",
+                //     &temporary_path_name.as_os_str().to_string_lossy()
+                // );
             }
             Err(why) => println!(
                 "Error getting dimensions: {} {:?}",
@@ -924,24 +992,65 @@ pub fn guifrontend(
     //       viewport: egui::ViewportBuilder::default().with_inner_size([400.0, 800.0]),
     //       ..Default::default()
     //   };
+
+    let vpinball_ini_path = config.vpinball_ini_file();
+    let vpinball_config = VPinballConfig::read(&vpinball_ini_path).unwrap();
+    let mut position = WindowPosition::default();
+    let mut mode = WindowMode::Fullscreen;
+    let mut resolution = WindowResolution::default();
+    if let Some(playfield) = vpinball_config.get_playfield_info() {
+        if let (Some(x), Some(y)) = (playfield.x, playfield.y) {
+            // For macOS with scale factor > 1 this is not correct but we don't know the scale
+            // factor before the window is created. We will correct the position later using the
+            // system "correct_mac_window_size".
+            let physical_x = x as i32;
+            let physical_y = y as i32;
+            position = WindowPosition::At(IVec2::new(physical_x, physical_y));
+        }
+        if let (Some(width), Some(height)) = (playfield.width, playfield.height) {
+            resolution = WindowResolution::new(width as f32, height as f32);
+        }
+        mode = if playfield.fullscreen {
+            WindowMode::Fullscreen
+        } else {
+            WindowMode::Windowed
+        };
+    }
+    println!(
+        "Positioning window at {:?}, resolution {:?}",
+        position, resolution
+    );
+
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 title: "VPXTOOL".to_string(),
-                window_level: WindowLevel::AlwaysOnTop,
+                // window_level: WindowLevel::AlwaysOnTop,
+                resolution,
+                mode,
+                position,
                 ..Default::default()
             }),
             ..Default::default()
         }))
         .insert_resource(Config { config })
+        .insert_resource(VpxConfig {
+            config: vpinball_config,
+        })
         .insert_resource(VpxTables {
             indexed_tables: vpx_files_with_tableinfo,
         })
         .add_plugins(EguiPlugin)
         .add_plugins(PipelinesReadyPlugin)
         .insert_resource(ClearColor(Color::srgb(0.1, 0.1, 0.1)))
+        .insert_resource(Globals {
+            wheel_size: 100.0, // will be updated when loading wheels
+            game_running: false,
+        })
         //       .insert_resource(ClearColor(Color::srgb(0.9, 0.3, 0.6)))
         .add_event::<StreamEvent>()
+        // TODO why does this happen so late?
+        .add_systems(Startup, correct_window_size_and_position)
         .add_systems(Startup, setup)
         .add_systems(Startup, (create_wheel, create_flippers))
         .insert_resource(LoadingState::default())
@@ -1030,7 +1139,7 @@ fn read_stream(
         println!("Showing window");
         window.visible = true;
         // bring window to front
-        window.window_level = WindowLevel::AlwaysOnTop;
+        // window.window_level = WindowLevel::AlwaysOnTop;
         // request focus
         window.focused = true;
         events.send(StreamEvent(from_stream));
