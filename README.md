@@ -11,7 +11,8 @@ if wanted copy or symlink the binary to `$HOME/bin` to put in on your path
 
 ### macOS
 
-After extracting the archive you will have to remove the quarantine flag through `System Settings / Privacy & Security / Allow Anyway button` or on the command line as shown below.
+After extracting the archive you will have to remove the quarantine flag through
+`System Settings / Privacy & Security / Allow Anyway button` or on the command line as shown below.
 
 ```
 xattr -d com.apple.quarantine vpxtool
@@ -28,19 +29,24 @@ Extracts and assembles vpx files
 Usage: vpxtool [COMMAND]
 
 Commands:
-  info        Show information about a vpx file
-  diff        Prints out a diff between the vbs in the vpx and the sidecar vbs
-  frontend    Acts as a frontend for launching vpx files
-  index       Indexes a directory of vpx files
-  script      Cat the vpx script
-  ls          List directory contents without extracting the vpx file
-  extract     Extracts a vpx file
-  extractvbs  Extracts the vbs from a vpx file next to it
-  importvbs   Imports the vbs next to it into a vpx file
-  verify      Verify the structure of a vpx file
-  assemble    Assembles a vpx file
-  new         Creates a minimal empty new vpx file
-  help        Print this message or the help of the given subcommand(s)
+  info            Vpx table info related commands
+  diff            Prints out a diff between the vbs in the vpx and the sidecar vbs
+  frontend        Text based frontend for launching vpx files
+  simplefrontend  Simple text based frontend for launching vpx files
+  index           Indexes a directory of vpx files
+  script          Vpx script code related commands
+  ls              Show a vpx file content
+  extract         Extracts a vpx file
+  extractvbs      Extracts the vbs from a vpx file next to it
+  importvbs       Imports the vbs next to it into a vpx file
+  verify          Verify the structure of a vpx file
+  assemble        Assembles a vpx file
+  patch           Applies a VPURemix System patch to a table
+  new             Creates a minimal empty new vpx file
+  config          Vpxtool related config file
+  images          Vpx image related commands
+  gamedata        Vpx gamedata related commands
+  help            Print this message or the help of the given subcommand(s)
 
 Options:
   -h, --help     Print help
@@ -75,13 +81,15 @@ launch them.
 A configuration file will be written to store the Visual Pinball executable location.
 
 To show the current config location use the following command
+
 ```
 vpxtool config show
 ```
 
 ### Configuring a custom editor
 
-When actions are invoked that open an editor the default editor configured for your system will be used. In case you want to override this with a specific editor you can add the following line to the config file:
+When actions are invoked that open an editor the default editor configured for your system will be used. In case you
+want to override this with a specific editor you can add the following line to the config file:
 
 ```yaml
 # use Visual Studio Code as default editor
@@ -110,6 +118,7 @@ https://github.com/vbousquet/flexdmd/tree/master/FlexDemo
 
 ## Building
 
-The project uses the default [rust](https://www.rust-lang.org/) build tool `cargo`. To get going read the docs on installation and first steps at https://doc.rust-lang.org/cargo/
+The project uses the default [rust](https://www.rust-lang.org/) build tool `cargo`. To get going read the docs on
+installation and first steps at https://doc.rust-lang.org/cargo/
 
 `cargo build --release`

@@ -8,10 +8,11 @@ use console::Emoji;
 use git_version::git_version;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use std::error::Error;
+use std::ffi::OsStr;
 use std::fmt::Display;
 use std::fs::{metadata, File};
 use std::io;
-use std::io::{BufReader, Read, Write};
+use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{exit, ExitCode};
 use vpin::directb2s::read;
@@ -38,6 +39,9 @@ const CMD_EXTRACT: &str = "extract";
 const CMD_ASSEMBLE: &str = "assemble";
 const CMD_EXTRACT_VBS: &str = "extractvbs";
 const CMD_IMPORT_VBS: &str = "importvbs";
+const CMD_PATCH: &str = "patch";
+const CMD_VERIFY: &str = "verify";
+const CMD_NEW: &str = "new";
 
 const CMD_SIMPLE_FRONTEND: &str = "simplefrontend";
 
@@ -569,8 +573,54 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 }
             }
         }
+        Some((CMD_PATCH, sub_matches)) => {
+            let vpx_path = sub_matches
+                .get_one::<String>("VPXPATH")
+                .map(|s| Path::new(OsStr::new(s)))
+                .expect("VPXPATH is required");
+            let patch_path = sub_matches
+                .get_one::<String>("PATCHPATH")
+                .map(|s| Path::new(OsStr::new(s)))
+                .expect("PATCHPATH is required");
+            let patched_vpx_path = sub_matches
+                .get_one::<String>("OUTVPXPATH")
+                .map(PathBuf::from)
+                .unwrap_or_else(|| vpx_path.with_extension("patched.vpx"));
 
-        Some(("verify", sub_matches)) => {
+            if !vpx_path.exists() {
+                return Err(io::Error::new(
+                    io::ErrorKind::NotFound,
+                    format!("VPXPATH not found: {}", vpx_path.display()),
+                ));
+            }
+            if !patch_path.exists() {
+                return Err(io::Error::new(
+                    io::ErrorKind::NotFound,
+                    format!("PATCHPATH not found: {}", patch_path.display()),
+                ));
+            }
+            if patched_vpx_path.exists() {
+                return Err(io::Error::new(
+                    io::ErrorKind::AlreadyExists,
+                    format!("OUTVPXPATH already exists: {}", patched_vpx_path.display()),
+                ));
+            }
+            let vpx_file = File::open(vpx_path)?;
+            let patch_file = File::open(patch_path)?;
+            let patched_vpx_file = File::create(patched_vpx_path)?;
+
+            let mut vpx_reader = BufReader::new(vpx_file);
+            let mut patch_reader = BufReader::new(patch_file);
+            let mut patched_vpx_writer = BufWriter::new(patched_vpx_file);
+
+            jojodiff::patch(&mut vpx_reader, &mut patch_reader, &mut patched_vpx_writer)?;
+
+            patched_vpx_writer.flush()?;
+
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Some((CMD_VERIFY, sub_matches)) => {
             let paths: Vec<&str> = sub_matches
                 .get_many::<String>("VPXPATH")
                 .unwrap_or_default()
@@ -591,7 +641,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             }
             Ok(ExitCode::SUCCESS)
         }
-        Some(("new", sub_matches)) => {
+        Some((CMD_NEW, sub_matches)) => {
             let path = {
                 let this = sub_matches.get_one::<String>("VPXPATH").map(|v| v.as_str());
                 match this {
@@ -918,7 +968,7 @@ fn build_command() -> Command {
                 ),
         )
         .subcommand(
-            Command::new("verify")
+            Command::new(CMD_VERIFY)
                 .about("Verify the structure of a vpx file")
                 .arg(
                     arg!(<VPXPATH> "The path(s) to the vpx file(s)")
@@ -940,7 +990,14 @@ fn build_command() -> Command {
                 .arg(arg!([VPXPATH] "Optional path of the VPX file to assemble to. Defaults to <DIRPATH>.vpx.")),
         )
         .subcommand(
-            Command::new("new")
+            Command::new(CMD_PATCH)
+                .about("Applies a VPURemix System patch to a table")
+                .arg(arg!(<VPXPATH> "The path to the vpx file").required(true))
+                .arg(arg!(<PATCHPATH> "The path to the dif file").required(true))
+                .arg(arg!(<OUTVPXPATH> "The path to the output vpx file. Defaults to <VPXPATH>.patched.vpx").required(false))
+        )
+        .subcommand(
+            Command::new(CMD_NEW)
                 .about("Creates a minimal empty new vpx file")
                 .arg(arg!(<VPXPATH> "The path(s) to the vpx file").required(true)),
         )

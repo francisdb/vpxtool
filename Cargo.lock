@@ -1028,6 +1028,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "jojodiff"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11690b29972144ea34a4b7a4744ded18488e5f9e3f3a4f8e21128155278c1e7d"
+dependencies = [
+ "log",
+]
+
+[[package]]
 name = "jpeg-decoder"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2081,6 +2090,7 @@ dependencies = [
  "git-version",
  "indicatif",
  "is_executable",
+ "jojodiff",
  "log",
  "logging_timer",
  "pretty_assertions",
