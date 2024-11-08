@@ -608,9 +608,9 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     ),
                 ));
             }
-            let mut vpx_file = File::open(&vpx_path)?;
-            let mut patch_file = File::open(&patch_path)?;
-            let mut patched_vpx_file = File::create(&patched_vpx_path)?;
+            let mut vpx_file = File::open(vpx_path)?;
+            let mut patch_file = File::open(patch_path)?;
+            let mut patched_vpx_file = File::create(patched_vpx_path)?;
 
             jojodiff::patch(&mut vpx_file, &mut patch_file, &mut patched_vpx_file)?;
 
