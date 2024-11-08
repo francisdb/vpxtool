@@ -12,7 +12,7 @@ use std::ffi::OsStr;
 use std::fmt::Display;
 use std::fs::{metadata, File};
 use std::io;
-use std::io::{BufReader, Read, Write};
+use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{exit, ExitCode};
 use vpin::directb2s::read;
@@ -583,7 +583,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 .map(|s| Path::new(OsStr::new(s)))
                 .expect("PATCHPATH is required");
             let patched_vpx_path = sub_matches
-                .get_one::<String>("PATCHEDVPXPATH")
+                .get_one::<String>("OUTVPXPATH")
                 .map(PathBuf::from)
                 .unwrap_or_else(|| vpx_path.with_extension("patched.vpx"));
 
@@ -602,17 +602,20 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             if patched_vpx_path.exists() {
                 return Err(io::Error::new(
                     io::ErrorKind::AlreadyExists,
-                    format!(
-                        "PATCHEDVPXPATH already exists: {}",
-                        patched_vpx_path.display()
-                    ),
+                    format!("OUTVPXPATH already exists: {}", patched_vpx_path.display()),
                 ));
             }
-            let mut vpx_file = File::open(vpx_path)?;
-            let mut patch_file = File::open(patch_path)?;
-            let mut patched_vpx_file = File::create(patched_vpx_path)?;
+            let vpx_file = File::open(vpx_path)?;
+            let patch_file = File::open(patch_path)?;
+            let patched_vpx_file = File::create(patched_vpx_path)?;
 
-            jojodiff::patch(&mut vpx_file, &mut patch_file, &mut patched_vpx_file)?;
+            let mut vpx_reader = BufReader::new(vpx_file);
+            let mut patch_reader = BufReader::new(patch_file);
+            let mut patched_vpx_writer = BufWriter::new(patched_vpx_file);
+
+            jojodiff::patch(&mut vpx_reader, &mut patch_reader, &mut patched_vpx_writer)?;
+
+            patched_vpx_writer.flush()?;
 
             Ok(ExitCode::SUCCESS)
         }
@@ -991,7 +994,7 @@ fn build_command() -> Command {
                 .about("Applies a VPURemix System patch to a table")
                 .arg(arg!(<VPXPATH> "The path to the vpx file").required(true))
                 .arg(arg!(<PATCHPATH> "The path to the dif file").required(true))
-                .arg(arg!(<OUTPATH> "The path to the output vpx file. Defaults to <VPXPATH>.patched.vpx").required(false))
+                .arg(arg!(<OUTVPXPATH> "The path to the output vpx file. Defaults to <VPXPATH>.patched.vpx").required(false))
         )
         .subcommand(
             Command::new(CMD_NEW)
