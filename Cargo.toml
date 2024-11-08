@@ -41,6 +41,7 @@ regex = { version = "1.11.1", features = [] }
 vpin = { version = "0.15.6" }
 rust-ini = "0.21.1"
 edit = "0.1.5"
+jojodiff = "0.1.1"
 
 [dev-dependencies]
 pretty_assertions = "1.4.1"
