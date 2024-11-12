@@ -29,7 +29,7 @@ log = "0.4.22"
 logging_timer = "1.1.1"
 pretty_env_logger = "0.5.0"
 quick-xml = { version = "0.37.0", features = ["serialize"] }
-serde = { version = "1.0.214", features = ["derive"] }
+serde = { version = "1.0.215", features = ["derive"] }
 serde_json = { version = "1.0.132", features = ["preserve_order"] }
 shellexpand = "3.1.0"
 walkdir = "2.5.0"
