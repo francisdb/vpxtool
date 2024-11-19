@@ -166,11 +166,18 @@ fn correct_window_size_and_position(
 fn create_wheel(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
+    mut loading_data: ResMut<LoadingData>,
     window_query: Query<&Window, With<PrimaryWindow>>,
+    mut game_state: ResMut<NextState<LoadingState>>,
     // assets: Res<Assets<Image>>,
     config: Res<Config>,
     vpx_tables: Res<VpxTables>,
 ) {
+    let level_data = LevelData {
+        level_1_id: commands.register_one_shot_system(gui_update),
+    };
+    commands.insert_resource(level_data);
+
     //config: &ResolvedConfig,
     //vpx_files_with_tableinfo: &mut Vec<IndexedTable>,
     //vpinball_executable: &Path,
@@ -196,6 +203,7 @@ fn create_wheel(
     let window = window_query.single();
     let width = window.width();
     let height = window.height();
+    let table_path = &config.config.tables_folder;
 
     // let mut orentation = Horizontal;
     // if height > width {
@@ -226,11 +234,12 @@ fn create_wheel(
     // Create blank wheel
     // tries [table_path]/wheels/blankwheel.png first
     // fallbacks to assets/blankwheel.png
-    let mut blank_path = config.config.tables_folder.clone();
+    let mut blank_path = table_path.clone().into_os_string();
     blank_path.push("/wheels/blankwheel.png");
     if !Path::new(&blank_path).exists() {
         // will be loaded from assets
-        blank_path = PathBuf::from("blankwheel.png");
+        println!("Please copy the blankwheel.png to {:?}",blank_path);
+        blank_path = PathBuf::from("blankwheel.png").into_os_string();
     }
 
     while counter < (tables_len) {
@@ -270,17 +279,22 @@ fn create_wheel(
         //    None => "None",
         //    };
         let handle = asset_server.load(temporary_path_name.clone());
+        loading_data.loading_assets.push(handle.clone().into());
         // Normalizing the dimentions of wheels so they are all the same size.
         //  using imagesize crate as it is a very fast way to get the dimentions.
         let (mut wheel_width, mut wheel_height) = (0., 0.);
+
+        // Set default wheel size
+        commands.insert_resource(Globals {
+            wheel_size: (height / 3.),
+            game_running: false,
+        });
+
         match imagesize::size(&temporary_path_name) {
             Ok(size) => {
                 wheel_width = size.width as f32;
                 wheel_height = size.height as f32;
-                commands.insert_resource(Globals {
-                    wheel_size: (height / 3.),
-                    game_running: false,
-                });
+
                 // wheel_size.wheel_size = (height / 3.) / (size.height as f32);
                 // Normalize icons to 1/3 the screen height
                 transform.scale = Vec3::new(
@@ -288,17 +302,11 @@ fn create_wheel(
                     (height / 3.) / (size.height as f32),
                     100.0,
                 );
-                // println!("height {} ", size.height);
-                //                 transform.translation = Vec3::new(
-                //                   (width / 2.0) / (size.height as f32),
-                //                  (- (height)) + (size.height as f32),
-                //  (0. - ((height / 2.0) - (height / 4.0))),
-                //                   0.0
-                //               );
-                // println!(
-                //     "Initializing:  {}",
-                //     &temporary_path_name.as_os_str().to_string_lossy()
-                // );
+                println!("height {} ", size.height);
+                println!(
+                    "Initializing:  {}",
+                    &temporary_path_name.as_os_str().to_string_lossy()
+                );
             }
             Err(why) => println!(
                 "Error getting dimensions: {} {:?}",
@@ -392,8 +400,11 @@ fn create_wheel(
     }
     // commands.spawn((Camera2dBundle
     //                {..default()},));
-
+    //let update = commands.register_one_shot_system(update_loading_data);
+    //commands.run_system(update);
     println!("Wheels loaded");
+    
+    game_state.set(LoadingState::LevelLoading);
 }
 
 fn create_flippers(
@@ -549,7 +560,7 @@ fn create_info_box(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut
 }
 */
 
-pub fn guiupdate(
+pub fn gui_update(
     mut commands: Commands,
     keys: Res<ButtonInput<KeyCode>>,
     time: Res<Time>,
@@ -792,11 +803,18 @@ pub fn guiupdate(
     }
 }
 
-#[derive(Resource, Default)]
+#[derive(States, Default, Debug, Clone, PartialEq, Eq, Hash)]
 enum LoadingState {
     #[default]
-    LevelReady,
+    LevelIntitializing,
     LevelLoading,
+    LevelReady,
+}
+
+#[derive(AssetCollection, Resource)]
+struct ImageAssets {
+  #[asset(key = "wheel")]
+  wheel: Handle<Image>,
 }
 
 #[derive(Resource, Debug, Default)]
@@ -824,9 +842,7 @@ impl LoadingData {
 // This resource will hold the level related systems ID for later use.
 #[derive(Resource)]
 struct LevelData {
-    unload_level_id: SystemId,
     level_1_id: SystemId,
-    level_2_id: SystemId,
 }
 
 // Marker component for easier deletion of entities.
@@ -836,10 +852,10 @@ struct LevelComponents;
 // Removes all currently loaded level assets from the game World.
 fn unload_current_level(
     mut commands: Commands,
-    mut loading_state: ResMut<LoadingState>,
+    // mut loading_state: ResMut<LoadingState>,
     entities: Query<Entity, With<LevelComponents>>,
 ) {
-    *loading_state = LoadingState::LevelLoading;
+   // *loading_state = LoadingState::LevelLoading;
     for entity in entities.iter() {
         commands.entity(entity).despawn_recursive();
     }
@@ -847,10 +863,13 @@ fn unload_current_level(
 
 // Monitors current loading status of assets.
 fn update_loading_data(
+    mut commands: Commands,
     mut loading_data: ResMut<LoadingData>,
-    mut loading_state: ResMut<LoadingState>,
+    mut game_state: ResMut<NextState<LoadingState>>,
+   // mut loading_state: ResMut<LoadingState>,
     asset_server: Res<AssetServer>,
     pipelines_ready: Res<PipelinesReady>,
+    mut level_data: Res<LevelData>,
 ) {
     if !loading_data.loading_assets.is_empty() || !pipelines_ready.0 {
         // If we are still loading assets / pipelines are not fully compiled,
@@ -869,9 +888,10 @@ fn update_loading_data(
         }
 
         // Remove all loaded assets from the loading_assets list.
-        for i in pop_list.iter() {
-            loading_data.loading_assets.remove(*i);
-        }
+        if pop_list.len()>0 {
+            loading_data.loading_assets.remove(pop_list[0]);
+
+        }   
 
         // If there are no more assets being monitored, and pipelines
         // are compiled, then start counting confirmation frames.
@@ -880,9 +900,11 @@ fn update_loading_data(
     } else {
         loading_data.confirmation_frames_count += 1;
         if loading_data.confirmation_frames_count == loading_data.confirmation_frames_target {
-            *loading_state = LoadingState::LevelReady;
+            game_state.set(LoadingState::LevelReady);
         }
     }
+        
+
 }
 
 // Marker tag for loading screen components.
@@ -935,14 +957,18 @@ fn load_loading_screen(mut commands: Commands) {
 // Determines when to show the loading screen
 fn display_loading_screen(
     mut loading_screen: Query<&mut Visibility, With<LoadingScreen>>,
-    loading_state: Res<LoadingState>,
+    mut loading_state: ResMut<State<LoadingState>>,
+  //  loading_state: Res<LoadingState>,
 ) {
-    match loading_state.as_ref() {
+    println!("loading state {:?}",loading_state.get());
+    match loading_state.get() {
         LoadingState::LevelLoading => {
             *loading_screen.get_single_mut().unwrap() = Visibility::Visible;
         }
         LoadingState::LevelReady => *loading_screen.get_single_mut().unwrap() = Visibility::Hidden,
+        _ => {},
     };
+
 }
 
 mod pipelines_ready {
@@ -973,8 +999,18 @@ mod pipelines_ready {
     }
 }
 
-// if ctrl && shift && input.just_pressed(KeyCode::KeyA) {
-//   info!("Just pressed Ctrl + Shift + A!"); }
+fn level_selection(
+    mut commands: Commands,
+    keyboard: Res<ButtonInput<KeyCode>>,
+    level_data: Res<LevelData>,
+   // loading_state: Res<LoadingState>,
+) {
+    // Only trigger a load if the current level is fully loaded.
+ /*    if let LoadingState::LevelReady = loading_state.as_ref() {
+        commands.run_system(level_data.level_1_id);
+    }
+    */
+}
 
 pub fn guifrontend(
     config: ResolvedConfig,
@@ -1020,7 +1056,7 @@ pub fn guifrontend(
         "Positioning window at {:?}, resolution {:?}",
         position, resolution
     );
-
+    
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
@@ -1053,20 +1089,22 @@ pub fn guifrontend(
         .add_systems(Startup, correct_window_size_and_position)
         .add_systems(Startup, setup)
         .add_systems(Startup, (create_wheel, create_flippers))
-        .insert_resource(LoadingState::default())
         .insert_resource(LoadingData::new(5))
         //       .insert_resource(ClearColor(Color::srgb(0.9, 0.3, 0.6)))
         .add_systems(Startup, (load_loading_screen))
         .add_systems(Startup, play_background_audio)
-        .add_systems(Update, gui_update)
+        //.add_systems(Update, gui_update)
         //.add_systems(Update,(guiupdate,update_loading_data, level_selection,display_loading_screen),)
-        .add_systems(
-            Update,
-            (guiupdate, update_loading_data, display_loading_screen),
-        )
+        //.add_systems(
+        //    Update,
+        //    (update_loading_data, display_loading_screen),
+        //)
         //.add_systems(Update, volume_system)
         //   .add_systems(Update,create_wheel)
-        .add_systems(Update, (read_stream, spawn_text, move_text))
+        .add_systems(Update, (display_loading_screen, read_stream, spawn_text, move_text))
+        .add_systems(Update, update_loading_data.run_if(in_state(LoadingState::LevelLoading)))
+        .add_systems(Update, gui_update.run_if(in_state(LoadingState::LevelReady)))
+        .init_state::<LoadingState>()
         .run();
     /*     eframe::run_native(
             "Image Viewer",

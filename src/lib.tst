@@ -23,8 +23,8 @@ use vpin::vpx::{expanded, extractvbs, importvbs, tableinfo, verify, ExtractResul
 pub mod config;
 pub mod fixprint;
 mod frontend;
-mod guifrontend;
 pub mod indexer;
+
 pub mod patcher;
 
 // see https://github.com/fusion-engineering/rust-git-version/issues/21
@@ -34,7 +34,6 @@ const OK: Emoji = Emoji("✅", "[launch]");
 const NOK: Emoji = Emoji("❌", "[crash]");
 
 const CMD_FRONTEND: &str = "frontend";
-const CMD_GUI_FRONTEND: &str = "gui";
 const CMD_DIFF: &str = "diff";
 const CMD_EXTRACT: &str = "extract";
 const CMD_ASSEMBLE: &str = "assemble";
@@ -273,52 +272,6 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 }
             }
         }
-        Some((CMD_GUI_FRONTEND, _sub_matches)) => {
-            let (config_path, config) = config::load_or_setup_config()?;
-            println!("Using config file {}", config_path.display())?;
-            let roms = indexer::find_roms(config.global_pinmame_rom_folder())?;
-            if roms.is_empty() {
-                let warning = format!(
-                    "No roms found in {}",
-                    config.global_pinmame_rom_folder().display()
-                )
-                .yellow();
-                eprintln!("{}", warning)?;
-            } else {
-                println!(
-                    "Found {} roms in {}",
-                    roms.len(),
-                    config.global_pinmame_rom_folder().display()
-                )?;
-            }
-            match frontend::frontend_index(&config, true, vec![]) {
-                Ok(tables) if tables.is_empty() => {
-                    let warning =
-                        format!("No tables found in {}", config.tables_folder.display()).red();
-                    eprintln!("{}", warning)?;
-                    Ok(ExitCode::FAILURE)
-                }
-                Ok(vpx_files_with_tableinfo) => {
-                    guifrontend::guifrontend(config.clone(), vpx_files_with_tableinfo);
-                    Ok(ExitCode::SUCCESS)
-                }
-                Err(IndexError::FolderDoesNotExist(path)) => {
-                    let warning = format!(
-                        "Configured tables folder does not exist: {}",
-                        path.display()
-                    )
-                    .red();
-                    eprintln!("{}", warning)?;
-                    Ok(ExitCode::FAILURE)
-                }
-                Err(IndexError::IoError(e)) => {
-                    let warning = format!("Error running frontend: {}", e).red();
-                    eprintln!("{}", warning)?;
-                    Ok(ExitCode::FAILURE)
-                }
-            }
-        }
-
         Some(("index", sub_matches)) => {
             let recursive = sub_matches.get_flag("RECURSIVE");
             let path = sub_matches
@@ -896,18 +849,6 @@ fn build_command() -> Command {
                 )
         )
         .subcommand(
-            Command::new(CMD_GUI_FRONTEND)
-                .about("Gui Frontend test")
-                .arg(
-                    Arg::new("RECURSIVE")
-                        .short('r')
-                        .long("recursive")
-                        .num_args(0)
-                        .help("Recursivly index subdirectories")
-                        .default_value("true"),
-                )
-        )
-        .subcommand(
             Command::new("index")
                 .about("Indexes a directory of vpx files")
                 .arg(
@@ -1138,30 +1079,6 @@ fn new(vpx_file_path: &str) -> io::Result<()> {
     // TODO check if file exists and prompt to overwrite / add option to force
     vpx::new_minimal_vpx(vpx_file_path)
 }
-
-/*fn extract_wheel(expanded_path: &PathBuf) -> io::Result<()> {
-    let file = File::open(expanded_path).unwrap();
-    let reader = BufReader::new(file);
-    match read(reader) {
-        Ok(b2s) => {
-            println!("DirectB2S file version {}", b2s.version)?;
-            let root_dir_path = expanded_path.with_extension("directb2s.extracted");
-
-            let mut root_dir = std::fs::DirBuilder::new();
-            root_dir.recursive(true);
-            root_dir.create(&root_dir_path).unwrap();
-
-            println!("Writing to {}", root_dir_path.display())?;
-            wite_images(b2s, root_dir_path.as_path());
-        }
-        Err(msg) => {
-            println!("Failed to load {}: {}", expanded_path.display(), msg)?;
-            exit(1);
-        }
-    }
-    Ok(())
-}
-*/
 
 fn extract_directb2s(expanded_path: &PathBuf) -> io::Result<()> {
     let file = File::open(expanded_path).unwrap();
@@ -1704,3 +1621,4 @@ mod tests {
         assert_eq!(result, None);
     }
 }
+
