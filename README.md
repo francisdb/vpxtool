@@ -24,6 +24,8 @@ Show help
 
 ```
 > vpxtool --help
+Vpxtool v0.16.0
+
 Extracts and assembles vpx files
 
 Usage: vpxtool [COMMAND]
@@ -46,6 +48,7 @@ Commands:
   config          Vpxtool related config file
   images          Vpx image related commands
   gamedata        Vpx gamedata related commands
+  romname         Prints the PinMAME ROM name from a vpx file
   help            Print this message or the help of the given subcommand(s)
 
 Options:

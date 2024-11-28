@@ -426,6 +426,19 @@ fn index_vpx_file(vpx_file_path: &PathWithMetadata) -> io::Result<(PathBuf, Inde
     Ok((indexed.path.clone(), indexed))
 }
 
+pub(crate) fn get_romname_from_vpx(vpx_path: &Path) -> io::Result<Option<String>> {
+    let mut vpx_file = vpx::open(vpx_path)?;
+    let game_data = vpx_file.read_gamedata()?;
+    let code = consider_sidecar_vbs(vpx_path, game_data)?;
+    let game_name = extract_game_name(&code);
+    let requires_pinmame = requires_pinmame(&code);
+    if requires_pinmame {
+        Ok(game_name)
+    } else {
+        Ok(None)
+    }
+}
+
 fn read_table_info_json(info_file_path: &Path) -> io::Result<TableInfo> {
     let mut info_file = File::open(info_file_path)?;
     let json = serde_json::from_reader(&mut info_file).map_err(|e| {
