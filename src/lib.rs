@@ -73,6 +73,8 @@ const CMD_IMAGES_WEBP: &str = "webp";
 const CMD_GAMEDATA: &str = "gamedata";
 const CMD_GAMEDATA_SHOW: &str = "show";
 
+const CMD_ROMNAME: &str = "romname";
+
 pub struct ProgressBarProgress {
     pb: ProgressBar,
 }
@@ -105,8 +107,6 @@ pub fn run() -> io::Result<ExitCode> {
     let matches = command.get_matches_from(wild::args());
     handle_command(matches)
 }
-
-const CMD_ROMNAME: &'static str = "romname";
 
 fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
     match matches.subcommand() {
