@@ -1067,8 +1067,8 @@ fn build_command() -> Command {
         )
         .subcommand(
             Command::new(CMD_ROMNAME)
-                .about("Prints the PinMAME ROM name from a VPX file")
-                .long_about("Extracts the PinMAME ROM name from a VPX file by searching for specific patterns in the table script. If the table is not PinMAME based, no output is produced.")
+                .about("Prints the PinMAME ROM name from a vpx file")
+                .long_about("Extracts the PinMAME ROM name from a vpx file by searching for specific patterns in the table script. If the table is not PinMAME based, no output is produced.")
                 .arg(arg!(<VPXPATH> "The path to the vpx file").required(true)),
         )
 }

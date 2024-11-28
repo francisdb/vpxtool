@@ -48,7 +48,7 @@ Commands:
   config          Vpxtool related config file
   images          Vpx image related commands
   gamedata        Vpx gamedata related commands
-  romname         Prints the PinMAME ROM name from a VPX file
+  romname         Prints the PinMAME ROM name from a vpx file
   help            Print this message or the help of the given subcommand(s)
 
 Options:
