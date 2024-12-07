@@ -74,6 +74,8 @@ const CMD_IMAGES_WEBP: &str = "webp";
 const CMD_GAMEDATA: &str = "gamedata";
 const CMD_GAMEDATA_SHOW: &str = "show";
 
+const CMD_ROMNAME: &str = "romname";
+
 pub struct ProgressBarProgress {
     pb: ProgressBar,
 }
@@ -806,6 +808,17 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             }
             _ => unreachable!(),
         },
+        Some((CMD_ROMNAME, sub_matches)) => {
+            let path = sub_matches
+                .get_one::<String>("VPXPATH")
+                .map(|s| s.as_str())
+                .unwrap_or_default();
+            let expanded_path = expand_path_exists(path)?;
+            if let Some(rom_name) = indexer::get_romname_from_vpx(&expanded_path)? {
+                println!("{rom_name}")?;
+            }
+            Ok(ExitCode::SUCCESS)
+        }
         _ => unreachable!(), // If all subcommands are defined above, anything else is unreachable!()
     }
 }
@@ -1110,6 +1123,12 @@ fn build_command() -> Command {
                                 .required(true),
                         ),
                 ),
+        )
+        .subcommand(
+            Command::new(CMD_ROMNAME)
+                .about("Prints the PinMAME ROM name from a vpx file")
+                .long_about("Extracts the PinMAME ROM name from a vpx file by searching for specific patterns in the table script. If the table is not PinMAME based, no output is produced.")
+                .arg(arg!(<VPXPATH> "The path to the vpx file").required(true)),
         )
 }
 
