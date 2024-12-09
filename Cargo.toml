@@ -46,7 +46,7 @@ jojodiff = "0.1.2"
 [dev-dependencies]
 pretty_assertions = "1.4.1"
 rand = "0.8.5"
-testdir = "0.9.1"
+testdir = "0.9.3"
 
 [profile.test]
 # level 0 is very slow for writing to compound files
