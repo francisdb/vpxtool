@@ -44,10 +44,10 @@ regex = { version = "1.11.1", features = [] }
 vpin = { version = "0.16.1" }
 rust-ini = "0.21.1"
 edit = "0.1.5"
-bevy = "0.14.2"
-bevy_asset = "0.14.2"
-bevy_asset_loader = "0.21.0"
-bevy_egui = "0.30"
+bevy = "0.15.0"
+bevy_asset = "0.15.0"
+bevy_asset_loader = "0.22.0"
+bevy_egui = "0.31.1"
 crossbeam-channel = "0.5.13"
 
 [dev-dependencies]

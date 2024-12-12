@@ -6,7 +6,8 @@ use bevy::core_pipeline::{
 };
 use bevy::ecs::system::SystemId;
 use bevy::render::view::visibility;
-use bevy::sprite::{MaterialMesh2dBundle, Mesh2dHandle, Wireframe2dConfig, Wireframe2dPlugin};
+use bevy::sprite::{MaterialMesh2dBundle, Wireframe2dConfig, Wireframe2dPlugin};
+//use bevy::sprite::{MaterialMesh2dBundle, Mesh2dHandle, Wireframe2dConfig, Wireframe2dPlugin};
 use bevy::{input::common_conditions::*, prelude::*};
 use bevy_asset::*;
 use bevy_asset_loader::prelude::*;
@@ -65,9 +66,29 @@ pub struct Wheel {
     //pub table_info: IndexedTable,
 }
 
+#[derive(Component)]
+pub struct TextItemGold {
+    pub item_number: i16,
+    //pub image_handle: Handle<Image>,
+    pub selected: bool,
+    //  pub launch_path: PathBuf,
+    //pub table_info: IndexedTable,
+}
+
+#[derive(Component)]
+pub struct TextItemGhostWhite {
+    pub item_number: i16,
+    //pub image_handle: Handle<Image>,
+    pub selected: bool,
+    //  pub launch_path: PathBuf,
+    //pub table_info: IndexedTable,
+}
+
 #[derive(Component, Debug)]
 pub struct TableText {
     pub item_number: i16,
+    pub tabletext: String,
+    pub tableblurb: String,
     //pub has_wheel: bool,
 }
 
@@ -100,6 +121,12 @@ pub struct InfoBox {
 pub struct Globals {
     pub wheel_size: f32,
     pub game_running: bool,
+}
+
+#[derive(Resource, Debug)]
+pub struct DialogBox {
+    pub title: String,
+    pub text: String,
 }
 
 fn correct_window_size_and_position(
@@ -163,6 +190,78 @@ fn correct_window_size_and_position(
     }
 }
 
+#[derive(Bundle)]
+struct WheelBundle {
+    sprite: Sprite,
+    transform: Transform,
+    //global_transform: GlobalTransform,
+    visibility: Visibility,
+    wheel: Wheel,
+    //inherited_visibility: InheritedVisibility,
+    //view_visibility: ViewVisibility,
+}
+#[derive(Component)]
+pub struct Flipper;
+
+#[derive(Component)]
+pub struct Flipper1;
+
+#[derive(Bundle)]
+struct FlipperBundle {
+    sprite: Sprite,
+    transform: Transform,
+    // translate: Translate,
+    //global_transform: GlobalTransform,
+    //    visibility: Visibility,
+    //    wheel: Wheel,
+    //inherited_visibility: InheritedVisibility,
+    visibility: Visibility,
+    flipper: Flipper,
+}
+
+#[derive(Bundle)]
+struct FlipperBundle1 {
+    sprite: Sprite,
+    transform: Transform,
+    // translate: Translate,
+    //global_transform: GlobalTransform,
+    //    visibility: Visibility,
+    //    wheel: Wheel,
+    //inherited_visibility: InheritedVisibility,
+    visibility: Visibility,
+    flipper1: Flipper1,
+}
+
+#[derive(Bundle)]
+struct MenuTextBundle {
+    text: Text,
+    text_font: TextFont,
+    text_color: TextColor,
+    text_bundle: Node,
+    // display: Display,
+    //position_type: PositionType,
+    //  left: f32,
+    //   top: f32,
+    //   right: f32,
+    table_text: TableText,
+    text_item: TextItemGold,
+}
+
+#[derive(Bundle)]
+struct MenuTextBundle1 {
+    text: Text,
+    text_font: TextFont,
+    text_color: TextColor,
+    text_bundle: Node,
+    // display: Display,
+    //position_type: PositionType,
+    //  left: f32,
+    //   top: f32,
+    //   right: f32,
+    table_text: TableText,
+    text_item: TextItemGhostWhite,
+}
+
 fn create_wheel(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
@@ -174,7 +273,7 @@ fn create_wheel(
     vpx_tables: Res<VpxTables>,
 ) {
     let level_data = LevelData {
-        level_1_id: commands.register_one_shot_system(gui_update),
+        level_1_id: commands.register_system(gui_update),
     };
     commands.insert_resource(level_data);
 
@@ -238,7 +337,7 @@ fn create_wheel(
     blank_path.push("/wheels/blankwheel.png");
     if !Path::new(&blank_path).exists() {
         // will be loaded from assets
-        println!("Please copy the blankwheel.png to {:?}",blank_path);
+        println!("Please copy the blankwheel.png to {:?}", blank_path);
         blank_path = PathBuf::from("blankwheel.png").into_os_string();
     }
 
@@ -298,11 +397,11 @@ fn create_wheel(
                 // wheel_size.wheel_size = (height / 3.) / (size.height as f32);
                 // Normalize icons to 1/3 the screen height
                 transform.scale = Vec3::new(
-                    (height / 3.) / (size.height as f32),
-                    (height / 3.) / (size.height as f32),
+                    (height / 5.) / (size.height as f32),
+                    (height / 5.) / (size.height as f32),
                     100.0,
                 );
-                println!("height {} ", size.height);
+
                 println!(
                     "Initializing:  {}",
                     &temporary_path_name.as_os_str().to_string_lossy()
@@ -316,82 +415,113 @@ fn create_wheel(
         };
 
         // Wheel
-        commands.spawn((
-            SpriteBundle {
+        commands.spawn(WheelBundle {
+            /*
+                        Replace all uses of SpriteBundle with Sprite. There are several new convenience constructors: Sprite::from_image, Sprite::from_atlas_image, Sprite::from_color.
+
+            WARNING: use of Handle<Image> and TextureAtlas as components on sprite entities will NO LONGER WORK. Use the fields on Sprite instead. I would have removed the Component impls from TextureAtlas and Handle<Image> except it is still used within ui. We should fix this moving forward with the migration.
+                         */
+            sprite: Sprite {
                 // texture: asset_server.load("/usr/tables/wheels/Sing Along (Gottlieb 1967).png"),
-                texture: handle.clone(),
-                transform: transform,
-                visibility: Visibility::Hidden,
+                image: handle.clone(),
                 ..default()
             },
-            Wheel {
+            transform: transform,
+            visibility: Visibility::Hidden,
+            wheel: Wheel {
                 item_number: counter as i16,
                 //image_handle: handle.clone(),
                 selected: false,
                 launch_path: info.path.clone(),
                 //tableinfo: info.clone(),
             },
-        ));
+        });
 
         // Game Name
-        commands.spawn((
+
+        // Accepts a `String` or any type that converts into a `String`, such as `&str`
+        commands.spawn(MenuTextBundle {
             // Create a TextBundle that has a Text with a single section.
-            TextBundle::from_section(
-                // Accepts a `String` or any type that converts into a `String`, such as `&str`
-                temporary_table_name,
-                TextStyle {
-                    // This font is loaded and will be used instead of the default font.
-                    font_size: 30.0,
-                    color: GOLD.into(),
-                    ..default()
-                },
-            ) // Set the justification of the Text
-            //.with_text_justify(JustifyText::Center)
-            // Set the style of the TextBundle itself.
-            .with_style(Style {
+            text: Text::new(temporary_table_name),
+            text_font: TextFont {
+                // This font is loaded and will be used instead of the default font.
+                font_size: 20.0,
+                // TextStyle has been renamed to TextFont and its color field has been moved to a separate component named TextColor which newtypes Color.
+                ..default()
+            },
+            text_color: TextColor::from(GHOST_WHITE),
+            text_bundle: Node {
+                // Set the justification of the Text
+                //.with_text_justify(JustifyText::Center)
+                // Set the style of the TextBundle itself.
                 display: Display::None,
                 position_type: PositionType::Absolute,
                 left: Val::Px(20.),
-                top: Val::Px(245.),
-                // top: Val::Px(height*0.025),//-(height-(height/2.+(scale*2.)))),
-                // right: Val::Px((0.)),
+                //top: Val::Px(245.),
+                top: Val::Px(height * 0.025), //-(height-(height/2.+(scale*2.)))),
+                right: Val::Px((0.)),
                 ..default()
-            }),
-            TableText {
-                item_number: counter as i16,
-                //has_wheel: haswheel,
             },
-        ));
+            table_text: TableText {
+                item_number: counter as i16,
+                tabletext: match info.table_info.table_description.clone() {
+                    Some(a) => a,
+                    _ => "Empty".to_owned(),
+                },
+                tableblurb: match info.table_info.table_blurb.clone() {
+                    Some(a) => a,
+                    _ => "Empty".to_owned(),
+                }, //has_wheel: haswheel,
+            },
+            text_item: TextItemGold {
+                item_number: counter as i16,
+                //image_handle: handle.clone(),
+                selected: false,
+            },
+        });
 
         // game info text
-        commands.spawn((
+        commands.spawn(MenuTextBundle1 {
             // Create a TextBundle that has a Text with a single section.
-            TextBundle::from_section(
-                // Accepts a `String` or any type that converts into a `String`, such as `&str`
-                temporary_table_name,
-                TextStyle {
-                    // This font is loaded and will be used instead of the default font.
-                    font_size: 20.0,
-                    color: GHOST_WHITE.into(),
-                    ..default()
-                },
-            ) // Set the justification of the Text
+            // Accepts a `String` or any type that converts into a `String`, such as `&str`
+            text: Text::new(temporary_table_name),
+            text_font: TextFont {
+                // This font is loaded and will be used instead of the default font.
+                font_size: 20.0,
+                ..default()
+            },
+            text_color: TextColor::from(GHOST_WHITE),
+            // Set the justification of the Text
             //.with_text_justify(JustifyText::Center)
             // Set the style of the TextBundle itself.
-            .with_style(Style {
+            text_bundle: Node {
                 flex_direction: FlexDirection::Row,
                 align_content: AlignContent::FlexEnd,
                 display: Display::None,
                 position_type: PositionType::Absolute,
                 left: Val::Px(20.),
                 top: Val::Px(height * 0.2), //-(height-(height/2.+(scale*2.)))),
-                // right: Val::Px((0.)),
+                right: Val::Px((0.)),
                 ..default()
-            }),
-            TableBlurb {
-                item_number: counter as i16,
             },
-        ));
+
+            table_text: TableText {
+                item_number: counter as i16,
+                tabletext: match info.table_info.table_description.clone() {
+                    Some(a) => a,
+                    _ => "Empty".to_owned(),
+                },
+                tableblurb: match info.table_info.table_blurb.clone() {
+                    Some(a) => a,
+                    _ => "Empty".to_owned(),
+                },
+            },
+            text_item: TextItemGhostWhite {
+                item_number: counter as i16,
+                //image_handle: handle.clone(),
+                selected: false,
+            },
+        });
 
         //let image = image::load(BufReader::new(File::open("foo.png")?), ImageFormat::Jpeg)?;
         counter += 1;
@@ -403,7 +533,7 @@ fn create_wheel(
     //let update = commands.register_one_shot_system(update_loading_data);
     //commands.run_system(update);
     println!("Wheels loaded");
-    
+
     game_state.set(LoadingState::LevelLoading);
 }
 
@@ -415,8 +545,14 @@ fn create_flippers(
     let window = window_query.single();
     let window_width = window.width();
     let window_height = window.height();
-    commands.spawn(SpriteBundle {
-        texture: asset_server.load("left-flipper.png"),
+    commands.spawn(FlipperBundle {
+        sprite: Sprite {
+            // texture: asset_server.load("/usr/tables/wheels/Sing Along (Gottlieb 1967).png"),
+            image: asset_server.load("left-flipper.png"),
+            ..default()
+        },
+        visibility: Visibility::Hidden,
+
         transform: Transform {
             translation: Vec3::new(
                 window_width - (window_width * 0.60) - 225.,
@@ -425,11 +561,18 @@ fn create_flippers(
             ),
             scale: (Vec3::new(0.5, 0.5, 1.0)),
             rotation: Quat::from_rotation_z(-0.25),
+            ..default()
         },
-        ..default()
+        flipper: Flipper,
     });
-    commands.spawn(SpriteBundle {
-        texture: asset_server.load("right-flipper.png"),
+
+    commands.spawn(FlipperBundle1 {
+        sprite: Sprite {
+            image: asset_server.load("right-flipper.png"),
+            ..default()
+        },
+        visibility: Visibility::Hidden,
+
         transform: Transform {
             translation: Vec3::new(
                 window_width - (window_width * 0.60),
@@ -438,8 +581,9 @@ fn create_flippers(
             ),
             scale: (Vec3::new(0.5, 0.5, 1.0)),
             rotation: Quat::from_rotation_z(0.25),
+            ..default()
         },
-        ..default()
+        flipper1: Flipper1,
     });
 }
 
@@ -545,31 +689,30 @@ pub fn frontend_index(
     tables.sort_by_key(|indexed| display_table_line(indexed).to_lowercase());
     Ok(tables)
 }
-/*
-fn create_info_box(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut materials: ResMut<Assets<ColorMaterial>>,
-                window_query: Query<&Window, With<PrimaryWindow>>,
-                mut contexts: EguiContexts, wtitle: String, wtext: String)
-{
-    egui::Window::new(wtitle).show(contexts.ctx_mut(), |ui| {
-        ui.label(wtext);
-
-    });
-
-    // info box
-
-}
-*/
 
 pub fn gui_update(
     mut commands: Commands,
     keys: Res<ButtonInput<KeyCode>>,
     time: Res<Time>,
-    mut query: Query<(&mut Visibility, &mut Wheel, &mut Transform), With<Wheel>>,
     window_query: Query<&Window, With<PrimaryWindow>>,
     mut app_exit_events: ResMut<Events<bevy::app::AppExit>>,
     mut set: ParamSet<(
-        Query<(&mut TableText, &mut Style), With<TableText>>,
-        Query<(&mut TableBlurb, &mut Style), With<TableBlurb>>,
+        Query<
+            (
+                &mut TableText,
+                &mut TextFont,
+                &mut Node,
+                &mut TextColor,
+                &mut Text,
+            ),
+            With<TextItemGold>,
+        >,
+        Query<(&mut TableBlurb, &mut Node), With<TextItemGhostWhite>>,
+    )>,
+    mut query: ParamSet<(
+        Query<(&mut Visibility, &mut Wheel, &mut Transform), With<Wheel>>,
+        Query<(&mut Transform, &mut Visibility), With<Flipper>>,
+        Query<(&mut Transform, &mut Visibility), With<Flipper1>>,
     )>,
     music_box_query: Query<&AudioSink>,
     mut contexts: EguiContexts,
@@ -577,8 +720,12 @@ pub fn gui_update(
     mut materials: ResMut<Assets<ColorMaterial>>,
     mut globals: ResMut<Globals>,
 ) {
+    let (_config_path, loaded_config) = config::load_config().unwrap().unwrap();
     let mut window = window_query.get_single().unwrap().clone();
     window.window_level = WindowLevel::Normal;
+    let mut wtitle = " ".to_owned();
+    let mut gametext = " ".to_owned();
+    let mut gameblurb = " ".to_owned();
 
     let width = window.width();
     let height = window.height();
@@ -597,17 +744,17 @@ pub fn gui_update(
 
     // Count entities
     let mut num = 1;
-    num += query.iter().count() as i16;
+    num += query.p0().iter().count() as i16;
 
     // Find current selection
-    for (visibility, wheel, transform) in query.iter() {
+    for (visibility, wheel, transform) in query.p0().iter() {
         if wheel.selected {
             selected_item = wheel.item_number;
         }
     }
     // If no selection, set it to item 0
     if selected_item == -2 {
-        for (visibility, mut wheel, transform) in query.iter_mut() {
+        for (visibility, mut wheel, transform) in query.p0().iter_mut() {
             if wheel.item_number == 0 {
                 wheel.selected = true;
                 selected_item = 0;
@@ -628,19 +775,12 @@ pub fn gui_update(
             }
             //   } else if keys.just_pressed(KeyCode::KeyN) {
             //       sink.play();
-        }
-
-        if keys.pressed(KeyCode::Digit1) {
-            create_info_box(
-                commands,
-                keys,
-                meshes,
-                materials,
-                &window.clone(),
-                contexts,
-                "Window Title".to_owned(),
-                "Window Text".to_owned(),
-            )
+        } else if keys.just_pressed(KeyCode::Digit1) {
+            if globals.game_running {
+                globals.game_running = false;
+            } else {
+                globals.game_running = true;
+            }
         } else if keys.just_pressed(KeyCode::ShiftRight) {
             selected_item += 1;
         } else if keys.just_pressed(KeyCode::ShiftLeft) {
@@ -660,8 +800,10 @@ pub fn gui_update(
             selected_item = num - 2;
         }
 
+        // for (mut visibility, mut wheel, mut transform) in query.iter_mut() {}
+
         // update currently selected item to new value
-        for (mut visibility, mut wheel, mut transform) in query.iter_mut() {
+        for (mut visibility, mut wheel, mut transform) in query.p0().iter_mut() {
             if wheel.item_number != selected_item {
                 wheel.selected = false;
                 *visibility = Visibility::Hidden;
@@ -676,12 +818,49 @@ pub fn gui_update(
                 //    println!("Selected {}",&wheel.launchpath.as_os_str().to_string_lossy());
             }
         }
+
+        for (mut transform, mut visibility) in query.p1().iter_mut() {
+            let wsize = globals.wheel_size;
+
+            transform.translation = Vec3::new(
+                ((wsize / 3.0) * -1.0),
+                ((-(height / 2.)) + (wsize / 4.)),
+                0.,
+            );
+            *visibility = Visibility::Visible;
+
+            //    let Ok(transform) = flipperset.p0().get_single() else {
+            //       return;
+            //   };
+            //let mut transform = flipperset.p0().get_single_mut().unwrap();
+        }
+
+        for (mut transform, mut visibility) in query.p2().iter_mut() {
+            let wsize = globals.wheel_size;
+
+            transform.translation =
+                Vec3::new((wsize / 3.0), ((-(height / 2.0)) + (wsize / 4.)), 0.);
+            *visibility = Visibility::Visible;
+
+            //    let Ok(transform) = flipperset.p0().get_single() else {
+            //       return;
+            //   };
+            //let mut transform = flipperset.p0().get_single_mut().unwrap();
+            println!("Transform {:?}", wsize);
+        }
+
         // change name of game
-        for (mut items, mut textstyle) in set.p0().iter_mut() {
+        for (mut items, mut font, mut textstyle, mut color, text) in set.p0().iter_mut() {
             if items.item_number != selected_item {
                 textstyle.display = Display::None;
+                *color = TextColor::from(GHOST_WHITE);
             } else {
+                *color = TextColor::from(GHOST_WHITE);
+                font.font_size = 20.0;
+                gametext = items.tabletext.clone();
+                gameblurb = items.tableblurb.clone();
                 textstyle.display = Display::Block;
+                wtitle = text.to_string();
             }
         }
 
@@ -716,12 +895,20 @@ pub fn gui_update(
         }
         counter = 0;
 
+        //   let mut wtitle = &gametext;
+        let mut wtext = &gameblurb;
+
         // clear all game name assets
-        for (_items, mut textstyle) in set.p1().iter_mut() {
+        for (items, mut fontsize, mut textstyle, mut color, _text) in set.p0().iter_mut() {
             if num > 21 {
                 textstyle.display = Display::None;
+                fontsize.font_size = 20.0;
+                *color = TextColor::from(GHOST_WHITE);
             } else {
                 textstyle.display = Display::Block;
+                fontsize.font_size = 20.0;
+                *color = TextColor::from(GHOST_WHITE);
+
                 textstyle.top = Val::Px(255. + (((counter as f32) + 1.) * 20.));
                 counter += 1;
             }
@@ -729,17 +916,31 @@ pub fn gui_update(
 
         if num > 21 {
             for _name in names {
-                for (items, mut text_style) in set.p1().iter_mut() {
+                for (items, mut fontsize, mut text_style, mut color, text) in set.p0().iter_mut() {
                     for (index, item) in names.iter().enumerate().take(9 + 1) {
                         if items.item_number == *item {
+                            //wtitle = items;
+                            *color = TextColor::from(GHOST_WHITE);
                             text_style.top = Val::Px(25. + (((index as f32) + 1.) * 20.));
+                            fontsize.font_size = 15.0;
                             text_style.display = Display::Block;
                             //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
+                        }
+                    }
+                    for (index, item) in names.iter().enumerate().skip(10) {
+                        if items.item_number == *item {
+                            fontsize.font_size = 25.0;
+                            *color = TextColor::from(GOLD);
+                            text_style.top = Val::Px(255. + (((index as f32) - 10.5) * 20.));
+                            text_style.display = Display::Block;
+                            break;
                         }
                     }
 
                     for (index, item) in names.iter().enumerate().skip(11) {
                         if items.item_number == *item {
+                            *color = TextColor::from(GHOST_WHITE);
+                            fontsize.font_size = 15.0;
                             text_style.top = Val::Px(255. + (((index as f32) - 10.) * 20.));
                             text_style.display = Display::Block;
                             //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
@@ -750,11 +951,24 @@ pub fn gui_update(
         }
         //  counter += 1;
 
+        if globals.game_running {
+            create_info_box(
+                commands,
+                keys,
+                meshes,
+                materials,
+                &window.clone(),
+                contexts,
+                wtitle,
+                gametext.to_owned(),
+            );
+        };
+
         if launchit {
-            if globals.game_running {
-                println!("Game running");
-                return;
-            };
+            //if globals.game_running {
+            //    println!("Game running");
+            //    return;
+            //};
             let mut game_running = globals.game_running;
             globals.game_running = true;
             let mut ispaused: bool = false;
@@ -762,7 +976,7 @@ pub fn gui_update(
                 ispaused = sink.is_paused();
                 sink.pause();
             };
-            for (visibility, wheel, transform) in query.iter() {
+            for (visibility, wheel, transform) in query.p0().iter() {
                 if wheel.item_number == selected_item {
                     println!(
                         "Launching {}",
@@ -771,27 +985,27 @@ pub fn gui_update(
                     println!("Hide window");
                     window.visible = false;
 
-                    let (_config_path, loaded_config) = config::load_config().unwrap().unwrap();
                     let (tx, rx) = mpsc::channel();
                     let tx = tx.clone();
                     let path = wheel.launch_path.clone();
                     let mut global = globals.game_running.clone();
+                    let (_config_path, loaded_config) = config::load_config().unwrap().unwrap();
                     let executable = loaded_config.vpx_executable; // .executable.clone();
 
                     let pin_thread = std::thread::spawn(move || {
                         launch(&path, &executable, None);
-                        thread::sleep(Duration::from_millis(2000 as u64));
+                        thread::sleep(Duration::from_millis(2 as u64));
 
                         println!("Vpinball done, sending event");
                         tx.send(1).unwrap();
-                        //tx.send(1);
+
                         window.visible = true;
                         true
                     });
-                    if pin_thread.join().unwrap() == true {
-                        globals.game_running = false;
-                    }
-                    println!("game_running {}", globals.game_running);
+                    //  if pin_thread.join().unwrap() == true {
+                    //      globals.game_running = false;
+                    //  }
+                    //  println!("game_running {}", globals.game_running);
                 }
             }
             if let Ok(sink) = music_box_query.get_single() {
@@ -809,12 +1023,13 @@ enum LoadingState {
     LevelIntitializing,
     LevelLoading,
     LevelReady,
+    LevelMenu,
 }
 
 #[derive(AssetCollection, Resource)]
 struct ImageAssets {
-  #[asset(key = "wheel")]
-  wheel: Handle<Image>,
+    #[asset(key = "wheel")]
+    wheel: Handle<Image>,
 }
 
 #[derive(Resource, Debug, Default)]
@@ -855,7 +1070,7 @@ fn unload_current_level(
     // mut loading_state: ResMut<LoadingState>,
     entities: Query<Entity, With<LevelComponents>>,
 ) {
-   // *loading_state = LoadingState::LevelLoading;
+    // *loading_state = LoadingState::LevelLoading;
     for entity in entities.iter() {
         commands.entity(entity).despawn_recursive();
     }
@@ -864,13 +1079,16 @@ fn unload_current_level(
 // Monitors current loading status of assets.
 fn update_loading_data(
     mut commands: Commands,
+    mut dialog: ResMut<DialogBox>,
     mut loading_data: ResMut<LoadingData>,
     mut game_state: ResMut<NextState<LoadingState>>,
-   // mut loading_state: ResMut<LoadingState>,
+    // mut loading_state: ResMut<LoadingState>,
     asset_server: Res<AssetServer>,
     pipelines_ready: Res<PipelinesReady>,
     mut level_data: Res<LevelData>,
 ) {
+    dialog.title = "Loaping...".to_owned();
+    dialog.text = "test".to_owned();
     if !loading_data.loading_assets.is_empty() || !pipelines_ready.0 {
         // If we are still loading assets / pipelines are not fully compiled,
         // we reset the confirmation frame count.
@@ -888,10 +1106,10 @@ fn update_loading_data(
         }
 
         // Remove all loaded assets from the loading_assets list.
-        if pop_list.len()>0 {
+        if !pop_list.is_empty() {
+            println!("pop list {:?}", pop_list[0]);
             loading_data.loading_assets.remove(pop_list[0]);
-
-        }   
+        }
 
         // If there are no more assets being monitored, and pipelines
         // are compiled, then start counting confirmation frames.
@@ -903,8 +1121,6 @@ fn update_loading_data(
             game_state.set(LoadingState::LevelReady);
         }
     }
-        
-
 }
 
 // Marker tag for loading screen components.
@@ -912,12 +1128,14 @@ fn update_loading_data(
 struct LoadingScreen;
 
 // Spawns the necessary components for the loading screen.
-fn load_loading_screen(mut commands: Commands) {
-    let text_style = TextStyle {
+fn load_loading_screen(mut commands: Commands, mut dialog: ResMut<DialogBox>) {
+    let text_style = TextFont {
         font_size: 80.0,
         ..default()
     };
 
+    let title = &dialog.title;
+    let text = &dialog.text;
     // Spawn the UI and Loading screen camera.
     /*   commands.spawn((
             Camera2dBundle {
@@ -931,44 +1149,37 @@ fn load_loading_screen(mut commands: Commands) {
         ));
     */
     // Spawn the UI that will make up the loading screen.
-    commands
-        .spawn((
-            NodeBundle {
-                background_color: BackgroundColor(Color::BLACK),
-                style: Style {
-                    height: Val::Percent(100.0),
-                    width: Val::Percent(100.0),
-                    justify_content: JustifyContent::Center,
-                    align_items: AlignItems::Center,
-                    ..default()
-                },
-                ..default()
-            },
-            LoadingScreen,
-        ))
-        .with_children(|parent| {
-            parent.spawn(TextBundle::from_sections([TextSection::new(
-                "Loading...",
-                text_style.clone(),
-            )]));
-        });
+    commands.spawn((
+        Node {
+            //          background_color: BackgroundColor(Color::BLACK),
+            height: Val::Percent(100.0),
+            width: Val::Percent(100.0),
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Center,
+            ..default()
+        },
+        LoadingScreen,
+        Text::new(title),
+        //              text_style.clone(),
+    ));
 }
 
 // Determines when to show the loading screen
 fn display_loading_screen(
     mut loading_screen: Query<&mut Visibility, With<LoadingScreen>>,
+
     mut loading_state: ResMut<State<LoadingState>>,
-  //  loading_state: Res<LoadingState>,
+    //  loading_state: Res<LoadingState>,
 ) {
-    println!("loading state {:?}",loading_state.get());
+    //println!("loading state {:?}", loading_state.get());
     match loading_state.get() {
         LoadingState::LevelLoading => {
             *loading_screen.get_single_mut().unwrap() = Visibility::Visible;
+            *loading_screen.get_single_mut().unwrap() = Visibility::Visible;
         }
         LoadingState::LevelReady => *loading_screen.get_single_mut().unwrap() = Visibility::Hidden,
-        _ => {},
+        _ => {}
     };
-
 }
 
 mod pipelines_ready {
@@ -1003,10 +1214,10 @@ fn level_selection(
     mut commands: Commands,
     keyboard: Res<ButtonInput<KeyCode>>,
     level_data: Res<LevelData>,
-   // loading_state: Res<LoadingState>,
+    // loading_state: Res<LoadingState>,
 ) {
     // Only trigger a load if the current level is fully loaded.
- /*    if let LoadingState::LevelReady = loading_state.as_ref() {
+    /*    if let LoadingState::LevelReady = loading_state.as_ref() {
         commands.run_system(level_data.level_1_id);
     }
     */
@@ -1032,7 +1243,7 @@ pub fn guifrontend(
     let vpinball_ini_path = config.vpinball_ini_file();
     let vpinball_config = VPinballConfig::read(&vpinball_ini_path).unwrap();
     let mut position = WindowPosition::default();
-    let mut mode = WindowMode::Fullscreen;
+    let mut mode = WindowMode::Fullscreen(MonitorSelection::Primary);
     let mut resolution = WindowResolution::default();
     if let Some(playfield) = vpinball_config.get_playfield_info() {
         if let (Some(x), Some(y)) = (playfield.x, playfield.y) {
@@ -1047,7 +1258,7 @@ pub fn guifrontend(
             resolution = WindowResolution::new(width as f32, height as f32);
         }
         mode = if playfield.fullscreen {
-            WindowMode::Fullscreen
+            WindowMode::Fullscreen(MonitorSelection::Primary)
         } else {
             WindowMode::Windowed
         };
@@ -1056,14 +1267,14 @@ pub fn guifrontend(
         "Positioning window at {:?}, resolution {:?}",
         position, resolution
     );
-    
+
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 title: "VPXTOOL".to_string(),
                 // window_level: WindowLevel::AlwaysOnTop,
                 resolution,
-                mode,
+                mode, // WindowMode::Windowed,
                 position,
                 ..Default::default()
             }),
@@ -1083,6 +1294,10 @@ pub fn guifrontend(
             wheel_size: 100.0, // will be updated when loading wheels
             game_running: false,
         })
+        .insert_resource(DialogBox {
+            title: "Loading...".to_owned(),
+            text: "blank".to_owned(),
+        })
         //       .insert_resource(ClearColor(Color::srgb(0.9, 0.3, 0.6)))
         .add_event::<StreamEvent>()
         // TODO why does this happen so late?
@@ -1101,9 +1316,19 @@ pub fn guifrontend(
         //)
         //.add_systems(Update, volume_system)
         //   .add_systems(Update,create_wheel)
-        .add_systems(Update, (display_loading_screen, read_stream, spawn_text, move_text))
-        .add_systems(Update, update_loading_data.run_if(in_state(LoadingState::LevelLoading)))
-        .add_systems(Update, gui_update.run_if(in_state(LoadingState::LevelReady)))
+        .add_systems(
+            Update,
+            //(display_loading_screen, read_stream, spawn_text, move_text),
+            (display_loading_screen, read_stream),
+        )
+        .add_systems(
+            Update,
+            update_loading_data.run_if(in_state(LoadingState::LevelLoading)),
+        )
+        .add_systems(
+            Update,
+            gui_update.run_if(in_state(LoadingState::LevelReady)),
+        )
         .init_state::<LoadingState>()
         .run();
     /*     eframe::run_native(
@@ -1127,7 +1352,7 @@ fn play_background_audio(asset_server: Res<AssetServer>, mut commands: Commands)
     };
 
     commands.spawn(AudioBundle {
-        source: asset_server.load("Pinball.ogg"),
+        source: bevy::prelude::AudioPlayer(asset_server.load("Pinball.ogg")),
         settings: initialsettings,
     });
 }
@@ -1157,7 +1382,7 @@ struct StreamEvent(u32);
 use crossbeam_channel::{bounded, Receiver, Sender};
 
 fn setup(mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn(Camera2d::default());
 
     let (tx, rx) = bounded::<u32>(10);
 
@@ -1184,11 +1409,11 @@ fn read_stream(
     }
 }
 
-fn spawn_text(mut commands: Commands, mut reader: EventReader<StreamEvent>) {
-    let text_style = TextStyle::default();
+/*  fn spawn_text(mut commands: Commands, mut reader: EventReader<StreamEvent>) {
+    let text_style = TextFont::default();
 
     for (per_frame, event) in reader.read().enumerate() {
-        commands.spawn(Text2dBundle {
+        commands.spawn(Text2d {
             text: Text::from_section(event.0.to_string(), text_style.clone())
                 .with_justify(JustifyText::Center),
             transform: Transform::from_xyz(per_frame as f32 * 100.0, 300.0, 0.0),
@@ -1203,12 +1428,14 @@ fn move_text(
     time: Res<Time>,
 ) {
     for (entity, mut position) in &mut texts {
-        position.translation -= Vec3::new(0.0, 100.0 * time.delta_seconds(), 0.0);
+        position.translation -= Vec3::new(0.0, 100.0 * time.delta_secs(), 0.0);
         if position.translation.y < -300.0 {
             commands.entity(entity).despawn();
         }
     }
 }
+
+*/
 
 fn launch(selected_path: &PathBuf, vpinball_executable: &Path, fullscreen: Option<bool>) {
     println!("Launching {}", selected_path.display());
