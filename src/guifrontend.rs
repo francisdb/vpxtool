@@ -828,11 +828,6 @@ pub fn gui_update(
                 0.,
             );
             *visibility = Visibility::Visible;
-
-            //    let Ok(transform) = flipperset.p0().get_single() else {
-            //       return;
-            //   };
-            //let mut transform = flipperset.p0().get_single_mut().unwrap();
         }
 
         for (mut transform, mut visibility) in query.p2().iter_mut() {
@@ -841,12 +836,6 @@ pub fn gui_update(
             transform.translation =
                 Vec3::new((wsize / 3.0), ((-(height / 2.0)) + (wsize / 4.)), 0.);
             *visibility = Visibility::Visible;
-
-            //    let Ok(transform) = flipperset.p0().get_single() else {
-            //       return;
-            //   };
-            //let mut transform = flipperset.p0().get_single_mut().unwrap();
-            println!("Transform {:?}", wsize);
         }
 
         // change name of game
