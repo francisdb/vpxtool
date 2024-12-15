@@ -15,6 +15,7 @@ use bevy_egui::{egui, EguiContexts, EguiPlugin};
 use image::ImageReader;
 use indicatif::{ProgressBar, ProgressStyle};
 use menus::*;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
@@ -271,6 +272,7 @@ fn create_wheel(
     // assets: Res<Assets<Image>>,
     config: Res<Config>,
     vpx_tables: Res<VpxTables>,
+    mut asset_paths: ResMut<AssetPaths>,
 ) {
     let level_data = LevelData {
         level_1_id: commands.register_system(gui_update),
@@ -413,6 +415,10 @@ fn create_wheel(
                 why
             ),
         };
+
+        asset_paths
+            .paths
+            .insert(handle.clone().id(), temporary_table_name.clone().to_owned());
 
         // Wheel
         commands.spawn(WheelBundle {
@@ -695,6 +701,8 @@ pub fn gui_update(
     keys: Res<ButtonInput<KeyCode>>,
     time: Res<Time>,
     window_query: Query<&Window, With<PrimaryWindow>>,
+    mut dialog: ResMut<DialogBox>,
+
     mut app_exit_events: ResMut<Events<bevy::app::AppExit>>,
     mut set: ParamSet<(
         Query<
@@ -959,7 +967,7 @@ pub fn gui_update(
             //    return;
             //};
             let mut game_running = globals.game_running;
-            globals.game_running = true;
+            //   globals.game_running = true;
             let mut ispaused: bool = false;
             if let Ok(sink) = music_box_query.get_single() {
                 ispaused = sink.is_paused();
@@ -986,7 +994,10 @@ pub fn gui_update(
                         thread::sleep(Duration::from_millis(2 as u64));
 
                         println!("Vpinball done, sending event");
-                        tx.send(1).unwrap();
+                        match tx.send(1) {
+                            Ok(_tx1) => tx.send(1).unwrap(),
+                            _ => (),
+                        };
 
                         window.visible = true;
                         true
@@ -1049,6 +1060,17 @@ struct LevelData {
     level_1_id: SystemId,
 }
 
+#[derive(Resource, Default)]
+pub struct AssetPaths {
+    pub paths: HashMap<AssetId<Image>, String>,
+}
+
+#[derive(Resource)]
+pub struct AssetPath {
+    pub handle: Handle<Image>,
+    pub path: OsString,
+}
+
 // Marker component for easier deletion of entities.
 #[derive(Component)]
 struct LevelComponents;
@@ -1075,9 +1097,10 @@ fn update_loading_data(
     asset_server: Res<AssetServer>,
     pipelines_ready: Res<PipelinesReady>,
     mut level_data: Res<LevelData>,
+    asset_paths: Res<AssetPaths>,
 ) {
-    dialog.title = "Loaping...".to_owned();
-    dialog.text = "test".to_owned();
+    dialog.title = "Loading...".to_owned();
+    //dialog.text = "test".to_owned();
     if !loading_data.loading_assets.is_empty() || !pipelines_ready.0 {
         // If we are still loading assets / pipelines are not fully compiled,
         // we reset the confirmation frame count.
@@ -1089,6 +1112,8 @@ fn update_loading_data(
         for (index, asset) in loading_data.loading_assets.iter().enumerate() {
             if let Some(state) = asset_server.get_load_states(asset) {
                 if let bevy::asset::RecursiveDependencyLoadState::Loaded = state.2 {
+                    let id = asset.id().typed_unchecked::<Image>();
+                    dialog.text = asset_paths.paths.get(&id).cloned().unwrap();
                     pop_list.push(index);
                 }
             }
@@ -1117,56 +1142,88 @@ fn update_loading_data(
 struct LoadingScreen;
 
 // Spawns the necessary components for the loading screen.
-fn load_loading_screen(mut commands: Commands, mut dialog: ResMut<DialogBox>) {
+fn load_loading_screen(
+    mut commands: Commands,
+    mut dialog: ResMut<DialogBox>,
+    mut contexts: EguiContexts,
+    asset_server: Res<AssetServer>,
+    window_query: Query<&Window, With<PrimaryWindow>>,
+) {
     let text_style = TextFont {
         font_size: 80.0,
         ..default()
     };
+    let window = window_query.single();
 
     let title = &dialog.title;
     let text = &dialog.text;
-    // Spawn the UI and Loading screen camera.
-    /*   commands.spawn((
-            Camera2dBundle {
-                camera: Camera {
-                    order: 1,
-                    ..default()
-                },
+
+    let width = window.resolution.width();
+    let height = window.resolution.height();
+    let mut ctx = contexts.ctx_mut();
+    let raw_input = egui::RawInput::default();
+    //let x = TextColor::from(GHOST_WHITE);
+
+    // Check if the texture is loaded if let Some(texture) = textures.get(texture_handle) { // Display the image using egui egui::Window::new("Image Window").show(egui_context.ctx_mut(), |ui| { let texture_id = egui::TextureId::User(texture_handle.id); ui.image(texture_id, [texture.size.width as f32, texture.size.height as f32
+    //let texture_handle: Handle<Texture> = asset_server.load("//usr/tables/wheels/blankwheel.png");
+    let x: Handle<Image> = asset_server.load("left-flipper.png");
+
+    /*   commands.spawn(FlipperBundle1 {
+            sprite: Sprite {
+                image: asset_server.load("right-flipper.png"),
                 ..default()
             },
-            LoadingScreen,
-        ));
+            visibility: Visibility::Visible,
+
+            transform: Transform {
+                translation: Vec3::new(
+                    100.0, 100.0,
+                    //  window_width - (window_width * 0.60),
+                    // window_height * 0.25 + 60.,
+                    0.,
+                ),
+                scale: (Vec3::new(0.5, 0.5, 1.0)),
+                rotation: Quat::from_rotation_z(0.25),
+                ..default()
+            },
+            flipper1: Flipper1,
+        });
     */
-    // Spawn the UI that will make up the loading screen.
-    commands.spawn((
-        Node {
-            //          background_color: BackgroundColor(Color::BLACK),
-            height: Val::Percent(100.0),
-            width: Val::Percent(100.0),
-            justify_content: JustifyContent::Center,
-            align_items: AlignItems::Center,
-            ..default()
-        },
-        LoadingScreen,
-        Text::new(title),
-        //              text_style.clone(),
-    ));
+
+    egui::Area::new(egui::Id::new("my area"))
+        .current_pos(egui::Pos2::new((width / 3.0) - 10.0, (height / 3.0)))
+        .show(&ctx, |ui| {
+            ui.label(
+                egui::RichText::new(title)
+                    .size(50.0)
+                    .color(egui::Color32::WHITE),
+            );
+            ui.label(
+                egui::RichText::new(text)
+                    .size(20.0)
+                    .color(egui::Color32::WHITE),
+            );
+            //ui.image(("file://assets/left-flipper.png"));
+
+            //   if ui.button("Click me").clicked() {
+            // take some action here
+            //   }
+        });
 }
 
 // Determines when to show the loading screen
 fn display_loading_screen(
-    mut loading_screen: Query<&mut Visibility, With<LoadingScreen>>,
-
+    // mut loading_screen: Query<&mut Visibility, With<LoadingScreen>>,
     mut loading_state: ResMut<State<LoadingState>>,
     //  loading_state: Res<LoadingState>,
 ) {
     //println!("loading state {:?}", loading_state.get());
     match loading_state.get() {
         LoadingState::LevelLoading => {
-            *loading_screen.get_single_mut().unwrap() = Visibility::Visible;
-            *loading_screen.get_single_mut().unwrap() = Visibility::Visible;
+            //      *loading_screen.get_single_mut().unwrap() = Visibility::Hidden;
+            //     *loading_screen.get_single_mut().unwrap() = Visibility::Hidden;
         }
-        LoadingState::LevelReady => *loading_screen.get_single_mut().unwrap() = Visibility::Hidden,
+        //LoadingState::LevelReady => *loading_screen.get_single_mut().unwrap() = Visibility::Hidden,
         _ => {}
     };
 }
@@ -1269,6 +1326,9 @@ pub fn guifrontend(
             }),
             ..Default::default()
         }))
+        .insert_resource(AssetPaths {
+            paths: HashMap::new(),
+        })
         .insert_resource(Config { config })
         .insert_resource(VpxConfig {
             config: vpinball_config,
@@ -1295,7 +1355,10 @@ pub fn guifrontend(
         .add_systems(Startup, (create_wheel, create_flippers))
         .insert_resource(LoadingData::new(5))
         //       .insert_resource(ClearColor(Color::srgb(0.9, 0.3, 0.6)))
-        .add_systems(Startup, (load_loading_screen))
+        .add_systems(
+            Update,
+            (load_loading_screen).run_if(in_state(LoadingState::LevelLoading)),
+        )
         .add_systems(Startup, play_background_audio)
         //.add_systems(Update, gui_update)
         //.add_systems(Update,(guiupdate,update_loading_data, level_selection,display_loading_screen),)

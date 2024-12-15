@@ -12,6 +12,17 @@ use bevy_asset_loader::prelude::*;
 use bevy_egui::egui::Align2;
 use bevy_egui::{egui, EguiContexts, EguiPlugin};
 
+pub fn create_dmd(
+    mut commands: Commands,
+    keys: Res<ButtonInput<KeyCode>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+    window: &Window,
+    mut contexts: EguiContexts,
+) {
+    let dmd = (128, 32);
+}
+
 pub fn create_info_box(
     mut commands: Commands,
     keys: Res<ButtonInput<KeyCode>>,
