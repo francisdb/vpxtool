@@ -7,10 +7,11 @@ use colored::Colorize;
 use console::Emoji;
 use git_version::git_version;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
+use pinmame_nvram::dips::get_all_dip_switches;
 use std::error::Error;
 use std::ffi::OsStr;
 use std::fmt::Display;
-use std::fs::{metadata, File};
+use std::fs::{metadata, File, OpenOptions};
 use std::io;
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
@@ -72,6 +73,9 @@ const CMD_IMAGES_WEBP: &str = "webp";
 
 const CMD_GAMEDATA: &str = "gamedata";
 const CMD_GAMEDATA_SHOW: &str = "show";
+
+const CMD_DIPSWITCHES: &str = "dipswitches";
+const CMD_DIPSWITCHES_SHOW: &str = "show";
 
 const CMD_ROMNAME: &str = "romname";
 
@@ -761,6 +765,19 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             }
             _ => unreachable!(),
         },
+        Some((CMD_DIPSWITCHES, sub_matches)) => match sub_matches.subcommand() {
+            Some((CMD_DIPSWITCHES_SHOW, sub_matches)) => {
+                let path = sub_matches
+                    .get_one::<String>("NVRAMPATH")
+                    .map(|s| s.as_str())
+                    .unwrap_or_default();
+                let expanded_path = expand_path_exists(path)?;
+                let summary = show_dip_switches(&expanded_path)?;
+                println!("{}", summary)?;
+                Ok(ExitCode::SUCCESS)
+            }
+            _ => unreachable!(),
+        },
         Some((CMD_ROMNAME, sub_matches)) => {
             let path = sub_matches
                 .get_one::<String>("VPXPATH")
@@ -1061,6 +1078,19 @@ fn build_command() -> Command {
                         .about("Show the gamedata for a vpx file")
                         .arg(
                             arg!(<VPXPATH> "The path to the vpx file")
+                                .required(true),
+                        ),
+                ),
+        )
+        .subcommand(
+            Command::new(CMD_DIPSWITCHES)
+                .subcommand_required(true)
+                .about("NVRAM file DIP switch related commands")
+                .subcommand(
+                    Command::new(CMD_DIPSWITCHES_SHOW)
+                        .about("Show the DIP switches for a nvram file")
+                        .arg(
+                            arg!(<NVRAMPATH> "The path to the nvram file")
                                 .required(true),
                         ),
                 ),
@@ -1592,6 +1622,23 @@ pub fn run_diff(
         .arg(vbs_filename)
         .output()
         .map(|o| o.stdout)
+}
+
+fn show_dip_switches(nvram: &PathBuf) -> io::Result<String> {
+    let mut nvram_file = OpenOptions::new().read(true).open(nvram)?;
+    let switches = get_all_dip_switches(&mut nvram_file)?;
+
+    let mut lines = Vec::new();
+    for s in switches {
+        lines.push(format!(
+            "DIP #{}: {}",
+            s.nr,
+            if s.on { "ON" } else { "OFF" }
+        ));
+    }
+
+    let summary = lines.join("\n");
+    Ok(summary)
 }
 
 #[cfg(test)]
