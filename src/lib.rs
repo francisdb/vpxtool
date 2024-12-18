@@ -1,7 +1,14 @@
+// Main module for the command line interface
+//
+// We try to adhere to the Command Line Interface Guidelines
+// https://clig.dev/#arguments-and-flags
+// https://clig.dev/#subcommands
+//
 use crate::config::{ResolvedConfig, SetupConfigResult};
 use crate::indexer::{IndexError, Progress};
 use crate::patcher::patch_vbs_file;
 use base64::Engine;
+use clap::builder::Str;
 use clap::{arg, Arg, ArgMatches, Command};
 use colored::Colorize;
 use console::Emoji;
@@ -340,39 +347,20 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 println!("{}", code)?;
                 Ok(ExitCode::SUCCESS)
             }
-            Some((CMD_SCRIPT_EXTRACT, sub_matches)) => {
-                let path = sub_matches
-                    .get_one::<String>("VPXPATH")
-                    .map(|s| s.as_str())
-                    .unwrap_or_default();
-
-                let expanded_path = expand_path_exists(path)?;
-                match extractvbs(&expanded_path, false, None) {
-                    Ok(ExtractResult::Existed(vbs_path)) => {
-                        let warning =
-                            format!("EXISTED {}", vbs_path.display()).truecolor(255, 125, 0);
-                        println!("{}", warning)?;
-                        Ok(ExitCode::SUCCESS)
-                    }
-                    Ok(ExtractResult::Extracted(vbs_path)) => {
-                        println!("CREATED {}", vbs_path.display())?;
-                        Ok(ExitCode::SUCCESS)
-                    }
-                    Err(e) => {
-                        let warning = format!("Error extracting vbs: {}", e).red();
-                        eprintln!("{}", warning)?;
-                        Ok(ExitCode::FAILURE)
-                    }
-                }
-            }
+            Some((CMD_SCRIPT_EXTRACT, sub_matches)) => handle_extractvbs(sub_matches),
             Some((CMD_SCRIPT_IMPORT, sub_matches)) => {
                 let path = sub_matches
                     .get_one::<String>("VPXPATH")
                     .map(|s| s.as_str())
                     .unwrap_or_default();
 
+                let vbs_path_opt = sub_matches.get_one::<String>("VBSPATH").map(|s| {
+                    let path = s.as_str();
+                    expand_path(path)
+                });
+
                 let expanded_path = expand_path_exists(path)?;
-                match importvbs(&expanded_path, None) {
+                match importvbs(&expanded_path, vbs_path_opt) {
                     Ok(vbs_path) => {
                         println!("IMPORTED {}", vbs_path.display())?;
                         Ok(ExitCode::SUCCESS)
@@ -398,7 +386,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 if vbs_path.exists() {
                     open_or_fail(&vbs_path, config)
                 } else {
-                    extractvbs(&expanded_vpx_path, false, None)?;
+                    extractvbs(&expanded_vpx_path, None, false)?;
                     open_or_fail(&vbs_path, config)
                 }
             }
@@ -420,7 +408,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     .unwrap_or_default();
 
                 let expanded_path = expand_path_exists(path)?;
-                let vbs_path = match extractvbs(&expanded_path, false, None) {
+                let vbs_path = match extractvbs(&expanded_path, None, false) {
                     Ok(ExtractResult::Existed(vbs_path)) => {
                         let warning =
                             format!("EXISTED {}", vbs_path.display()).truecolor(255, 125, 0);
@@ -538,32 +526,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 }
             }
         }
-        Some((CMD_EXTRACT_VBS, sub_matches)) => {
-            let overwrite = sub_matches.get_flag("OVERWRITE");
-            let paths: Vec<&str> = sub_matches
-                .get_many::<String>("VPXPATH")
-                .unwrap_or_default()
-                .map(|v| v.as_str())
-                .collect::<Vec<_>>();
-            for path in paths {
-                let expanded_path = expand_path_exists(path)?;
-                match extractvbs(&expanded_path, overwrite, None) {
-                    Ok(ExtractResult::Existed(vbs_path)) => {
-                        let warning =
-                            format!("EXISTED {}", vbs_path.display()).truecolor(255, 125, 0);
-                        println!("{}", warning)?;
-                    }
-                    Ok(ExtractResult::Extracted(vbs_path)) => {
-                        println!("CREATED {}", vbs_path.display())?;
-                    }
-                    Err(e) => {
-                        let warning = format!("Error extracting vbs: {}", e).red();
-                        eprintln!("{}", warning)?;
-                    }
-                }
-            }
-            Ok(ExitCode::SUCCESS)
-        }
+        Some((CMD_EXTRACT_VBS, sub_matches)) => handle_extractvbs(sub_matches),
         Some((CMD_IMPORT_VBS, sub_matches)) => {
             let path: &str = sub_matches.get_one::<String>("VPXPATH").unwrap().as_str();
             let expanded_path = expand_path_exists(path)?;
@@ -907,12 +870,7 @@ fn build_command() -> Command {
                         ),
                 )
                 .subcommand(
-                    Command::new(CMD_SCRIPT_EXTRACT)
-                        .about("Extract the table vpx script")
-                        .arg(
-                            arg!(<VPXPATH> "The path to the vpx file")
-                                .required(true),
-                        ),
+                    extract_script_command(CMD_SCRIPT_EXTRACT),
                 )
                 .subcommand(
                     Command::new(CMD_SCRIPT_IMPORT)
@@ -920,6 +878,10 @@ fn build_command() -> Command {
                         .arg(
                             arg!(<VPXPATH> "The path to the vpx file")
                                 .required(true),
+                        )
+                        .arg(
+                            arg!([VBSPATH] "The optional path to the vbs file to import. Defaults to the vpx file path with the extension changed to .vbs.")
+                                .required(false),
                         ),
                 )
                 .subcommand(
@@ -972,21 +934,7 @@ fn build_command() -> Command {
                 ),
         )
         .subcommand(
-            Command::new(CMD_EXTRACT_VBS)
-                .about("Extracts the vbs from a vpx file next to it")
-                .arg(
-                    Arg::new("OVERWRITE")
-                        .short('o')
-                        .long("overwrite")
-                        .num_args(0)
-                        .default_value("false")
-                        .help("(Default: false) Will overwrite existing .vbs files if true, will skip the table file if false."),
-                )
-                .arg(
-                    arg!(<VPXPATH> "The path(s) to the vpx file(s)")
-                        .required(true)
-                        .num_args(1..),
-                ),
+            extract_script_command(CMD_EXTRACT_VBS),
         )
         .subcommand(
             Command::new(CMD_IMPORT_VBS)
@@ -1103,6 +1051,35 @@ fn build_command() -> Command {
         )
 }
 
+fn extract_script_command(name: impl Into<Str>) -> Command {
+    Command::new(name)
+        .about("Extracts the script from a vpx file.")
+        .long_about("Extracts the script from a vpx file by default into a vbs file next to it. Scripts placed next to the vpx file with the same name are considered sidecar scripts and will be picked up by Visual Pinball instead of the script inside the vpx file.")
+        .arg(
+            Arg::new("FORCE")
+                .short('f')
+                .long("force")
+                .num_args(0)
+                .default_value("false")
+                .help("Will overwrite existing .vbs file if set."),
+        )
+        .arg(
+            arg!(<VPXPATH> "The path to the vpx file")
+                .required(true),
+        )
+        .arg(
+            arg!([VBSPATH] "The optional path to the vbs file to write. Defaults to the vpx file path with the extension changed to .vbs. This option is mutually exclusive with DIRECTORY.")
+                .required(false),
+        )
+        .arg(
+            Arg::new("OUTPUT_DIRECTORY")
+                .long("output-dir")
+                .num_args(1)
+                .required(false)
+                .help("The directory to extract the vbs file to. Only if no VBSPATH is provided"),
+        )
+}
+
 fn open_or_fail(vbs_path: &Path, config: Option<&ResolvedConfig>) -> io::Result<ExitCode> {
     match open_editor(vbs_path, config) {
         Ok(_) => Ok(ExitCode::SUCCESS),
@@ -1119,14 +1096,52 @@ fn fail_with_error(message: impl Display, err: impl Error) -> io::Result<ExitCod
 }
 
 fn fail<M: AsRef<str>>(message: M) -> io::Result<ExitCode> {
-    let warning = message.as_ref().red();
-    eprintln!("{}", warning)?;
+    let error = "error:".red();
+    eprintln!("{} {}", error, message.as_ref())?;
     Ok(ExitCode::FAILURE)
 }
 
 fn new(vpx_file_path: &str) -> io::Result<()> {
     // TODO check if file exists and prompt to overwrite / add option to force
     vpx::new_minimal_vpx(vpx_file_path)
+}
+
+fn handle_extractvbs(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
+    let force = sub_matches.get_flag("FORCE");
+    let vpx_path = sub_matches.get_one::<String>("VPXPATH").map(expand_path);
+    let vbs_path = sub_matches.get_one::<String>("VBSPATH").map(expand_path);
+    let directory = sub_matches
+        .get_one::<String>("OUTPUT_DIRECTORY")
+        .map(expand_path);
+    let expanded_vpx_path = path_exists(vpx_path.expect("should be checked by clap"))?;
+    if vbs_path.is_some() && directory.is_some() {
+        return fail("Conflicting VBSPATH and DIRECTORY options, only one can be used");
+    }
+
+    let vbs_path_opt = vbs_path.or_else(|| {
+        directory.map(|dir| {
+            let mut path = dir;
+            path.push(expanded_vpx_path.file_stem().unwrap());
+            path.set_extension("vbs");
+            path
+        })
+    });
+
+    match extractvbs(&expanded_vpx_path, vbs_path_opt, force) {
+        Ok(ExtractResult::Existed(vbs_path)) => {
+            let warning = format!("EXISTED {}", vbs_path.display()).truecolor(255, 125, 0);
+            println!("{}", warning)?;
+        }
+        Ok(ExtractResult::Extracted(vbs_path)) => {
+            println!("CREATED {}", vbs_path.display())?;
+        }
+        Err(e) => {
+            let warning = format!("Error extracting vbs: {}", e).red();
+            eprintln!("{}", warning)?;
+        }
+    }
+
+    Ok(ExitCode::SUCCESS)
 }
 
 fn extract_directb2s(expanded_path: &PathBuf) -> io::Result<()> {
@@ -1276,26 +1291,34 @@ fn os_independent_file_name(file_path: String) -> Option<String> {
     file_path.rsplit(['/', '\\']).next().map(|f| f.to_string())
 }
 
-fn expand_path(path: &str) -> PathBuf {
-    shellexpand::tilde(path).to_string().into()
+fn expand_path<S: AsRef<str>>(path: S) -> PathBuf {
+    shellexpand::tilde(path.as_ref()).to_string().into()
 }
 
-fn expand_path_exists(path: &str) -> io::Result<PathBuf> {
+fn expand_path_exists<S: AsRef<str>>(path: S) -> io::Result<PathBuf> {
     // TODO expand all instead of only tilde?
-    let expanded_path = shellexpand::tilde(path);
+    let expanded_path = shellexpand::tilde(path.as_ref());
+    path_exists(PathBuf::from(expanded_path.to_string()))
+}
+
+fn path_exists<P: AsRef<Path>>(expanded_path: P) -> io::Result<PathBuf> {
     match metadata(expanded_path.as_ref()) {
         Ok(md) => {
             if !md.is_file() && !md.is_dir() && md.is_symlink() {
                 Err(io::Error::new(
                     io::ErrorKind::InvalidInput,
-                    format!("{} is not a file", expanded_path),
+                    format!("{} is not a file", expanded_path.as_ref().display()),
                 ))
             } else {
-                Ok(PathBuf::from(expanded_path.to_string()))
+                Ok(expanded_path.as_ref().to_path_buf())
             }
         }
         Err(msg) => {
-            let warning = format!("Failed to read metadata for {}: {}", expanded_path, msg);
+            let warning = format!(
+                "Failed to read metadata for {}: {}",
+                expanded_path.as_ref().display(),
+                msg
+            );
             Err(io::Error::new(io::ErrorKind::InvalidInput, warning))
         }
     }

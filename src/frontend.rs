@@ -274,7 +274,7 @@ fn table_menu(
             let result = if path.exists() {
                 open_editor(&path, Some(config))
             } else {
-                extractvbs(selected_path, false, None)
+                extractvbs(selected_path, None, false)
                     .and_then(|_| open_editor(&path, Some(config)))
             };
             match result {
@@ -287,7 +287,7 @@ fn table_menu(
                 }
             }
         }
-        Some(TableOption::ExtractVBS) => match extractvbs(selected_path, false, None) {
+        Some(TableOption::ExtractVBS) => match extractvbs(selected_path, None, false) {
             Ok(ExtractResult::Extracted(path)) => {
                 prompt(format!("VBS extracted to {}", path.to_string_lossy()));
             }
@@ -310,7 +310,7 @@ fn table_menu(
             }
         },
         Some(TableOption::PatchVBS) => {
-            let vbs_path = match extractvbs(selected_path, false, Some("vbs")) {
+            let vbs_path = match extractvbs(selected_path, None, false) {
                 Ok(ExtractResult::Existed(path)) => path,
                 Ok(ExtractResult::Extracted(path)) => path,
                 Err(err) => {
@@ -340,7 +340,8 @@ fn table_menu(
             }
         }
         Some(TableOption::UnifyLineEndings) => {
-            let vbs_path = match extractvbs(selected_path, false, Some("vbs")) {
+            let vbs_path = vbs_path_for(selected_path);
+            let vbs_path = match extractvbs(selected_path, Some(vbs_path), false) {
                 Ok(ExtractResult::Existed(path)) => path,
                 Ok(ExtractResult::Extracted(path)) => path,
                 Err(err) => {
@@ -366,7 +367,8 @@ fn table_menu(
             }
         }
         Some(TableOption::CreateVBSPatch) => {
-            let original_path = match extractvbs(selected_path, true, Some("vbs.original")) {
+            let vbs_path = selected_path.with_extension("vbs.original");
+            let original_path = match extractvbs(selected_path, Some(vbs_path), true) {
                 Ok(ExtractResult::Existed(path)) => path,
                 Ok(ExtractResult::Extracted(path)) => path,
                 Err(err) => {
