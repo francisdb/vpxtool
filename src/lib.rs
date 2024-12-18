@@ -51,6 +51,8 @@ const CMD_PATCH: &str = "patch";
 const CMD_VERIFY: &str = "verify";
 const CMD_NEW: &str = "new";
 
+const CMD_LS: &str = "ls";
+
 const CMD_SIMPLE_FRONTEND: &str = "simplefrontend";
 
 const CMD_CONFIG: &str = "config";
@@ -434,14 +436,14 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             }
             _ => unreachable!(),
         },
-        Some(("ls", sub_matches)) => {
+        Some((CMD_LS, sub_matches)) => {
             let path = sub_matches
                 .get_one::<String>("VPXPATH")
                 .map(|s| s.as_str())
                 .unwrap_or_default();
 
             let expanded_path = expand_path_exists(path)?;
-            ls(expanded_path.as_ref())?;
+            ls(&expanded_path)?;
             Ok(ExitCode::SUCCESS)
         }
         Some((CMD_EXTRACT, sub_matches)) => {
@@ -910,8 +912,8 @@ fn build_command() -> Command {
                 ),
         )
         .subcommand(
-            Command::new("ls")
-                .about("Show a vpx file content")
+            Command::new(CMD_LS)
+                .about("Show the vpx file contents")
                 .arg(
                     arg!(<VPXPATH> "The path to the vpx file")
                         .required(true),
