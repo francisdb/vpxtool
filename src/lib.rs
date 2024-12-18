@@ -1,3 +1,9 @@
+// Main module for the command line interface
+//
+// We try to adhere to the Command Line Interface Guidelines
+// https://clig.dev/#arguments-and-flags
+// https://clig.dev/#subcommands
+//
 use crate::config::{ResolvedConfig, SetupConfigResult};
 use crate::indexer::{IndexError, Progress};
 use crate::patcher::patch_vbs_file;
@@ -1050,12 +1056,12 @@ fn extract_script_command(name: impl Into<Str>) -> Command {
         .about("Extracts the script from a vpx file.")
         .long_about("Extracts the script from a vpx file by default into a vbs file next to it. Scripts placed next to the vpx file with the same name are considered sidecar scripts and will be picked up by Visual Pinball instead of the script inside the vpx file.")
         .arg(
-            Arg::new("OVERWRITE")
-                .short('o')
-                .long("overwrite")
+            Arg::new("FORCE")
+                .short('f')
+                .long("force")
                 .num_args(0)
                 .default_value("false")
-                .help("(Default: false) Will overwrite existing .vbs file if set."),
+                .help("Will overwrite existing .vbs file if set."),
         )
         .arg(
             arg!(<VPXPATH> "The path to the vpx file")
@@ -1102,7 +1108,7 @@ fn new(vpx_file_path: &str) -> io::Result<()> {
 }
 
 fn handle_extractvbs(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
-    let overwrite = sub_matches.get_flag("OVERWRITE");
+    let force = sub_matches.get_flag("FORCE");
     let vpx_path = sub_matches.get_one::<String>("VPXPATH").map(expand_path);
     let vbs_path = sub_matches.get_one::<String>("VBSPATH").map(expand_path);
     let directory = sub_matches.get_one::<String>("DIRECTORY").map(expand_path);
@@ -1120,7 +1126,7 @@ fn handle_extractvbs(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
         })
     });
 
-    match extractvbs(&expanded_vpx_path, vbs_path_opt, overwrite) {
+    match extractvbs(&expanded_vpx_path, vbs_path_opt, force) {
         Ok(ExtractResult::Existed(vbs_path)) => {
             let warning = format!("EXISTED {}", vbs_path.display()).truecolor(255, 125, 0);
             println!("{}", warning)?;
