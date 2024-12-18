@@ -1072,9 +1072,8 @@ fn extract_script_command(name: impl Into<Str>) -> Command {
                 .required(false),
         )
         .arg(
-            Arg::new("DIRECTORY")
-                .short('d')
-                .long("dir")
+            Arg::new("OUTPUT_DIRECTORY")
+                .long("output-dir")
                 .num_args(1)
                 .required(false)
                 .help("The directory to extract the vbs file to. Only if no VBSPATH is provided"),
@@ -1111,7 +1110,9 @@ fn handle_extractvbs(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
     let force = sub_matches.get_flag("FORCE");
     let vpx_path = sub_matches.get_one::<String>("VPXPATH").map(expand_path);
     let vbs_path = sub_matches.get_one::<String>("VBSPATH").map(expand_path);
-    let directory = sub_matches.get_one::<String>("DIRECTORY").map(expand_path);
+    let directory = sub_matches
+        .get_one::<String>("OUTPUT_DIRECTORY")
+        .map(expand_path);
     let expanded_vpx_path = path_exists(vpx_path.expect("should be checked by clap"))?;
     if vbs_path.is_some() && directory.is_some() {
         return fail("Conflicting VBSPATH and DIRECTORY options, only one can be used");
