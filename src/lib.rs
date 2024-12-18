@@ -750,42 +750,6 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
     }
 }
 
-fn handle_extractvbs(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
-    let overwrite = sub_matches.get_flag("OVERWRITE");
-    let vpx_path = sub_matches.get_one::<String>("VPXPATH").map(expand_path);
-    let vbs_path = sub_matches.get_one::<String>("VBSPATH").map(expand_path);
-    let directory = sub_matches.get_one::<String>("DIRECTORY").map(expand_path);
-    let expanded_vpx_path = path_exists(vpx_path.expect("should be checked by clap"))?;
-    if vbs_path.is_some() && directory.is_some() {
-        return fail("Conflicting VBSPATH and DIRECTORY options, only one can be used");
-    }
-
-    let vbs_path_opt = vbs_path.or_else(|| {
-        directory.map(|dir| {
-            let mut path = dir;
-            path.push(expanded_vpx_path.file_stem().unwrap());
-            path.set_extension("vbs");
-            path
-        })
-    });
-
-    match extractvbs(&expanded_vpx_path, vbs_path_opt, overwrite) {
-        Ok(ExtractResult::Existed(vbs_path)) => {
-            let warning = format!("EXISTED {}", vbs_path.display()).truecolor(255, 125, 0);
-            println!("{}", warning)?;
-        }
-        Ok(ExtractResult::Extracted(vbs_path)) => {
-            println!("CREATED {}", vbs_path.display())?;
-        }
-        Err(e) => {
-            let warning = format!("Error extracting vbs: {}", e).red();
-            eprintln!("{}", warning)?;
-        }
-    }
-
-    Ok(ExitCode::SUCCESS)
-}
-
 fn build_command() -> Command {
     // to allow for non-static strings in clap
     // I had to enable the "string" module
@@ -900,7 +864,7 @@ fn build_command() -> Command {
                         ),
                 )
                 .subcommand(
-                    extract_command(CMD_SCRIPT_EXTRACT),
+                    extract_script_command(CMD_SCRIPT_EXTRACT),
                 )
                 .subcommand(
                     Command::new(CMD_SCRIPT_IMPORT)
@@ -964,7 +928,7 @@ fn build_command() -> Command {
                 ),
         )
         .subcommand(
-            extract_command(CMD_EXTRACT_VBS),
+            extract_script_command(CMD_EXTRACT_VBS),
         )
         .subcommand(
             Command::new(CMD_IMPORT_VBS)
@@ -1081,9 +1045,10 @@ fn build_command() -> Command {
         )
 }
 
-fn extract_command(name: impl Into<Str>) -> Command {
+fn extract_script_command(name: impl Into<Str>) -> Command {
     Command::new(name)
-        .about("Extracts the vbs from a vpx file, by default next to it")
+        .about("Extracts the script from a vpx file.")
+        .long_about("Extracts the script from a vpx file by default into a vbs file next to it. Scripts placed next to the vpx file with the same name are considered sidecar scripts and will be picked up by Visual Pinball instead of the script inside the vpx file.")
         .arg(
             Arg::new("OVERWRITE")
                 .short('o')
@@ -1097,7 +1062,7 @@ fn extract_command(name: impl Into<Str>) -> Command {
                 .required(true),
         )
         .arg(
-            arg!([VBSPATH] "The optional path to the vbs file to write. Defaults to the vpx file path with the extension changed to .vbs.")
+            arg!([VBSPATH] "The optional path to the vbs file to write. Defaults to the vpx file path with the extension changed to .vbs. This option is mutually exclusive with DIRECTORY.")
                 .required(false),
         )
         .arg(
@@ -1134,6 +1099,42 @@ fn fail<M: AsRef<str>>(message: M) -> io::Result<ExitCode> {
 fn new(vpx_file_path: &str) -> io::Result<()> {
     // TODO check if file exists and prompt to overwrite / add option to force
     vpx::new_minimal_vpx(vpx_file_path)
+}
+
+fn handle_extractvbs(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
+    let overwrite = sub_matches.get_flag("OVERWRITE");
+    let vpx_path = sub_matches.get_one::<String>("VPXPATH").map(expand_path);
+    let vbs_path = sub_matches.get_one::<String>("VBSPATH").map(expand_path);
+    let directory = sub_matches.get_one::<String>("DIRECTORY").map(expand_path);
+    let expanded_vpx_path = path_exists(vpx_path.expect("should be checked by clap"))?;
+    if vbs_path.is_some() && directory.is_some() {
+        return fail("Conflicting VBSPATH and DIRECTORY options, only one can be used");
+    }
+
+    let vbs_path_opt = vbs_path.or_else(|| {
+        directory.map(|dir| {
+            let mut path = dir;
+            path.push(expanded_vpx_path.file_stem().unwrap());
+            path.set_extension("vbs");
+            path
+        })
+    });
+
+    match extractvbs(&expanded_vpx_path, vbs_path_opt, overwrite) {
+        Ok(ExtractResult::Existed(vbs_path)) => {
+            let warning = format!("EXISTED {}", vbs_path.display()).truecolor(255, 125, 0);
+            println!("{}", warning)?;
+        }
+        Ok(ExtractResult::Extracted(vbs_path)) => {
+            println!("CREATED {}", vbs_path.display())?;
+        }
+        Err(e) => {
+            let warning = format!("Error extracting vbs: {}", e).red();
+            eprintln!("{}", warning)?;
+        }
+    }
+
+    Ok(ExitCode::SUCCESS)
 }
 
 fn extract_directb2s(expanded_path: &PathBuf) -> io::Result<()> {
