@@ -25,10 +25,6 @@ dialoguer = { version = "0.11.0", features = ["fuzzy-select"] }
 dirs = "5.0.1"
 git-version = "0.3.9"
 indicatif = "0.17.9"
-log = "0.4.22"
-logging_timer = "1.1.1"
-pretty_env_logger = "0.5.0"
-quick-xml = { version = "0.37.1", features = ["serialize"] }
 serde = { version = "1.0.216", features = ["derive"] }
 serde_json = { version = "1.0.133", features = ["preserve_order"] }
 shellexpand = "3.1.0"
@@ -38,7 +34,7 @@ figment = { version = "0.10", features = ["toml", "env"] }
 toml = "0.8.19"
 is_executable = "1.0.4"
 regex = { version = "1.11.1", features = [] }
-vpin = { version = "0.17.0" }
+vpin = { version = "0.17.1" }
 rust-ini = "0.21.1"
 edit = "0.1.5"
 jojodiff = "0.1.2"
@@ -46,7 +42,6 @@ pinmame-nvram = "0.3.3"
 
 [dev-dependencies]
 pretty_assertions = "1.4.1"
-rand = "0.8.5"
 testdir = "0.9.3"
 
 [profile.test]
