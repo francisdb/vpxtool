@@ -31,5 +31,5 @@ jobs:
       - name: Run fmt check
         run: cargo fmt --all --check -- --color=always
       - name: Run audit
-        run: cargo install cargo-audit && cargo audit
+        run: cargo install cargo-audit --force && cargo audit
         # to update the dependencies in the lock file, run `cargo update`

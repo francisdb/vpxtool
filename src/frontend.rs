@@ -1,27 +1,27 @@
+use crate::config::ResolvedConfig;
+use crate::indexer::{IndexError, IndexedTable, Progress};
+use crate::patcher::LineEndingsResult::{NoChanges, Unified};
+use crate::patcher::{patch_vbs_file, unify_line_endings_vbs_file};
+use crate::{
+    confirm, indexer, info_diff, info_edit, info_gather, open_editor, run_diff, script_diff,
+    vpx::{extractvbs, vbs_path_for, ExtractResult},
+    DiffColor, ProgressBarProgress,
+};
+use colored::Colorize;
+use console::Emoji;
+use dialoguer::theme::ColorfulTheme;
+use dialoguer::{FuzzySelect, Input, MultiSelect, Select};
+use indicatif::{ProgressBar, ProgressStyle};
+use is_executable::IsExecutable;
+use pinmame_nvram::dips::{get_all_dip_switches, set_dip_switches};
 use std::collections::HashSet;
+use std::fs::OpenOptions;
 use std::{
     fs::File,
     io,
     io::Write,
     path::{Path, PathBuf},
     process::{exit, ExitStatus},
-};
-
-use colored::Colorize;
-use console::Emoji;
-use dialoguer::theme::ColorfulTheme;
-use dialoguer::{FuzzySelect, Input, Select};
-use indicatif::{ProgressBar, ProgressStyle};
-use is_executable::IsExecutable;
-
-use crate::config::ResolvedConfig;
-use crate::indexer::{IndexError, IndexedTable, Progress};
-use crate::patcher::LineEndingsResult::{NoChanges, Unified};
-use crate::patcher::{patch_vbs_file, unify_line_endings_vbs_file};
-use crate::{
-    indexer, info_diff, info_edit, info_gather, open_editor, run_diff, script_diff,
-    vpx::{extractvbs, vbs_path_for, ExtractResult},
-    DiffColor, ProgressBarProgress,
 };
 
 const LAUNCH: Emoji = Emoji("🚀", "[launch]");
@@ -46,11 +46,12 @@ enum TableOption {
     UnifyLineEndings,
     ShowVBSDiff,
     CreateVBSPatch,
-    // ClearNVRAM,
+    DIPSwitches,
+    NVRAMClear,
 }
 
 impl TableOption {
-    const ALL: [TableOption; 13] = [
+    const ALL: [TableOption; 15] = [
         TableOption::Launch,
         TableOption::LaunchFullscreen,
         TableOption::LaunchWindowed,
@@ -64,7 +65,8 @@ impl TableOption {
         TableOption::UnifyLineEndings,
         TableOption::ShowVBSDiff,
         TableOption::CreateVBSPatch,
-        // TableOption::ClearNVRAM,
+        TableOption::DIPSwitches,
+        TableOption::NVRAMClear,
     ];
 
     fn from_index(index: usize) -> Option<TableOption> {
@@ -82,7 +84,8 @@ impl TableOption {
             10 => Some(TableOption::UnifyLineEndings),
             11 => Some(TableOption::ShowVBSDiff),
             12 => Some(TableOption::CreateVBSPatch),
-            // 13 => Some(TableOption::ClearNVRAM),
+            13 => Some(TableOption::DIPSwitches),
+            14 => Some(TableOption::NVRAMClear),
             _ => None,
         }
     }
@@ -102,7 +105,8 @@ impl TableOption {
             TableOption::UnifyLineEndings => "VBScript > Unify line endings".to_string(),
             TableOption::ShowVBSDiff => "VBScript > Diff".to_string(),
             TableOption::CreateVBSPatch => "VBScript > Create patch file".to_string(),
-            // TableOption::ClearNVRAM => "Clear NVRAM".to_string(),
+            TableOption::DIPSwitches => "DIP Switches".to_string(),
+            TableOption::NVRAMClear => "NVRAM > Clear".to_string(),
         }
     }
 }
@@ -270,7 +274,7 @@ fn table_menu(
             let result = if path.exists() {
                 open_editor(&path, Some(config))
             } else {
-                extractvbs(selected_path, false, None)
+                extractvbs(selected_path, None, false)
                     .and_then(|_| open_editor(&path, Some(config)))
             };
             match result {
@@ -283,7 +287,7 @@ fn table_menu(
                 }
             }
         }
-        Some(TableOption::ExtractVBS) => match extractvbs(selected_path, false, None) {
+        Some(TableOption::ExtractVBS) => match extractvbs(selected_path, None, false) {
             Ok(ExtractResult::Extracted(path)) => {
                 prompt(format!("VBS extracted to {}", path.to_string_lossy()));
             }
@@ -306,7 +310,7 @@ fn table_menu(
             }
         },
         Some(TableOption::PatchVBS) => {
-            let vbs_path = match extractvbs(selected_path, false, Some("vbs")) {
+            let vbs_path = match extractvbs(selected_path, None, false) {
                 Ok(ExtractResult::Existed(path)) => path,
                 Ok(ExtractResult::Extracted(path)) => path,
                 Err(err) => {
@@ -336,7 +340,8 @@ fn table_menu(
             }
         }
         Some(TableOption::UnifyLineEndings) => {
-            let vbs_path = match extractvbs(selected_path, false, Some("vbs")) {
+            let vbs_path = vbs_path_for(selected_path);
+            let vbs_path = match extractvbs(selected_path, Some(vbs_path), false) {
                 Ok(ExtractResult::Existed(path)) => path,
                 Ok(ExtractResult::Extracted(path)) => path,
                 Err(err) => {
@@ -362,7 +367,8 @@ fn table_menu(
             }
         }
         Some(TableOption::CreateVBSPatch) => {
-            let original_path = match extractvbs(selected_path, true, Some("vbs.original")) {
+            let vbs_path = selected_path.with_extension("vbs.original");
+            let original_path = match extractvbs(selected_path, Some(vbs_path), true) {
                 Ok(ExtractResult::Existed(path)) => path,
                 Ok(ExtractResult::Extracted(path)) => path,
                 Err(err) => {
@@ -412,8 +418,123 @@ fn table_menu(
                 prompt(msg.truecolor(255, 125, 0).to_string());
             }
         },
+        Some(TableOption::DIPSwitches) => {
+            if info.requires_pinmame {
+                let nvram = nvram_for_rom(info);
+                if let Some(nvram) = nvram {
+                    // open file in read/write mode
+                    match edit_dip_switches(nvram) {
+                        Ok(_) => {
+                            // ok
+                        }
+                        Err(err) => {
+                            let msg = format!("Unable to edit DIP switches: {}", err);
+                            prompt(msg.truecolor(255, 125, 0).to_string());
+                        }
+                    }
+                } else {
+                    prompt(
+                        "This table does not have an NVRAM file, try launching it once."
+                            .to_string(),
+                    );
+                }
+            } else {
+                prompt("This table is not using used PinMAME".to_string());
+            }
+        }
+        Some(TableOption::NVRAMClear) => {
+            clear_nvram(info);
+        }
         None => (),
     }
+}
+
+fn edit_dip_switches(nvram: PathBuf) -> io::Result<()> {
+    let mut nvram_file = OpenOptions::new().read(true).write(true).open(nvram)?;
+    let mut switches = get_all_dip_switches(&mut nvram_file)?;
+
+    let items = switches
+        .iter()
+        .map(|s| format!("DIP #{}", s.nr))
+        .collect::<Vec<String>>();
+
+    let defaults = switches.iter().map(|s| s.on).collect::<Vec<bool>>();
+
+    let help = "(<␣> selects, <⏎> saves, <esc/q> exits)"
+        .dimmed()
+        .to_string();
+    let prompt_string = format!("Toggle switches {}", help);
+    let selection = MultiSelect::with_theme(&ColorfulTheme::default())
+        .with_prompt(prompt_string)
+        .items(&items)
+        .defaults(&defaults)
+        .interact_opt()
+        .unwrap();
+
+    if let Some(selection) = selection {
+        // update the switches
+        switches.iter_mut().enumerate().for_each(|(i, s)| {
+            s.on = selection.contains(&i);
+        });
+
+        set_dip_switches(&mut nvram_file, &switches)?;
+        prompt("DIP switches updated".to_string());
+    }
+    Ok(())
+}
+
+fn clear_nvram(info: &IndexedTable) {
+    if info.requires_pinmame {
+        let nvram_file = nvram_for_rom(info);
+        if let Some(nvram_file) = nvram_file {
+            if nvram_file.exists() {
+                match confirm(
+                    "This will remove the table NVRAM file and you will lose all settings / high scores!".to_string(),
+                    "Are you sure?".to_string(),
+                ) {
+                    Ok(true) => {
+                        match std::fs::remove_file(&nvram_file) {
+                            Ok(_) => {
+                                prompt(format!("NVRAM file {} removed", nvram_file.display()));
+                            }
+                            Err(err) => {
+                                let msg = format!("Unable to remove NVRAM file: {}", err);
+                                prompt(msg.truecolor(255, 125, 0).to_string());
+                            }
+                        }
+                    }
+                    Ok(false) => {
+                        prompt("NVRAM file removal canceled.".to_string());
+                    }
+                    Err(err) => {
+                        let msg = format!("Error during confirmation: {}", err);
+                        prompt(msg.truecolor(255, 125, 0).to_string());
+                    }
+                }
+            } else {
+                prompt(format!(
+                    "NVRAM file {} does not exist",
+                    nvram_file.display()
+                ));
+            }
+        } else {
+            prompt("This table does not have an NVRAM file".to_string());
+        }
+    } else {
+        prompt("This table is not using used PinMAME".to_string());
+    }
+}
+
+/// Find the NVRAM file for a ROM, not checking if it exists
+fn nvram_for_rom(info: &IndexedTable) -> Option<PathBuf> {
+    info.local_rom_path.as_ref().and_then(|rom_path| {
+        // ../nvram/[romname].nv
+        rom_path.parent().and_then(|p| p.parent()).and_then(|p| {
+            rom_path
+                .file_name()
+                .map(|file_name| p.join("nvram").join(file_name).with_extension("nv"))
+        })
+    })
 }
 
 fn prompt<S: Into<String>>(msg: S) {
