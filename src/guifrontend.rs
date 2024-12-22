@@ -1,15 +1,18 @@
 mod menus;
 use bevy::color::palettes::css::*;
-use bevy::core_pipeline::{
-    bloom::{BloomCompositeMode, BloomSettings},
-    tonemapping::Tonemapping,
-};
+//use bevy::core_pipeline::{
+//    bloom::{BloomCompositeMode, BloomSettings},
+//    tonemapping::Tonemapping,
+//};
+
 use bevy::ecs::system::SystemId;
-use bevy::render::view::visibility;
-use bevy::sprite::{MaterialMesh2dBundle, Wireframe2dConfig, Wireframe2dPlugin};
+//use bevy::render::view::visibility;
+//use bevy::sprite::{MaterialMesh2dBundle, Wireframe2dConfig, Wireframe2dPlugin};
 //use bevy::sprite::{MaterialMesh2dBundle, Mesh2dHandle, Wireframe2dConfig, Wireframe2dPlugin};
-use bevy::{input::common_conditions::*, prelude::*};
-use bevy_asset::*;
+
+use bevy::prelude::*;
+//use bevy::{input::common_conditions::*, prelude::*};
+//use bevy_asset::*;
 use bevy_asset_loader::prelude::*;
 use bevy_egui::{egui, EguiContexts, EguiPlugin};
 use image::ImageReader;
@@ -17,46 +20,48 @@ use indicatif::{ProgressBar, ProgressStyle};
 use menus::*;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::sync::atomic::{AtomicBool, Ordering};
+//use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
-use std::sync::Arc;
+//use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 use std::{
-    fs::File,
+    //   fs::File,
     io,
-    io::Write,
+    //   io::Write,
     path::{Path, PathBuf},
     process::{exit, ExitStatus},
 };
 
 use crate::config;
 use crate::config::{ResolvedConfig, VPinballConfig};
-use crate::indexer::{find_vpx_files, IndexError, IndexedTable, Progress};
-use crate::patcher::LineEndingsResult::{NoChanges, Unified};
-use crate::patcher::{patch_vbs_file, unify_line_endings_vbs_file};
-use crate::{
-    indexer, info_diff, info_edit, info_gather, open_editor, run_diff, script_diff,
-    vpx::{extractvbs, vbs_path_for, ExtractResult},
-    DiffColor, ProgressBarProgress,
-};
-use bevy::utils::info;
+//use crate::indexer::{find_vpx_files, IndexError, IndexedTable, Progress};
+use crate::indexer::{IndexError, IndexedTable, Progress};
+//use crate::patcher::LineEndingsResult::{NoChanges, Unified};
+//use crate::patcher::{patch_vbs_file, unify_line_endings_vbs_file};
+//use crate::{
+//    indexer, info_diff, info_edit, info_gather, open_editor, run_diff, script_diff,
+//    vpx::{extractvbs, vbs_path_for, ExtractResult},
+//   DiffColor, ProgressBarProgress,
+//};
+use crate::{indexer, ProgressBarProgress};
+//use bevy::utils::info;
 use bevy::window::*;
 use colored::Colorize;
 use console::Emoji;
 use is_executable::IsExecutable;
 use pipelines_ready::*;
-use std::ffi::{OsStr, OsString};
+//use std::ffi::{OsStr, OsString};
+//use std::ffi::OsString;
+//const LAUNCH: Emoji = Emoji("🚀", "[launch]");
+//const CRASH: Emoji = Emoji("💥", "[crash]");
 
-const LAUNCH: Emoji = Emoji("🚀", "[launch]");
-const CRASH: Emoji = Emoji("💥", "[crash]");
-
-const SEARCH: &str = "> Search";
-const RECENT: &str = "> Recent";
-const SEARCH_INDEX: usize = 0;
-const RECENT_INDEX: usize = 1;
-const HORIZONTAL: bool = false;
-const VERTICAL: bool = true;
+//const SEARCH: &str = "> Search";
+//const RECENT: &str = "> Recent";
+//const SEARCH_INDEX: usize = 0;
+//const RECENT_INDEX: usize = 1;
+//const HORIZONTAL: bool = false;
+//const VERTICAL: bool = true;
 
 #[derive(Component)]
 pub struct Wheel {
@@ -69,18 +74,18 @@ pub struct Wheel {
 
 #[derive(Component)]
 pub struct TextItemGold {
-    pub item_number: i16,
+    //pub item_number: i16,
     //pub image_handle: Handle<Image>,
-    pub selected: bool,
+    //pub selected: bool,
     //  pub launch_path: PathBuf,
     //pub table_info: IndexedTable,
 }
 
 #[derive(Component)]
 pub struct TextItemGhostWhite {
-    pub item_number: i16,
+    //  pub _item_number: i16,
     //pub image_handle: Handle<Image>,
-    pub selected: bool,
+    //  pub _selected: bool,
     //  pub launch_path: PathBuf,
     //pub table_info: IndexedTable,
 }
@@ -95,7 +100,7 @@ pub struct TableText {
 
 #[derive(Component, Debug)]
 pub struct TableBlurb {
-    pub item_number: i16,
+    // pub item_number: i16,
 }
 
 #[derive(Resource)]
@@ -113,10 +118,10 @@ pub struct VpxTables {
     pub indexed_tables: Vec<IndexedTable>,
 }
 
-#[derive(Component, Debug)]
-pub struct InfoBox {
-    // infostring: String,
-}
+//#[derive(Component, Debug)]
+//pub struct InfoBox {
+// infostring: String,
+//}
 
 #[derive(Resource, Debug)]
 pub struct Globals {
@@ -277,7 +282,9 @@ fn create_wheel(
     let level_data = LevelData {
         level_1_id: commands.register_system(gui_update),
     };
+    let _systemid = level_data.level_1_id;
     commands.insert_resource(level_data);
+    let _list_of_tables = &vpx_tables.indexed_tables;
 
     //config: &ResolvedConfig,
     //vpx_files_with_tableinfo: &mut Vec<IndexedTable>,
@@ -285,11 +292,11 @@ fn create_wheel(
     //info: &IndexedTable,
     //info_str: &str,
 
-    //// commands.spawn(SpriteBundle {
-    ////     texture: asset_server.load("/usr/tables/wheels/Sing Along (Gottlieb 1967).png"),
-    ////    ..default()
-    //// });
-    ///
+    // commands.spawn(SpriteBundle {
+    //     texture: asset_server.load("/usr/tables/wheels/Sing Along (Gottlieb 1967).png"),
+    //    ..default()
+    // });
+    //
     //let (_config_path, loaded_config) = config::load_config().unwrap().unwrap();
     let vpx_files_with_tableinfo1 = frontend_index(&config.config, true, vec![]).unwrap();
     let roms = indexer::find_roms(&config.config.global_pinmame_rom_folder());
@@ -302,7 +309,7 @@ fn create_wheel(
     //let temporary_path_name="";
 
     let window = window_query.single();
-    let width = window.width();
+    let _width = window.width();
     let height = window.height();
     let table_path = &config.config.tables_folder;
 
@@ -383,7 +390,7 @@ fn create_wheel(
         loading_data.loading_assets.push(handle.clone().into());
         // Normalizing the dimentions of wheels so they are all the same size.
         //  using imagesize crate as it is a very fast way to get the dimentions.
-        let (mut wheel_width, mut wheel_height) = (0., 0.);
+        let (_wheel_width, _wheel_height) = (0., 0.);
 
         // Set default wheel size
         commands.insert_resource(Globals {
@@ -391,34 +398,34 @@ fn create_wheel(
             game_running: false,
         });
 
-        match imagesize::size(&temporary_path_name) {
-            Ok(size) => {
-                wheel_width = size.width as f32;
-                wheel_height = size.height as f32;
+        let image = ImageReader::open(&temporary_path_name)
+            .unwrap()
+            .into_dimensions()
+            .unwrap();
+        let (_wheel_width, wheel_height) = image;
+        // wheel_size.wheel_size = (height / 3.) / (size.height as f32);
+        // Normalize icons to 1/3 the screen height
+        transform.scale = Vec3::new(
+            (height / 5.) / (wheel_height as f32),
+            (height / 5.) / (wheel_height as f32),
+            100.0,
+        );
 
-                // wheel_size.wheel_size = (height / 3.) / (size.height as f32);
-                // Normalize icons to 1/3 the screen height
-                transform.scale = Vec3::new(
-                    (height / 5.) / (size.height as f32),
-                    (height / 5.) / (size.height as f32),
-                    100.0,
-                );
-
-                println!(
-                    "Initializing:  {}",
-                    &temporary_path_name.as_os_str().to_string_lossy()
-                );
-            }
-            Err(why) => println!(
-                "Error getting dimensions: {} {:?}",
-                &temporary_path_name.as_os_str().to_string_lossy(),
-                why
-            ),
-        };
+        println!(
+            "Initializing:  {}",
+            &temporary_path_name.as_os_str().to_string_lossy()
+        );
+        //   }
+        // Err(why) => println!(
+        //    "Error getting dimensions: {} {:?}",
+        //    &temporary_path_name.as_os_str().to_string_lossy(),
+        //    why
+        //     ),
+        //};
 
         asset_paths
             .paths
-            .insert(handle.clone().id(), temporary_table_name.clone().to_owned());
+            .insert(handle.clone().id(), temporary_table_name.to_owned());
 
         // Wheel
         commands.spawn(WheelBundle {
@@ -465,7 +472,7 @@ fn create_wheel(
                 left: Val::Px(20.),
                 //top: Val::Px(245.),
                 top: Val::Px(height * 0.025), //-(height-(height/2.+(scale*2.)))),
-                right: Val::Px((0.)),
+                right: Val::Px(0.),
                 ..default()
             },
             table_text: TableText {
@@ -480,9 +487,9 @@ fn create_wheel(
                 }, //has_wheel: haswheel,
             },
             text_item: TextItemGold {
-                item_number: counter as i16,
+                //item_number: counter as i16,
                 //image_handle: handle.clone(),
-                selected: false,
+                //selected: false,
             },
         });
 
@@ -507,7 +514,7 @@ fn create_wheel(
                 position_type: PositionType::Absolute,
                 left: Val::Px(20.),
                 top: Val::Px(height * 0.2), //-(height-(height/2.+(scale*2.)))),
-                right: Val::Px((0.)),
+                right: Val::Px(0.),
                 ..default()
             },
 
@@ -523,9 +530,9 @@ fn create_wheel(
                 },
             },
             text_item: TextItemGhostWhite {
-                item_number: counter as i16,
+                //item_number: counter as i16,
                 //image_handle: handle.clone(),
-                selected: false,
+                //selected: false,
             },
         });
 
@@ -541,6 +548,96 @@ fn create_wheel(
     println!("Wheels loaded");
 
     game_state.set(LoadingState::LevelLoading);
+}
+
+#[derive(Component)]
+pub struct Dmd;
+
+#[derive(Bundle)]
+struct DmdBundle {
+    node: Node,
+    //sprite: Sprite,
+    transform: Transform,
+    boxshadow: BoxShadow,
+    backgroundcolor: BackgroundColor,
+    borderradius: BorderRadius,
+    // translate: Translate,
+    //global_transform: GlobalTransform,
+    //    visibility: Visibility,
+    //    wheel: Wheel,
+    //inherited_visibility: InheritedVisibility,
+    visibility: Visibility,
+    text: Text,
+    text_font: TextFont,
+    text_color: TextColor,
+    text_layout: TextLayout,
+    // table_text: TableText,
+    //text_bundle: Node,
+    dmd: Dmd,
+}
+
+fn create_dmd(
+    mut commands: Commands,
+    _asset_server: Res<AssetServer>,
+    window_query: Query<&Window, With<PrimaryWindow>>,
+) {
+    let window = window_query.single();
+    let window_width = window.width();
+    let window_height = window.height();
+    commands.spawn(DmdBundle {
+        node: Node {
+            width: Val::Px(512.),
+            height: Val::Px(128.),
+            //left: Val::Px(10.),
+            left: Val::Px(window_width / 6.),
+            top: Val::Px(window_height / 2.),
+            border: UiRect::all(Val::Px(2.)),
+
+            ..Default::default()
+        },
+        visibility: Visibility::Hidden,
+        transform: Transform {
+            translation: Vec3::new(
+                window_width - (window_width * 0.60) - 225.,
+                (window_height * 0.25) + 60.,
+                0.,
+            ),
+            ..default()
+        },
+
+        boxshadow: BoxShadow {
+            color: GOLDENROD.into(),
+            x_offset: Val::Px(0.),
+            y_offset: Val::Px(0.),
+            spread_radius: Val::Px(20.),
+            blur_radius: Val::Px(2.),
+        },
+        backgroundcolor: BackgroundColor(Color::srgba(0.5, 0.5, 0.5, 1.0)),
+        borderradius: BorderRadius::new(
+            // top left
+            Val::Px(40.),
+            // top right
+            Val::Px(40.),
+            // bottom right
+            Val::Px(40.),
+            // bottom left
+            Val::Px(40.),
+        ),
+        dmd: Dmd,
+        text_layout: TextLayout {justify:JustifyText::Center,
+        linebreak: LineBreak::WordBoundary},
+        //text_layout: TextLayout::new_with_justify(JustifyText::Center).with_no_wrap(),
+        text: Text::new("Keys       q: quit\n1: open up table description dialog\nleft-shift: scroll backward\nright-shift: scroll forward\nenter: start selected game"),
+        text_font: TextFont {
+            // This font is loaded and will be used instead of the default font.
+            font_size: 20.0,
+            ..default()
+        },
+        text_color: TextColor::from(GHOST_WHITE),
+        // Set the justification of the Text
+        //.with_text_justify(JustifyText::Center)
+        // Set the style of the TextBundle itself.
+    });
 }
 
 fn create_flippers(
@@ -592,7 +689,7 @@ fn create_flippers(
         flipper1: Flipper1,
     });
 }
-
+/*
 enum TableOption {
     Launch,
     LaunchFullscreen,
@@ -611,7 +708,7 @@ enum TableOption {
 }
 
 impl TableOption {
-    const ALL: [TableOption; 13] = [
+    const _ALL: [TableOption; 13] = [
         TableOption::Launch,
         TableOption::LaunchFullscreen,
         TableOption::LaunchWindowed,
@@ -628,7 +725,7 @@ impl TableOption {
         // TableOption::ClearNVRAM,
     ];
 
-    fn from_index(index: usize) -> Option<TableOption> {
+    fn _from_index(index: usize) -> Option<TableOption> {
         match index {
             0 => Some(TableOption::Launch),
             1 => Some(TableOption::LaunchFullscreen),
@@ -647,26 +744,26 @@ impl TableOption {
             _ => None,
         }
     }
-
-    fn display(&self) -> String {
-        match self {
-            TableOption::Launch => "Launch".to_string(),
-            TableOption::LaunchFullscreen => "Launch fullscreen".to_string(),
-            TableOption::LaunchWindowed => "Launch windowed".to_string(),
-            TableOption::ForceReload => "Force reload".to_string(),
-            TableOption::InfoShow => "Info > Show".to_string(),
-            TableOption::InfoEdit => "Info > Edit".to_string(),
-            TableOption::InfoDiff => "Info > Diff".to_string(),
-            TableOption::ExtractVBS => "VBScript > Extract".to_string(),
-            TableOption::EditVBS => "VBScript > Edit".to_string(),
-            TableOption::PatchVBS => "VBScript > Patch typical standalone issues".to_string(),
-            TableOption::UnifyLineEndings => "VBScript > Unify line endings".to_string(),
-            TableOption::ShowVBSDiff => "VBScript > Diff".to_string(),
-            TableOption::CreateVBSPatch => "VBScript > Create patch file".to_string(),
-            // TableOption::ClearNVRAM => "Clear NVRAM".to_string(),
-        }
+*/
+/*     fn display(&self) -> String {
+    match self {
+        TableOption::Launch => "Launch".to_string(),
+        TableOption::LaunchFullscreen => "Launch fullscreen".to_string(),
+        TableOption::LaunchWindowed => "Launch windowed".to_string(),
+        TableOption::ForceReload => "Force reload".to_string(),
+        TableOption::InfoShow => "Info > Show".to_string(),
+        TableOption::InfoEdit => "Info > Edit".to_string(),
+        TableOption::InfoDiff => "Info > Diff".to_string(),
+        TableOption::ExtractVBS => "VBScript > Extract".to_string(),
+        TableOption::EditVBS => "VBScript > Edit".to_string(),
+        TableOption::PatchVBS => "VBScript > Patch typical standalone issues".to_string(),
+        TableOption::UnifyLineEndings => "VBScript > Unify line endings".to_string(),
+        TableOption::ShowVBSDiff => "VBScript > Diff".to_string(),
+        TableOption::CreateVBSPatch => "VBScript > Create patch file".to_string(),
+        // TableOption::ClearNVRAM => "Clear NVRAM".to_string(),
     }
-}
+} */
+//}
 
 pub fn frontend_index(
     resolved_config: &ResolvedConfig,
@@ -697,11 +794,11 @@ pub fn frontend_index(
 }
 
 pub fn gui_update(
-    mut commands: Commands,
+    commands: Commands,
     keys: Res<ButtonInput<KeyCode>>,
-    time: Res<Time>,
+    _time: Res<Time>,
     window_query: Query<&Window, With<PrimaryWindow>>,
-    mut dialog: ResMut<DialogBox>,
+    _dialog: ResMut<DialogBox>,
 
     mut app_exit_events: ResMut<Events<bevy::app::AppExit>>,
     mut set: ParamSet<(
@@ -716,19 +813,18 @@ pub fn gui_update(
             With<TextItemGold>,
         >,
         Query<(&mut TableBlurb, &mut Node), With<TextItemGhostWhite>>,
-    )>,
-    mut query: ParamSet<(
         Query<(&mut Visibility, &mut Wheel, &mut Transform), With<Wheel>>,
         Query<(&mut Transform, &mut Visibility), With<Flipper>>,
         Query<(&mut Transform, &mut Visibility), With<Flipper1>>,
+        Query<(&mut Node, &mut Visibility), With<Dmd>>,
     )>,
     music_box_query: Query<&AudioSink>,
-    mut contexts: EguiContexts,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
+    contexts: EguiContexts,
+    meshes: ResMut<Assets<Mesh>>,
+    materials: ResMut<Assets<ColorMaterial>>,
     mut globals: ResMut<Globals>,
 ) {
-    let (_config_path, loaded_config) = config::load_config().unwrap().unwrap();
+    let (_config_path, _loaded_config) = config::load_config().unwrap().unwrap();
     let mut window = window_query.get_single().unwrap().clone();
     window.window_level = WindowLevel::Normal;
     let mut wtitle = " ".to_owned();
@@ -742,7 +838,7 @@ pub fn gui_update(
     // if height > width {orentation=VERTICAL;}
     //    else {orentation=HORIZONTAL};
 
-    let mut scale = width / 10.;
+    let _scale = width / 10.;
 
     // arbitrary number to indicate there is no selected item.
     let mut selected_item: i16 = -2;
@@ -752,17 +848,17 @@ pub fn gui_update(
 
     // Count entities
     let mut num = 1;
-    num += query.p0().iter().count() as i16;
+    num += set.p2().iter().count() as i16;
 
     // Find current selection
-    for (visibility, wheel, transform) in query.p0().iter() {
+    for (_visibility, wheel, _transform) in set.p2().iter() {
         if wheel.selected {
             selected_item = wheel.item_number;
         }
     }
     // If no selection, set it to item 0
     if selected_item == -2 {
-        for (visibility, mut wheel, transform) in query.p0().iter_mut() {
+        for (_visibility, mut wheel, _transform) in set.p2().iter_mut() {
             if wheel.item_number == 0 {
                 wheel.selected = true;
                 selected_item = 0;
@@ -811,7 +907,7 @@ pub fn gui_update(
         // for (mut visibility, mut wheel, mut transform) in query.iter_mut() {}
 
         // update currently selected item to new value
-        for (mut visibility, mut wheel, mut transform) in query.p0().iter_mut() {
+        for (mut visibility, mut wheel, mut transform) in set.p2().iter_mut() {
             if wheel.item_number != selected_item {
                 wheel.selected = false;
                 *visibility = Visibility::Hidden;
@@ -827,27 +923,34 @@ pub fn gui_update(
             }
         }
 
-        for (mut transform, mut visibility) in query.p1().iter_mut() {
-            let wsize = globals.wheel_size;
-
-            transform.translation = Vec3::new(
-                ((wsize / 3.0) * -1.0),
-                ((-(height / 2.)) + (wsize / 4.)),
-                0.,
-            );
-            *visibility = Visibility::Visible;
-        }
-
-        for (mut transform, mut visibility) in query.p2().iter_mut() {
+        for (mut transform, mut visibility) in set.p3().iter_mut() {
             let wsize = globals.wheel_size;
 
             transform.translation =
-                Vec3::new((wsize / 3.0), ((-(height / 2.0)) + (wsize / 4.)), 0.);
+                Vec3::new((wsize / 3.0) * -1.0, (-(height / 2.)) + (wsize / 4.), 0.);
+            *visibility = Visibility::Visible;
+        }
+
+        for (mut transform, mut visibility) in set.p4().iter_mut() {
+            let wsize = globals.wheel_size;
+
+            transform.translation = Vec3::new(wsize / 3.0, (-(height / 2.0)) + (wsize / 4.), 0.);
+            *visibility = Visibility::Visible;
+        }
+        for (mut node, mut visibility) in set.p5().iter_mut() {
+            //let (mut node1, mut visibility) = &query.p3().get_single_mut();
+            let wsize = globals.wheel_size;
+            //println!("node: {:?}", node);
+            node.left = Val::Px((width / 2.) - 256.0);
+            node.top = Val::Px(height - wsize - 108.);
+
+            //   node.top = Val::Px((-(height / 2.0)) + wsize + 20.);
+            //transform.translation = Vec3::new(0. - 326.0, (-(height / 2.0)) + wsize + 20., 0.);
             *visibility = Visibility::Visible;
         }
 
         // change name of game
-        for (mut items, mut font, mut textstyle, mut color, text) in set.p0().iter_mut() {
+        for (items, mut font, mut textstyle, mut color, text) in set.p0().iter_mut() {
             if items.item_number != selected_item {
                 textstyle.display = Display::None;
                 *color = TextColor::from(GHOST_WHITE);
@@ -883,7 +986,7 @@ pub fn gui_update(
         counter = 0;
         for count in 12..=22 {
             if (selected_item + counter) < num - 1 {
-                names[count - 2] = (selected_item + counter);
+                names[count - 2] = selected_item + counter;
             } else if selected_item + counter + 3 > num {
                 names[count - 2] = (selected_item + counter - num) + 1
             }
@@ -893,10 +996,10 @@ pub fn gui_update(
         counter = 0;
 
         //   let mut wtitle = &gametext;
-        let mut wtext = &gameblurb;
+        let _wtext = &gameblurb;
 
         // clear all game name assets
-        for (items, mut fontsize, mut textstyle, mut color, _text) in set.p0().iter_mut() {
+        for (_items, mut fontsize, mut textstyle, mut color, _text) in set.p0().iter_mut() {
             if num > 21 {
                 textstyle.display = Display::None;
                 fontsize.font_size = 20.0;
@@ -913,7 +1016,7 @@ pub fn gui_update(
 
         if num > 21 {
             for _name in names {
-                for (items, mut fontsize, mut text_style, mut color, text) in set.p0().iter_mut() {
+                for (items, mut fontsize, mut text_style, mut color, _text) in set.p0().iter_mut() {
                     for (index, item) in names.iter().enumerate().take(9 + 1) {
                         if items.item_number == *item {
                             //wtitle = items;
@@ -966,14 +1069,14 @@ pub fn gui_update(
             //    println!("Game running");
             //    return;
             //};
-            let mut game_running = globals.game_running;
+            let _game_running = globals.game_running;
             //   globals.game_running = true;
             let mut ispaused: bool = false;
             if let Ok(sink) = music_box_query.get_single() {
                 ispaused = sink.is_paused();
                 sink.pause();
             };
-            for (visibility, wheel, transform) in query.p0().iter() {
+            for (_visibility, wheel, _transform) in set.p2().iter() {
                 if wheel.item_number == selected_item {
                     println!(
                         "Launching {}",
@@ -982,14 +1085,14 @@ pub fn gui_update(
                     println!("Hide window");
                     window.visible = false;
 
-                    let (tx, rx) = mpsc::channel();
+                    let (tx, _rx) = mpsc::channel();
                     let tx = tx.clone();
                     let path = wheel.launch_path.clone();
-                    let mut global = globals.game_running.clone();
+                    let _global = globals.game_running.clone();
                     let (_config_path, loaded_config) = config::load_config().unwrap().unwrap();
                     let executable = loaded_config.vpx_executable; // .executable.clone();
 
-                    let pin_thread = std::thread::spawn(move || {
+                    let _pin_thread = std::thread::spawn(move || {
                         launch(&path, &executable, None);
                         thread::sleep(Duration::from_millis(2 as u64));
 
@@ -1023,13 +1126,13 @@ enum LoadingState {
     LevelIntitializing,
     LevelLoading,
     LevelReady,
-    LevelMenu,
+    _LevelMenu,
 }
 
 #[derive(AssetCollection, Resource)]
 struct ImageAssets {
     #[asset(key = "wheel")]
-    wheel: Handle<Image>,
+    _wheel: Handle<Image>,
 }
 
 #[derive(Resource, Debug, Default)]
@@ -1065,18 +1168,18 @@ pub struct AssetPaths {
     pub paths: HashMap<AssetId<Image>, String>,
 }
 
-#[derive(Resource)]
+/* #[derive(Resource)]
 pub struct AssetPath {
     pub handle: Handle<Image>,
     pub path: OsString,
-}
+} */
 
 // Marker component for easier deletion of entities.
-#[derive(Component)]
-struct LevelComponents;
+//#[derive(Component)]
+//struct LevelComponents;
 
 // Removes all currently loaded level assets from the game World.
-fn unload_current_level(
+/*fn unload_current_level(
     mut commands: Commands,
     // mut loading_state: ResMut<LoadingState>,
     entities: Query<Entity, With<LevelComponents>>,
@@ -1085,18 +1188,18 @@ fn unload_current_level(
     for entity in entities.iter() {
         commands.entity(entity).despawn_recursive();
     }
-}
+}*/
 
 // Monitors current loading status of assets.
 fn update_loading_data(
-    mut commands: Commands,
+    _commands: Commands,
     mut dialog: ResMut<DialogBox>,
     mut loading_data: ResMut<LoadingData>,
     mut game_state: ResMut<NextState<LoadingState>>,
     // mut loading_state: ResMut<LoadingState>,
     asset_server: Res<AssetServer>,
     pipelines_ready: Res<PipelinesReady>,
-    mut level_data: Res<LevelData>,
+    _level_data: Res<LevelData>,
     asset_paths: Res<AssetPaths>,
 ) {
     dialog.title = "Loading...".to_owned();
@@ -1138,18 +1241,18 @@ fn update_loading_data(
 }
 
 // Marker tag for loading screen components.
-#[derive(Component)]
-struct LoadingScreen;
+//#[derive(Component)]
+//struct LoadingScreen;
 
 // Spawns the necessary components for the loading screen.
 fn load_loading_screen(
-    mut commands: Commands,
-    mut dialog: ResMut<DialogBox>,
+    _commands: Commands,
+    dialog: ResMut<DialogBox>,
     mut contexts: EguiContexts,
     asset_server: Res<AssetServer>,
     window_query: Query<&Window, With<PrimaryWindow>>,
 ) {
-    let text_style = TextFont {
+    let _text_style = TextFont {
         font_size: 80.0,
         ..default()
     };
@@ -1160,13 +1263,13 @@ fn load_loading_screen(
 
     let width = window.resolution.width();
     let height = window.resolution.height();
-    let mut ctx = contexts.ctx_mut();
-    let raw_input = egui::RawInput::default();
+    let ctx = contexts.ctx_mut();
+    let _raw_input = egui::RawInput::default();
     //let x = TextColor::from(GHOST_WHITE);
 
     // Check if the texture is loaded if let Some(texture) = textures.get(texture_handle) { // Display the image using egui egui::Window::new("Image Window").show(egui_context.ctx_mut(), |ui| { let texture_id = egui::TextureId::User(texture_handle.id); ui.image(texture_id, [texture.size.width as f32, texture.size.height as f32
     //let texture_handle: Handle<Texture> = asset_server.load("//usr/tables/wheels/blankwheel.png");
-    let x: Handle<Image> = asset_server.load("left-flipper.png");
+    let _x: Handle<Image> = asset_server.load("left-flipper.png");
 
     /*   commands.spawn(FlipperBundle1 {
             sprite: Sprite {
@@ -1191,7 +1294,7 @@ fn load_loading_screen(
     */
 
     egui::Area::new(egui::Id::new("my area"))
-        .current_pos(egui::Pos2::new((width / 3.0) - 10.0, (height / 3.0)))
+        .current_pos(egui::Pos2::new((width / 3.0) - 10.0, height / 3.0))
         .show(&ctx, |ui| {
             ui.label(
                 egui::RichText::new(title)
@@ -1214,7 +1317,7 @@ fn load_loading_screen(
 // Determines when to show the loading screen
 fn display_loading_screen(
     // mut loading_screen: Query<&mut Visibility, With<LoadingScreen>>,
-    mut loading_state: ResMut<State<LoadingState>>,
+    loading_state: ResMut<State<LoadingState>>,
     //  loading_state: Res<LoadingState>,
 ) {
     //println!("loading state {:?}", loading_state.get());
@@ -1256,8 +1359,8 @@ mod pipelines_ready {
     }
 }
 
-fn level_selection(
-    mut commands: Commands,
+/* fn level_selection(
+    commands: Commands,
     keyboard: Res<ButtonInput<KeyCode>>,
     level_data: Res<LevelData>,
     // loading_state: Res<LoadingState>,
@@ -1268,6 +1371,7 @@ fn level_selection(
     }
     */
 }
+*/
 
 pub fn guifrontend(
     config: ResolvedConfig,
@@ -1352,7 +1456,7 @@ pub fn guifrontend(
         // TODO why does this happen so late?
         .add_systems(Startup, correct_window_size_and_position)
         .add_systems(Startup, setup)
-        .add_systems(Startup, (create_wheel, create_flippers))
+        .add_systems(Startup, (create_wheel, create_flippers, create_dmd))
         .insert_resource(LoadingData::new(5))
         //       .insert_resource(ClearColor(Color::srgb(0.9, 0.3, 0.6)))
         .add_systems(
@@ -1381,6 +1485,10 @@ pub fn guifrontend(
             Update,
             gui_update.run_if(in_state(LoadingState::LevelReady)),
         )
+        .add_systems(
+            Update,
+            dmd_update.run_if(in_state(LoadingState::LevelReady)),
+        )
         .init_state::<LoadingState>()
         .run();
     /*     eframe::run_native(
@@ -1397,16 +1505,18 @@ pub fn guifrontend(
 
 fn play_background_audio(asset_server: Res<AssetServer>, mut commands: Commands) {
     // Create an entity dedicated to playing our background music
-    let initialsettings = PlaybackSettings {
-        mode: bevy::audio::PlaybackMode::Loop,
-        paused: true,
-        ..default()
-    };
-
-    commands.spawn(AudioBundle {
-        source: bevy::prelude::AudioPlayer(asset_server.load("Pinball.ogg")),
-        settings: initialsettings,
-    });
+    //   let initialsettings = PlaybackSettings {
+    //       mode: bevy::audio::PlaybackMode::Loop,
+    //       paused: true,
+    //       ..default()
+    //  };
+    commands.spawn((
+        AudioPlayer::new(asset_server.load("Pinball.ogg")),
+        PlaybackSettings {
+            paused: true,
+            ..Default::default()
+        },
+    ));
 }
 
 /*fn volume_system(
@@ -1429,6 +1539,7 @@ struct StreamReceiver(Receiver<u32>);
 struct StreamSender(Sender<u32>);
 
 #[derive(Event)]
+#[allow(dead_code)]
 struct StreamEvent(u32);
 
 use crossbeam_channel::{bounded, Receiver, Sender};
@@ -1448,6 +1559,7 @@ fn read_stream(
     receiver: Res<StreamReceiver>,
     mut events: EventWriter<StreamEvent>,
 ) {
+    let _event_writer = &events;
     let mut window = window.single_mut();
     for from_stream in receiver.try_iter() {
         println!("Window visibility: {}", window.visible);

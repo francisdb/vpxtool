@@ -1,33 +1,54 @@
-use bevy::color::palettes::css::*;
-use bevy::core_pipeline::{
-    bloom::{BloomCompositeMode, BloomSettings},
-    tonemapping::Tonemapping,
-};
-use bevy::render::view::visibility;
-use bevy::sprite::{MaterialMesh2dBundle, Wireframe2dConfig, Wireframe2dPlugin};
+//use bevy::color::palettes::css::*;
+use bevy::prelude::*;
 use bevy::window::*;
-use bevy::{input::common_conditions::*, prelude::*};
-use bevy_asset::*;
-use bevy_asset_loader::prelude::*;
 use bevy_egui::egui::Align2;
-use bevy_egui::{egui, EguiContexts, EguiPlugin};
+use bevy_egui::{egui, EguiContexts};
 
-pub fn create_dmd(
-    mut commands: Commands,
-    keys: Res<ButtonInput<KeyCode>>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
-    window: &Window,
-    mut contexts: EguiContexts,
+pub fn dmd_update(
+    mut _commands: Commands,
+    //flipper: Query<&mut Transform, With<crate::guifrontend::Flipper>>,
+
+    //keys: Res<ButtonInput<KeyCode>>,
+    //mut meshes: ResMut<Assets<Mesh>>,
+    //mut materials: ResMut<Assets<ColorMaterial>>,
+    //window_query: Query<&Window, With<PrimaryWindow>>,
+    mut visibility: Query<&mut Visibility, With<crate::guifrontend::Dmd>>,
+    //mut contexts: EguiContexts,
 ) {
-    let dmd = (128, 32);
+    let _dmd = (128, 32);
+    for mut visibility in visibility.iter_mut() {
+        *visibility = Visibility::Visible;
+    }
+    //let _flipper_transform = flipper.get_single().unwrap();
+    //println!("Transform{:?}", flipper_transform.translation);
+    //let window = window_query.single();
+    //let width = window.resolution.width();
+    //let height = window.resolution.height();
+
+    /* let sprite = Sprite {
+        color: Color::srgb(1., 0.5, 0.0),
+        flip_x: false,
+        flip_y: false,
+        custom_size: Some(Vec2::new(512.0, 128.0)),
+        anchor: Default::default(),
+        ..default()
+    };  */
+    let _color = Color::srgba(0.5, 0., 0., 0.);
+
+    /*/   let paddle = commands
+    .spawn(SpriteBundle {
+        sprite: sprite,
+        transform: Transform::from_xyz(0.0, height / 10. * -1., 0.0),
+        //  ..Default::default()
+    })
+    .id(); */
 }
 
 pub fn create_info_box(
-    mut commands: Commands,
+    _commands: Commands,
     keys: Res<ButtonInput<KeyCode>>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
+    _meshes: ResMut<Assets<Mesh>>,
+    _materials: ResMut<Assets<ColorMaterial>>,
     window: &Window,
     mut contexts: EguiContexts,
     wtitle: String,
@@ -49,7 +70,7 @@ pub fn create_info_box(
         .vscroll(true)
         .current_pos(egui::Pos2::new(
             ((width / 2.0) - 250.0) - 10.0,
-            ((height / 2.0) - 250.0),
+            (height / 2.0) - 250.0,
         ))
         .min_width(500.0)
         .min_height(500.0)
@@ -58,7 +79,7 @@ pub fn create_info_box(
             //  ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
             //egui::ScrollArea::vertical()
             //   .min_scrolled_width(500.0)
-            ///  .auto_shrink(false)
+            //  .auto_shrink(false)
             // .animated(true)
             //.show(ui, |ui| {
             ui.add(egui::Label::wrap(egui::Label::new(&wtext)));
@@ -66,15 +87,15 @@ pub fn create_info_box(
         });
     //});
 
-    let mut loopstop = false;
+    let mut _loopstop = false;
 
     //println!("key: {:?}",keys.get_pressed());
     if keys.pressed(KeyCode::ShiftRight) {
-        println!("broken");
-        loopstop = true;
+        // println!("broken");
+        _loopstop = true;
     }
 
-    let window = Window {
+    let _window = Window {
         // Enable transparent support for the window
         transparent: true,
         decorations: true,
@@ -88,7 +109,7 @@ pub fn create_info_box(
     };
 }
 
-pub fn gui_update() {}
+// pub fn gui_update() {}
 
 /*let options = eframe::NativeOptions {
     viewport: egui::ViewportBuilder::default()
@@ -99,3 +120,9 @@ pub fn gui_update() {}
 
     ..Default::default()
 }; */
+
+#[derive(Bundle)]
+struct SpriteBundle {
+    sprite: Sprite,
+    transform: Transform,
+}
