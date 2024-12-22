@@ -44,6 +44,7 @@ pub fn dmd_update(
     .id(); */
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn create_info_box(
     _commands: Commands,
     keys: Res<ButtonInput<KeyCode>>,

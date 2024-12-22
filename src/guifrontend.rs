@@ -268,6 +268,7 @@ struct MenuTextBundle1 {
     text_item: TextItemGhostWhite,
 }
 
+#[allow(clippy::too_many_arguments)]
 fn create_wheel(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
@@ -299,7 +300,7 @@ fn create_wheel(
     //
     //let (_config_path, loaded_config) = config::load_config().unwrap().unwrap();
     let vpx_files_with_tableinfo1 = frontend_index(&config.config, true, vec![]).unwrap();
-    let roms = indexer::find_roms(&config.config.global_pinmame_rom_folder());
+    let roms = indexer::find_roms(config.config.global_pinmame_rom_folder());
     let roms1 = roms.unwrap();
     let tables: Vec<String> = frontend_index(&config.config, true, vec![])
         .unwrap()
@@ -378,7 +379,7 @@ fn create_wheel(
         // let mut temporary_table_name="None";
         //let mut handle =  asset_server.load(temporary_path_name);
         let temporary_table_name = match &info.table_info.table_name {
-            Some(tb) => &tb,
+            Some(tb) => tb,
             None => "None",
         };
 
@@ -439,7 +440,7 @@ fn create_wheel(
                 image: handle.clone(),
                 ..default()
             },
-            transform: transform,
+            transform,
             visibility: Visibility::Hidden,
             wheel: Wheel {
                 item_number: counter as i16,
@@ -664,7 +665,6 @@ fn create_flippers(
             ),
             scale: (Vec3::new(0.5, 0.5, 1.0)),
             rotation: Quat::from_rotation_z(-0.25),
-            ..default()
         },
         flipper: Flipper,
     });
@@ -684,7 +684,6 @@ fn create_flippers(
             ),
             scale: (Vec3::new(0.5, 0.5, 1.0)),
             rotation: Quat::from_rotation_z(0.25),
-            ..default()
         },
         flipper1: Flipper1,
     });
@@ -793,6 +792,7 @@ pub fn frontend_index(
     Ok(tables)
 }
 
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn gui_update(
     commands: Commands,
     keys: Res<ButtonInput<KeyCode>>,
@@ -880,11 +880,7 @@ pub fn gui_update(
             //   } else if keys.just_pressed(KeyCode::KeyN) {
             //       sink.play();
         } else if keys.just_pressed(KeyCode::Digit1) {
-            if globals.game_running {
-                globals.game_running = false;
-            } else {
-                globals.game_running = true;
-            }
+            globals.game_running = !globals.game_running;
         } else if keys.just_pressed(KeyCode::ShiftRight) {
             selected_item += 1;
         } else if keys.just_pressed(KeyCode::ShiftLeft) {
@@ -1088,18 +1084,17 @@ pub fn gui_update(
                     let (tx, _rx) = mpsc::channel();
                     let tx = tx.clone();
                     let path = wheel.launch_path.clone();
-                    let _global = globals.game_running.clone();
+                    let _global = globals.game_running;
                     let (_config_path, loaded_config) = config::load_config().unwrap().unwrap();
                     let executable = loaded_config.vpx_executable; // .executable.clone();
 
                     let _pin_thread = std::thread::spawn(move || {
                         launch(&path, &executable, None);
-                        thread::sleep(Duration::from_millis(2 as u64));
+                        thread::sleep(Duration::from_millis(2_u64));
 
                         println!("Vpinball done, sending event");
-                        match tx.send(1) {
-                            Ok(_tx1) => tx.send(1).unwrap(),
-                            _ => (),
+                        if let Ok(_tx1) = tx.send(1) {
+                            tx.send(1).unwrap()
                         };
 
                         window.visible = true;
@@ -1191,6 +1186,7 @@ pub struct AssetPath {
 }*/
 
 // Monitors current loading status of assets.
+#[allow(clippy::too_many_arguments)]
 fn update_loading_data(
     _commands: Commands,
     mut dialog: ResMut<DialogBox>,
@@ -1295,7 +1291,7 @@ fn load_loading_screen(
 
     egui::Area::new(egui::Id::new("my area"))
         .current_pos(egui::Pos2::new((width / 3.0) - 10.0, height / 3.0))
-        .show(&ctx, |ui| {
+        .show(ctx, |ui| {
             ui.label(
                 egui::RichText::new(title)
                     .size(50.0)
@@ -1321,13 +1317,9 @@ fn display_loading_screen(
     //  loading_state: Res<LoadingState>,
 ) {
     //println!("loading state {:?}", loading_state.get());
-    match loading_state.get() {
-        LoadingState::LevelLoading => {
-            //      *loading_screen.get_single_mut().unwrap() = Visibility::Hidden;
-            //     *loading_screen.get_single_mut().unwrap() = Visibility::Hidden;
-        }
-        //LoadingState::LevelReady => *loading_screen.get_single_mut().unwrap() = Visibility::Hidden,
-        _ => {}
+    if loading_state.get() == &LoadingState::LevelLoading {
+        //      *loading_screen.get_single_mut().unwrap() = Visibility::Hidden;
+        //     *loading_screen.get_single_mut().unwrap() = Visibility::Hidden;
     };
 }
 
@@ -1545,7 +1537,7 @@ struct StreamEvent(u32);
 use crossbeam_channel::{bounded, Receiver, Sender};
 
 fn setup(mut commands: Commands) {
-    commands.spawn(Camera2d::default());
+    commands.spawn(Camera2d);
 
     let (tx, rx) = bounded::<u32>(10);
 
