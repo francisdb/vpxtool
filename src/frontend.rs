@@ -14,7 +14,6 @@ use dialoguer::{FuzzySelect, Input, MultiSelect, Select};
 use indicatif::{ProgressBar, ProgressStyle};
 use is_executable::IsExecutable;
 use pinmame_nvram::dips::{get_all_dip_switches, set_dip_switches};
-use std::collections::HashSet;
 use std::fs::OpenOptions;
 use std::{
     fs::File,
@@ -128,6 +127,7 @@ pub fn frontend_index(
         recursive,
         &resolved_config.tables_folder,
         &resolved_config.tables_index_path,
+        Some(&resolved_config.global_pinmame_rom_folder()),
         &progress,
         force_reindex,
     );
@@ -142,14 +142,13 @@ pub fn frontend_index(
 pub fn frontend(
     config: &ResolvedConfig,
     mut vpx_files_with_tableinfo: Vec<IndexedTable>,
-    roms: &HashSet<String>,
     vpinball_executable: &Path,
 ) {
     let mut main_selection_opt = None;
     loop {
         let tables: Vec<String> = vpx_files_with_tableinfo
             .iter()
-            .map(|indexed| display_table_line_full(indexed, roms))
+            .map(|indexed| display_table_line_full(indexed))
             .collect();
 
         let mut selections = vec![SEARCH.bold().to_string(), RECENT.bold().to_string()];
@@ -180,7 +179,7 @@ pub fn frontend(
                                 .get(selected_index)
                                 .unwrap()
                                 .clone();
-                            let info_str = display_table_line_full(&info, roms);
+                            let info_str = display_table_line_full(&info);
                             table_menu(
                                 config,
                                 &mut vpx_files_with_tableinfo,
@@ -197,7 +196,7 @@ pub fn frontend(
                         let last_modified = recent.iter().rev().take(50).collect::<Vec<_>>();
                         let last_modified_str: Vec<String> = last_modified
                             .iter()
-                            .map(|indexed| display_table_line_full(indexed, roms))
+                            .map(|indexed| display_table_line_full(indexed))
                             .collect();
 
                         let selected = Select::with_theme(&ColorfulTheme::default())
@@ -209,7 +208,7 @@ pub fn frontend(
 
                         if let Some(selected_index) = selected {
                             let info = last_modified.get(selected_index).unwrap();
-                            let info_str = display_table_line_full(info, roms);
+                            let info_str = display_table_line_full(info);
                             table_menu(
                                 config,
                                 &mut vpx_files_with_tableinfo,
@@ -223,7 +222,7 @@ pub fn frontend(
                         let index = selection - 2;
 
                         let info = vpx_files_with_tableinfo.get(index).unwrap().clone();
-                        let info_str = display_table_line_full(&info, roms);
+                        let info_str = display_table_line_full(&info);
                         table_menu(
                             config,
                             &mut vpx_files_with_tableinfo,
@@ -527,7 +526,7 @@ fn clear_nvram(info: &IndexedTable) {
 
 /// Find the NVRAM file for a ROM, not checking if it exists
 fn nvram_for_rom(info: &IndexedTable) -> Option<PathBuf> {
-    info.local_rom_path.as_ref().and_then(|rom_path| {
+    info.rom_path().as_ref().and_then(|rom_path| {
         // ../nvram/[romname].nv
         rom_path.parent().and_then(|p| p.parent()).and_then(|p| {
             rom_path
@@ -655,11 +654,11 @@ fn display_table_line(table: &IndexedTable) -> String {
         .unwrap_or(file_name)
 }
 
-fn display_table_line_full(table: &IndexedTable, roms: &HashSet<String>) -> String {
+fn display_table_line_full(table: &IndexedTable) -> String {
     let base = display_table_line(table);
     let gamename_suffix = match &table.game_name {
         Some(name) => {
-            let rom_found = table.local_rom_path.is_some() || roms.contains(&name.to_lowercase());
+            let rom_found = table.rom_path().is_some();
             if rom_found {
                 format!(" - [{}]", name.dimmed())
             } else if table.requires_pinmame {
