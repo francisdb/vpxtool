@@ -188,21 +188,10 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
         Some((CMD_FRONTEND, _sub_matches)) => {
             let (config_path, config) = config::load_or_setup_config()?;
             println!("Using config file {}", config_path.display())?;
-            let roms = indexer::find_roms(config.global_pinmame_rom_folder())?;
-            if roms.is_empty() {
-                let warning = format!(
-                    "No roms found in {}",
-                    config.global_pinmame_rom_folder().display()
-                )
-                .yellow();
-                eprintln!("{}", warning)?;
-            } else {
-                println!(
-                    "Found {} roms in {}",
-                    roms.len(),
-                    config.global_pinmame_rom_folder().display()
-                )?;
-            }
+            println!(
+                "Using global pinmame rom folder {}",
+                config.global_pinmame_rom_folder().display()
+            )?;
             match frontend::frontend_index(&config, true, vec![]) {
                 Ok(tables) if tables.is_empty() => {
                     let warning =
@@ -212,12 +201,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 }
                 Ok(vpx_files_with_tableinfo) => {
                     let vpinball_executable = &config.vpx_executable;
-                    frontend::frontend(
-                        &config,
-                        vpx_files_with_tableinfo,
-                        &roms,
-                        vpinball_executable,
-                    );
+                    frontend::frontend(&config, vpx_files_with_tableinfo, vpinball_executable);
                     Ok(ExitCode::SUCCESS)
                 }
                 Err(IndexError::FolderDoesNotExist(path)) => {
@@ -263,12 +247,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 }
                 Ok(vpx_files_with_tableinfo) => {
                     let vpinball_executable = &config.vpx_executable;
-                    frontend::frontend(
-                        &config,
-                        vpx_files_with_tableinfo,
-                        &roms,
-                        vpinball_executable,
-                    );
+                    frontend::frontend(&config, vpx_files_with_tableinfo, vpinball_executable);
                     Ok(ExitCode::SUCCESS)
                 }
                 Err(IndexError::FolderDoesNotExist(path)) => {
@@ -322,6 +301,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 recursive,
                 &tables_folder_path,
                 &tables_index_path,
+                None,
                 &progress,
                 vec![],
             )
