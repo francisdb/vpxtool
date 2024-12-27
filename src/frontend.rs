@@ -148,7 +148,7 @@ pub fn frontend(
     loop {
         let tables: Vec<String> = vpx_files_with_tableinfo
             .iter()
-            .map(|indexed| display_table_line_full(indexed))
+            .map(display_table_line_full)
             .collect();
 
         let mut selections = vec![SEARCH.bold().to_string(), RECENT.bold().to_string()];

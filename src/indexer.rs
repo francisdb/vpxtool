@@ -727,7 +727,7 @@ mod tests {
         Ok(())
     }
 
-    fn test_script(temp_dir: &PathBuf, game_name: &str) -> io::Result<PathBuf> {
+    fn test_script(temp_dir: &Path, game_name: &str) -> io::Result<PathBuf> {
         // write simple script in tempdir
         let script = format!(
             r#"
