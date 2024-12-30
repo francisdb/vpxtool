@@ -38,7 +38,7 @@ vpin = { version = "0.17.2" }
 rust-ini = "0.21.1"
 edit = "0.1.5"
 jojodiff = "0.1.2"
-pinmame-nvram = "0.3.4"
+pinmame-nvram = "0.3.6"
 
 [dev-dependencies]
 pretty_assertions = "1.4.1"
