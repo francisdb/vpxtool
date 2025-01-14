@@ -173,7 +173,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
             let path = path.unwrap_or("");
             let expanded_path = expand_path_exists(path)?;
-            match script_diff(expanded_path) {
+            match script_diff(&expanded_path) {
                 Ok(output) => {
                     println!("{}", output)?;
                     Ok(ExitCode::SUCCESS)
@@ -223,7 +223,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
         Some((CMD_SIMPLE_FRONTEND, _sub_matches)) => {
             let (config_path, config) = config::load_or_setup_config()?;
             println!("Using config file {}", config_path.display())?;
-            let roms = indexer::find_roms(config.global_pinmame_rom_folder())?;
+            let roms = indexer::find_roms(&config.global_pinmame_rom_folder())?;
             if roms.is_empty() {
                 let warning = format!(
                     "No roms found in {}",
@@ -379,7 +379,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     .unwrap_or_default();
 
                 let expanded_path = expand_path_exists(path)?;
-                let diff = script_diff(expanded_path)?;
+                let diff = script_diff(&expanded_path)?;
                 println!("{}", diff)?;
                 Ok(ExitCode::SUCCESS)
             }
@@ -662,7 +662,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 Some(config_path) => {
                     let loaded_config = config::load_config()?;
                     let config = loaded_config.as_ref().map(|c| &c.1);
-                    open_editor(config_path, config)?;
+                    open_editor(&config_path, config)?;
                     Ok(ExitCode::SUCCESS)
                 }
                 None => fail("No config file found"),
@@ -1095,7 +1095,7 @@ fn handle_extractvbs(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
     let directory = sub_matches
         .get_one::<String>("OUTPUT_DIRECTORY")
         .map(expand_path);
-    let expanded_vpx_path = path_exists(vpx_path.expect("should be checked by clap"))?;
+    let expanded_vpx_path = path_exists(&vpx_path.expect("should be checked by clap"))?;
     if vbs_path.is_some() && directory.is_some() {
         return fail("Conflicting VBSPATH and DIRECTORY options, only one can be used");
     }
@@ -1127,7 +1127,7 @@ fn handle_extractvbs(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
 }
 
 fn extract_directb2s(expanded_path: &PathBuf) -> io::Result<()> {
-    let file = File::open(expanded_path).unwrap();
+    let file = File::open(expanded_path)?;
     let reader = BufReader::new(file);
     match read(reader) {
         Ok(b2s) => {
@@ -1280,25 +1280,25 @@ fn expand_path<S: AsRef<str>>(path: S) -> PathBuf {
 fn expand_path_exists<S: AsRef<str>>(path: S) -> io::Result<PathBuf> {
     // TODO expand all instead of only tilde?
     let expanded_path = shellexpand::tilde(path.as_ref());
-    path_exists(PathBuf::from(expanded_path.to_string()))
+    path_exists(&PathBuf::from(expanded_path.to_string()))
 }
 
-fn path_exists<P: AsRef<Path>>(expanded_path: P) -> io::Result<PathBuf> {
-    match metadata(expanded_path.as_ref()) {
+fn path_exists(expanded_path: &Path) -> io::Result<PathBuf> {
+    match metadata(expanded_path) {
         Ok(md) => {
             if !md.is_file() && !md.is_dir() && md.is_symlink() {
                 Err(io::Error::new(
                     io::ErrorKind::InvalidInput,
-                    format!("{} is not a file", expanded_path.as_ref().display()),
+                    format!("{} is not a file", expanded_path.display()),
                 ))
             } else {
-                Ok(expanded_path.as_ref().to_path_buf())
+                Ok(expanded_path.to_path_buf())
             }
         }
         Err(msg) => {
             let warning = format!(
                 "Failed to read metadata for {}: {}",
-                expanded_path.as_ref().display(),
+                expanded_path.display(),
                 msg
             );
             Err(io::Error::new(io::ErrorKind::InvalidInput, warning))
@@ -1387,7 +1387,7 @@ fn info_gather(vpx_file_path: &PathBuf) -> io::Result<String> {
     Ok(buffer)
 }
 
-fn info_extract(vpx_file_path: &PathBuf) -> io::Result<ExitCode> {
+fn info_extract(vpx_file_path: &Path) -> io::Result<ExitCode> {
     let info_file_path = vpx_file_path.with_extension("info.json");
     if info_file_path.exists() {
         let confirmed = confirm(
@@ -1404,7 +1404,7 @@ fn info_extract(vpx_file_path: &PathBuf) -> io::Result<ExitCode> {
     Ok(ExitCode::SUCCESS)
 }
 
-fn write_info_json(vpx_file_path: &PathBuf, info_file_path: &PathBuf) -> io::Result<()> {
+fn write_info_json(vpx_file_path: &Path, info_file_path: &Path) -> io::Result<()> {
     let mut vpx_file = vpx::open(vpx_file_path)?;
     let table_info = vpx_file.read_tableinfo()?;
     let custom_info_tags = vpx_file.read_custominfotags()?;
@@ -1414,7 +1414,7 @@ fn write_info_json(vpx_file_path: &PathBuf, info_file_path: &PathBuf) -> io::Res
     Ok(())
 }
 
-fn info_edit(vpx_file_path: &PathBuf, config: Option<&ResolvedConfig>) -> io::Result<PathBuf> {
+fn info_edit(vpx_file_path: &Path, config: Option<&ResolvedConfig>) -> io::Result<PathBuf> {
     let info_file_path = vpx_file_path.with_extension("info.json");
     if !info_file_path.exists() {
         write_info_json(vpx_file_path, &info_file_path)?;
@@ -1423,16 +1423,16 @@ fn info_edit(vpx_file_path: &PathBuf, config: Option<&ResolvedConfig>) -> io::Re
     Ok(info_file_path)
 }
 
-fn open_editor<P: AsRef<Path>>(file_to_edit: P, config: Option<&ResolvedConfig>) -> io::Result<()> {
+fn open_editor(file_to_edit: &Path, config: Option<&ResolvedConfig>) -> io::Result<()> {
     match config.iter().flat_map(|c| c.editor.clone()).next() {
-        Some(editor) => open_configured_editor(&file_to_edit, &editor),
+        Some(editor) => open_configured_editor(file_to_edit, &editor),
         None => edit::edit_file(file_to_edit),
     }
 }
 
-fn open_configured_editor<P: AsRef<Path>>(file_to_edit: &P, editor: &String) -> io::Result<()> {
+fn open_configured_editor(file_to_edit: &Path, editor: &String) -> io::Result<()> {
     let mut command = std::process::Command::new(editor);
-    command.arg(file_to_edit.as_ref());
+    command.arg(file_to_edit);
     command.stdout(std::process::Stdio::inherit());
     command.stderr(std::process::Stdio::inherit());
     match command.status() {
@@ -1529,21 +1529,19 @@ pub fn extract(vpx_file_path: &Path, yes: bool) -> io::Result<ExitCode> {
     }
 }
 
-pub fn info_diff<P: AsRef<Path>>(vpx_file_path: P) -> io::Result<String> {
-    let expanded_vpx_path = expand_path_exists(vpx_file_path.as_ref().to_str().unwrap())?;
+pub fn info_diff(vpx_file_path: &Path) -> io::Result<String> {
+    let expanded_vpx_path = expand_path_exists(vpx_file_path.to_str().unwrap())?;
     let info_file_path = expanded_vpx_path.with_extension("info.json");
-    let original_info_path = vpx_file_path.as_ref().with_extension("info.original.tmp");
     if info_file_path.exists() {
-        write_info_json(&expanded_vpx_path, &original_info_path)?;
+        let original_info_path =
+            RemoveOnDrop::new(vpx_file_path.with_extension("info.original.tmp"));
+        write_info_json(&expanded_vpx_path, original_info_path.path())?;
         let diff_color = if colored::control::SHOULD_COLORIZE.should_colorize() {
             DiffColor::Always
         } else {
             DiffColor::Never
         };
-        let output = run_diff(&original_info_path, &info_file_path, diff_color)?;
-        if original_info_path.exists() {
-            std::fs::remove_file(original_info_path)?;
-        }
+        let output = run_diff(original_info_path.path(), &info_file_path, diff_color)?;
         Ok(String::from_utf8_lossy(&output).to_string())
     } else {
         let msg = format!("No sidecar info file found: {}", info_file_path.display());
@@ -1551,35 +1549,27 @@ pub fn info_diff<P: AsRef<Path>>(vpx_file_path: P) -> io::Result<String> {
     }
 }
 
-pub fn script_diff<P: AsRef<Path>>(vpx_file_path: P) -> io::Result<String> {
+pub fn script_diff(vpx_file_path: &Path) -> io::Result<String> {
     // set extension for PathBuf
-    let vbs_path = vpx_file_path.as_ref().with_extension("vbs");
-    let original_vbs_path = vpx_file_path.as_ref().with_extension("vbs.original.tmp");
-
+    let vbs_path = vpx_file_path.with_extension("vbs");
     if vbs_path.exists() {
         match vpx::open(&vpx_file_path) {
             Ok(mut vpx_file) => {
                 let gamedata = vpx_file.read_gamedata()?;
                 let script = gamedata.code;
-                std::fs::write(&original_vbs_path, script.string)?;
+                let original_vbs_path =
+                    RemoveOnDrop::new(vpx_file_path.with_extension("vbs.original.tmp"));
+                std::fs::write(original_vbs_path.path(), script.string)?;
                 let diff_color = if colored::control::SHOULD_COLORIZE.should_colorize() {
                     DiffColor::Always
                 } else {
                     DiffColor::Never
                 };
-                let output = run_diff(&original_vbs_path, &vbs_path, diff_color)?;
-
-                if original_vbs_path.exists() {
-                    std::fs::remove_file(original_vbs_path)?;
-                }
+                let output = run_diff(original_vbs_path.path(), &vbs_path, diff_color)?;
                 Ok(String::from_utf8_lossy(&output).to_string())
             }
             Err(e) => {
-                let msg = format!(
-                    "Not a valid vpx file {}: {}",
-                    vpx_file_path.as_ref().display(),
-                    e
-                );
+                let msg = format!("Not a valid vpx file {}: {}", vpx_file_path.display(), e);
                 Err(io::Error::new(io::ErrorKind::InvalidData, msg))
             }
         }
@@ -1587,6 +1577,29 @@ pub fn script_diff<P: AsRef<Path>>(vpx_file_path: P) -> io::Result<String> {
         // wrap the error
         let msg = format!("No sidecar vbs file found: {}", vbs_path.display());
         Err(io::Error::new(io::ErrorKind::NotFound, msg))
+    }
+}
+
+/// Path to file that will be removed when it goes out of scope
+struct RemoveOnDrop {
+    path: PathBuf,
+}
+impl RemoveOnDrop {
+    fn new(path: PathBuf) -> Self {
+        RemoveOnDrop { path }
+    }
+
+    fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+impl Drop for RemoveOnDrop {
+    fn drop(&mut self) {
+        if self.path.exists() {
+            // silently ignore any errors
+            let _ = std::fs::remove_file(&self.path);
+        }
     }
 }
 
@@ -1618,7 +1631,7 @@ pub fn run_diff(
         .file_name()
         .unwrap_or(original_vbs_path.as_os_str());
     let vbs_filename = vbs_path.file_name().unwrap_or(vbs_path.as_os_str());
-    std::process::Command::new("diff")
+    let result = std::process::Command::new("diff")
         .current_dir(parent)
         .arg("-u")
         .arg("-w")
@@ -1626,7 +1639,14 @@ pub fn run_diff(
         .arg(original_vbs_filename)
         .arg(vbs_filename)
         .output()
-        .map(|o| o.stdout)
+        .map(|o| o.stdout);
+    result.map_err(|e| {
+        let msg = format!(
+            "Failed to run 'diff'. Is it installed on your system? {}",
+            e
+        );
+        io::Error::new(io::ErrorKind::Other, msg)
+    })
 }
 
 fn show_dip_switches(nvram: &PathBuf) -> io::Result<String> {
