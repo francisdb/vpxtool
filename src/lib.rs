@@ -1553,7 +1553,7 @@ pub fn script_diff(vpx_file_path: &Path) -> io::Result<String> {
     // set extension for PathBuf
     let vbs_path = vpx_file_path.with_extension("vbs");
     if vbs_path.exists() {
-        match vpx::open(&vpx_file_path) {
+        match vpx::open(vpx_file_path) {
             Ok(mut vpx_file) => {
                 let gamedata = vpx_file.read_gamedata()?;
                 let script = gamedata.code;

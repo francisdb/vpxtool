@@ -235,7 +235,7 @@ pub fn find_roms(rom_path: &Path) -> io::Result<HashMap<String, PathBuf>> {
 pub fn find_vpx_files(recursive: bool, tables_path: &Path) -> io::Result<Vec<PathWithMetadata>> {
     if recursive {
         let mut vpx_files = Vec::new();
-        let mut entries = walk_dir_filtered(&tables_path);
+        let mut entries = walk_dir_filtered(tables_path);
         entries.try_for_each(|entry| {
             let dir_entry = entry?;
             let path = dir_entry.path();
@@ -331,7 +331,7 @@ pub fn index_folder(
         return Err(IndexError::FolderDoesNotExist(tables_folder.to_path_buf()));
     }
 
-    let existing_index = read_index_json(&tables_index_path)?;
+    let existing_index = read_index_json(tables_index_path)?;
     if let Some(index) = &existing_index {
         println!(
             "  Found existing index with {} tables at {}",
