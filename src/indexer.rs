@@ -202,8 +202,8 @@ impl From<TablesIndexJson> for TablesIndex {
 }
 
 /// Returns all roms names lower case for the roms in the given folder
-pub fn find_roms<P: AsRef<Path>>(rom_path: P) -> io::Result<HashMap<String, PathBuf>> {
-    if !rom_path.as_ref().exists() {
+pub fn find_roms(rom_path: &Path) -> io::Result<HashMap<String, PathBuf>> {
+    if !rom_path.exists() {
         return Ok(HashMap::new());
     }
     // TODO
@@ -232,13 +232,10 @@ pub fn find_roms<P: AsRef<Path>>(rom_path: P) -> io::Result<HashMap<String, Path
     Ok(roms)
 }
 
-pub fn find_vpx_files<P: AsRef<Path>>(
-    recursive: bool,
-    tables_path: P,
-) -> io::Result<Vec<PathWithMetadata>> {
+pub fn find_vpx_files(recursive: bool, tables_path: &Path) -> io::Result<Vec<PathWithMetadata>> {
     if recursive {
         let mut vpx_files = Vec::new();
-        let mut entries = walk_dir_filtered(&tables_path);
+        let mut entries = walk_dir_filtered(tables_path);
         entries.try_for_each(|entry| {
             let dir_entry = entry?;
             let path = dir_entry.path();
@@ -277,9 +274,7 @@ pub fn find_vpx_files<P: AsRef<Path>>(
 }
 
 /// Walks the directory and filters out .git and __MACOSX folders
-fn walk_dir_filtered<P: AsRef<Path>>(
-    tables_path: &P,
-) -> FilterEntry<IntoIter, fn(&DirEntry) -> bool> {
+fn walk_dir_filtered(tables_path: &Path) -> FilterEntry<IntoIter, fn(&DirEntry) -> bool> {
     WalkDir::new(tables_path).into_iter().filter_entry(|entry| {
         let path = entry.path();
         let git = std::path::Component::Normal(".git".as_ref());
@@ -319,31 +314,29 @@ impl From<io::Error> for IndexError {
 /// Returns the index.
 /// If the index file already exists, it will be read and updated.
 /// If the index file does not exist, it will be created.
-pub fn index_folder<P: AsRef<Path>>(
+pub fn index_folder(
     recursive: bool,
-    tables_folder: P,
-    tables_index_path: P,
-    global_roms_path: Option<P>,
+    tables_folder: &Path,
+    tables_index_path: &Path,
+    global_roms_path: Option<&Path>,
     progress: &impl Progress,
     force_reindex: Vec<PathBuf>,
 ) -> Result<TablesIndex, IndexError> {
     let global_roms = global_roms_path
         .map(find_roms)
         .unwrap_or_else(|| Ok(HashMap::new()))?;
-    println!("Indexing {}", tables_folder.as_ref().display());
+    println!("Indexing {}", tables_folder.display());
 
-    if !tables_folder.as_ref().exists() {
-        return Err(IndexError::FolderDoesNotExist(
-            tables_folder.as_ref().to_path_buf(),
-        ));
+    if !tables_folder.exists() {
+        return Err(IndexError::FolderDoesNotExist(tables_folder.to_path_buf()));
     }
 
-    let existing_index = read_index_json(&tables_index_path)?;
+    let existing_index = read_index_json(tables_index_path)?;
     if let Some(index) = &existing_index {
         println!(
             "  Found existing index with {} tables at {}",
             index.tables.len(),
-            tables_index_path.as_ref().display()
+            tables_index_path.display()
         );
     }
     let mut index = existing_index.unwrap_or(TablesIndex::empty());
@@ -549,23 +542,20 @@ fn consider_sidecar_vbs(path: &Path, game_data: GameData) -> io::Result<String> 
     Ok(code)
 }
 
-fn last_modified<P: AsRef<Path>>(path: P) -> io::Result<SystemTime> {
-    let metadata: Metadata = path.as_ref().metadata()?;
+fn last_modified(path: &Path) -> io::Result<SystemTime> {
+    let metadata: Metadata = path.metadata()?;
     metadata.modified()
 }
 
-pub fn write_index_json<P: AsRef<Path>>(
-    indexed_tables: &TablesIndex,
-    json_path: P,
-) -> io::Result<()> {
+pub fn write_index_json(indexed_tables: &TablesIndex, json_path: &Path) -> io::Result<()> {
     let json_file = File::create(json_path)?;
     let indexed_tables_json: TablesIndexJson = indexed_tables.into();
     serde_json::to_writer_pretty(json_file, &indexed_tables_json)
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
 }
 
-pub fn read_index_json<P: AsRef<Path>>(json_path: P) -> io::Result<Option<TablesIndex>> {
-    if !json_path.as_ref().exists() {
+pub fn read_index_json(json_path: &Path) -> io::Result<Option<TablesIndex>> {
+    if !json_path.exists() {
         return Ok(None);
     }
     let json_file = File::open(json_path)?;
@@ -819,7 +809,7 @@ mod tests {
     #[test]
     fn test_read_index_missing() -> io::Result<()> {
         let index_path = PathBuf::from("missing_index_file.json");
-        let read = read_index_json(index_path)?;
+        let read = read_index_json(&index_path)?;
         assert_eq!(read, None);
         Ok(())
     }
