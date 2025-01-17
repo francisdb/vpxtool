@@ -22,6 +22,7 @@ fn run() -> io::Result<ExitCode> {
             &VoidProgress,
             Vec::new(),
         )?;
+        // TODO we want to run the indexer once the frontend has started and report progress in the frontend
         guifrontend::guifrontend(resolved_config.clone(), index.tables());
         Ok(ExitCode::SUCCESS)
     } else {

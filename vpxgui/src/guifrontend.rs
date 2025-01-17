@@ -1,62 +1,25 @@
-mod menus;
 use bevy::color::palettes::css::*;
-//use bevy::core_pipeline::{
-//    bloom::{BloomCompositeMode, BloomSettings},
-//    tonemapping::Tonemapping,
-//};
 
-use bevy::ecs::system::SystemId;
-//use bevy::render::view::visibility;
-//use bevy::sprite::{MaterialMesh2dBundle, Wireframe2dConfig, Wireframe2dPlugin};
-//use bevy::sprite::{MaterialMesh2dBundle, Mesh2dHandle, Wireframe2dConfig, Wireframe2dPlugin};
-
+use crate::menus::*;
 use bevy::prelude::*;
-//use bevy::{input::common_conditions::*, prelude::*};
-//use bevy_asset::*;
+use bevy::window::*;
+use bevy_asset::RecursiveDependencyLoadState;
 use bevy_asset_loader::prelude::*;
 use bevy_egui::{egui, EguiContexts, EguiPlugin};
 use image::ImageReader;
-use menus::*;
+use is_executable::IsExecutable;
+use pipelines_ready::*;
+use shared::config::{ResolvedConfig, VPinballConfig};
+use shared::indexer::IndexedTable;
 use std::collections::HashMap;
-//use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
-//use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 use std::{
-    //   fs::File,
     io,
-    //   io::Write,
     path::{Path, PathBuf},
     process::{exit, ExitStatus},
 };
-
-use shared::config::{ResolvedConfig, VPinballConfig};
-//use crate::indexer::{find_vpx_files, IndexError, IndexedTable, Progress};
-use shared::indexer::{IndexError, IndexedTable, VoidProgress};
-//use crate::patcher::LineEndingsResult::{NoChanges, Unified};
-//use crate::patcher::{patch_vbs_file, unify_line_endings_vbs_file};
-//use crate::{
-//    indexer, info_diff, info_edit, info_gather, open_editor, run_diff, script_diff,
-//    vpx::{extractvbs, vbs_path_for, ExtractResult},
-//   DiffColor, ProgressBarProgress,
-//};
-use shared::indexer;
-//use bevy::utils::info;
-use bevy::window::*;
-use is_executable::IsExecutable;
-use pipelines_ready::*;
-//use std::ffi::{OsStr, OsString};
-//use std::ffi::OsString;
-//const LAUNCH: Emoji = Emoji("🚀", "[launch]");
-//const CRASH: Emoji = Emoji("💥", "[crash]");
-
-//const SEARCH: &str = "> Search";
-//const RECENT: &str = "> Recent";
-//const SEARCH_INDEX: usize = 0;
-//const RECENT_INDEX: usize = 1;
-//const HORIZONTAL: bool = false;
-//const VERTICAL: bool = true;
 
 #[derive(Component)]
 pub struct Wheel {
@@ -112,11 +75,6 @@ pub struct VpxConfig {
 pub struct VpxTables {
     pub indexed_tables: Vec<IndexedTable>,
 }
-
-//#[derive(Component, Debug)]
-//pub struct InfoBox {
-// infostring: String,
-//}
 
 #[derive(Resource, Debug)]
 pub struct Globals {
@@ -275,33 +233,14 @@ fn create_wheel(
     vpx_tables: Res<VpxTables>,
     mut asset_paths: ResMut<AssetPaths>,
 ) {
-    let level_data = LevelData {
-        level_1_id: commands.register_system(gui_update),
-    };
-    let _systemid = level_data.level_1_id;
-    commands.insert_resource(level_data);
     let _list_of_tables = &vpx_tables.indexed_tables;
-
-    //config: &ResolvedConfig,
-    //vpx_files_with_tableinfo: &mut Vec<IndexedTable>,
-    //vpinball_executable: &Path,
-    //info: &IndexedTable,
-    //info_str: &str,
 
     // commands.spawn(SpriteBundle {
     //     texture: asset_server.load("/usr/tables/wheels/Sing Along (Gottlieb 1967).png"),
     //    ..default()
     // });
-    //
-    //let (_config_path, loaded_config) = config::load_config().unwrap().unwrap();
-    let vpx_files_with_tableinfo1 = frontend_index(&config.config, true, vec![]).unwrap();
-    let roms = indexer::find_roms(&config.config.global_pinmame_rom_folder());
-    let roms1 = roms.unwrap();
-    let tables: Vec<String> = frontend_index(&config.config, true, vec![])
-        .unwrap()
-        .iter()
-        .map(|indexed| display_table_line_full(indexed, &roms1))
-        .collect();
+    let tables = &vpx_tables.indexed_tables;
+
     //let temporary_path_name="";
 
     let window = window_query.single();
@@ -317,10 +256,7 @@ fn create_wheel(
     // };
 
     //let mut scale = width/10.;
-    let tables_len = tables.len();
     //let mut entities=0.;
-    let mut counter: usize = 0;
-    let mut xlocation = 0;
     //let locations = [
     //    -(width/2.)+scale,
     //    -(scale*2.),
@@ -342,15 +278,11 @@ fn create_wheel(
     blank_path.push("/wheels/blankwheel.png");
     if !Path::new(&blank_path).exists() {
         // will be loaded from assets
-        println!("Please copy the blankwheel.png to {:?}", blank_path);
+        warn!("Please copy the blankwheel.png to {:?}", blank_path);
         blank_path = PathBuf::from("blankwheel.png").into_os_string();
     }
 
-    while counter < (tables_len) {
-        if xlocation > 4 {
-            xlocation = 0
-        };
-        let info = vpx_files_with_tableinfo1.get(counter).unwrap().clone();
+    for (counter, info) in tables.iter().enumerate() {
         /*    match &info.wheel_path {
                   Some(path)=> println!("{}",&path.as_os_str().to_string_lossy()),
                   None => println!("NONE"),
@@ -360,41 +292,33 @@ fn create_wheel(
         //let mut temporary_path_name= &info.wheel_path.unwrap();
         //blank_path.into();
 
-        let temporary_path_name = match &info.wheel_path {
-            // get handle from path
-            Some(path) => {
-                //haswheel = false;
-                PathBuf::from(path)
-            }
-            None => {
-                //haswheel = true;
-                PathBuf::from(blank_path.clone())
-            }
-        };
-        // let mut temporary_table_name="None";
-        //let mut handle =  asset_server.load(temporary_path_name);
-        let temporary_table_name = match &info.table_info.table_name {
-            Some(tb) => tb,
-            None => "None",
-        };
-
         // let table_info = match &info.table_info.table_rules {
         //    Some(tb) => &tb,
         //    None => "None",
         //    };
-        let handle = asset_server.load(temporary_path_name.clone());
-        loading_data.loading_assets.push(handle.clone().into());
-        // Normalizing the dimentions of wheels so they are all the same size.
-        //  using imagesize crate as it is a very fast way to get the dimentions.
+
+        let wheel_path = match &info.wheel_path {
+            // get handle from path
+            Some(path) => PathBuf::from(path),
+            None => PathBuf::from(blank_path.clone()),
+        };
+        let wheel_image_handle = asset_server.load(wheel_path.clone());
+        loading_data
+            .loading_assets
+            .push(wheel_image_handle.clone().into());
+        // Normalizing the dimensions of wheels so they are all the same size.
+        //  using imagesize crate as it is a very fast way to get the dimensions.
         let (_wheel_width, _wheel_height) = (0., 0.);
 
         // Set default wheel size
+        // TODO why is this done for every wheel?
         commands.insert_resource(Globals {
             wheel_size: (height / 3.),
             game_running: false,
         });
 
-        let image = ImageReader::open(&temporary_path_name)
+        // TODO below code is blocking, should be offloaded to a thread?
+        let image = ImageReader::open(&wheel_path)
             .unwrap()
             .into_dimensions()
             .unwrap();
@@ -407,21 +331,20 @@ fn create_wheel(
             100.0,
         );
 
-        println!(
-            "Initializing:  {}",
-            &temporary_path_name.as_os_str().to_string_lossy()
+        info!(
+            "Wheel asset for table {} = {} {}",
+            info.path.display(),
+            wheel_path.display(),
+            wheel_image_handle.id(),
         );
-        //   }
-        // Err(why) => println!(
-        //    "Error getting dimensions: {} {:?}",
-        //    &temporary_path_name.as_os_str().to_string_lossy(),
-        //    why
-        //     ),
-        //};
 
+        let temporary_table_name = match &info.table_info.table_name {
+            Some(tb) => tb,
+            None => "None",
+        };
         asset_paths
             .paths
-            .insert(handle.clone().id(), temporary_table_name.to_owned());
+            .insert(wheel_image_handle.id(), temporary_table_name.to_owned());
 
         // Wheel
         commands.spawn(WheelBundle {
@@ -432,7 +355,7 @@ fn create_wheel(
                          */
             sprite: Sprite {
                 // texture: asset_server.load("/usr/tables/wheels/Sing Along (Gottlieb 1967).png"),
-                image: handle.clone(),
+                image: wheel_image_handle.clone(),
                 ..default()
             },
             transform,
@@ -533,8 +456,6 @@ fn create_wheel(
         });
 
         //let image = image::load(BufReader::new(File::open("foo.png")?), ImageFormat::Jpeg)?;
-        counter += 1;
-        xlocation += 1;
         //entities +=1.;
     }
     // commands.spawn((Camera2dBundle
@@ -682,101 +603,6 @@ fn create_flippers(
         },
         flipper1: Flipper1,
     });
-}
-/*
-enum TableOption {
-    Launch,
-    LaunchFullscreen,
-    LaunchWindowed,
-    ForceReload,
-    InfoShow,
-    InfoEdit,
-    InfoDiff,
-    ExtractVBS,
-    EditVBS,
-    PatchVBS,
-    UnifyLineEndings,
-    ShowVBSDiff,
-    CreateVBSPatch,
-    // ClearNVRAM,
-}
-
-impl TableOption {
-    const _ALL: [TableOption; 13] = [
-        TableOption::Launch,
-        TableOption::LaunchFullscreen,
-        TableOption::LaunchWindowed,
-        TableOption::ForceReload,
-        TableOption::InfoShow,
-        TableOption::InfoEdit,
-        TableOption::InfoDiff,
-        TableOption::ExtractVBS,
-        TableOption::EditVBS,
-        TableOption::PatchVBS,
-        TableOption::UnifyLineEndings,
-        TableOption::ShowVBSDiff,
-        TableOption::CreateVBSPatch,
-        // TableOption::ClearNVRAM,
-    ];
-
-    fn _from_index(index: usize) -> Option<TableOption> {
-        match index {
-            0 => Some(TableOption::Launch),
-            1 => Some(TableOption::LaunchFullscreen),
-            2 => Some(TableOption::LaunchWindowed),
-            3 => Some(TableOption::ForceReload),
-            4 => Some(TableOption::InfoShow),
-            5 => Some(TableOption::InfoEdit),
-            6 => Some(TableOption::InfoDiff),
-            7 => Some(TableOption::ExtractVBS),
-            8 => Some(TableOption::EditVBS),
-            9 => Some(TableOption::PatchVBS),
-            10 => Some(TableOption::UnifyLineEndings),
-            11 => Some(TableOption::ShowVBSDiff),
-            12 => Some(TableOption::CreateVBSPatch),
-            // 13 => Some(TableOption::ClearNVRAM),
-            _ => None,
-        }
-    }
-*/
-/*     fn display(&self) -> String {
-    match self {
-        TableOption::Launch => "Launch".to_string(),
-        TableOption::LaunchFullscreen => "Launch fullscreen".to_string(),
-        TableOption::LaunchWindowed => "Launch windowed".to_string(),
-        TableOption::ForceReload => "Force reload".to_string(),
-        TableOption::InfoShow => "Info > Show".to_string(),
-        TableOption::InfoEdit => "Info > Edit".to_string(),
-        TableOption::InfoDiff => "Info > Diff".to_string(),
-        TableOption::ExtractVBS => "VBScript > Extract".to_string(),
-        TableOption::EditVBS => "VBScript > Edit".to_string(),
-        TableOption::PatchVBS => "VBScript > Patch typical standalone issues".to_string(),
-        TableOption::UnifyLineEndings => "VBScript > Unify line endings".to_string(),
-        TableOption::ShowVBSDiff => "VBScript > Diff".to_string(),
-        TableOption::CreateVBSPatch => "VBScript > Create patch file".to_string(),
-        // TableOption::ClearNVRAM => "Clear NVRAM".to_string(),
-    }
-} */
-//}
-
-pub fn frontend_index(
-    resolved_config: &ResolvedConfig,
-    recursive: bool,
-    force_reindex: Vec<PathBuf>,
-) -> Result<Vec<IndexedTable>, IndexError> {
-    let index = indexer::index_folder(
-        recursive,
-        &resolved_config.tables_folder,
-        &resolved_config.tables_index_path,
-        Some(&resolved_config.global_pinmame_rom_folder()),
-        &VoidProgress,
-        force_reindex,
-    );
-    let index = index?;
-
-    let mut tables: Vec<IndexedTable> = index.tables();
-    tables.sort_by_key(|indexed| display_table_line(indexed).to_lowercase());
-    Ok(tables)
 }
 
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
@@ -1140,12 +966,6 @@ impl LoadingData {
     }
 }
 
-// This resource will hold the level related systems ID for later use.
-#[derive(Resource)]
-struct LevelData {
-    level_1_id: SystemId,
-}
-
 #[derive(Resource, Default)]
 pub struct AssetPaths {
     pub paths: HashMap<AssetId<Image>, String>,
@@ -1183,11 +1003,9 @@ fn update_loading_data(
     // mut loading_state: ResMut<LoadingState>,
     asset_server: Res<AssetServer>,
     pipelines_ready: Res<PipelinesReady>,
-    _level_data: Res<LevelData>,
     asset_paths: Res<AssetPaths>,
 ) {
-    dialog.title = "Loading...".to_owned();
-    //dialog.text = "test".to_owned();
+    dialog.title = format!("Loading {}...", loading_data.loading_assets.len());
     if !loading_data.loading_assets.is_empty() || !pipelines_ready.0 {
         // If we are still loading assets / pipelines are not fully compiled,
         // we reset the confirmation frame count.
@@ -1197,19 +1015,28 @@ fn update_loading_data(
         // Any assets that are loaded are then added to the pop list for later removal.
         let mut pop_list: Vec<usize> = Vec::new();
         for (index, asset) in loading_data.loading_assets.iter().enumerate() {
-            if let Some(state) = asset_server.get_load_states(asset) {
-                if let bevy::asset::RecursiveDependencyLoadState::Loaded = state.2 {
-                    let id = asset.id().typed_unchecked::<Image>();
-                    dialog.text = asset_paths.paths.get(&id).cloned().unwrap();
-                    pop_list.push(index);
-                }
+            // log asset name
+            // info!("asset {:?}", asset);
+            if let Some((_, _, RecursiveDependencyLoadState::Loaded)) =
+                asset_server.get_load_states(asset)
+            {
+                let id = asset.id().typed_unchecked::<Image>();
+                // Since for example the default asset is shared this will repeatedly the last
+                // path that was loaded.
+                info!("loading {}", asset_paths.paths.get(&id).cloned().unwrap());
+                dialog.text = asset_paths.paths.get(&id).cloned().unwrap();
+                pop_list.push(index);
             }
         }
 
         // Remove all loaded assets from the loading_assets list.
         if !pop_list.is_empty() {
-            println!("pop list {:?}", pop_list[0]);
-            loading_data.loading_assets.remove(pop_list[0]);
+            info!("Removing loaded assets {:?}", pop_list);
+            // remove all items from the pop list
+            for index in pop_list.iter().rev() {
+                loading_data.loading_assets.remove(*index);
+            }
+            // loading_data.loading_assets.remove(pop_list[0]);
         }
 
         // If there are no more assets being monitored, and pipelines
@@ -1353,22 +1180,14 @@ mod pipelines_ready {
 }
 */
 
-pub fn guifrontend(
-    config: ResolvedConfig,
-    vpx_files_with_tableinfo: Vec<IndexedTable>,
-    //roms: &HashSet<String>,
-    //vpinball_executable: &Path,
-) {
-    // let tables: Vec<String> = vpx_files_with_tableinfo
-    //     .iter()
-    //     .map(|indexed| display_table_line_full(indexed, roms))
-    //     .collect();
-    // let path = "/usr/tables/wheels/Sing Along (Gottlieb 1967).png";
-
+pub fn guifrontend(config: ResolvedConfig, vpx_files_with_tableinfo: Vec<IndexedTable>) {
     //    let options = eframe::NativeOptions {
     //       viewport: egui::ViewportBuilder::default().with_inner_size([400.0, 800.0]),
     //       ..Default::default()
     //   };
+
+    let mut tables: Vec<IndexedTable> = vpx_files_with_tableinfo;
+    tables.sort_by_key(|indexed| display_table_line(indexed).to_lowercase());
 
     let vpinball_ini_path = config.vpinball_ini_file();
     let vpinball_config = VPinballConfig::read(&vpinball_ini_path).unwrap();
@@ -1418,7 +1237,7 @@ pub fn guifrontend(
             config: vpinball_config,
         })
         .insert_resource(VpxTables {
-            indexed_tables: vpx_files_with_tableinfo,
+            indexed_tables: tables,
         })
         .add_plugins(EguiPlugin)
         .add_plugins(PipelinesReadyPlugin)
@@ -1433,7 +1252,6 @@ pub fn guifrontend(
         })
         //       .insert_resource(ClearColor(Color::srgb(0.9, 0.3, 0.6)))
         .add_event::<StreamEvent>()
-        // TODO why does this happen so late?
         .add_systems(Startup, correct_window_size_and_position)
         .add_systems(Startup, setup)
         .add_systems(Startup, (create_wheel, create_flippers, create_dmd))
@@ -1662,36 +1480,12 @@ fn display_table_line(table: &IndexedTable) -> String {
         .filter(|s| !s.clone().unwrap_or_default().is_empty())
         .map(|s| {
             format!(
-                "{} {}",
+                "{} ({})",
                 capitalize_first_letter(s.unwrap_or_default().as_str()),
-                (format!("({})", file_name)) /*.dimmed()*/
+                file_name
             )
         })
         .unwrap_or(file_name)
-}
-
-fn display_table_line_full(table: &IndexedTable, roms: &HashMap<String, PathBuf>) -> String {
-    let base = display_table_line(table);
-    let gamename_suffix = match &table.game_name {
-        Some(name) => {
-            let rom_found = table.rom_path().is_some() || roms.contains_key(&name.to_lowercase());
-            if rom_found {
-                format!(" - [{}]", name /*.dimmed()*/)
-            } else if table.requires_pinmame {
-                format!(" - !!! [{}]", &name)
-                    //.yellow()
-                    .to_string()
-            } else {
-                format!(" - [{}]", name /*.dimmed()*/)
-            }
-        }
-        None => "".to_string(),
-    };
-    let b2s_suffix = match &table.b2s_path {
-        Some(_) => " ▀", //.dimmed(),
-        None => "",      //.into(),
-    };
-    format!("{}{}{}", base, gamename_suffix, b2s_suffix)
 }
 
 fn capitalize_first_letter(s: &str) -> String {
