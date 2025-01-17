@@ -1,9 +1,7 @@
-use crate::config::ResolvedConfig;
-use crate::indexer::{IndexError, IndexedTable, Progress};
 use crate::patcher::LineEndingsResult::{NoChanges, Unified};
 use crate::patcher::{patch_vbs_file, unify_line_endings_vbs_file};
 use crate::{
-    confirm, indexer, info_diff, info_edit, info_gather, open_editor, run_diff, script_diff,
+    confirm, info_diff, info_edit, info_gather, open_editor, run_diff, script_diff,
     vpx::{extractvbs, vbs_path_for, ExtractResult},
     DiffColor, ProgressBarProgress,
 };
@@ -14,6 +12,9 @@ use dialoguer::{FuzzySelect, Input, MultiSelect, Select};
 use indicatif::{ProgressBar, ProgressStyle};
 use is_executable::IsExecutable;
 use pinmame_nvram::dips::{get_all_dip_switches, set_dip_switches};
+use shared::config::ResolvedConfig;
+use shared::indexer;
+use shared::indexer::{IndexError, IndexedTable, Progress};
 use std::fs::OpenOptions;
 use std::{
     fs::File,

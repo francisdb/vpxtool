@@ -16,7 +16,6 @@ use bevy::prelude::*;
 use bevy_asset_loader::prelude::*;
 use bevy_egui::{egui, EguiContexts, EguiPlugin};
 use image::ImageReader;
-use indicatif::{ProgressBar, ProgressStyle};
 use menus::*;
 use std::collections::HashMap;
 //use std::sync::atomic::{AtomicBool, Ordering};
@@ -32,10 +31,9 @@ use std::{
     process::{exit, ExitStatus},
 };
 
-use crate::config;
-use crate::config::{ResolvedConfig, VPinballConfig};
+use shared::config::{ResolvedConfig, VPinballConfig};
 //use crate::indexer::{find_vpx_files, IndexError, IndexedTable, Progress};
-use crate::indexer::{IndexError, IndexedTable, Progress};
+use shared::indexer::{IndexError, IndexedTable, VoidProgress};
 //use crate::patcher::LineEndingsResult::{NoChanges, Unified};
 //use crate::patcher::{patch_vbs_file, unify_line_endings_vbs_file};
 //use crate::{
@@ -43,11 +41,9 @@ use crate::indexer::{IndexError, IndexedTable, Progress};
 //    vpx::{extractvbs, vbs_path_for, ExtractResult},
 //   DiffColor, ProgressBarProgress,
 //};
-use crate::{indexer, ProgressBarProgress};
+use shared::indexer;
 //use bevy::utils::info;
 use bevy::window::*;
-use colored::Colorize;
-use console::Emoji;
 use is_executable::IsExecutable;
 use pipelines_ready::*;
 //use std::ffi::{OsStr, OsString};
@@ -768,23 +764,14 @@ pub fn frontend_index(
     recursive: bool,
     force_reindex: Vec<PathBuf>,
 ) -> Result<Vec<IndexedTable>, IndexError> {
-    let pb = ProgressBar::hidden();
-    pb.set_style(
-        ProgressStyle::with_template(
-            "{spinner:.green} [{bar:.cyan/blue}] {pos}/{human_len} ({eta})",
-        )
-        .unwrap(),
-    );
-    let progress = ProgressBarProgress::new(pb);
     let index = indexer::index_folder(
         recursive,
         &resolved_config.tables_folder,
         &resolved_config.tables_index_path,
         Some(&resolved_config.global_pinmame_rom_folder()),
-        &progress,
+        &VoidProgress,
         force_reindex,
     );
-    progress.finish_and_clear();
     let index = index?;
 
     let mut tables: Vec<IndexedTable> = index.tables();
@@ -824,7 +811,7 @@ pub fn gui_update(
     materials: ResMut<Assets<ColorMaterial>>,
     mut globals: ResMut<Globals>,
 ) {
-    let (_config_path, _loaded_config) = config::load_config().unwrap().unwrap();
+    let (_config_path, _loaded_config) = shared::config::load_config().unwrap().unwrap();
     let mut window = window_query.get_single().unwrap().clone();
     window.window_level = WindowLevel::Normal;
     let mut wtitle = " ".to_owned();
@@ -1085,7 +1072,8 @@ pub fn gui_update(
                     let tx = tx.clone();
                     let path = wheel.launch_path.clone();
                     let _global = globals.game_running;
-                    let (_config_path, loaded_config) = config::load_config().unwrap().unwrap();
+                    let (_config_path, loaded_config) =
+                        shared::config::load_config().unwrap().unwrap();
                     let executable = loaded_config.vpx_executable; // .executable.clone();
 
                     let _pin_thread = std::thread::spawn(move || {
@@ -1676,7 +1664,7 @@ fn display_table_line(table: &IndexedTable) -> String {
             format!(
                 "{} {}",
                 capitalize_first_letter(s.unwrap_or_default().as_str()),
-                (format!("({})", file_name)).dimmed()
+                (format!("({})", file_name)) /*.dimmed()*/
             )
         })
         .unwrap_or(file_name)
@@ -1688,19 +1676,19 @@ fn display_table_line_full(table: &IndexedTable, roms: &HashMap<String, PathBuf>
         Some(name) => {
             let rom_found = table.rom_path().is_some() || roms.contains_key(&name.to_lowercase());
             if rom_found {
-                format!(" - [{}]", name.dimmed())
+                format!(" - [{}]", name /*.dimmed()*/)
             } else if table.requires_pinmame {
-                format!(" - {} [{}]", Emoji("⚠️", "!"), &name)
-                    .yellow()
+                format!(" - !!! [{}]", &name)
+                    //.yellow()
                     .to_string()
             } else {
-                format!(" - [{}]", name.dimmed())
+                format!(" - [{}]", name /*.dimmed()*/)
             }
         }
         None => "".to_string(),
     };
     let b2s_suffix = match &table.b2s_path {
-        Some(_) => " ▀".dimmed(),
+        Some(_) => " ▀", //.dimmed(),
         None => "".into(),
     };
     format!("{}{}{}", base, gamename_suffix, b2s_suffix)

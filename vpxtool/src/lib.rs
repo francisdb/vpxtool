@@ -4,8 +4,6 @@
 // https://clig.dev/#arguments-and-flags
 // https://clig.dev/#subcommands
 //
-use crate::config::{ResolvedConfig, SetupConfigResult};
-use crate::indexer::{IndexError, Progress};
 use crate::patcher::patch_vbs_file;
 use base64::Engine;
 use clap::builder::Str;
@@ -15,6 +13,9 @@ use console::Emoji;
 use git_version::git_version;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use pinmame_nvram::dips::get_all_dip_switches;
+use shared::config::{ResolvedConfig, SetupConfigResult};
+use shared::indexer::{IndexError, Progress};
+use shared::{config, indexer};
 use std::error::Error;
 use std::ffi::OsStr;
 use std::fmt::Display;
@@ -26,13 +27,11 @@ use std::process::{exit, ExitCode};
 use vpin::directb2s::read;
 use vpin::vpx;
 use vpin::vpx::jsonmodel::{game_data_to_json, info_to_json};
-use vpin::vpx::{expanded, extractvbs, importvbs, tableinfo, verify, ExtractResult, VerifyResult};
+use vpin::vpx::{expanded, extractvbs, importvbs, verify, ExtractResult, VerifyResult};
+use vpxgui::guifrontend;
 
-pub mod config;
 pub mod fixprint;
 mod frontend;
-mod guifrontend;
-pub mod indexer;
 pub mod patcher;
 
 // see https://github.com/fusion-engineering/rust-git-version/issues/21

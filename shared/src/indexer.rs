@@ -11,14 +11,13 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use colored::Colorize;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use vpin::vpx;
 use vpin::vpx::jsonmodel::json_to_info;
+use vpin::vpx::tableinfo::TableInfo;
 use walkdir::{DirEntry, FilterEntry, IntoIter, WalkDir};
 
-use crate::tableinfo::TableInfo;
-use crate::vpx;
-use crate::vpx::gamedata::GameData;
+use vpx::gamedata::GameData;
 
 /// Introduced because we want full control over serialization
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
@@ -128,7 +127,7 @@ impl TablesIndex {
         }
     }
 
-    pub(crate) fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.tables.len()
     }
 
@@ -290,6 +289,13 @@ pub trait Progress {
     fn finish_and_clear(&self);
 }
 
+pub struct VoidProgress;
+impl Progress for VoidProgress {
+    fn set_length(&self, _len: u64) {}
+    fn set_position(&self, _i: u64) {}
+    fn finish_and_clear(&self) {}
+}
+
 pub enum IndexError {
     FolderDoesNotExist(PathBuf),
     IoError(io::Error),
@@ -302,6 +308,11 @@ impl Debug for IndexError {
             }
             IndexError::IoError(e) => write!(f, "IO error: {}", e),
         }
+    }
+}
+impl From<IndexError> for io::Error {
+    fn from(e: IndexError) -> io::Error {
+        io::Error::new(io::ErrorKind::Other, format!("{:?}", e))
     }
 }
 
@@ -405,7 +416,7 @@ pub fn index_vpx_files(
                 Err(e) => {
                     // TODO we want to return any failures instead of printing here
                     let warning =
-                        format!("Not a valid vpx file {}: {}", vpx_file.path.display(), e).red();
+                        format!("Not a valid vpx file {}: {}", vpx_file.path.display(), e);
                     println!("{}", warning);
                     None
                 }
@@ -464,7 +475,7 @@ fn index_vpx_file(
     Ok((indexed.path.clone(), indexed))
 }
 
-pub(crate) fn get_romname_from_vpx(vpx_path: &Path) -> io::Result<Option<String>> {
+pub fn get_romname_from_vpx(vpx_path: &Path) -> io::Result<Option<String>> {
     let mut vpx_file = vpx::open(vpx_path)?;
     let game_data = vpx_file.read_gamedata()?;
     let code = consider_sidecar_vbs(vpx_path, game_data)?;
@@ -644,17 +655,10 @@ fn unify_line_endings(code: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::vpx;
     use serde_json::json;
     use std::io::Write;
     use testdir::testdir;
-
-    struct VoidProgress;
-    impl Progress for VoidProgress {
-        fn set_length(&self, _len: u64) {}
-        fn set_position(&self, _i: u64) {}
-        fn finish_and_clear(&self) {}
-    }
+    use vpin::vpx;
 
     #[test]
     fn test_index_vpx_files() -> io::Result<()> {

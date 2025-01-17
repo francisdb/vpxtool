@@ -1985,9 +1985,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.2.10"
+version = "1.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "13208fcbb66eaeffe09b99fffbe1af420f00a7b35aa99ad683dfc1aa76145229"
+checksum = "c8293772165d9345bdaaa39b45b2109591e63fe5e6fbc23c6ff930a048aa310b"
 dependencies = [
  "jobserver",
  "libc",
@@ -2933,9 +2933,9 @@ dependencies = [
 
 [[package]]
 name = "enumflags2"
-version = "0.7.11"
+version = "0.7.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba2f4b465f5318854c6f8dd686ede6c0a9dc67d4b1ac241cf0eb51521a309147"
+checksum = "d232db7f5956f3f14313dc2f87985c58bd2c695ce124c8cdd984e08e15ac133d"
 dependencies = [
  "enumflags2_derive",
  "serde",
@@ -2943,9 +2943,9 @@ dependencies = [
 
 [[package]]
 name = "enumflags2_derive"
-version = "0.7.11"
+version = "0.7.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc4caf64a58d7a6d65ab00639b046ff54399a39f5f2554728895ace4b297cd79"
+checksum = "de0d48a183585823424a4ce1aa132d174a6a81bd540895822eb4c8373a8e49e8"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5827,27 +5827,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "shared"
-version = "0.0.0"
-dependencies = [
- "chrono",
- "dialoguer",
- "dirs 6.0.0",
- "figment",
- "log",
- "pretty_assertions",
- "rand",
- "regex",
- "rust-ini",
- "serde",
- "serde_json",
- "testdir",
- "toml",
- "vpin",
- "walkdir",
-]
-
-[[package]]
 name = "shell-words"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6615,9 +6594,9 @@ dependencies = [
 
 [[package]]
 name = "valuable"
-version = "0.1.1"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba73ea9cf16a25df0c8caa16c51acb937d5712a8429db78a3ee29d5dcacd3a65"
+checksum = "830b7e5d4d90034032940e4ace0d9a9a057e7a45cd94e6c007832e39edb82f6d"
 
 [[package]]
 name = "vec_map"
@@ -6664,33 +6643,27 @@ dependencies = [
 ]
 
 [[package]]
-name = "vpxgui"
-version = "0.0.0"
+name = "vpxtool"
+version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "bevy",
  "bevy_asset",
  "bevy_asset_loader",
  "bevy_egui",
- "crossbeam-channel",
- "eframe",
- "egui_extras",
- "image",
- "is_executable",
- "shared",
-]
-
-[[package]]
-name = "vpxtool"
-version = "0.0.0"
-dependencies = [
- "base64 0.22.1",
+ "chrono",
  "clap",
  "colored",
  "console",
+ "crossbeam-channel",
  "dialoguer",
+ "dirs 6.0.0",
  "edit",
+ "eframe",
+ "egui_extras",
  "figment",
  "git-version",
+ "image",
  "imagesize",
  "indicatif",
  "is_executable",
@@ -6701,13 +6674,16 @@ dependencies = [
  "pretty_assertions",
  "pretty_env_logger",
  "quick-xml 0.37.2",
+ "rand",
  "regex",
+ "rust-ini",
  "serde",
  "serde_json",
- "shared",
  "shellexpand",
+ "testdir",
+ "toml",
  "vpin",
- "vpxgui",
+ "walkdir",
  "wild",
 ]
 
