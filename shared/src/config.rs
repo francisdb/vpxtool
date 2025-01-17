@@ -51,15 +51,15 @@ pub struct ResolvedConfig {
 /// PlayfieldHeight = 960
 ///
 /// Note: For macOS with hidpi screen this these are logical sizes/locations, not pixel sizes
-pub(crate) struct PlayfieldInfo {
-    pub(crate) fullscreen: bool,
-    pub(crate) x: Option<u32>,
-    pub(crate) y: Option<u32>,
-    pub(crate) width: Option<u32>,
-    pub(crate) height: Option<u32>,
+pub struct PlayfieldInfo {
+    pub fullscreen: bool,
+    pub x: Option<u32>,
+    pub y: Option<u32>,
+    pub width: Option<u32>,
+    pub height: Option<u32>,
 }
 
-pub(crate) struct VPinballConfig {
+pub struct VPinballConfig {
     ini: ini::Ini,
 }
 
@@ -178,7 +178,7 @@ pub enum SetupConfigResult {
     Existing(PathBuf),
 }
 
-pub(crate) fn setup_config() -> io::Result<SetupConfigResult> {
+pub fn setup_config() -> io::Result<SetupConfigResult> {
     // TODO check if the config file already exists
     let existing_config_path = config_path();
     match existing_config_path {
@@ -236,7 +236,7 @@ fn read_config(config_path: &Path) -> io::Result<ResolvedConfig> {
     Ok(resolved_config)
 }
 
-pub(crate) fn tables_index_path(tables_folder: &Path) -> PathBuf {
+pub fn tables_index_path(tables_folder: &Path) -> PathBuf {
     tables_folder.join("vpxtool_index.json")
 }
 
