@@ -10,4 +10,4 @@ resolver = "2"
 [profile.test]
 # level 0 is very slow for writing to compound files
 # see https://github.com/mdsteele/rust-cfb/issues/42
-opt-level = 1
+#opt-level = 1
