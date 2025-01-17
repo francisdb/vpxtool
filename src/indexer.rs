@@ -105,6 +105,7 @@ pub struct IndexedTable {
     rom_path: Option<PathBuf>,
     /// deprecated: only used for reading the old index format
     local_rom_path: Option<PathBuf>,
+    pub wheel_path: Option<PathBuf>,
     pub requires_pinmame: bool,
     pub last_modified: IsoSystemTime,
 }
@@ -445,7 +446,7 @@ fn index_vpx_file(
             .and_then(|game_name| global_roms.get(&game_name.to_lowercase()).cloned())
     });
     let b2s_path = find_b2s_path(vpx_file_path);
-
+    let wheel_path = find_wheel_path(vpx_file_path);
     let last_modified = last_modified(path).unwrap();
     let indexed_table_info = IndexedTableInfo::from(table_info);
 
@@ -456,6 +457,7 @@ fn index_vpx_file(
         b2s_path,
         rom_path,
         local_rom_path: None,
+        wheel_path,
         requires_pinmame,
         last_modified: IsoSystemTime(last_modified),
     };
@@ -523,6 +525,26 @@ fn find_b2s_path(vpx_file_path: &PathWithMetadata) -> Option<PathBuf> {
     } else {
         None
     }
+}
+
+/// Tries to find a wheel image for the given vpx file.
+/// 2 locations are tried:
+/// * ../wheels/<vpx_file_name>.png
+/// * <vpx_file_name>.wheel.png
+fn find_wheel_path(vpx_file_path: &PathWithMetadata) -> Option<PathBuf> {
+    let wheel_file_name = format!(
+        "wheels/{}.png",
+        vpx_file_path.path.file_stem().unwrap().to_string_lossy()
+    );
+    let wheel_path = vpx_file_path.path.parent().unwrap().join(wheel_file_name);
+    if wheel_path.exists() {
+        return Some(wheel_path);
+    }
+    let wheel_path = vpx_file_path.path.with_extension("wheel.png");
+    if wheel_path.exists() {
+        return Some(wheel_path);
+    }
+    None
 }
 
 /// If there is a file with the same name and extension .vbs we pick that code
@@ -795,6 +817,7 @@ mod tests {
             b2s_path: Some(PathBuf::from("test.b2s")),
             rom_path: Some(PathBuf::from("testrom.zip")),
             local_rom_path: None,
+            wheel_path: Some(PathBuf::from("test.png")),
             requires_pinmame: true,
             last_modified: IsoSystemTime(SystemTime::UNIX_EPOCH),
         });

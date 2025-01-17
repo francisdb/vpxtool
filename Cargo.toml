@@ -23,8 +23,14 @@ colored = "3.0.0"
 console = "0.15.10"
 dialoguer = { version = "0.11.0", features = ["fuzzy-select"] }
 dirs = "6.0.0"
+image = { version = "0.25", default-features = true, features = ["jpeg", "png"] }
 git-version = "0.3.9"
 indicatif = "0.17.9"
+jojodiff = "0.1.2"
+log = "0.4.22"
+logging_timer = "1.1.1"
+pretty_env_logger = "0.5.0"
+quick-xml = { version = "0.37.1", features = ["serialize"] }
 serde = { version = "1.0.217", features = ["derive"] }
 serde_json = { version = "1.0.135", features = ["preserve_order"] }
 shellexpand = "3.1.0"
@@ -33,15 +39,23 @@ wild = "2.2.1"
 figment = { version = "0.10", features = ["toml", "env"] }
 toml = "0.8.19"
 is_executable = "1.0.4"
+imagesize = "0.13.0"
 regex = { version = "1.11.1", features = [] }
 vpin = { version = "0.17.2" }
 rust-ini = "0.21.1"
 edit = "0.1.5"
-jojodiff = "0.1.2"
+bevy = "0.15.0"
+bevy_asset = "0.15.0"
+bevy_asset_loader = "0.22.0"
+bevy_egui = "0.31.1"
+eframe = "0.29.1"
+egui_extras = { version = "0.29.1", features = ["image"] }
+crossbeam-channel = "0.5.13"
 pinmame-nvram = "0.3.9"
 
 [dev-dependencies]
 pretty_assertions = "1.4.1"
+rand = "0.8.5"
 testdir = "0.9.3"
 
 [profile.test]
