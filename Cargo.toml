@@ -18,11 +18,11 @@ name = "vpxtool"
 base64 = "0.22.1"
 #see https://github.com/chronotope/chrono/issues/602#issuecomment-1242149249
 chrono = { version = "0.4.39", default-features = false, features = ["clock"] }
-clap = { version = "4.5.23", features = ["derive", "string"] }
-colored = "2.2.0"
-console = "0.15.8"
+clap = { version = "4.5.26", features = ["derive", "string"] }
+colored = "3.0.0"
+console = "0.15.10"
 dialoguer = { version = "0.11.0", features = ["fuzzy-select"] }
-dirs = "5.0.1"
+dirs = "6.0.0"
 image = { version = "0.25", default-features= true, features = ["jpeg", "png"] }
 git-version = "0.3.9"
 indicatif = "0.17.9"
@@ -31,8 +31,8 @@ log = "0.4.22"
 logging_timer = "1.1.1"
 pretty_env_logger = "0.5.0"
 quick-xml = { version = "0.37.1", features = ["serialize"] }
-serde = { version = "1.0.215", features = ["derive"] }
-serde_json = { version = "1.0.133", features = ["preserve_order"] }
+serde = { version = "1.0.217", features = ["derive"] }
+serde_json = { version = "1.0.135", features = ["preserve_order"] }
 shellexpand = "3.1.0"
 walkdir = "2.5.0"
 wild = "2.2.1"
@@ -51,7 +51,8 @@ bevy_egui = "0.31.1"
 eframe =  "0.29.1" 
 egui_extras = { version = "0.29.1", features = ["image"] }
 crossbeam-channel = "0.5.13"
-pinmame-nvram = "0.3.3"
+jojodiff = "0.1.2"
+pinmame-nvram = "0.3.9"
 
 [dev-dependencies]
 pretty_assertions = "1.4.1"

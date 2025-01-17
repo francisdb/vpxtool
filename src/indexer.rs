@@ -101,10 +101,19 @@ pub struct IndexedTable {
     pub table_info: IndexedTableInfo,
     pub game_name: Option<String>,
     pub b2s_path: Option<PathBuf>,
-    pub local_rom_path: Option<PathBuf>,
+    /// The rom path, in the table folder or in the global pinmame roms folder
+    rom_path: Option<PathBuf>,
+    /// deprecated: only used for reading the old index format
+    local_rom_path: Option<PathBuf>,
     pub wheel_path: Option<PathBuf>,
     pub requires_pinmame: bool,
     pub last_modified: IsoSystemTime,
+}
+
+impl IndexedTable {
+    pub fn rom_path(&self) -> Option<&PathBuf> {
+        self.rom_path.as_ref().or(self.local_rom_path.as_ref())
+    }
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
@@ -194,14 +203,14 @@ impl From<TablesIndexJson> for TablesIndex {
 }
 
 /// Returns all roms names lower case for the roms in the given folder
-pub fn find_roms<P: AsRef<Path>>(rom_path: P) -> io::Result<HashSet<String>> {
-    if !rom_path.as_ref().exists() {
-        return Ok(HashSet::new());
+pub fn find_roms(rom_path: &Path) -> io::Result<HashMap<String, PathBuf>> {
+    if !rom_path.exists() {
+        return Ok(HashMap::new());
     }
     // TODO
     // TODO if there is an ini file for the table we might have to check locally for the rom
     //   currently only a standalone feature
-    let mut roms = HashSet::new();
+    let mut roms = HashMap::new();
     // TODO is there a cleaner version like try_filter_map?
     let mut entries = fs::read_dir(rom_path)?;
     entries.try_for_each(|entry| {
@@ -209,14 +218,14 @@ pub fn find_roms<P: AsRef<Path>>(rom_path: P) -> io::Result<HashSet<String>> {
         let path = dir_entry.path();
         if path.is_file() {
             if let Some("zip") = path.extension().and_then(OsStr::to_str) {
-                roms.insert(
-                    path.file_stem()
-                        .unwrap()
-                        .to_str()
-                        .unwrap()
-                        .to_string()
-                        .to_lowercase(),
-                );
+                let rom_name = path
+                    .file_stem()
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+                    .to_string()
+                    .to_lowercase();
+                roms.insert(rom_name, path);
             }
         }
         Ok::<(), io::Error>(())
@@ -224,13 +233,10 @@ pub fn find_roms<P: AsRef<Path>>(rom_path: P) -> io::Result<HashSet<String>> {
     Ok(roms)
 }
 
-pub fn find_vpx_files<P: AsRef<Path>>(
-    recursive: bool,
-    tables_path: P,
-) -> io::Result<Vec<PathWithMetadata>> {
+pub fn find_vpx_files(recursive: bool, tables_path: &Path) -> io::Result<Vec<PathWithMetadata>> {
     if recursive {
         let mut vpx_files = Vec::new();
-        let mut entries = walk_dir_filtered(&tables_path);
+        let mut entries = walk_dir_filtered(tables_path);
         entries.try_for_each(|entry| {
             let dir_entry = entry?;
             let path = dir_entry.path();
@@ -269,9 +275,7 @@ pub fn find_vpx_files<P: AsRef<Path>>(
 }
 
 /// Walks the directory and filters out .git and __MACOSX folders
-fn walk_dir_filtered<P: AsRef<Path>>(
-    tables_path: &P,
-) -> FilterEntry<IntoIter, fn(&DirEntry) -> bool> {
+fn walk_dir_filtered(tables_path: &Path) -> FilterEntry<IntoIter, fn(&DirEntry) -> bool> {
     WalkDir::new(tables_path).into_iter().filter_entry(|entry| {
         let path = entry.path();
         let git = std::path::Component::Normal(".git".as_ref());
@@ -311,27 +315,29 @@ impl From<io::Error> for IndexError {
 /// Returns the index.
 /// If the index file already exists, it will be read and updated.
 /// If the index file does not exist, it will be created.
-pub fn index_folder<P: AsRef<Path>>(
+pub fn index_folder(
     recursive: bool,
-    tables_folder: P,
-    tables_index_path: P,
+    tables_folder: &Path,
+    tables_index_path: &Path,
+    global_roms_path: Option<&Path>,
     progress: &impl Progress,
     force_reindex: Vec<PathBuf>,
 ) -> Result<TablesIndex, IndexError> {
-    println!("Indexing {}", tables_folder.as_ref().display());
+    let global_roms = global_roms_path
+        .map(find_roms)
+        .unwrap_or_else(|| Ok(HashMap::new()))?;
+    println!("Indexing {}", tables_folder.display());
 
-    if !tables_folder.as_ref().exists() {
-        return Err(IndexError::FolderDoesNotExist(
-            tables_folder.as_ref().to_path_buf(),
-        ));
+    if !tables_folder.exists() {
+        return Err(IndexError::FolderDoesNotExist(tables_folder.to_path_buf()));
     }
 
-    let existing_index = read_index_json(&tables_index_path)?;
+    let existing_index = read_index_json(tables_index_path)?;
     if let Some(index) = &existing_index {
         println!(
             "  Found existing index with {} tables at {}",
             index.tables.len(),
-            tables_index_path.as_ref().display()
+            tables_index_path.display()
         );
     }
     let mut index = existing_index.unwrap_or(TablesIndex::empty());
@@ -342,16 +348,34 @@ pub fn index_folder<P: AsRef<Path>>(
     let removed_len = index.remove_missing(&vpx_files);
     println!("  {} missing tables have been removed", removed_len);
 
+    let tables_with_missing_rom = index
+        .tables()
+        .iter()
+        .filter_map(|table| {
+            table
+                .rom_path()
+                .filter(|rom_path| !rom_path.exists())
+                .map(|_| table.path.clone())
+        })
+        .collect::<HashSet<PathBuf>>();
+    println!(
+        "  {} tables will be re-indexed because their rom is missing",
+        tables_with_missing_rom.len()
+    );
+
     // find files that are missing or have been modified
     let mut vpx_files_to_index = Vec::new();
     for vpx_file in vpx_files {
-        if force_reindex.contains(&vpx_file.path) || index.should_index(&vpx_file) {
+        if tables_with_missing_rom.contains(&vpx_file.path)
+            || force_reindex.contains(&vpx_file.path)
+            || index.should_index(&vpx_file)
+        {
             vpx_files_to_index.push(vpx_file);
         }
     }
 
     println!("  {} tables need (re)indexing.", vpx_files_to_index.len());
-    let vpx_files_with_table_info = index_vpx_files(&vpx_files_to_index, progress);
+    let vpx_files_with_table_info = index_vpx_files(&vpx_files_to_index, &global_roms, progress);
 
     // add new files to index
     index.merge(vpx_files_with_table_info);
@@ -362,7 +386,11 @@ pub fn index_folder<P: AsRef<Path>>(
     Ok(index)
 }
 
-pub fn index_vpx_files(vpx_files: &[PathWithMetadata], progress: &impl Progress) -> TablesIndex {
+pub fn index_vpx_files(
+    vpx_files: &[PathWithMetadata],
+    global_roms: &HashMap<String, PathBuf>,
+    progress: &impl Progress,
+) -> TablesIndex {
     // TODO tried using rayon here but it's not faster and uses up all cpu
     // use rayon::prelude::*;
     // .par_iter() instead of .iter()
@@ -372,7 +400,7 @@ pub fn index_vpx_files(vpx_files: &[PathWithMetadata], progress: &impl Progress)
         .iter()
         .enumerate()
         .flat_map(|(i, vpx_file)| {
-            let optional = match index_vpx_file(vpx_file) {
+            let optional = match index_vpx_file(vpx_file, global_roms) {
                 Ok(indexed_table) => Some(indexed_table),
                 Err(e) => {
                     // TODO we want to return any failures instead of printing here
@@ -394,7 +422,10 @@ pub fn index_vpx_files(vpx_files: &[PathWithMetadata], progress: &impl Progress)
     }
 }
 
-fn index_vpx_file(vpx_file_path: &PathWithMetadata) -> io::Result<(PathBuf, IndexedTable)> {
+fn index_vpx_file(
+    vpx_file_path: &PathWithMetadata,
+    global_roms: &HashMap<String, PathBuf>,
+) -> io::Result<(PathBuf, IndexedTable)> {
     let path = &vpx_file_path.path;
     let mut vpx_file = vpx::open(path)?;
     // if there's an .info.json file, we should use that instead of the info in the vpx file
@@ -409,7 +440,11 @@ fn index_vpx_file(vpx_file_path: &PathWithMetadata) -> io::Result<(PathBuf, Inde
     //  also this sidecar should be part of the cache key
     let game_name = extract_game_name(&code);
     let requires_pinmame = requires_pinmame(&code);
-    let local_rom_path = find_local_rom_path(vpx_file_path, &game_name);
+    let rom_path = find_local_rom_path(vpx_file_path, &game_name).or_else(|| {
+        game_name
+            .as_ref()
+            .and_then(|game_name| global_roms.get(&game_name.to_lowercase()).cloned())
+    });
     let b2s_path = find_b2s_path(vpx_file_path);
     let wheel_path = find_wheel_path(vpx_file_path);
     let last_modified = last_modified(path).unwrap();
@@ -420,8 +455,9 @@ fn index_vpx_file(vpx_file_path: &PathWithMetadata) -> io::Result<(PathBuf, Inde
         table_info: indexed_table_info,
         game_name,
         b2s_path,
+        rom_path,
+        local_rom_path: None,
         wheel_path,
-        local_rom_path,
         requires_pinmame,
         last_modified: IsoSystemTime(last_modified),
     };
@@ -528,23 +564,20 @@ fn consider_sidecar_vbs(path: &Path, game_data: GameData) -> io::Result<String> 
     Ok(code)
 }
 
-fn last_modified<P: AsRef<Path>>(path: P) -> io::Result<SystemTime> {
-    let metadata: Metadata = path.as_ref().metadata()?;
+fn last_modified(path: &Path) -> io::Result<SystemTime> {
+    let metadata: Metadata = path.metadata()?;
     metadata.modified()
 }
 
-pub fn write_index_json<P: AsRef<Path>>(
-    indexed_tables: &TablesIndex,
-    json_path: P,
-) -> io::Result<()> {
+pub fn write_index_json(indexed_tables: &TablesIndex, json_path: &Path) -> io::Result<()> {
     let json_file = File::create(json_path)?;
     let indexed_tables_json: TablesIndexJson = indexed_tables.into();
     serde_json::to_writer_pretty(json_file, &indexed_tables_json)
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
 }
 
-pub fn read_index_json<P: AsRef<Path>>(json_path: P) -> io::Result<Option<TablesIndex>> {
-    if !json_path.as_ref().exists() {
+pub fn read_index_json(json_path: &Path) -> io::Result<Option<TablesIndex>> {
+    if !json_path.exists() {
         return Ok(None);
     }
     let json_file = File::open(json_path)?;
@@ -613,6 +646,7 @@ mod tests {
     use super::*;
     use crate::vpx;
     use serde_json::json;
+    use std::io::Write;
     use testdir::testdir;
 
     struct VoidProgress;
@@ -624,7 +658,25 @@ mod tests {
 
     #[test]
     fn test_index_vpx_files() -> io::Result<()> {
+        // Test setup looks like this:
+        // test_dir/
+        // ├── test.vpx
+        // ├── test2.vpx
+        // ├── subdir
+        // │   └── test3.vpx
+        // ├── test3.vpx
+        // ├── __MACOSX/
+        // │   └── ignored.vpx
+        // ├── .git/
+        // │   └── ignored2.vpx
+        // ├── pinmame/
+        // │   └── roms/
+        // │       └── testgamename.zip
+        // global_rom_dir/
+        // ├── testgamename2.zip
+        let global_rom_dir = testdir!();
         let test_dir = testdir!();
+        let temp_dir = testdir!();
         // the next two folders should be ignored
         let macosx = test_dir.join("__MACOSX");
         fs::create_dir(&macosx)?;
@@ -632,31 +684,74 @@ mod tests {
         let git = test_dir.join(".git");
         fs::create_dir(&git)?;
         File::create(git.join("ignored2.vpx"))?;
+        fs::create_dir(test_dir.join("subdir"))?;
         // actual vpx files to index
         let vpx_1_path = test_dir.join("test.vpx");
         let vpx_2_path = test_dir.join("test2.vpx");
-        vpx::new_minimal_vpx(&vpx_1_path)?;
-        vpx::new_minimal_vpx(&vpx_2_path)?;
-        let vpx_files = vec![
-            PathWithMetadata {
-                path: vpx_1_path.clone(),
-                last_modified: SystemTime::UNIX_EPOCH,
-            },
-            PathWithMetadata {
-                path: vpx_2_path.clone(),
-                last_modified: SystemTime::UNIX_EPOCH,
-            },
-        ];
-        println!("vpx_files");
-        let indexed_tables = index_vpx_files(&vpx_files, &VoidProgress);
-        assert_eq!(indexed_tables.tables.len(), 2);
-        // get the first two tables
+        let vpx_3_path = test_dir.join("subdir").join("test3.vpx");
 
-        let table1 = indexed_tables.tables.get(&vpx_1_path);
-        let table2 = indexed_tables.tables.get(&vpx_2_path);
-        assert_eq!(table1.map(|t| t.path.clone()), Some(vpx_1_path));
-        assert_eq!(table2.map(|t| t.path.clone()), Some(vpx_2_path));
+        vpx::new_minimal_vpx(&vpx_1_path)?;
+        let script1 = test_script(&temp_dir, "testgamename")?;
+        vpx::importvbs(&vpx_1_path, Some(script1))?;
+        // local rom
+        let rom1_path_local = test_dir
+            .join("pinmame")
+            .join("roms")
+            .join("testgamename.zip");
+        // recursively create dir
+        fs::create_dir_all(rom1_path_local.parent().unwrap())?;
+        File::create(&rom1_path_local)?;
+
+        vpx::new_minimal_vpx(&vpx_2_path)?;
+        let script2 = test_script(&temp_dir, "testgamename2")?;
+        vpx::importvbs(&vpx_2_path, Some(script2))?;
+        // global rom
+        let rom2_path_global = global_rom_dir.join("testgamename2.zip");
+        File::create(&rom2_path_global)?;
+
+        vpx::new_minimal_vpx(&vpx_3_path)?;
+        // no rom
+
+        let vpx_files = find_vpx_files(true, &test_dir)?;
+        assert_eq!(vpx_files.len(), 3);
+        let global_roms = find_roms(&global_rom_dir)?;
+        assert_eq!(global_roms.len(), 1);
+        let indexed_tables = index_vpx_files(&vpx_files, &global_roms, &VoidProgress);
+        assert_eq!(indexed_tables.tables.len(), 3);
+        let table1 = indexed_tables
+            .tables
+            .get(&vpx_1_path)
+            .expect("table1 not found");
+        let table2 = indexed_tables
+            .tables
+            .get(&vpx_2_path)
+            .expect("table2 not found");
+        let table3 = indexed_tables
+            .tables
+            .get(&vpx_3_path)
+            .expect("table3 not found");
+        assert_eq!(table1.path, vpx_1_path);
+        assert_eq!(table2.path, vpx_2_path);
+        assert_eq!(table3.path, vpx_3_path);
+        assert_eq!(table1.rom_path, Some(rom1_path_local.clone()));
+        assert_eq!(table2.rom_path, Some(rom2_path_global.clone()));
+        assert_eq!(table3.rom_path, None);
         Ok(())
+    }
+
+    fn test_script(temp_dir: &Path, game_name: &str) -> io::Result<PathBuf> {
+        // write simple script in tempdir
+        let script = format!(
+            r#"
+    Const cGameName = "{}"
+    Sub LoadVPM
+    "#,
+            game_name
+        );
+        let script_path = temp_dir.join(game_name).with_extension("vbs");
+        let mut script_file = File::create(&script_path)?;
+        script_file.write_all(script.as_bytes())?;
+        Ok(script_path)
     }
 
     #[test]
@@ -720,8 +815,9 @@ mod tests {
             },
             game_name: Some("testrom".to_string()),
             b2s_path: Some(PathBuf::from("test.b2s")),
+            rom_path: Some(PathBuf::from("testrom.zip")),
+            local_rom_path: None,
             wheel_path: Some(PathBuf::from("test.png")),
-            local_rom_path: Some(PathBuf::from("testrom.zip")),
             requires_pinmame: true,
             last_modified: IsoSystemTime(SystemTime::UNIX_EPOCH),
         });
@@ -736,7 +832,7 @@ mod tests {
     #[test]
     fn test_read_index_missing() -> io::Result<()> {
         let index_path = PathBuf::from("missing_index_file.json");
-        let read = read_index_json(index_path)?;
+        let read = read_index_json(&index_path)?;
         assert_eq!(read, None);
         Ok(())
     }
