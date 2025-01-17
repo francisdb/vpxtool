@@ -19,7 +19,6 @@ use image::ImageReader;
 use indicatif::{ProgressBar, ProgressStyle};
 use menus::*;
 use std::collections::HashMap;
-use std::collections::HashSet;
 //use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 //use std::sync::Arc;
@@ -300,7 +299,7 @@ fn create_wheel(
     //
     //let (_config_path, loaded_config) = config::load_config().unwrap().unwrap();
     let vpx_files_with_tableinfo1 = frontend_index(&config.config, true, vec![]).unwrap();
-    let roms = indexer::find_roms(config.config.global_pinmame_rom_folder());
+    let roms = indexer::find_roms(&config.config.global_pinmame_rom_folder());
     let roms1 = roms.unwrap();
     let tables: Vec<String> = frontend_index(&config.config, true, vec![])
         .unwrap()
@@ -781,6 +780,7 @@ pub fn frontend_index(
         recursive,
         &resolved_config.tables_folder,
         &resolved_config.tables_index_path,
+        Some(&resolved_config.global_pinmame_rom_folder()),
         &progress,
         force_reindex,
     );
@@ -1682,11 +1682,11 @@ fn display_table_line(table: &IndexedTable) -> String {
         .unwrap_or(file_name)
 }
 
-fn display_table_line_full(table: &IndexedTable, roms: &HashSet<String>) -> String {
+fn display_table_line_full(table: &IndexedTable, roms: &HashMap<String, PathBuf>) -> String {
     let base = display_table_line(table);
     let gamename_suffix = match &table.game_name {
         Some(name) => {
-            let rom_found = table.local_rom_path.is_some() || roms.contains(&name.to_lowercase());
+            let rom_found = table.rom_path().is_some() || roms.contains_key(&name.to_lowercase());
             if rom_found {
                 format!(" - [{}]", name.dimmed())
             } else if table.requires_pinmame {

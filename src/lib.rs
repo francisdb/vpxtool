@@ -270,7 +270,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
         Some((CMD_GUI_FRONTEND, _sub_matches)) => {
             let (config_path, config) = config::load_or_setup_config()?;
             println!("Using config file {}", config_path.display())?;
-            let roms = indexer::find_roms(config.global_pinmame_rom_folder())?;
+            let roms = indexer::find_roms(&config.global_pinmame_rom_folder())?;
             if roms.is_empty() {
                 let warning = format!(
                     "No roms found in {}",
