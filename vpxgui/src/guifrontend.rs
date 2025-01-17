@@ -116,6 +116,10 @@ fn correct_window_size_and_position(
                         logical_width, logical_height
                     );
                     window.resolution.set(logical_width, logical_height);
+                    if let (Some(x), Some(y)) = (playfield.x, playfield.y) {
+                        info!("Setting window position to {}, {}", x, y);
+                        window.position = WindowPosition::At(IVec2::new(x as i32, y as i32));
+                    }
                     window.set_changed();
                 }
             }
@@ -234,19 +238,14 @@ fn create_wheel(
     mut asset_paths: ResMut<AssetPaths>,
 ) {
     let _list_of_tables = &vpx_tables.indexed_tables;
-
-    // commands.spawn(SpriteBundle {
-    //     texture: asset_server.load("/usr/tables/wheels/Sing Along (Gottlieb 1967).png"),
-    //    ..default()
-    // });
     let tables = &vpx_tables.indexed_tables;
 
-    //let temporary_path_name="";
-
     let window = window_query.single();
-    let _width = window.width();
-    let height = window.height();
-    let table_path = &config.config.tables_folder;
+    // Set default wheel size to a third of the window height
+    commands.insert_resource(Globals {
+        wheel_size: (window.height() / 3.),
+        game_running: false,
+    });
 
     // let mut orentation = Horizontal;
     // if height > width {
@@ -274,33 +273,19 @@ fn create_wheel(
     // Create blank wheel
     // tries [table_path]/wheels/blankwheel.png first
     // fallbacks to assets/blankwheel.png
-    let mut blank_path = table_path.clone().into_os_string();
+    let mut blank_path = config.config.tables_folder.clone();
     blank_path.push("/wheels/blankwheel.png");
     if !Path::new(&blank_path).exists() {
         // will be loaded from assets
         warn!("Please copy the blankwheel.png to {:?}", blank_path);
-        blank_path = PathBuf::from("blankwheel.png").into_os_string();
+        blank_path = PathBuf::from("blankwheel.png");
     }
 
     for (counter, info) in tables.iter().enumerate() {
-        /*    match &info.wheel_path {
-                  Some(path)=> println!("{}",&path.as_os_str().to_string_lossy()),
-                  None => println!("NONE"),
-              };
-        */
-        //let mut haswheel = true;
-        //let mut temporary_path_name= &info.wheel_path.unwrap();
-        //blank_path.into();
-
-        // let table_info = match &info.table_info.table_rules {
-        //    Some(tb) => &tb,
-        //    None => "None",
-        //    };
-
         let wheel_path = match &info.wheel_path {
             // get handle from path
-            Some(path) => PathBuf::from(path),
-            None => PathBuf::from(blank_path.clone()),
+            Some(path) => path.clone(),
+            None => blank_path.clone(),
         };
         let wheel_image_handle = asset_server.load(wheel_path.clone());
         loading_data
@@ -310,24 +295,22 @@ fn create_wheel(
         //  using imagesize crate as it is a very fast way to get the dimensions.
         let (_wheel_width, _wheel_height) = (0., 0.);
 
-        // Set default wheel size
-        // TODO why is this done for every wheel?
-        commands.insert_resource(Globals {
-            wheel_size: (height / 3.),
-            game_running: false,
-        });
-
         // TODO below code is blocking, should be offloaded to a thread?
-        let image = ImageReader::open(&wheel_path)
-            .unwrap()
-            .into_dimensions()
-            .unwrap();
-        let (_wheel_width, wheel_height) = image;
+        let wheel_height = if wheel_path.exists() {
+            let image = ImageReader::open(&wheel_path)
+                .unwrap()
+                .into_dimensions()
+                .unwrap();
+            let (_wheel_width, wheel_height) = image;
+            wheel_height
+        } else {
+            1000
+        };
         // wheel_size.wheel_size = (height / 3.) / (size.height as f32);
         // Normalize icons to 1/3 the screen height
         transform.scale = Vec3::new(
-            (height / 5.) / (wheel_height as f32),
-            (height / 5.) / (wheel_height as f32),
+            (window.height() / 5.) / (wheel_height as f32),
+            (window.height() / 5.) / (wheel_height as f32),
             100.0,
         );
 
@@ -390,7 +373,7 @@ fn create_wheel(
                 position_type: PositionType::Absolute,
                 left: Val::Px(20.),
                 //top: Val::Px(245.),
-                top: Val::Px(height * 0.025), //-(height-(height/2.+(scale*2.)))),
+                top: Val::Px(window.height() * 0.025), //-(height-(height/2.+(scale*2.)))),
                 right: Val::Px(0.),
                 ..default()
             },
@@ -432,7 +415,7 @@ fn create_wheel(
                 display: Display::None,
                 position_type: PositionType::Absolute,
                 left: Val::Px(20.),
-                top: Val::Px(height * 0.2), //-(height-(height/2.+(scale*2.)))),
+                top: Val::Px(window.height() * 0.2), //-(height-(height/2.+(scale*2.)))),
                 right: Val::Px(0.),
                 ..default()
             },
@@ -1023,7 +1006,7 @@ fn update_loading_data(
                 let id = asset.id().typed_unchecked::<Image>();
                 // Since for example the default asset is shared this will repeatedly the last
                 // path that was loaded.
-                info!("loading {}", asset_paths.paths.get(&id).cloned().unwrap());
+                // info!("loading {}", asset_paths.paths.get(&id).cloned().unwrap());
                 dialog.text = asset_paths.paths.get(&id).cloned().unwrap();
                 pop_list.push(index);
             }
@@ -1031,7 +1014,7 @@ fn update_loading_data(
 
         // Remove all loaded assets from the loading_assets list.
         if !pop_list.is_empty() {
-            info!("Removing loaded assets {:?}", pop_list);
+            info!("Removing {} loaded assets.", pop_list.len());
             // remove all items from the pop list
             for index in pop_list.iter().rev() {
                 loading_data.loading_assets.remove(*index);
@@ -1186,6 +1169,10 @@ pub fn guifrontend(config: ResolvedConfig, vpx_files_with_tableinfo: Vec<Indexed
     //       ..Default::default()
     //   };
 
+    // Since wayland does not allow positioning windows, we force x11 / xwayland.
+    // https://gitlab.freedesktop.org/wayland/wayland-protocols/-/issues/72
+    std::env::set_var("WINIT_UNIX_BACKEND", "x11");
+
     let mut tables: Vec<IndexedTable> = vpx_files_with_tableinfo;
     tables.sort_by_key(|indexed| display_table_line(indexed).to_lowercase());
 
@@ -1199,6 +1186,7 @@ pub fn guifrontend(config: ResolvedConfig, vpx_files_with_tableinfo: Vec<Indexed
             // For macOS with scale factor > 1 this is not correct but we don't know the scale
             // factor before the window is created. We will correct the position later using the
             // system "correct_mac_window_size".
+            info!("Setting window position to x={}, y={}", x, y);
             let physical_x = x as i32;
             let physical_y = y as i32;
             position = WindowPosition::At(IVec2::new(physical_x, physical_y));
@@ -1229,6 +1217,7 @@ pub fn guifrontend(config: ResolvedConfig, vpx_files_with_tableinfo: Vec<Indexed
             }),
             ..Default::default()
         }))
+        .add_plugins(WindowEventLoggerPlugin)
         .insert_resource(AssetPaths {
             paths: HashMap::new(),
         })
@@ -1273,7 +1262,12 @@ pub fn guifrontend(config: ResolvedConfig, vpx_files_with_tableinfo: Vec<Indexed
         .add_systems(
             Update,
             //(display_loading_screen, read_stream, spawn_text, move_text),
-            (display_loading_screen, read_stream),
+            (
+                display_loading_screen,
+                read_stream,
+                log_window_moved,
+                log_window_resized,
+            ),
         )
         .add_systems(
             Update,
@@ -1340,6 +1334,7 @@ struct StreamSender(Sender<u32>);
 #[allow(dead_code)]
 struct StreamEvent(u32);
 
+use crate::windowing::{log_window_moved, log_window_resized, WindowEventLoggerPlugin};
 use crossbeam_channel::{bounded, Receiver, Sender};
 
 fn setup(mut commands: Commands) {
