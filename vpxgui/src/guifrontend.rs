@@ -1689,7 +1689,7 @@ fn display_table_line_full(table: &IndexedTable, roms: &HashMap<String, PathBuf>
     };
     let b2s_suffix = match &table.b2s_path {
         Some(_) => " ▀", //.dimmed(),
-        None => "".into(),
+        None => "",      //.into(),
     };
     format!("{}{}{}", base, gamename_suffix, b2s_suffix)
 }

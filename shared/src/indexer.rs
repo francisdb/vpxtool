@@ -131,6 +131,10 @@ impl TablesIndex {
         self.tables.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.tables.is_empty()
+    }
+
     pub(crate) fn insert(&mut self, table: IndexedTable) {
         self.tables.insert(table.path.clone(), table);
     }
