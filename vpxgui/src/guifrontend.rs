@@ -88,71 +88,6 @@ pub struct DialogBox {
     pub text: String,
 }
 
-fn correct_window_size_and_position(
-    mut window_query: Query<&mut Window, With<PrimaryWindow>>,
-    vpx_config: Res<VpxConfig>,
-) {
-    // only on Linux
-    // #[cfg(target_os = "linux")] is annoying because it causes clippy to complain about dead code
-    if cfg!(target_os = "linux") {
-        // Under wayland the window size is not correct, we need to scale it down.
-        // In vpinball the playfield window size is configured in physical pixels.
-        // The window constructor will create a window with the size in logical pixels.
-        let mut window = window_query.single_mut();
-        if window.resolution.scale_factor() != 1.0 {
-            info!(
-                "Resizing window for Linux with scale factor {}",
-                window.resolution.scale_factor(),
-            );
-            let vpinball_config = &vpx_config.config;
-            if let Some(playfield) = vpinball_config.get_playfield_info() {
-                if let (Some(physical_width), Some(physical_height)) =
-                    (playfield.width, playfield.height)
-                {
-                    let logical_width = physical_width as f32 / window.resolution.scale_factor();
-                    let logical_height = physical_height as f32 / window.resolution.scale_factor();
-                    info!(
-                        "Setting window size to {}x{}",
-                        logical_width, logical_height
-                    );
-                    window.resolution.set(logical_width, logical_height);
-                    if let (Some(x), Some(y)) = (playfield.x, playfield.y) {
-                        info!("Setting window position to {}, {}", x, y);
-                        window.position = WindowPosition::At(IVec2::new(x as i32, y as i32));
-                    }
-                    window.set_changed();
-                }
-            }
-        }
-    }
-
-    // only on macOS
-    // #[cfg(target_os = "macos")] is annoying because it causes clippy to complain about dead code
-    if cfg!(target_os = "macos") {
-        let mut window = window_query.single_mut();
-        if window.resolution.scale_factor() != 1.0 {
-            info!(
-                "Repositioning window for macOS with scale factor {}",
-                window.resolution.scale_factor(),
-            );
-            let vpinball_config = &vpx_config.config;
-            if let Some(playfield) = vpinball_config.get_playfield_info() {
-                if let (Some(logical_x), Some(logical_y)) = (playfield.x, playfield.y) {
-                    // For macOS with scales factor > 1 this is not correct but we don't know the scale
-                    // factor before the window is created.
-                    let physical_x = logical_x as f32 * window.resolution.scale_factor();
-                    let physical_y = logical_y as f32 * window.resolution.scale_factor();
-                    info!("Setting window position to {}, {}", physical_x, physical_y,);
-                    // this will apply the width as if it was set in logical pixels
-                    window.position =
-                        WindowPosition::At(IVec2::new(physical_x as i32, physical_y as i32));
-                    window.set_changed();
-                }
-            }
-        }
-    }
-}
-
 #[derive(Bundle)]
 struct WheelBundle {
     sprite: Sprite,
@@ -1178,46 +1113,14 @@ pub fn guifrontend(config: ResolvedConfig, vpx_files_with_tableinfo: Vec<Indexed
 
     let vpinball_ini_path = config.vpinball_ini_file();
     let vpinball_config = VPinballConfig::read(&vpinball_ini_path).unwrap();
-    let mut position = WindowPosition::default();
-    let mut mode = WindowMode::Fullscreen(MonitorSelection::Primary);
-    let mut resolution = WindowResolution::default();
-    if let Some(playfield) = vpinball_config.get_playfield_info() {
-        if let (Some(x), Some(y)) = (playfield.x, playfield.y) {
-            // For macOS with scale factor > 1 this is not correct but we don't know the scale
-            // factor before the window is created. We will correct the position later using the
-            // system "correct_mac_window_size".
-            info!("Setting window position to x={}, y={}", x, y);
-            let physical_x = x as i32;
-            let physical_y = y as i32;
-            position = WindowPosition::At(IVec2::new(physical_x, physical_y));
-        }
-        if let (Some(width), Some(height)) = (playfield.width, playfield.height) {
-            resolution = WindowResolution::new(width as f32, height as f32);
-        }
-        mode = if playfield.fullscreen {
-            WindowMode::Fullscreen(MonitorSelection::Primary)
-        } else {
-            WindowMode::Windowed
-        };
-    }
-    println!(
-        "Positioning window at {:?}, resolution {:?}",
-        position, resolution
-    );
+    let window = windowing::setup_window(&vpinball_config);
 
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                title: "VPXTOOL".to_string(),
-                // window_level: WindowLevel::AlwaysOnTop,
-                resolution,
-                mode, // WindowMode::Windowed,
-                position,
-                ..Default::default()
-            }),
+            primary_window: Some(window),
             ..Default::default()
         }))
-        .add_plugins(WindowEventLoggerPlugin)
+        .add_plugins(WindowingPlugin)
         .insert_resource(AssetPaths {
             paths: HashMap::new(),
         })
@@ -1241,7 +1144,7 @@ pub fn guifrontend(config: ResolvedConfig, vpx_files_with_tableinfo: Vec<Indexed
         })
         //       .insert_resource(ClearColor(Color::srgb(0.9, 0.3, 0.6)))
         .add_event::<StreamEvent>()
-        .add_systems(Startup, correct_window_size_and_position)
+        .add_systems(Startup, windowing::correct_window_size_and_position)
         .add_systems(Startup, setup)
         .add_systems(Startup, (create_wheel, create_flippers, create_dmd))
         .insert_resource(LoadingData::new(5))
@@ -1262,12 +1165,7 @@ pub fn guifrontend(config: ResolvedConfig, vpx_files_with_tableinfo: Vec<Indexed
         .add_systems(
             Update,
             //(display_loading_screen, read_stream, spawn_text, move_text),
-            (
-                display_loading_screen,
-                read_stream,
-                log_window_moved,
-                log_window_resized,
-            ),
+            (display_loading_screen, read_stream),
         )
         .add_systems(
             Update,
@@ -1334,7 +1232,8 @@ struct StreamSender(Sender<u32>);
 #[allow(dead_code)]
 struct StreamEvent(u32);
 
-use crate::windowing::{log_window_moved, log_window_resized, WindowEventLoggerPlugin};
+use crate::windowing;
+use crate::windowing::WindowingPlugin;
 use crossbeam_channel::{bounded, Receiver, Sender};
 
 fn setup(mut commands: Commands) {
