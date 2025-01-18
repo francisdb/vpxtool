@@ -50,7 +50,7 @@ pub(crate) fn log_window_resized(
     }
 }
 
-pub(crate) fn setup_window(vpinball_config: &VPinballConfig) -> Window {
+pub(crate) fn setup_playfield_window(vpinball_config: &VPinballConfig) -> Window {
     let mut position = WindowPosition::default();
     let mut mode = WindowMode::Fullscreen(MonitorSelection::Primary);
     let mut resolution = WindowResolution::default();

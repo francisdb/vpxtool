@@ -1113,7 +1113,7 @@ pub fn guifrontend(config: ResolvedConfig, vpx_files_with_tableinfo: Vec<Indexed
 
     let vpinball_ini_path = config.vpinball_ini_file();
     let vpinball_config = VPinballConfig::read(&vpinball_ini_path).unwrap();
-    let window = windowing::setup_window(&vpinball_config);
+    let window = windowing::setup_playfield_window(&vpinball_config);
 
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
