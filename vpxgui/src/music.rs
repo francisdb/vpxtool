@@ -6,17 +6,9 @@ pub enum ControlMusicEvent {
     Resume,
 }
 
-#[derive(Resource)]
+#[derive(Resource, Default)]
 struct MusicState {
     play_on_resume: bool,
-}
-
-impl Default for MusicState {
-    fn default() -> Self {
-        MusicState {
-            play_on_resume: false,
-        }
-    }
 }
 
 pub(crate) fn music_plugin(app: &mut App) {

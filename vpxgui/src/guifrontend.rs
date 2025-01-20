@@ -808,7 +808,7 @@ fn resume_after_play(
     mut globals: ResMut<Globals>,
     window_query: Query<&Window, With<PrimaryWindow>>,
 ) {
-    for (_i, event) in reader.read().enumerate() {
+    for event in reader.read() {
         info!("Event: {:?}", event);
         globals.game_running = false;
         resume_music(&mut event_writer);
