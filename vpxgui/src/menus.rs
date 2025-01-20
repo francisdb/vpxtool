@@ -1,8 +1,5 @@
-//use bevy::color::palettes::css::*;
+use crate::dmd::Dmd;
 use bevy::prelude::*;
-use bevy::window::*;
-use bevy_egui::egui::Align2;
-use bevy_egui::{egui, EguiContexts};
 
 pub fn dmd_update(
     mut _commands: Commands,
@@ -12,7 +9,7 @@ pub fn dmd_update(
     //mut meshes: ResMut<Assets<Mesh>>,
     //mut materials: ResMut<Assets<ColorMaterial>>,
     //window_query: Query<&Window, With<PrimaryWindow>>,
-    mut visibility: Query<&mut Visibility, With<crate::guifrontend::Dmd>>,
+    mut visibility: Query<&mut Visibility, With<Dmd>>,
     //mut contexts: EguiContexts,
 ) {
     let _dmd = (128, 32);
@@ -42,72 +39,6 @@ pub fn dmd_update(
         //  ..Default::default()
     })
     .id(); */
-}
-
-#[allow(clippy::too_many_arguments)]
-pub fn create_info_box(
-    _commands: Commands,
-    keys: Res<ButtonInput<KeyCode>>,
-    _meshes: ResMut<Assets<Mesh>>,
-    _materials: ResMut<Assets<ColorMaterial>>,
-    window: &Window,
-    mut contexts: EguiContexts,
-    wtitle: String,
-    wtext: String,
-) {
-    /*   MacOS window settings
-     pub movable_by_window_background: bool,
-    pub fullsize_content_view: bool,
-    pub has_shadow: bool,
-    pub titlebar_shown: bool,
-    pub titlebar_transparent: bool,
-    pub titlebar_show_title: bool,
-    pub titlebar_show_buttons: bool, */
-
-    let width = window.resolution.width();
-    let height = window.resolution.height();
-
-    egui::Window::new(&wtitle)
-        .vscroll(true)
-        .current_pos(egui::Pos2::new(
-            ((width / 2.0) - 250.0) - 10.0,
-            (height / 2.0) - 250.0,
-        ))
-        .min_width(500.0)
-        .min_height(500.0)
-        .pivot(Align2::LEFT_TOP)
-        .show(contexts.ctx_mut(), |ui| {
-            //  ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
-            //egui::ScrollArea::vertical()
-            //   .min_scrolled_width(500.0)
-            //  .auto_shrink(false)
-            // .animated(true)
-            //.show(ui, |ui| {
-            ui.add(egui::Label::wrap(egui::Label::new(&wtext)));
-            // });
-        });
-    //});
-
-    let mut _loopstop = false;
-
-    //println!("key: {:?}",keys.get_pressed());
-    if keys.pressed(KeyCode::ShiftRight) {
-        // println!("broken");
-        _loopstop = true;
-    }
-
-    let _window = Window {
-        // Enable transparent support for the window
-        transparent: true,
-        decorations: true,
-        window_level: WindowLevel::AlwaysOnTop,
-        //       cursor: Cursor {
-        //           // Allow inputs to pass through to apps behind this app.
-        //           hit_test: false,
-        //           ..default()
-        //       },
-        ..default()
-    };
 }
 
 // pub fn gui_update() {}

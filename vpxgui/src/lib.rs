@@ -1,5 +1,11 @@
+mod dmd;
+mod flippers;
 pub mod guifrontend;
+mod info;
+mod loading;
 mod menus;
 mod music;
+mod pipelines;
 mod process;
+mod wheel;
 mod windowing;
