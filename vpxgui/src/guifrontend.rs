@@ -88,67 +88,6 @@ pub struct DialogBox {
     pub text: String,
 }
 
-fn correct_window_size_and_position(
-    mut window_query: Query<&mut Window, With<PrimaryWindow>>,
-    vpx_config: Res<VpxConfig>,
-) {
-    // only on Linux
-    // #[cfg(target_os = "linux")] is annoying because it causes clippy to complain about dead code
-    if cfg!(target_os = "linux") {
-        // Under wayland the window size is not correct, we need to scale it down.
-        // In vpinball the playfield window size is configured in physical pixels.
-        // The window constructor will create a window with the size in logical pixels.
-        let mut window = window_query.single_mut();
-        if window.resolution.scale_factor() != 1.0 {
-            info!(
-                "Resizing window for Linux with scale factor {}",
-                window.resolution.scale_factor(),
-            );
-            let vpinball_config = &vpx_config.config;
-            if let Some(playfield) = vpinball_config.get_playfield_info() {
-                if let (Some(physical_width), Some(physical_height)) =
-                    (playfield.width, playfield.height)
-                {
-                    let logical_width = physical_width as f32 / window.resolution.scale_factor();
-                    let logical_height = physical_height as f32 / window.resolution.scale_factor();
-                    info!(
-                        "Setting window size to {}x{}",
-                        logical_width, logical_height
-                    );
-                    window.resolution.set(logical_width, logical_height);
-                    window.set_changed();
-                }
-            }
-        }
-    }
-
-    // only on macOS
-    // #[cfg(target_os = "macos")] is annoying because it causes clippy to complain about dead code
-    if cfg!(target_os = "macos") {
-        let mut window = window_query.single_mut();
-        if window.resolution.scale_factor() != 1.0 {
-            info!(
-                "Repositioning window for macOS with scale factor {}",
-                window.resolution.scale_factor(),
-            );
-            let vpinball_config = &vpx_config.config;
-            if let Some(playfield) = vpinball_config.get_playfield_info() {
-                if let (Some(logical_x), Some(logical_y)) = (playfield.x, playfield.y) {
-                    // For macOS with scales factor > 1 this is not correct but we don't know the scale
-                    // factor before the window is created.
-                    let physical_x = logical_x as f32 * window.resolution.scale_factor();
-                    let physical_y = logical_y as f32 * window.resolution.scale_factor();
-                    info!("Setting window position to {}, {}", physical_x, physical_y,);
-                    // this will apply the width as if it was set in logical pixels
-                    window.position =
-                        WindowPosition::At(IVec2::new(physical_x as i32, physical_y as i32));
-                    window.set_changed();
-                }
-            }
-        }
-    }
-}
-
 #[derive(Bundle)]
 struct WheelBundle {
     sprite: Sprite,
@@ -234,19 +173,14 @@ fn create_wheel(
     mut asset_paths: ResMut<AssetPaths>,
 ) {
     let _list_of_tables = &vpx_tables.indexed_tables;
-
-    // commands.spawn(SpriteBundle {
-    //     texture: asset_server.load("/usr/tables/wheels/Sing Along (Gottlieb 1967).png"),
-    //    ..default()
-    // });
     let tables = &vpx_tables.indexed_tables;
 
-    //let temporary_path_name="";
-
     let window = window_query.single();
-    let _width = window.width();
-    let height = window.height();
-    let table_path = &config.config.tables_folder;
+    // Set default wheel size to a third of the window height
+    commands.insert_resource(Globals {
+        wheel_size: (window.height() / 3.),
+        game_running: false,
+    });
 
     // let mut orentation = Horizontal;
     // if height > width {
@@ -274,33 +208,19 @@ fn create_wheel(
     // Create blank wheel
     // tries [table_path]/wheels/blankwheel.png first
     // fallbacks to assets/blankwheel.png
-    let mut blank_path = table_path.clone().into_os_string();
+    let mut blank_path = config.config.tables_folder.clone();
     blank_path.push("/wheels/blankwheel.png");
     if !Path::new(&blank_path).exists() {
         // will be loaded from assets
         warn!("Please copy the blankwheel.png to {:?}", blank_path);
-        blank_path = PathBuf::from("blankwheel.png").into_os_string();
+        blank_path = PathBuf::from("blankwheel.png");
     }
 
     for (counter, info) in tables.iter().enumerate() {
-        /*    match &info.wheel_path {
-                  Some(path)=> println!("{}",&path.as_os_str().to_string_lossy()),
-                  None => println!("NONE"),
-              };
-        */
-        //let mut haswheel = true;
-        //let mut temporary_path_name= &info.wheel_path.unwrap();
-        //blank_path.into();
-
-        // let table_info = match &info.table_info.table_rules {
-        //    Some(tb) => &tb,
-        //    None => "None",
-        //    };
-
         let wheel_path = match &info.wheel_path {
             // get handle from path
-            Some(path) => PathBuf::from(path),
-            None => PathBuf::from(blank_path.clone()),
+            Some(path) => path.clone(),
+            None => blank_path.clone(),
         };
         let wheel_image_handle = asset_server.load(wheel_path.clone());
         loading_data
@@ -310,28 +230,26 @@ fn create_wheel(
         //  using imagesize crate as it is a very fast way to get the dimensions.
         let (_wheel_width, _wheel_height) = (0., 0.);
 
-        // Set default wheel size
-        // TODO why is this done for every wheel?
-        commands.insert_resource(Globals {
-            wheel_size: (height / 3.),
-            game_running: false,
-        });
-
         // TODO below code is blocking, should be offloaded to a thread?
-        let image = ImageReader::open(&wheel_path)
-            .unwrap()
-            .into_dimensions()
-            .unwrap();
-        let (_wheel_width, wheel_height) = image;
+        let wheel_height = if wheel_path.exists() {
+            let image = ImageReader::open(&wheel_path)
+                .unwrap()
+                .into_dimensions()
+                .unwrap();
+            let (_wheel_width, wheel_height) = image;
+            wheel_height
+        } else {
+            1000
+        };
         // wheel_size.wheel_size = (height / 3.) / (size.height as f32);
         // Normalize icons to 1/3 the screen height
         transform.scale = Vec3::new(
-            (height / 5.) / (wheel_height as f32),
-            (height / 5.) / (wheel_height as f32),
+            (window.height() / 5.) / (wheel_height as f32),
+            (window.height() / 5.) / (wheel_height as f32),
             100.0,
         );
 
-        info!(
+        debug!(
             "Wheel asset for table {} = {} {}",
             info.path.display(),
             wheel_path.display(),
@@ -390,7 +308,7 @@ fn create_wheel(
                 position_type: PositionType::Absolute,
                 left: Val::Px(20.),
                 //top: Val::Px(245.),
-                top: Val::Px(height * 0.025), //-(height-(height/2.+(scale*2.)))),
+                top: Val::Px(window.height() * 0.025), //-(height-(height/2.+(scale*2.)))),
                 right: Val::Px(0.),
                 ..default()
             },
@@ -432,7 +350,7 @@ fn create_wheel(
                 display: Display::None,
                 position_type: PositionType::Absolute,
                 left: Val::Px(20.),
-                top: Val::Px(height * 0.2), //-(height-(height/2.+(scale*2.)))),
+                top: Val::Px(window.height() * 0.2), //-(height-(height/2.+(scale*2.)))),
                 right: Val::Px(0.),
                 ..default()
             },
@@ -1023,7 +941,7 @@ fn update_loading_data(
                 let id = asset.id().typed_unchecked::<Image>();
                 // Since for example the default asset is shared this will repeatedly the last
                 // path that was loaded.
-                info!("loading {}", asset_paths.paths.get(&id).cloned().unwrap());
+                // info!("loading {}", asset_paths.paths.get(&id).cloned().unwrap());
                 dialog.text = asset_paths.paths.get(&id).cloned().unwrap();
                 pop_list.push(index);
             }
@@ -1031,7 +949,7 @@ fn update_loading_data(
 
         // Remove all loaded assets from the loading_assets list.
         if !pop_list.is_empty() {
-            info!("Removing loaded assets {:?}", pop_list);
+            info!("Removing {} loaded assets.", pop_list.len());
             // remove all items from the pop list
             for index in pop_list.iter().rev() {
                 loading_data.loading_assets.remove(*index);
@@ -1191,44 +1109,14 @@ pub fn guifrontend(config: ResolvedConfig, vpx_files_with_tableinfo: Vec<Indexed
 
     let vpinball_ini_path = config.vpinball_ini_file();
     let vpinball_config = VPinballConfig::read(&vpinball_ini_path).unwrap();
-    let mut position = WindowPosition::default();
-    let mut mode = WindowMode::Fullscreen(MonitorSelection::Primary);
-    let mut resolution = WindowResolution::default();
-    if let Some(playfield) = vpinball_config.get_playfield_info() {
-        if let (Some(x), Some(y)) = (playfield.x, playfield.y) {
-            // For macOS with scale factor > 1 this is not correct but we don't know the scale
-            // factor before the window is created. We will correct the position later using the
-            // system "correct_mac_window_size".
-            let physical_x = x as i32;
-            let physical_y = y as i32;
-            position = WindowPosition::At(IVec2::new(physical_x, physical_y));
-        }
-        if let (Some(width), Some(height)) = (playfield.width, playfield.height) {
-            resolution = WindowResolution::new(width as f32, height as f32);
-        }
-        mode = if playfield.fullscreen {
-            WindowMode::Fullscreen(MonitorSelection::Primary)
-        } else {
-            WindowMode::Windowed
-        };
-    }
-    println!(
-        "Positioning window at {:?}, resolution {:?}",
-        position, resolution
-    );
+    let window = windowing::setup_playfield_window(&vpinball_config);
 
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                title: "VPXTOOL".to_string(),
-                // window_level: WindowLevel::AlwaysOnTop,
-                resolution,
-                mode, // WindowMode::Windowed,
-                position,
-                ..Default::default()
-            }),
+            primary_window: Some(window),
             ..Default::default()
         }))
+        .add_plugins(WindowingPlugin)
         .insert_resource(AssetPaths {
             paths: HashMap::new(),
         })
@@ -1252,7 +1140,7 @@ pub fn guifrontend(config: ResolvedConfig, vpx_files_with_tableinfo: Vec<Indexed
         })
         //       .insert_resource(ClearColor(Color::srgb(0.9, 0.3, 0.6)))
         .add_event::<StreamEvent>()
-        .add_systems(Startup, correct_window_size_and_position)
+        .add_systems(Startup, windowing::correct_window_size_and_position)
         .add_systems(Startup, setup)
         .add_systems(Startup, (create_wheel, create_flippers, create_dmd))
         .insert_resource(LoadingData::new(5))
@@ -1340,6 +1228,8 @@ struct StreamSender(Sender<u32>);
 #[allow(dead_code)]
 struct StreamEvent(u32);
 
+use crate::windowing;
+use crate::windowing::WindowingPlugin;
 use crossbeam_channel::{bounded, Receiver, Sender};
 
 fn setup(mut commands: Commands) {
