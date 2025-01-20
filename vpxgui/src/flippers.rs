@@ -1,7 +1,6 @@
+use crate::guifrontend::Globals;
 use bevy::math::{Quat, Vec3};
-use bevy::prelude::{
-    default, Bundle, Commands, Component, Query, Res, Sprite, Transform, Visibility, Window, With,
-};
+use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use bevy_asset::AssetServer;
 
@@ -35,6 +34,39 @@ struct FlipperBundle1 {
     //inherited_visibility: InheritedVisibility,
     visibility: Visibility,
     flipper1: Flipper1,
+}
+
+pub(crate) fn flipper_plugin(app: &mut App) {
+    app.add_systems(Startup, create_flippers);
+    app.add_systems(Update, update_flippers);
+}
+
+#[allow(clippy::type_complexity)]
+fn update_flippers(
+    mut set: ParamSet<(
+        Query<(&mut Transform, &mut Visibility), With<Flipper>>,
+        Query<(&mut Transform, &mut Visibility), With<Flipper1>>,
+    )>,
+    globals: Res<Globals>,
+    window_query: Query<&Window, With<PrimaryWindow>>,
+) {
+    let window = window_query.single();
+    let height = window.height();
+
+    for (mut transform, mut visibility) in set.p0().iter_mut() {
+        let wsize = globals.wheel_size;
+
+        transform.translation =
+            Vec3::new((wsize / 3.0) * -1.0, (-(height / 2.)) + (wsize / 4.), 0.);
+        *visibility = Visibility::Visible;
+    }
+
+    for (mut transform, mut visibility) in set.p1().iter_mut() {
+        let wsize = globals.wheel_size;
+
+        transform.translation = Vec3::new(wsize / 3.0, (-(height / 2.0)) + (wsize / 4.), 0.);
+        *visibility = Visibility::Visible;
+    }
 }
 
 pub(crate) fn create_flippers(

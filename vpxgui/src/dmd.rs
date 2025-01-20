@@ -1,11 +1,8 @@
+use crate::guifrontend::Globals;
 use bevy::color::palettes::css::{GHOST_WHITE, GOLDENROD};
 use bevy::color::Color;
 use bevy::math::Vec3;
-use bevy::prelude::{
-    default, BackgroundColor, BorderRadius, BoxShadow, Bundle, Commands, Component, JustifyText,
-    LineBreak, Node, Query, Res, Text, TextColor, TextFont, TextLayout, Transform, UiRect, Val,
-    Visibility, Window, With,
-};
+use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use bevy_asset::AssetServer;
 
@@ -35,7 +32,33 @@ struct DmdBundle {
     dmd: Dmd,
 }
 
-pub(crate) fn create_dmd(
+pub(crate) fn dmd_plugin(app: &mut App) {
+    app.add_systems(Startup, create_dmd);
+    app.add_systems(Update, dmd_update);
+}
+
+fn dmd_update(
+    mut dmd_query: Query<(&mut Node, &mut Visibility), With<Dmd>>,
+    globals: Res<Globals>,
+    window_query: Query<&Window, With<PrimaryWindow>>,
+) {
+    let window = window_query.single();
+    let width = window.width();
+    let height = window.height();
+    for (mut node, mut visibility) in dmd_query.iter_mut() {
+        //let (mut node1, mut visibility) = &query.p3().get_single_mut();
+        let wsize = globals.wheel_size;
+        //println!("node: {:?}", node);
+        node.left = Val::Px((width / 2.) - 256.0);
+        node.top = Val::Px(height - wsize - 108.);
+
+        //   node.top = Val::Px((-(height / 2.0)) + wsize + 20.);
+        //transform.translation = Vec3::new(0. - 326.0, (-(height / 2.0)) + wsize + 20., 0.);
+        *visibility = Visibility::Visible;
+    }
+}
+
+fn create_dmd(
     mut commands: Commands,
     _asset_server: Res<AssetServer>,
     window_query: Query<&Window, With<PrimaryWindow>>,

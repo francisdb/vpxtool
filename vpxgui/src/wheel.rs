@@ -1,25 +1,43 @@
-use crate::guifrontend::{
-    AssetPaths, Config, Globals, TableText, TextItemGhostWhite, TextItemGold, VpxTables,
-};
+use crate::guifrontend::{Config, Globals, TableText, VpxTables};
 use crate::loading::{LoadingData, LoadingState};
 use bevy::color::palettes::css::GHOST_WHITE;
+use bevy::image::Image;
 use bevy::log::{debug, info, warn};
 use bevy::math::Vec3;
-use bevy::prelude::{
-    default, AlignContent, Bundle, Commands, Component, Display, FlexDirection, NextState, Node,
-    PositionType, Query, Res, ResMut, Sprite, Text, TextColor, TextFont, Transform, Val,
-    Visibility, Window, With,
-};
+use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
-use bevy_asset::AssetServer;
+use bevy_asset::{AssetId, AssetServer};
 use image::ImageReader;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-
 // #[derive(AssetCollection, Resource)]
 // struct ImageAssets {
 //     #[asset(key = "wheel")]
 //     _wheel: Handle<Image>,
 // }
+
+#[derive(Component)]
+pub struct TextItemGold {
+    //pub item_number: i16,
+    //pub image_handle: Handle<Image>,
+    //pub selected: bool,
+    //  pub launch_path: PathBuf,
+    //pub table_info: IndexedTable,
+}
+
+#[derive(Component)]
+pub struct TextItemGhostWhite {
+    //  pub _item_number: i16,
+    //pub image_handle: Handle<Image>,
+    //  pub _selected: bool,
+    //  pub launch_path: PathBuf,
+    //pub table_info: IndexedTable,
+}
+
+#[derive(Resource, Default)]
+pub struct AssetPaths {
+    pub paths: HashMap<AssetId<Image>, String>,
+}
 
 #[derive(Component)]
 pub struct Wheel {
@@ -71,8 +89,42 @@ struct MenuTextBundle1 {
     text_item: TextItemGhostWhite,
 }
 
+pub(crate) fn wheel_plugin(app: &mut App) {
+    app.insert_resource(AssetPaths {
+        paths: HashMap::new(),
+    });
+    app.add_systems(Startup, create_wheels);
+    app.add_systems(Update, update_selected_wheel);
+}
+
+fn update_selected_wheel(
+    mut wheel_query: Query<(&mut Visibility, &mut Wheel, &mut Transform)>,
+    globals: Res<Globals>,
+    window_query: Query<&Window, With<PrimaryWindow>>,
+) {
+    let selected_item = globals.selected_item.unwrap_or(0);
+    let window = window_query.single();
+    let height = window.height();
+    let wheel_size = globals.wheel_size;
+    // update currently selected item to new value
+    for (mut visibility, mut wheel, mut transform) in wheel_query.iter_mut() {
+        if wheel.item_number != selected_item {
+            wheel.selected = false;
+            *visibility = Visibility::Hidden;
+            // transform.translation = Vec3::new(0., width, 0.);
+        } else {
+            wheel.selected = true;
+            *visibility = Visibility::Visible;
+            // *transform = Transform::from_xyz(0., 0., 0.);
+            transform.translation = Vec3::new(0., (-(height / 2.0)) + (wheel_size / 2.) + 20., 0.);
+            //transform.translation = Vec3::new(0., -(height - (height / 2.75 + (scale * 2.))), 0.);
+            //    println!("Selected {}",&wheel.launchpath.as_os_str().to_string_lossy());
+        }
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn create_wheel(
+fn create_wheels(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     mut loading_data: ResMut<LoadingData>,
@@ -84,11 +136,11 @@ pub(crate) fn create_wheel(
     mut asset_paths: ResMut<AssetPaths>,
     mut globals: ResMut<Globals>,
 ) {
-    let _list_of_tables = &vpx_tables.indexed_tables;
     let tables = &vpx_tables.indexed_tables;
 
     let window = window_query.single();
     // Set default wheel size to a third of the window height
+    // TODO move this from globals to a specific resource for this module
     globals.wheel_size = window.height() / 3.;
 
     // let mut orentation = Horizontal;

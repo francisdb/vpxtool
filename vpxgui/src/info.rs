@@ -1,4 +1,5 @@
-use crate::guifrontend::{TableText, TextItemGold};
+use crate::guifrontend::TableText;
+use crate::wheel::TextItemGold;
 use bevy::input::ButtonInput;
 use bevy::prelude::{
     default, ColorMaterial, Commands, KeyCode, Mesh, Query, Res, ResMut, Text, Window, With,

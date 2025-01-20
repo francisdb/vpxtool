@@ -2,6 +2,7 @@ mod dmd;
 mod flippers;
 pub mod guifrontend;
 mod info;
+mod list;
 mod loading;
 mod menus;
 mod music;

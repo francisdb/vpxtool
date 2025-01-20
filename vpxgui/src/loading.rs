@@ -1,10 +1,19 @@
-use crate::guifrontend::{AssetPaths, DialogBox};
 use crate::pipelines::PipelinesReady;
+use crate::process::process_plugin;
+use crate::wheel::AssetPaths;
 use bevy::image::Image;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use bevy_asset::{AssetServer, RecursiveDependencyLoadState, UntypedHandle};
 use bevy_egui::{egui, EguiContexts};
+
+const SLOW_LOADING: bool = false;
+
+#[derive(Resource, Debug)]
+struct LoadingDialogBox {
+    pub title: String,
+    pub text: String,
+}
 
 #[derive(States, Default, Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) enum LoadingState {
@@ -37,12 +46,28 @@ impl LoadingData {
 }
 
 // TODO create a plugin that also pulls in the pipelines_ready plugin
+pub(crate) fn loading_plugin(app: &mut App) {
+    app.add_plugins(process_plugin);
+    app.insert_resource(LoadingDialogBox {
+        title: "Loading...".to_owned(),
+        text: "blank".to_owned(),
+    });
+    app.add_systems(Update, display_loading_screen);
+    app.add_systems(
+        Update,
+        load_loading_screen.run_if(in_state(LoadingState::Loading)),
+    );
+    app.add_systems(
+        Update,
+        update_loading_data.run_if(in_state(LoadingState::Loading)),
+    );
+}
 
 // Monitors current loading status of assets.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn update_loading_data(
+fn update_loading_data(
     _commands: Commands,
-    mut dialog: ResMut<DialogBox>,
+    mut dialog: ResMut<LoadingDialogBox>,
     mut loading_data: ResMut<LoadingData>,
     mut game_state: ResMut<NextState<LoadingState>>,
     // mut loading_state: ResMut<LoadingState>,
@@ -76,12 +101,17 @@ pub(crate) fn update_loading_data(
 
         // Remove all loaded assets from the loading_assets list.
         if !pop_list.is_empty() {
-            info!("Removing {} loaded assets.", pop_list.len());
+            debug!("Removing {} loaded assets.", pop_list.len());
             // remove all items from the pop list
-            for index in pop_list.iter().rev() {
-                loading_data.loading_assets.remove(*index);
+            if SLOW_LOADING {
+                for index in pop_list.iter().rev().take(1) {
+                    loading_data.loading_assets.remove(*index);
+                }
+            } else {
+                for index in pop_list.iter().rev() {
+                    loading_data.loading_assets.remove(*index);
+                }
             }
-            // loading_data.loading_assets.remove(pop_list[0]);
         }
 
         // If there are no more assets being monitored, and pipelines
@@ -101,17 +131,17 @@ pub(crate) fn update_loading_data(
 //struct LoadingScreen;
 
 // Spawns the necessary components for the loading screen.
-pub(crate) fn load_loading_screen(
+fn load_loading_screen(
     _commands: Commands,
-    dialog: ResMut<DialogBox>,
+    dialog: ResMut<LoadingDialogBox>,
     mut contexts: EguiContexts,
-    asset_server: Res<AssetServer>,
+    //asset_server: Res<AssetServer>,
     window_query: Query<&Window, With<PrimaryWindow>>,
 ) {
-    let _text_style = TextFont {
-        font_size: 80.0,
-        ..default()
-    };
+    // let _text_style = TextFont {
+    //     font_size: 80.0,
+    //     ..default()
+    // };
     let window = window_query.single();
 
     let title = &dialog.title;
@@ -120,12 +150,12 @@ pub(crate) fn load_loading_screen(
     let width = window.resolution.width();
     let height = window.resolution.height();
     let ctx = contexts.ctx_mut();
-    let _raw_input = egui::RawInput::default();
+    //let _raw_input = egui::RawInput::default();
     //let x = TextColor::from(GHOST_WHITE);
 
     // Check if the texture is loaded if let Some(texture) = textures.get(texture_handle) { // Display the image using egui egui::Window::new("Image Window").show(egui_context.ctx_mut(), |ui| { let texture_id = egui::TextureId::User(texture_handle.id); ui.image(texture_id, [texture.size.width as f32, texture.size.height as f32
     //let texture_handle: Handle<Texture> = asset_server.load("//usr/tables/wheels/blankwheel.png");
-    let _x: Handle<Image> = asset_server.load("left-flipper.png");
+    // let _x: Handle<Image> = asset_server.load("left-flipper.png");
 
     /*   commands.spawn(FlipperBundle1 {
             sprite: Sprite {
