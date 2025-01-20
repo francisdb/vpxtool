@@ -1248,6 +1248,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_mini_fps"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9fa083e6ca62d88c33fd041620f870c931415cfb6b275a4efb5e09bf08e56c27"
+dependencies = [
+ "sysinfo 0.33.1",
+]
+
+[[package]]
 name = "bevy_pbr"
 version = "0.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5952,6 +5961,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "sysinfo"
+version = "0.33.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4fc858248ea01b66f19d8e8a6d55f41deaf91e9d495246fd01368d99935c6c01"
+dependencies = [
+ "core-foundation-sys",
+ "libc",
+ "memchr",
+ "ntapi",
+ "rayon",
+ "windows 0.57.0",
+]
+
+[[package]]
 name = "system-deps"
 version = "6.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6526,6 +6549,7 @@ dependencies = [
  "bevy_asset",
  "bevy_asset_loader",
  "bevy_egui",
+ "bevy_mini_fps",
  "crossbeam-channel",
  "eframe",
  "egui_extras",
