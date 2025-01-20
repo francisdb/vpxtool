@@ -4,7 +4,6 @@ use bevy::color::Color;
 use bevy::math::Vec3;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
-use bevy_asset::AssetServer;
 
 #[derive(Component)]
 pub struct Dmd;
@@ -58,11 +57,7 @@ fn dmd_update(
     }
 }
 
-fn create_dmd(
-    mut commands: Commands,
-    _asset_server: Res<AssetServer>,
-    window_query: Query<&Window, With<PrimaryWindow>>,
-) {
+fn create_dmd(mut commands: Commands, window_query: Query<&Window, With<PrimaryWindow>>) {
     let window = window_query.single();
     let window_width = window.width();
     let window_height = window.height();

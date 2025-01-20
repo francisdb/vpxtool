@@ -99,12 +99,13 @@ pub(crate) fn wheel_plugin(app: &mut App) {
 
 fn update_selected_wheel(
     mut wheel_query: Query<(&mut Visibility, &mut Wheel, &mut Transform)>,
-    globals: Res<Globals>,
+    mut globals: ResMut<Globals>,
     window_query: Query<&Window, With<PrimaryWindow>>,
 ) {
     let selected_item = globals.selected_item.unwrap_or(0);
     let window = window_query.single();
     let height = window.height();
+    globals.wheel_size = window.height() / 3.;
     let wheel_size = globals.wheel_size;
     // update currently selected item to new value
     for (mut visibility, mut wheel, mut transform) in wheel_query.iter_mut() {

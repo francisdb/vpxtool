@@ -311,7 +311,6 @@ pub fn guifrontend(config: ResolvedConfig, vpx_files_with_tableinfo: Vec<Indexed
         .insert_resource(LoadingData::new(5))
         //       .insert_resource(ClearColor(Color::srgb(0.9, 0.3, 0.6)))
         .add_systems(Update, quit_on_q)
-        //.add_systems(Update, gui_update)
         //.add_systems(Update,(guiupdate,update_loading_data, level_selection,display_loading_screen),)
         //.add_systems(
         //    Update,
