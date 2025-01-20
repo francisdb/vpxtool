@@ -249,7 +249,7 @@ fn create_wheel(
             100.0,
         );
 
-        info!(
+        debug!(
             "Wheel asset for table {} = {} {}",
             info.path.display(),
             wheel_path.display(),
@@ -1103,10 +1103,6 @@ pub fn guifrontend(config: ResolvedConfig, vpx_files_with_tableinfo: Vec<Indexed
     //       viewport: egui::ViewportBuilder::default().with_inner_size([400.0, 800.0]),
     //       ..Default::default()
     //   };
-
-    // Since wayland does not allow positioning windows, we force x11 / xwayland.
-    // https://gitlab.freedesktop.org/wayland/wayland-protocols/-/issues/72
-    std::env::set_var("WINIT_UNIX_BACKEND", "x11");
 
     let mut tables: Vec<IndexedTable> = vpx_files_with_tableinfo;
     tables.sort_by_key(|indexed| display_table_line(indexed).to_lowercase());
