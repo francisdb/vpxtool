@@ -6,20 +6,18 @@ use bevy::window::*;
 use bevy_asset::RecursiveDependencyLoadState;
 use bevy_asset_loader::prelude::*;
 use bevy_egui::{egui, EguiContexts, EguiPlugin};
+use bevy_mini_fps::fps_plugin;
 use image::ImageReader;
-use is_executable::IsExecutable;
 use pipelines_ready::*;
 use shared::config::{ResolvedConfig, VPinballConfig};
 use shared::indexer::IndexedTable;
 use std::collections::HashMap;
-use std::sync::mpsc;
-use std::thread;
-use std::time::Duration;
-use std::{
-    io,
-    path::{Path, PathBuf},
-    process::{exit, ExitStatus},
-};
+use std::path::{Path, PathBuf};
+
+use crate::music::{music_plugin, resume_music, suspend_music, ControlMusicEvent};
+use crate::process::{do_launch, process_plugin, VpxEvent};
+use crate::windowing;
+use crate::windowing::WindowingPlugin;
 
 #[derive(Component)]
 pub struct Wheel {
@@ -380,7 +378,7 @@ fn create_wheel(
     //                {..default()},));
     //let update = commands.register_one_shot_system(update_loading_data);
     //commands.run_system(update);
-    println!("Wheels loaded");
+    info!("Wheels loaded");
 
     game_state.set(LoadingState::LevelLoading);
 }
@@ -459,8 +457,10 @@ fn create_dmd(
             Val::Px(40.),
         ),
         dmd: Dmd,
-        text_layout: TextLayout {justify:JustifyText::Center,
-        linebreak: LineBreak::WordBoundary},
+        text_layout: TextLayout {
+            justify: JustifyText::Center,
+            linebreak: LineBreak::WordBoundary,
+        },
         //text_layout: TextLayout::new_with_justify(JustifyText::Center).with_no_wrap(),
         text: Text::new("Keys       q: quit\n1: open up table description dialog\nleft-shift: scroll backward\nright-shift: scroll forward\nenter: start selected game"),
         text_font: TextFont {
@@ -524,7 +524,7 @@ fn create_flippers(
 }
 
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
-pub fn gui_update(
+pub(crate) fn gui_update(
     commands: Commands,
     keys: Res<ButtonInput<KeyCode>>,
     _time: Res<Time>,
@@ -549,11 +549,13 @@ pub fn gui_update(
         Query<(&mut Transform, &mut Visibility), With<Flipper1>>,
         Query<(&mut Node, &mut Visibility), With<Dmd>>,
     )>,
-    music_box_query: Query<&AudioSink>,
     contexts: EguiContexts,
     meshes: ResMut<Assets<Mesh>>,
     materials: ResMut<Assets<ColorMaterial>>,
     mut globals: ResMut<Globals>,
+    mut control_music_event_writer: EventWriter<ControlMusicEvent>,
+    stream_sender: Res<crate::process::StreamSender>,
+    config: Res<Config>,
 ) {
     let (_config_path, _loaded_config) = shared::config::load_config().unwrap().unwrap();
     let mut window = window_query.get_single().unwrap().clone();
@@ -597,253 +599,227 @@ pub fn gui_update(
         }
     };
 
-    if let Ok(sink) = music_box_query.get_single() {
-        if keys.just_pressed(KeyCode::Equal) {
-            sink.set_volume(sink.volume() + 0.1);
-        } else if keys.just_pressed(KeyCode::Minus) {
-            sink.set_volume(sink.volume() - 0.1);
-        } else if keys.just_pressed(KeyCode::KeyM) {
-            if sink.is_paused() {
-                sink.play()
-            } else {
-                sink.pause()
-            }
-            //   } else if keys.just_pressed(KeyCode::KeyN) {
-            //       sink.play();
-        } else if keys.just_pressed(KeyCode::Digit1) {
-            globals.game_running = !globals.game_running;
-        } else if keys.just_pressed(KeyCode::ShiftRight) {
-            selected_item += 1;
-        } else if keys.just_pressed(KeyCode::ShiftLeft) {
-            selected_item -= 1;
-        } else if keys.just_pressed(KeyCode::Enter) {
-            launchit = true;
-        } else if keys.just_pressed(KeyCode::KeyQ) {
-            app_exit_events.send(bevy::app::AppExit::Success);
-        } else if keys.just_pressed(KeyCode::Space) {
-            println!("current table {}", selected_item);
-        }
+    if keys.just_pressed(KeyCode::Digit1) {
+        globals.game_running = !globals.game_running;
+    } else if keys.just_pressed(KeyCode::ShiftRight) {
+        selected_item += 1;
+    } else if keys.just_pressed(KeyCode::ShiftLeft) {
+        selected_item -= 1;
+    } else if keys.just_pressed(KeyCode::Enter) {
+        launchit = true;
+    } else if keys.just_pressed(KeyCode::KeyQ) {
+        app_exit_events.send(bevy::app::AppExit::Success);
+    } else if keys.just_pressed(KeyCode::Space) {
+        println!("current table {}", selected_item);
+    }
 
-        // Wrap around if one of the bounds are hit.
-        if selected_item == num - 1 {
-            selected_item = 0;
-        } else if selected_item == -1 {
-            selected_item = num - 2;
-        }
+    // Wrap around if one of the bounds are hit.
+    if selected_item == num - 1 {
+        selected_item = 0;
+    } else if selected_item == -1 {
+        selected_item = num - 2;
+    }
 
-        // for (mut visibility, mut wheel, mut transform) in query.iter_mut() {}
+    // for (mut visibility, mut wheel, mut transform) in query.iter_mut() {}
 
-        // update currently selected item to new value
-        for (mut visibility, mut wheel, mut transform) in set.p2().iter_mut() {
-            if wheel.item_number != selected_item {
-                wheel.selected = false;
-                *visibility = Visibility::Hidden;
-            //                    transform.translation = Vec3::new(0., width, 0.);
-            } else {
-                wheel.selected = true;
-                *visibility = Visibility::Visible;
-                // *transform = Transform::from_xyz(0., 0., 0.);
-                let wsize = globals.wheel_size;
-                transform.translation = Vec3::new(0., (-(height / 2.0)) + (wsize / 2.) + 20., 0.);
-                //transform.translation = Vec3::new(0., -(height - (height / 2.75 + (scale * 2.))), 0.);
-                //    println!("Selected {}",&wheel.launchpath.as_os_str().to_string_lossy());
-            }
-        }
-
-        for (mut transform, mut visibility) in set.p3().iter_mut() {
-            let wsize = globals.wheel_size;
-
-            transform.translation =
-                Vec3::new((wsize / 3.0) * -1.0, (-(height / 2.)) + (wsize / 4.), 0.);
+    // update currently selected item to new value
+    for (mut visibility, mut wheel, mut transform) in set.p2().iter_mut() {
+        if wheel.item_number != selected_item {
+            wheel.selected = false;
+            *visibility = Visibility::Hidden;
+        //                    transform.translation = Vec3::new(0., width, 0.);
+        } else {
+            wheel.selected = true;
             *visibility = Visibility::Visible;
-        }
-
-        for (mut transform, mut visibility) in set.p4().iter_mut() {
+            // *transform = Transform::from_xyz(0., 0., 0.);
             let wsize = globals.wheel_size;
-
-            transform.translation = Vec3::new(wsize / 3.0, (-(height / 2.0)) + (wsize / 4.), 0.);
-            *visibility = Visibility::Visible;
+            transform.translation = Vec3::new(0., (-(height / 2.0)) + (wsize / 2.) + 20., 0.);
+            //transform.translation = Vec3::new(0., -(height - (height / 2.75 + (scale * 2.))), 0.);
+            //    println!("Selected {}",&wheel.launchpath.as_os_str().to_string_lossy());
         }
-        for (mut node, mut visibility) in set.p5().iter_mut() {
-            //let (mut node1, mut visibility) = &query.p3().get_single_mut();
-            let wsize = globals.wheel_size;
-            //println!("node: {:?}", node);
-            node.left = Val::Px((width / 2.) - 256.0);
-            node.top = Val::Px(height - wsize - 108.);
+    }
 
-            //   node.top = Val::Px((-(height / 2.0)) + wsize + 20.);
-            //transform.translation = Vec3::new(0. - 326.0, (-(height / 2.0)) + wsize + 20., 0.);
-            *visibility = Visibility::Visible;
+    for (mut transform, mut visibility) in set.p3().iter_mut() {
+        let wsize = globals.wheel_size;
+
+        transform.translation =
+            Vec3::new((wsize / 3.0) * -1.0, (-(height / 2.)) + (wsize / 4.), 0.);
+        *visibility = Visibility::Visible;
+    }
+
+    for (mut transform, mut visibility) in set.p4().iter_mut() {
+        let wsize = globals.wheel_size;
+
+        transform.translation = Vec3::new(wsize / 3.0, (-(height / 2.0)) + (wsize / 4.), 0.);
+        *visibility = Visibility::Visible;
+    }
+    for (mut node, mut visibility) in set.p5().iter_mut() {
+        //let (mut node1, mut visibility) = &query.p3().get_single_mut();
+        let wsize = globals.wheel_size;
+        //println!("node: {:?}", node);
+        node.left = Val::Px((width / 2.) - 256.0);
+        node.top = Val::Px(height - wsize - 108.);
+
+        //   node.top = Val::Px((-(height / 2.0)) + wsize + 20.);
+        //transform.translation = Vec3::new(0. - 326.0, (-(height / 2.0)) + wsize + 20., 0.);
+        *visibility = Visibility::Visible;
+    }
+
+    // change name of game
+    for (items, mut font, mut textstyle, mut color, text) in set.p0().iter_mut() {
+        if items.item_number != selected_item {
+            textstyle.display = Display::None;
+            *color = TextColor::from(GHOST_WHITE);
+        } else {
+            *color = TextColor::from(GHOST_WHITE);
+            font.font_size = 20.0;
+            gametext = items.tabletext.clone();
+            gameblurb = items.tableblurb.clone();
+            textstyle.display = Display::Block;
+            wtitle = text.to_string();
         }
+    }
 
-        // change name of game
-        for (items, mut font, mut textstyle, mut color, text) in set.p0().iter_mut() {
-            if items.item_number != selected_item {
-                textstyle.display = Display::None;
-                *color = TextColor::from(GHOST_WHITE);
-            } else {
-                *color = TextColor::from(GHOST_WHITE);
-                font.font_size = 20.0;
-                gametext = items.tabletext.clone();
-                gameblurb = items.tableblurb.clone();
-                textstyle.display = Display::Block;
-                wtitle = text.to_string();
-            }
+    // table scroll
+    let mut counter = 11;
+    let mut names = [0; 21];
+
+    // item # less than 10
+    for count in 2..=11 {
+        if num + (selected_item - counter) < num - 1 {
+            names[count - 2] = num + (selected_item - counter);
+        } else if selected_item - counter > num {
+            names[count - 2] = num - (selected_item - counter)
+        } else {
+            names[count - 2] = (selected_item + 1) - counter;
+        };
+        counter -= 1;
+        // item number over num-10
+        // item number not over 10 or less than num-10
+    }
+    names[10] = selected_item;
+
+    counter = 0;
+    for count in 12..=22 {
+        if (selected_item + counter) < num - 1 {
+            names[count - 2] = selected_item + counter;
+        } else if selected_item + counter + 3 > num {
+            names[count - 2] = (selected_item + counter - num) + 1
         }
+        //        else  {names[count-2] = (selected_item+1)-counter;};
+        counter += 1;
+    }
+    counter = 0;
 
-        // table scroll
-        let mut counter = 11;
-        let mut names = [0; 21];
+    //   let mut wtitle = &gametext;
+    let _wtext = &gameblurb;
 
-        // item # less than 10
-        for count in 2..=11 {
-            if num + (selected_item - counter) < num - 1 {
-                names[count - 2] = num + (selected_item - counter);
-            } else if selected_item - counter > num {
-                names[count - 2] = num - (selected_item - counter)
-            } else {
-                names[count - 2] = (selected_item + 1) - counter;
-            };
-            counter -= 1;
-            // item number over num-10
-            // item number not over 10 or less than num-10
-        }
-        names[10] = selected_item;
+    // clear all game name assets
+    for (_items, mut fontsize, mut textstyle, mut color, _text) in set.p0().iter_mut() {
+        if num > 21 {
+            textstyle.display = Display::None;
+            fontsize.font_size = 20.0;
+            *color = TextColor::from(GHOST_WHITE);
+        } else {
+            textstyle.display = Display::Block;
+            fontsize.font_size = 20.0;
+            *color = TextColor::from(GHOST_WHITE);
 
-        counter = 0;
-        for count in 12..=22 {
-            if (selected_item + counter) < num - 1 {
-                names[count - 2] = selected_item + counter;
-            } else if selected_item + counter + 3 > num {
-                names[count - 2] = (selected_item + counter - num) + 1
-            }
-            //        else  {names[count-2] = (selected_item+1)-counter;};
+            textstyle.top = Val::Px(255. + (((counter as f32) + 1.) * 20.));
             counter += 1;
         }
-        counter = 0;
+    }
 
-        //   let mut wtitle = &gametext;
-        let _wtext = &gameblurb;
-
-        // clear all game name assets
-        for (_items, mut fontsize, mut textstyle, mut color, _text) in set.p0().iter_mut() {
-            if num > 21 {
-                textstyle.display = Display::None;
-                fontsize.font_size = 20.0;
-                *color = TextColor::from(GHOST_WHITE);
-            } else {
-                textstyle.display = Display::Block;
-                fontsize.font_size = 20.0;
-                *color = TextColor::from(GHOST_WHITE);
-
-                textstyle.top = Val::Px(255. + (((counter as f32) + 1.) * 20.));
-                counter += 1;
-            }
-        }
-
-        if num > 21 {
-            for _name in names {
-                for (items, mut fontsize, mut text_style, mut color, _text) in set.p0().iter_mut() {
-                    for (index, item) in names.iter().enumerate().take(9 + 1) {
-                        if items.item_number == *item {
-                            //wtitle = items;
-                            *color = TextColor::from(GHOST_WHITE);
-                            text_style.top = Val::Px(25. + (((index as f32) + 1.) * 20.));
-                            fontsize.font_size = 15.0;
-                            text_style.display = Display::Block;
-                            //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
-                        }
+    if num > 21 {
+        for _name in names {
+            for (items, mut fontsize, mut text_style, mut color, _text) in set.p0().iter_mut() {
+                for (index, item) in names.iter().enumerate().take(9 + 1) {
+                    if items.item_number == *item {
+                        //wtitle = items;
+                        *color = TextColor::from(GHOST_WHITE);
+                        text_style.top = Val::Px(25. + (((index as f32) + 1.) * 20.));
+                        fontsize.font_size = 15.0;
+                        text_style.display = Display::Block;
+                        //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
                     }
-                    for (index, item) in names.iter().enumerate().skip(10) {
-                        if items.item_number == *item {
-                            fontsize.font_size = 25.0;
-                            *color = TextColor::from(GOLD);
-                            text_style.top = Val::Px(255. + (((index as f32) - 10.5) * 20.));
-                            text_style.display = Display::Block;
-                            break;
-                        }
+                }
+                for (index, item) in names.iter().enumerate().skip(10) {
+                    if items.item_number == *item {
+                        fontsize.font_size = 25.0;
+                        *color = TextColor::from(GOLD);
+                        text_style.top = Val::Px(255. + (((index as f32) - 10.5) * 20.));
+                        text_style.display = Display::Block;
+                        break;
                     }
+                }
 
-                    for (index, item) in names.iter().enumerate().skip(11) {
-                        if items.item_number == *item {
-                            *color = TextColor::from(GHOST_WHITE);
-                            fontsize.font_size = 15.0;
-                            text_style.top = Val::Px(255. + (((index as f32) - 10.) * 20.));
-                            text_style.display = Display::Block;
-                            //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
-                        }
+                for (index, item) in names.iter().enumerate().skip(11) {
+                    if items.item_number == *item {
+                        *color = TextColor::from(GHOST_WHITE);
+                        fontsize.font_size = 15.0;
+                        text_style.top = Val::Px(255. + (((index as f32) - 10.) * 20.));
+                        text_style.display = Display::Block;
+                        //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
                     }
                 }
             }
         }
-        //  counter += 1;
+    }
+    //  counter += 1;
 
+    if globals.game_running {
+        create_info_box(
+            commands,
+            keys,
+            meshes,
+            materials,
+            &window.clone(),
+            contexts,
+            wtitle,
+            gametext.to_owned(),
+        );
+    };
+
+    if launchit {
         if globals.game_running {
-            create_info_box(
-                commands,
-                keys,
-                meshes,
-                materials,
-                &window.clone(),
-                contexts,
-                wtitle,
-                gametext.to_owned(),
-            );
+            warn!("Game already running");
+            return;
         };
 
-        if launchit {
-            //if globals.game_running {
-            //    println!("Game running");
-            //    return;
-            //};
-            let _game_running = globals.game_running;
-            //   globals.game_running = true;
-            let mut ispaused: bool = false;
-            if let Ok(sink) = music_box_query.get_single() {
-                ispaused = sink.is_paused();
-                sink.pause();
-            };
-            for (_visibility, wheel, _transform) in set.p2().iter() {
-                if wheel.item_number == selected_item {
-                    println!(
-                        "Launching {}",
-                        wheel.launch_path.clone().into_os_string().to_string_lossy()
-                    );
-                    println!("Hide window");
-                    window.visible = false;
-
-                    let (tx, _rx) = mpsc::channel();
-                    let tx = tx.clone();
-                    let path = wheel.launch_path.clone();
-                    let _global = globals.game_running;
-                    let (_config_path, loaded_config) =
-                        shared::config::load_config().unwrap().unwrap();
-                    let executable = loaded_config.vpx_executable; // .executable.clone();
-
-                    let _pin_thread = std::thread::spawn(move || {
-                        launch(&path, &executable, None);
-                        thread::sleep(Duration::from_millis(2_u64));
-
-                        println!("Vpinball done, sending event");
-                        if let Ok(_tx1) = tx.send(1) {
-                            tx.send(1).unwrap()
-                        };
-
-                        window.visible = true;
-                        true
-                    });
-                    //  if pin_thread.join().unwrap() == true {
-                    //      globals.game_running = false;
-                    //  }
-                    //  println!("game_running {}", globals.game_running);
-                }
+        suspend_music(&mut control_music_event_writer);
+        for (_visibility, wheel, _transform) in set.p2().iter() {
+            if wheel.item_number == selected_item {
+                info!("Hide window");
+                window.visible = false;
+                globals.game_running = true;
+                do_launch(
+                    stream_sender.clone(),
+                    &wheel.launch_path,
+                    &config.config.vpx_executable,
+                );
             }
-            if let Ok(sink) = music_box_query.get_single() {
-                if !ispaused {
-                    sink.play();
-                }
-            };
         }
+    }
+}
+
+fn resume_after_play(
+    mut reader: EventReader<VpxEvent>,
+    mut event_writer: EventWriter<ControlMusicEvent>,
+    mut globals: ResMut<Globals>,
+    window_query: Query<&Window, With<PrimaryWindow>>,
+) {
+    for (_i, event) in reader.read().enumerate() {
+        info!("Event: {:?}", event);
+        globals.game_running = false;
+        resume_music(&mut event_writer);
+        let mut window = window_query.get_single().unwrap().clone();
+        info!("Window visibility: {}", window.visible);
+        info!("Showing window");
+        window.visible = true;
+        // bring window to front
+        // window.window_level = WindowLevel::AlwaysOnTop;
+        // request focus
+        window.focused = true;
     }
 }
 
@@ -1117,6 +1093,9 @@ pub fn guifrontend(config: ResolvedConfig, vpx_files_with_tableinfo: Vec<Indexed
             ..Default::default()
         }))
         .add_plugins(WindowingPlugin)
+        .add_plugins(fps_plugin!())
+        .add_plugins(music_plugin)
+        .add_plugins(process_plugin)
         .insert_resource(AssetPaths {
             paths: HashMap::new(),
         })
@@ -1139,7 +1118,7 @@ pub fn guifrontend(config: ResolvedConfig, vpx_files_with_tableinfo: Vec<Indexed
             text: "blank".to_owned(),
         })
         //       .insert_resource(ClearColor(Color::srgb(0.9, 0.3, 0.6)))
-        .add_event::<StreamEvent>()
+        .add_event::<VpxEvent>()
         .add_systems(Startup, windowing::correct_window_size_and_position)
         .add_systems(Startup, setup)
         .add_systems(Startup, (create_wheel, create_flippers, create_dmd))
@@ -1149,7 +1128,6 @@ pub fn guifrontend(config: ResolvedConfig, vpx_files_with_tableinfo: Vec<Indexed
             Update,
             (load_loading_screen).run_if(in_state(LoadingState::LevelLoading)),
         )
-        .add_systems(Startup, play_background_audio)
         //.add_systems(Update, gui_update)
         //.add_systems(Update,(guiupdate,update_loading_data, level_selection,display_loading_screen),)
         //.add_systems(
@@ -1158,11 +1136,7 @@ pub fn guifrontend(config: ResolvedConfig, vpx_files_with_tableinfo: Vec<Indexed
         //)
         //.add_systems(Update, volume_system)
         //   .add_systems(Update,create_wheel)
-        .add_systems(
-            Update,
-            //(display_loading_screen, read_stream, spawn_text, move_text),
-            (display_loading_screen, read_stream),
-        )
+        .add_systems(Update, (display_loading_screen, resume_after_play))
         .add_systems(
             Update,
             update_loading_data.run_if(in_state(LoadingState::LevelLoading)),
@@ -1189,173 +1163,8 @@ pub fn guifrontend(config: ResolvedConfig, vpx_files_with_tableinfo: Vec<Indexed
     */
 }
 
-fn play_background_audio(asset_server: Res<AssetServer>, mut commands: Commands) {
-    // Create an entity dedicated to playing our background music
-    //   let initialsettings = PlaybackSettings {
-    //       mode: bevy::audio::PlaybackMode::Loop,
-    //       paused: true,
-    //       ..default()
-    //  };
-    commands.spawn((
-        AudioPlayer::new(asset_server.load("Pinball.ogg")),
-        PlaybackSettings {
-            paused: true,
-            ..Default::default()
-        },
-    ));
-}
-
-/*fn volume_system(
-    keyboard_input: Res<ButtonInput<KeyCode>>,
-    music_box_query: Query<&AudioSink, With<MusicBox>>
-) {
-    if let Ok(sink) = music_box_query.get_single() {
-        if keyboard_input.just_pressed(KeyCode::Equal) {
-            sink.set_volume(sink.volume() + 0.1);
-        } else if keyboard_input.just_pressed(KeyCode::Minus) {
-            sink.set_volume(sink.volume() - 0.1);
-        }
-    }
-} */
-
-#[derive(Resource, Deref)]
-struct StreamReceiver(Receiver<u32>);
-
-#[derive(Resource, Deref)]
-struct StreamSender(Sender<u32>);
-
-#[derive(Event)]
-#[allow(dead_code)]
-struct StreamEvent(u32);
-
-use crate::windowing;
-use crate::windowing::WindowingPlugin;
-use crossbeam_channel::{bounded, Receiver, Sender};
-
 fn setup(mut commands: Commands) {
     commands.spawn(Camera2d);
-
-    let (tx, rx) = bounded::<u32>(10);
-
-    commands.insert_resource(StreamSender(tx));
-    commands.insert_resource(StreamReceiver(rx));
-}
-
-// This system reads from the receiver and sends events to Bevy
-fn read_stream(
-    mut window: Query<&mut Window>,
-    receiver: Res<StreamReceiver>,
-    mut events: EventWriter<StreamEvent>,
-) {
-    let _event_writer = &events;
-    let mut window = window.single_mut();
-    for from_stream in receiver.try_iter() {
-        println!("Window visibility: {}", window.visible);
-        println!("Showing window");
-        window.visible = true;
-        // bring window to front
-        // window.window_level = WindowLevel::AlwaysOnTop;
-        // request focus
-        window.focused = true;
-        events.send(StreamEvent(from_stream));
-    }
-}
-
-/*  fn spawn_text(mut commands: Commands, mut reader: EventReader<StreamEvent>) {
-    let text_style = TextFont::default();
-
-    for (per_frame, event) in reader.read().enumerate() {
-        commands.spawn(Text2d {
-            text: Text::from_section(event.0.to_string(), text_style.clone())
-                .with_justify(JustifyText::Center),
-            transform: Transform::from_xyz(per_frame as f32 * 100.0, 300.0, 0.0),
-            ..default()
-        });
-    }
-}
-
-fn move_text(
-    mut commands: Commands,
-    mut texts: Query<(Entity, &mut Transform), With<Text>>,
-    time: Res<Time>,
-) {
-    for (entity, mut position) in &mut texts {
-        position.translation -= Vec3::new(0.0, 100.0 * time.delta_secs(), 0.0);
-        if position.translation.y < -300.0 {
-            commands.entity(entity).despawn();
-        }
-    }
-}
-
-*/
-
-fn launch(selected_path: &PathBuf, vpinball_executable: &Path, fullscreen: Option<bool>) {
-    println!("Launching {}", selected_path.display());
-
-    if !vpinball_executable.is_executable() {
-        report_and_exit(format!(
-            "Unable to launch table, {} is not executable",
-            vpinball_executable.display()
-        ));
-    }
-
-    match launch_table(selected_path, vpinball_executable, fullscreen) {
-        Ok(status) => match status.code() {
-            Some(0) => {
-                //println!("Table exited normally");
-            }
-            Some(11) => {
-                eprintln!("Visual Pinball exited with segfault, you might want to report this to the vpinball team.");
-            }
-            Some(139) => {
-                eprintln!("Visual Pinball exited with segfault, you might want to report this to the vpinball team.");
-            }
-            Some(code) => {
-                eprintln!("Visual Pinball exited with code {}", code);
-            }
-            None => {
-                eprintln!("Visual Pinball exited with unknown code");
-            }
-        },
-        Err(e) => {
-            if e.kind() == std::io::ErrorKind::NotFound {
-                report_and_exit(format!(
-                    "Unable to launch table, vpinball executable not found at {}",
-                    vpinball_executable.display()
-                ));
-            } else {
-                report_and_exit(format!("Unable to launch table: {:?}", e));
-            }
-        }
-    }
-}
-
-fn report_and_exit(msg: String) -> ! {
-    eprintln!("CRASH {}", msg);
-    exit(1);
-}
-
-fn launch_table(
-    selected_path: &PathBuf,
-    vpinball_executable: &Path,
-    fullscreen: Option<bool>,
-) -> io::Result<ExitStatus> {
-    // start process ./VPinballX_GL -play [table path]
-    let mut cmd = std::process::Command::new(vpinball_executable);
-    match fullscreen {
-        Some(true) => {
-            cmd.arg("-EnableTrueFullscreen");
-        }
-        Some(false) => {
-            cmd.arg("-DisableTrueFullscreen");
-        }
-        None => (),
-    }
-    cmd.arg("-play");
-    cmd.arg(selected_path);
-    let mut child = cmd.spawn()?;
-    let result = child.wait()?;
-    Ok(result)
 }
 
 fn display_table_line(table: &IndexedTable) -> String {
