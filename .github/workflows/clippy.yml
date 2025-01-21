@@ -1,4 +1,6 @@
 name: Clippy check
+permissions:
+  contents: read
 
 on:
   push:
