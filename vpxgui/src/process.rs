@@ -5,7 +5,7 @@ use crossbeam_channel::{bounded, Receiver, Sender};
 use is_executable::IsExecutable;
 use std::path::Path;
 use std::process::{exit, ExitStatus};
-use std::time::Duration;
+
 use std::{io, thread};
 
 #[derive(Debug)]
@@ -52,12 +52,8 @@ pub(crate) fn do_launch(tx: Sender<VpxResult>, path: &Path, executable: &Path) {
 
     let _vpinball_thread = thread::spawn(move || {
         launch(&path, &executable, None);
-        thread::sleep(Duration::from_millis(2_u64));
-
         info!("Vpinball done, sending event");
         tx.send(VpxResult::VpxDone).unwrap();
-
-        //resume_music(&mut control_music_event_writer);
     });
 }
 

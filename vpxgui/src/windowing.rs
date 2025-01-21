@@ -7,6 +7,7 @@ pub struct WindowingPlugin;
 
 impl Plugin for WindowingPlugin {
     fn build(&self, app: &mut App) {
+        app.add_systems(Startup, correct_window_size_and_position);
         app.add_systems(Update, (log_window_moved, log_window_resized));
     }
 }
@@ -88,7 +89,7 @@ pub(crate) fn setup_playfield_window(vpinball_config: &VPinballConfig) -> Window
     }
 }
 
-pub(crate) fn correct_window_size_and_position(
+pub fn correct_window_size_and_position(
     mut window_query: Query<&mut Window, With<PrimaryWindow>>,
     vpx_config: Res<VpxConfig>,
 ) {
