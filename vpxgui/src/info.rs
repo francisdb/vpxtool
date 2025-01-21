@@ -1,5 +1,4 @@
-use crate::guifrontend::TableText;
-use crate::wheel::TextItemGold;
+use crate::list::{SelectedItem, TableText, TextItem};
 use bevy::input::ButtonInput;
 use bevy::prelude::{
     default, ColorMaterial, Commands, KeyCode, Mesh, Query, Res, ResMut, Text, Window, With,
@@ -11,17 +10,18 @@ use bevy_egui::{egui, EguiContexts};
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn show_info(
-    items: Query<(&TableText, &Text), With<TextItemGold>>,
+    items: Query<(&TableText, &Text), With<TextItem>>,
     commands: Commands,
     keys: Res<ButtonInput<KeyCode>>,
     meshes: ResMut<Assets<Mesh>>,
     materials: ResMut<Assets<ColorMaterial>>,
     mut globals: ResMut<crate::guifrontend::Globals>,
+    selected_item_res: Res<SelectedItem>,
     window_query: Query<&Window, With<PrimaryWindow>>,
     contexts: EguiContexts,
 ) {
     if keys.just_pressed(KeyCode::Digit1) {
-        globals.game_running = !globals.game_running;
+        globals.vpinball_running = !globals.vpinball_running;
     }
     let window = window_query.get_single().unwrap();
 
@@ -29,18 +29,18 @@ pub(crate) fn show_info(
     let mut gametext = " ".to_owned();
     //let mut gameblurb = " ".to_owned();
 
-    let selected_item = globals.selected_item.unwrap_or(0);
+    let selected_item = selected_item_res.index.unwrap_or(0);
 
     // change name of game
     for (item, text) in items.iter() {
-        if item.item_number == selected_item {
+        if item.list_index == selected_item {
             gametext = item.table_text.clone();
             //gameblurb = item.table_blurb.clone();
             wtitle = text.to_string();
         }
     }
 
-    if globals.game_running {
+    if globals.vpinball_running {
         create_info_box(
             commands,
             keys,

@@ -5954,6 +5954,7 @@ dependencies = [
  "crossbeam-channel",
  "image",
  "is_executable",
+ "pretty_assertions",
  "shared",
 ]
 

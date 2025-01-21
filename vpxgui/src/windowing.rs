@@ -11,43 +11,95 @@ impl Plugin for WindowingPlugin {
         app.add_systems(Update, (log_window_moved, log_window_resized));
     }
 }
+#[derive(Default)]
+struct MovedWindows {
+    windows: HashMap<Entity, IVec2>,
+}
 
-pub(crate) fn log_window_moved(
+struct ResizedWindow {
+    logical_width: f32,
+    logical_height: f32,
+}
+
+#[derive(Default)]
+struct ResizedWindows {
+    windows: HashMap<Entity, ResizedWindow>,
+}
+
+use bevy::utils::HashMap;
+use std::time::Duration;
+
+fn log_window_moved(
     mut events: EventReader<WindowMoved>,
     window_query: Query<(Entity, &Window)>,
+    time: Res<Time>,
+    mut timer: Local<Timer>,
+    mut moved_windows: Local<MovedWindows>,
 ) {
+    timer.tick(time.delta());
+
     for event in events.read() {
-        if let Some((entity, window)) = window_query
-            .iter()
-            .find(|(entity, _)| entity == &event.window)
-        {
-            let name = window_name(entity, &window);
-            info!(
-                "Window [{}] moved to {},{}",
-                name, event.position.x, event.position.y
-            );
+        moved_windows.windows.insert(event.window, event.position);
+        timer.reset();
+        timer.set_duration(Duration::from_millis(500));
+    }
+
+    if timer.finished() {
+        for (moved_window, position) in moved_windows.windows.iter() {
+            if let Some((entity, window)) = window_query
+                .iter()
+                .find(|(entity, _)| entity == moved_window)
+            {
+                let name = window_name(entity, &window);
+                info!("Window [{}] moved to {},{}", name, position.x, position.y);
+            }
         }
+        moved_windows.windows.clear();
     }
 }
 
-pub(crate) fn log_window_resized(
+fn log_window_resized(
     mut events: EventReader<WindowResized>,
     window_query: Query<(Entity, &Window)>,
+    time: Res<Time>,
+    mut timer: Local<Timer>,
+    mut resized_windows: Local<ResizedWindows>,
 ) {
+    timer.tick(time.delta());
+
     for event in events.read() {
-        if let Some((entity, window)) = window_query
-            .iter()
-            .find(|(entity, _)| entity == &event.window)
-        {
-            let scale_factor = window.scale_factor();
-            let physical_width = event.width * scale_factor;
-            let physical_height = event.height * scale_factor;
-            let name = window_name(entity, &window);
-            info!(
-                "Window [{}] resized to {}x{} (physical: {}x{})",
-                name, event.width, event.height, physical_width, physical_height
-            );
+        resized_windows.windows.insert(
+            event.window,
+            ResizedWindow {
+                logical_width: event.width,
+                logical_height: event.height,
+            },
+        );
+        timer.reset();
+        timer.set_duration(Duration::from_millis(500));
+    }
+
+    if timer.finished() {
+        for (resized_window, resized) in resized_windows.windows.iter() {
+            if let Some((entity, window)) = window_query
+                .iter()
+                .find(|(entity, _)| entity == resized_window)
+            {
+                let scale_factor = window.scale_factor();
+                let physical_width = resized.logical_width * scale_factor;
+                let physical_height = resized.logical_height * scale_factor;
+                let name = window_name(entity, &window);
+                info!(
+                    "Window [{}] resized to {}x{} (physical: {}x{})",
+                    name,
+                    resized.logical_width,
+                    resized.logical_height,
+                    physical_width,
+                    physical_height
+                );
+            }
         }
+        resized_windows.windows.clear();
     }
 }
 

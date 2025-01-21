@@ -1,6 +1,6 @@
-use crate::guifrontend::{Config, Globals, TableText, VpxTables};
+use crate::guifrontend::{Config, Globals, VpxTables};
+use crate::list::SelectedItem;
 use crate::loading::{LoadingData, LoadingState};
-use bevy::color::palettes::css::GHOST_WHITE;
 use bevy::image::Image;
 use bevy::log::{debug, info, warn};
 use bevy::math::Vec3;
@@ -10,29 +10,6 @@ use bevy_asset::{AssetId, AssetServer};
 use image::ImageReader;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-// #[derive(AssetCollection, Resource)]
-// struct ImageAssets {
-//     #[asset(key = "wheel")]
-//     _wheel: Handle<Image>,
-// }
-
-#[derive(Component)]
-pub struct TextItemGold {
-    //pub item_number: i16,
-    //pub image_handle: Handle<Image>,
-    //pub selected: bool,
-    //  pub launch_path: PathBuf,
-    //pub table_info: IndexedTable,
-}
-
-#[derive(Component)]
-pub struct TextItemGhostWhite {
-    //  pub _item_number: i16,
-    //pub image_handle: Handle<Image>,
-    //  pub _selected: bool,
-    //  pub launch_path: PathBuf,
-    //pub table_info: IndexedTable,
-}
 
 #[derive(Resource, Default)]
 pub struct AssetPaths {
@@ -41,11 +18,7 @@ pub struct AssetPaths {
 
 #[derive(Component)]
 pub struct Wheel {
-    pub item_number: i16,
-    //pub image_handle: Handle<Image>,
-    pub selected: bool,
-    pub launch_path: PathBuf,
-    //pub table_info: IndexedTable,
+    pub item_number: usize,
 }
 
 #[derive(Bundle)]
@@ -59,36 +32,6 @@ struct WheelBundle {
     //view_visibility: ViewVisibility,
 }
 
-#[derive(Bundle)]
-struct MenuTextBundle {
-    text: Text,
-    text_font: TextFont,
-    text_color: TextColor,
-    text_bundle: Node,
-    // display: Display,
-    //position_type: PositionType,
-    //  left: f32,
-    //   top: f32,
-    //   right: f32,
-    table_text: TableText,
-    text_item: TextItemGold,
-}
-
-#[derive(Bundle)]
-struct MenuTextBundle1 {
-    text: Text,
-    text_font: TextFont,
-    text_color: TextColor,
-    text_bundle: Node,
-    // display: Display,
-    //position_type: PositionType,
-    //  left: f32,
-    //   top: f32,
-    //   right: f32,
-    table_text: TableText,
-    text_item: TextItemGhostWhite,
-}
-
 pub(crate) fn wheel_plugin(app: &mut App) {
     app.insert_resource(AssetPaths {
         paths: HashMap::new(),
@@ -98,23 +41,22 @@ pub(crate) fn wheel_plugin(app: &mut App) {
 }
 
 fn update_selected_wheel(
-    mut wheel_query: Query<(&mut Visibility, &mut Wheel, &mut Transform)>,
+    mut wheel_query: Query<(&mut Visibility, &Wheel, &mut Transform)>,
     mut globals: ResMut<Globals>,
+    selected_item_res: Res<SelectedItem>,
     window_query: Query<&Window, With<PrimaryWindow>>,
 ) {
-    let selected_item = globals.selected_item.unwrap_or(0);
+    let selected_item = selected_item_res.index.unwrap_or(0);
     let window = window_query.single();
     let height = window.height();
     globals.wheel_size = window.height() / 3.;
     let wheel_size = globals.wheel_size;
     // update currently selected item to new value
-    for (mut visibility, mut wheel, mut transform) in wheel_query.iter_mut() {
+    for (mut visibility, wheel, mut transform) in wheel_query.iter_mut() {
         if wheel.item_number != selected_item {
-            wheel.selected = false;
             *visibility = Visibility::Hidden;
             // transform.translation = Vec3::new(0., width, 0.);
         } else {
-            wheel.selected = true;
             *visibility = Visibility::Visible;
             // *transform = Transform::from_xyz(0., 0., 0.);
             transform.translation = Vec3::new(0., (-(height / 2.0)) + (wheel_size / 2.) + 20., 0.);
@@ -131,7 +73,6 @@ fn create_wheels(
     mut loading_data: ResMut<LoadingData>,
     window_query: Query<&Window, With<PrimaryWindow>>,
     mut game_state: ResMut<NextState<LoadingState>>,
-    // assets: Res<Assets<Image>>,
     config: Res<Config>,
     vpx_tables: Res<VpxTables>,
     mut asset_paths: ResMut<AssetPaths>,
@@ -178,7 +119,7 @@ fn create_wheels(
         blank_path = PathBuf::from("blankwheel.png");
     }
 
-    for (counter, info) in tables.iter().enumerate() {
+    for (table_index, info) in tables.iter().enumerate() {
         let wheel_path = match &info.wheel_path {
             // get handle from path
             Some(path) => path.clone(),
@@ -218,129 +159,27 @@ fn create_wheels(
             wheel_image_handle.id(),
         );
 
-        let temporary_table_name = match &info.table_info.table_name {
-            Some(tb) => tb,
+        let table_name = match &info.table_info.table_name {
+            Some(name) => name,
             None => "None",
         };
         asset_paths
             .paths
-            .insert(wheel_image_handle.id(), temporary_table_name.to_owned());
+            .insert(wheel_image_handle.id(), table_name.to_owned());
 
         // Wheel
         commands.spawn(WheelBundle {
-            /*
-                        Replace all uses of SpriteBundle with Sprite. There are several new convenience constructors: Sprite::from_image, Sprite::from_atlas_image, Sprite::from_color.
-
-            WARNING: use of Handle<Image> and TextureAtlas as components on sprite entities will NO LONGER WORK. Use the fields on Sprite instead. I would have removed the Component impls from TextureAtlas and Handle<Image> except it is still used within ui. We should fix this moving forward with the migration.
-                         */
             sprite: Sprite {
-                // texture: asset_server.load("/usr/tables/wheels/Sing Along (Gottlieb 1967).png"),
                 image: wheel_image_handle.clone(),
                 ..default()
             },
             transform,
             visibility: Visibility::Hidden,
             wheel: Wheel {
-                item_number: counter as i16,
-                //image_handle: handle.clone(),
-                selected: false,
-                launch_path: info.path.clone(),
-                //tableinfo: info.clone(),
+                item_number: table_index,
             },
         });
-
-        // Game Name
-
-        // TODO move this MenuTextBundle(1) to it's own module?
-        // Accepts a `String` or any type that converts into a `String`, such as `&str`
-        commands.spawn(MenuTextBundle {
-            // Create a TextBundle that has a Text with a single section.
-            text: Text::new(temporary_table_name),
-            text_font: TextFont {
-                // This font is loaded and will be used instead of the default font.
-                font_size: 20.0,
-                // TextStyle has been renamed to TextFont and its color field has been moved to a separate component named TextColor which newtypes Color.
-                ..default()
-            },
-            text_color: TextColor::from(GHOST_WHITE),
-            text_bundle: Node {
-                // Set the justification of the Text
-                //.with_text_justify(JustifyText::Center)
-                // Set the style of the TextBundle itself.
-                display: Display::None,
-                position_type: PositionType::Absolute,
-                left: Val::Px(20.),
-                //top: Val::Px(245.),
-                top: Val::Px(window.height() * 0.025), //-(height-(height/2.+(scale*2.)))),
-                right: Val::Px(0.),
-                ..default()
-            },
-            table_text: TableText {
-                item_number: counter as i16,
-                table_text: match info.table_info.table_description.clone() {
-                    Some(a) => a,
-                    _ => "Empty".to_owned(),
-                },
-                table_blurb: match info.table_info.table_blurb.clone() {
-                    Some(a) => a,
-                    _ => "Empty".to_owned(),
-                }, //has_wheel: haswheel,
-            },
-            text_item: TextItemGold {
-                //item_number: counter as i16,
-                //image_handle: handle.clone(),
-                //selected: false,
-            },
-        });
-
-        // game info text
-        commands.spawn(MenuTextBundle1 {
-            // Create a TextBundle that has a Text with a single section.
-            // Accepts a `String` or any type that converts into a `String`, such as `&str`
-            text: Text::new(temporary_table_name),
-            text_font: TextFont {
-                // This font is loaded and will be used instead of the default font.
-                font_size: 20.0,
-                ..default()
-            },
-            text_color: TextColor::from(GHOST_WHITE),
-            // Set the justification of the Text
-            //.with_text_justify(JustifyText::Center)
-            // Set the style of the TextBundle itself.
-            text_bundle: Node {
-                flex_direction: FlexDirection::Row,
-                align_content: AlignContent::FlexEnd,
-                display: Display::None,
-                position_type: PositionType::Absolute,
-                left: Val::Px(20.),
-                top: Val::Px(window.height() * 0.2), //-(height-(height/2.+(scale*2.)))),
-                right: Val::Px(0.),
-                ..default()
-            },
-
-            table_text: TableText {
-                item_number: counter as i16,
-                table_text: match info.table_info.table_description.clone() {
-                    Some(a) => a,
-                    _ => "Empty".to_owned(),
-                },
-                table_blurb: match info.table_info.table_blurb.clone() {
-                    Some(a) => a,
-                    _ => "Empty".to_owned(),
-                },
-            },
-            text_item: TextItemGhostWhite {
-                //item_number: counter as i16,
-                //image_handle: handle.clone(),
-                //selected: false,
-            },
-        });
-
-        //let image = image::load(BufReader::new(File::open("foo.png")?), ImageFormat::Jpeg)?;
-        //entities +=1.;
     }
-    //let update = commands.register_one_shot_system(update_loading_data);
-    //commands.run_system(update);
     info!("Wheels loaded");
 
     game_state.set(LoadingState::Loading);
