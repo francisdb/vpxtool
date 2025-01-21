@@ -108,7 +108,7 @@ fn resume_after_play(
 }
 
 pub fn guifrontend(config: ResolvedConfig, vpx_files_with_tableinfo: Vec<IndexedTable>) {
-    let mut tables: Vec<IndexedTable> = vpx_files_with_tableinfo; //iter().take(10).cloned().collect();
+    let mut tables: Vec<IndexedTable> = vpx_files_with_tableinfo;
     tables.sort_by_key(|indexed| display_table_line(indexed).to_lowercase());
 
     let vpinball_ini_path = config.vpinball_ini_file();

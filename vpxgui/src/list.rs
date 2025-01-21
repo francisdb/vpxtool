@@ -2,15 +2,14 @@ use crate::guifrontend::VpxTables;
 use crate::loading::LoadingState;
 use bevy::color::palettes::css::{GHOST_WHITE, GOLD};
 use bevy::input::ButtonInput;
-use bevy::log::info;
 use bevy::prelude::*;
 use bevy::time::Stopwatch;
-use bevy::window::PrimaryWindow;
 use shared::indexer::IndexedTable;
+use std::cmp::Ordering;
 
 #[derive(Component, Debug)]
 pub(crate) struct TableText {
-    pub(crate) item_number: usize,
+    pub(crate) list_index: usize,
     pub(crate) table_text: String,
 }
 
@@ -20,9 +19,6 @@ pub struct SelectedItem {
 }
 
 #[derive(Component)]
-pub struct TextItemSelected;
-
-#[derive(Component)]
 pub struct TextItem;
 
 #[derive(Bundle)]
@@ -30,9 +26,13 @@ struct MenuTextBundle {
     text: Text,
     text_font: TextFont,
     text_color: TextColor,
-    text_bundle: Node,
+    text_node: Node,
     table_text: TableText,
+    text_item: TextItem,
 }
+
+const ITEMS_AROUND_SELECTED: usize = 10;
+const ITEMS_SHOWN: usize = ITEMS_AROUND_SELECTED * 2 + 1;
 
 pub(crate) fn list_plugin(app: &mut App) {
     app.insert_resource(SelectedItem::default());
@@ -45,191 +45,119 @@ pub(crate) fn list_plugin(app: &mut App) {
     );
 }
 
-fn create_list(
-    vpx_tables: Res<VpxTables>,
-    mut commands: Commands,
-    window_query: Query<&Window, With<PrimaryWindow>>,
-) {
-    let tables = &vpx_tables.indexed_tables;
-    let window = window_query.single();
-
-    for (table_index, info) in tables.iter().enumerate() {
-        let table_name = display_table_line(info);
-
-        commands.spawn((
-            TextItemSelected,
-            MenuTextBundle {
-                text: Text::new(&table_name),
-                text_font: TextFont {
-                    font_size: 20.0,
-                    ..default()
-                },
-                text_color: TextColor::from(GHOST_WHITE),
-                text_bundle: Node {
-                    // Set the justification of the Text
-                    //.with_text_justify(JustifyText::Center)
-                    display: Display::None,
-                    position_type: PositionType::Absolute,
-                    left: Val::Px(20.),
-                    top: Val::Px(window.height() * 0.025), //-(height-(height/2.+(scale*2.)))),
-                    right: Val::Px(0.),
-                    ..default()
-                },
-                table_text: TableText {
-                    item_number: table_index,
-                    table_text: match info.table_info.table_description.clone() {
-                        Some(a) => a,
-                        _ => "Empty".to_owned(),
-                    },
-                },
-            },
+fn create_list(mut commands: Commands) {
+    for list_index in 0..ITEMS_SHOWN {
+        let distance = (list_index as i32 - ITEMS_AROUND_SELECTED as i32).abs() as f32;
+        let alpha = 1.0 - (distance / ITEMS_AROUND_SELECTED as f32);
+        let mut text_color = TextColor::from(Color::srgba(
+            GHOST_WHITE.red,
+            GHOST_WHITE.green,
+            GHOST_WHITE.blue,
+            alpha,
         ));
+        let mut font_size = 15.0;
 
-        commands.spawn((
-            TextItem,
-            MenuTextBundle {
-                text: Text::new(&table_name),
-                text_font: TextFont {
-                    font_size: 20.0,
-                    ..default()
-                },
-                text_color: TextColor::from(GHOST_WHITE),
+        if list_index == ITEMS_AROUND_SELECTED {
+            text_color = TextColor::from(GOLD);
+            font_size = 25.0;
+        }
+
+        let top = match list_index.cmp(&ITEMS_AROUND_SELECTED) {
+            Ordering::Less => Val::Px(25. + (((list_index as f32) + 1.) * 20.)),
+            Ordering::Equal => Val::Px(255. + (((list_index as f32) - 10.5) * 20.)),
+            Ordering::Greater => Val::Px(255. + (((list_index as f32) - 10.) * 20.)),
+        };
+
+        commands.spawn(MenuTextBundle {
+            text: Text::new(""),
+            text_font: TextFont {
+                font_size,
+                ..default()
+            },
+            text_color,
+            text_node: Node {
                 // Set the justification of the Text
                 //.with_text_justify(JustifyText::Center)
-                text_bundle: Node {
-                    flex_direction: FlexDirection::Row,
-                    align_content: AlignContent::FlexEnd,
-                    display: Display::None,
-                    position_type: PositionType::Absolute,
-                    left: Val::Px(20.),
-                    top: Val::Px(window.height() * 0.2), //-(height-(height/2.+(scale*2.)))),
-                    right: Val::Px(0.),
-                    ..default()
-                },
-
-                table_text: TableText {
-                    item_number: table_index,
-                    table_text: match info.table_info.table_description.clone() {
-                        Some(a) => a,
-                        _ => "Empty".to_owned(),
-                    },
-                },
+                display: Display::Block,
+                position_type: PositionType::Absolute,
+                left: Val::Px(20.),
+                top,
+                right: Val::Px(0.),
+                ..default()
             },
-        ));
+            table_text: TableText {
+                list_index,
+                table_text: "".to_string(),
+            },
+            text_item: TextItem,
+        });
     }
 }
 
-const ITEMS_AROUND_SELECTED: usize = 10;
-const ITEMS_SHOWN: usize = ITEMS_AROUND_SELECTED * 2 + 1;
-
 fn list_update(
     tables: Res<VpxTables>,
-    mut text_items: Query<
-        (&mut TableText, &mut TextFont, &mut Node, &mut TextColor),
-        With<TextItemSelected>,
-    >,
+    mut text_items: Query<(&mut TableText, &mut Text), With<TextItem>>,
     selected_item: Res<SelectedItem>,
 ) {
-    // from here on no more changes to selected_item, make it immutable
+    // TODO we should only be making changes if the selected item has changed
     let selected_item = selected_item.index.unwrap_or(0);
-
-    // change name of game
-    for (items, mut font, mut textstyle, mut color) in text_items.iter_mut() {
-        if items.item_number != selected_item {
-            textstyle.display = Display::None;
-            *color = TextColor::from(GHOST_WHITE);
-        } else {
-            *color = TextColor::from(GHOST_WHITE);
-            font.font_size = 20.0;
-            textstyle.display = Display::Block;
-        }
+    let table_indices = generate_table_indices(tables.indexed_tables.len(), selected_item);
+    for (mut table_text, mut text) in text_items.iter_mut() {
+        let list_index = table_text.list_index;
+        let table_index = table_indices[list_index];
+        let table = &tables.indexed_tables[table_index];
+        let table_name = display_table_line(table);
+        let table_description = table
+            .table_info
+            .table_description
+            .clone()
+            .unwrap_or("Description missing".to_string());
+        table_text.table_text = table_description;
+        text.0 = table_name;
     }
+}
 
-    let mut counter = 0;
-
-    let table_count = tables.indexed_tables.len() as i16 + 1;
-
-    // clear all game name assets
-    for (_items, mut fontsize, mut textstyle, mut color) in text_items.iter_mut() {
-        if table_count > 21 {
-            textstyle.display = Display::None;
-            fontsize.font_size = 20.0;
-            *color = TextColor::from(GHOST_WHITE);
-        } else {
-            textstyle.display = Display::Block;
-            fontsize.font_size = 20.0;
-            *color = TextColor::from(GHOST_WHITE);
-
-            textstyle.top = Val::Px(255. + (((counter as f32) + 1.) * 20.));
-            counter += 1;
-        }
-    }
-
-    if table_count > ITEMS_SHOWN as i16 {
-        let table_indices = generate_table_indices(tables.indexed_tables.len(), selected_item);
-        for _name in table_indices {
-            for (items, mut fontsize, mut text_style, mut color) in text_items.iter_mut() {
-                for (index, item) in table_indices.iter().enumerate().take(9 + 1) {
-                    if items.item_number == *item {
-                        //wtitle = items;
-                        *color = TextColor::from(GHOST_WHITE);
-                        text_style.top = Val::Px(25. + (((index as f32) + 1.) * 20.));
-                        fontsize.font_size = 15.0;
-                        text_style.display = Display::Block;
-                        //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
-                    }
-                }
-                for (index, item) in table_indices.iter().enumerate().skip(10) {
-                    if items.item_number == *item {
-                        fontsize.font_size = 25.0;
-                        *color = TextColor::from(GOLD);
-                        text_style.top = Val::Px(255. + (((index as f32) - 10.5) * 20.));
-                        text_style.display = Display::Block;
-                        break;
-                    }
-                }
-
-                for (index, item) in table_indices.iter().enumerate().skip(11) {
-                    if items.item_number == *item {
-                        *color = TextColor::from(GHOST_WHITE);
-                        fontsize.font_size = 15.0;
-                        text_style.top = Val::Px(255. + (((index as f32) - 10.) * 20.));
-                        text_style.display = Display::Block;
-                        //        if items.itemnumber == selected_item {textstyle.color:GOLD.into(); }
-                    }
-                }
-            }
-        }
-    }
-    //  counter += 1;
+#[derive(Default)]
+struct ShiftIncrement {
+    s: f32,
 }
 
 fn input_handling(
     time: Res<Time>,
     keys: Res<ButtonInput<KeyCode>>,
     mut shift_stop_watch: Local<Stopwatch>,
+    mut shift_applied: Local<ShiftIncrement>,
     mut selected_item_res: ResMut<SelectedItem>,
     tables: Res<VpxTables>,
 ) {
-    // TODO handle 0 table count case?
     let mut selected_item = selected_item_res.index.unwrap_or(0) as i16;
 
     // Update timers
     shift_stop_watch.tick(time.delta());
 
     // Adjust increment based on time pressed
-    let shift_increment = (shift_stop_watch.elapsed_secs() * 2.0) as i16;
+    let shift_increment = (shift_stop_watch.elapsed_secs() / 1.5).min(10.0);
 
     if keys.just_pressed(KeyCode::ShiftRight) {
         selected_item += 1;
+        shift_applied.s = 0.0;
         shift_stop_watch.reset();
     } else if keys.just_pressed(KeyCode::ShiftLeft) {
         selected_item -= 1;
+        shift_applied.s = 0.0;
         shift_stop_watch.reset();
     } else if keys.pressed(KeyCode::ShiftRight) {
-        selected_item += shift_increment;
+        shift_applied.s += shift_increment;
+        if shift_applied.s >= 1.0 {
+            selected_item += shift_applied.s.floor() as i16;
+            shift_applied.s = shift_applied.s.fract();
+        }
     } else if keys.pressed(KeyCode::ShiftLeft) {
-        selected_item -= shift_increment;
+        shift_applied.s += shift_increment;
+        if shift_applied.s >= 1.0 {
+            selected_item -= shift_applied.s.floor() as i16;
+            shift_applied.s = shift_applied.s.fract();
+        }
     }
 
     let table_count = tables.indexed_tables.len();
@@ -237,7 +165,7 @@ fn input_handling(
     // Wrap around if one of the bounds are hit.
     let selected_item = wrap_around(selected_item, table_count);
     if selected_item_res.index != Some(selected_item) {
-        info!("Selected item: {} ({} total)", selected_item, table_count);
+        debug!("Selected item: {} ({} total)", selected_item, table_count);
     }
     selected_item_res.index = Some(selected_item);
 }

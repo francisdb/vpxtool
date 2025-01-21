@@ -1,4 +1,4 @@
-use crate::list::{SelectedItem, TableText, TextItemSelected};
+use crate::list::{SelectedItem, TableText, TextItem};
 use bevy::input::ButtonInput;
 use bevy::prelude::{
     default, ColorMaterial, Commands, KeyCode, Mesh, Query, Res, ResMut, Text, Window, With,
@@ -10,7 +10,7 @@ use bevy_egui::{egui, EguiContexts};
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn show_info(
-    items: Query<(&TableText, &Text), With<TextItemSelected>>,
+    items: Query<(&TableText, &Text), With<TextItem>>,
     commands: Commands,
     keys: Res<ButtonInput<KeyCode>>,
     meshes: ResMut<Assets<Mesh>>,
@@ -33,7 +33,7 @@ pub(crate) fn show_info(
 
     // change name of game
     for (item, text) in items.iter() {
-        if item.item_number == selected_item {
+        if item.list_index == selected_item {
             gametext = item.table_text.clone();
             //gameblurb = item.table_blurb.clone();
             wtitle = text.to_string();
