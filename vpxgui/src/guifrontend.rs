@@ -3,7 +3,7 @@ use crate::flippers::flipper_plugin;
 use crate::info::show_info;
 use crate::list::{display_table_line, list_plugin, SelectedItem};
 use crate::loading::loading_plugin;
-use crate::loading::{LoadingData, LoadingState};
+use crate::loading::LoadingState;
 use crate::menus::*;
 use crate::music::{music_plugin, resume_music, suspend_music, ControlMusicEvent};
 use crate::pipelines::PipelinesReadyPlugin;
@@ -116,6 +116,18 @@ pub fn guifrontend(config: ResolvedConfig, vpx_files_with_tableinfo: Vec<Indexed
     let window = windowing::setup_playfield_window(&vpinball_config);
 
     App::new()
+        .insert_resource(Config { config })
+        .insert_resource(VpxConfig {
+            config: vpinball_config,
+        })
+        .insert_resource(VpxTables {
+            indexed_tables: tables,
+        })
+        .insert_resource(Globals {
+            wheel_size: 100.0, // will be updated when loading wheels
+            vpinball_running: false,
+        })
+        .insert_resource(ClearColor(Color::srgb(0.1, 0.1, 0.1)))
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(window),
             ..Default::default()
@@ -125,23 +137,10 @@ pub fn guifrontend(config: ResolvedConfig, vpx_files_with_tableinfo: Vec<Indexed
         .add_plugins(music_plugin)
         .add_plugins((wheel_plugin, flipper_plugin, dmd_plugin, list_plugin))
         .add_plugins(loading_plugin)
-        .insert_resource(Config { config })
-        .insert_resource(VpxConfig {
-            config: vpinball_config,
-        })
-        .insert_resource(VpxTables {
-            indexed_tables: tables,
-        })
+        .add_plugins(crate::gradient_background::plugin)
         .add_plugins(EguiPlugin)
         .add_plugins(PipelinesReadyPlugin)
-        .insert_resource(ClearColor(Color::srgb(0.1, 0.1, 0.1)))
-        .insert_resource(Globals {
-            wheel_size: 100.0, // will be updated when loading wheels
-            vpinball_running: false,
-        })
-        .add_event::<VpxEvent>()
         .add_systems(Startup, setup)
-        .insert_resource(LoadingData::new(5))
         .add_systems(Update, quit_on_q)
         .add_systems(Update, resume_after_play)
         .add_systems(Update, gui_update.run_if(in_state(LoadingState::Ready)))

@@ -1,5 +1,6 @@
 mod dmd;
 mod flippers;
+mod gradient_background;
 pub mod guifrontend;
 mod info;
 mod list;

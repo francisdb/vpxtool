@@ -48,6 +48,7 @@ impl LoadingData {
 // TODO create a plugin that also pulls in the pipelines_ready plugin
 pub(crate) fn loading_plugin(app: &mut App) {
     app.add_plugins(process_plugin);
+    app.insert_resource(LoadingData::new(5));
     app.insert_resource(LoadingDialogBox {
         title: "Loading...".to_owned(),
         text: "blank".to_owned(),
