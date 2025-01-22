@@ -5952,7 +5952,6 @@ dependencies = [
  "bevy_egui",
  "bevy_mini_fps",
  "crossbeam-channel",
- "image",
  "is_executable",
  "pretty_assertions",
  "shared",

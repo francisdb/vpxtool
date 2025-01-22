@@ -179,7 +179,7 @@ pub(crate) fn display_table_line(table: &IndexedTable) -> String {
         .unwrap()
         .to_string();
     Some(table.table_info.table_name.to_owned())
-        .filter(|s| !s.clone().unwrap_or_default().is_empty())
+        .filter(|s| !s.clone().unwrap_or_default().trim().is_empty())
         .map(|s| {
             match s {
                 Some(name) => capitalize_first_letter(&name),
