@@ -1,5 +1,6 @@
 mod dmd;
 mod flippers;
+mod gradient_background;
 pub mod guifrontend;
 mod info;
 mod list;
@@ -10,4 +11,3 @@ mod pipelines;
 mod process;
 mod wheel;
 mod windowing;
-mod gradient_background;
