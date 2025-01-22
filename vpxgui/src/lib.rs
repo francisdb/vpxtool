@@ -10,3 +10,4 @@ mod pipelines;
 mod process;
 mod wheel;
 mod windowing;
+mod gradient_background;

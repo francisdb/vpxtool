@@ -23,6 +23,7 @@ pub(crate) struct StreamSender(Sender<VpxResult>);
 pub(crate) struct VpxEvent(pub(crate) VpxResult);
 
 pub(crate) fn process_plugin(app: &mut App) {
+    app.add_event::<VpxEvent>();
     app.add_systems(Startup, setup_channel);
     app.add_systems(Update, forward_events_to_bevy);
 }
