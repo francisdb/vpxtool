@@ -35,7 +35,6 @@ pub struct VpxTables {
 
 #[derive(Resource, Debug)]
 pub(crate) struct Globals {
-    pub wheel_size: f32,
     pub vpinball_running: bool,
 }
 
@@ -124,7 +123,6 @@ pub fn guifrontend(config: ResolvedConfig, vpx_files_with_tableinfo: Vec<Indexed
             indexed_tables: tables,
         })
         .insert_resource(Globals {
-            wheel_size: 100.0, // will be updated when loading wheels
             vpinball_running: false,
         })
         .insert_resource(ClearColor(Color::srgb(0.1, 0.1, 0.1)))

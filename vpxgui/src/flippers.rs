@@ -1,4 +1,4 @@
-use crate::guifrontend::Globals;
+use crate::wheel::WheelInfo;
 use bevy::math::{Quat, Vec3};
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
@@ -30,7 +30,7 @@ fn update_flippers(
         Query<(&mut Transform, &mut Visibility), With<FlipperLeft>>,
         Query<(&mut Transform, &mut Visibility), With<FlipperRight>>,
     )>,
-    globals: Res<Globals>,
+    wheel_info: Res<WheelInfo>,
     window_query: Query<&Window, With<PrimaryWindow>>,
 ) {
     let window = window_query.single();
@@ -38,8 +38,8 @@ fn update_flippers(
 
     for (mut transform, mut visibility) in set.p0().iter_mut() {
         transform.translation = Vec3::new(
-            (globals.wheel_size / 3.0) * -1.0,
-            (-(height / 2.)) + (globals.wheel_size / 4.),
+            (wheel_info.wheel_size / 2.) * -1.0,
+            (-(height / 2.)) + (wheel_info.wheel_size / 4.),
             Z_LEVEL,
         );
         *visibility = Visibility::Visible;
@@ -48,8 +48,8 @@ fn update_flippers(
     // TODO why should flippers get closer to each other when the window height is reduced?
     for (mut transform, mut visibility) in set.p1().iter_mut() {
         transform.translation = Vec3::new(
-            globals.wheel_size / 3.0,
-            (-(height / 2.0)) + (globals.wheel_size / 4.),
+            wheel_info.wheel_size / 2.,
+            (-(height / 2.0)) + (wheel_info.wheel_size / 4.),
             Z_LEVEL,
         );
         *visibility = Visibility::Visible;

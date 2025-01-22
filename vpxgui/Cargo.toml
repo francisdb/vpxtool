@@ -19,7 +19,6 @@ bevy_mini_fps = "0.1.0"
 #eframe = "0.30.0"
 #egui_extras = { version = "0.30.0", features = ["image"] }
 crossbeam-channel = "0.5.14"
-image = { version = "0.25.5", default-features = true, features = ["jpeg", "png"] }
 is_executable = "1.0.4"
 
 [dev-dependencies]

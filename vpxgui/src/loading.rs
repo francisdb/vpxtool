@@ -122,6 +122,7 @@ fn update_loading_data(
     } else {
         loading_data.confirmation_frames_count += 1;
         if loading_data.confirmation_frames_count == loading_data.confirmation_frames_target {
+            info!("All assets loaded.");
             game_state.set(LoadingState::Ready);
         }
     }
