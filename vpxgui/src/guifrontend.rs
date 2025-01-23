@@ -133,12 +133,16 @@ pub fn guifrontend(config: ResolvedConfig, vpx_files_with_tableinfo: Vec<Indexed
         .add_plugins(WindowingPlugin)
         .add_plugins(fps_plugin!())
         .add_plugins(music_plugin)
-        .add_plugins((wheel_plugin, flipper_plugin, dmd_plugin, list_plugin))
+        .add_plugins((
+            wheel_plugin,
+            flipper_plugin,
+            /*dmd_plugin,*/ list_plugin,
+        ))
         .add_plugins(loading_plugin)
         .add_plugins(crate::gradient_background::plugin)
         .add_plugins(EguiPlugin)
         .add_plugins(PipelinesReadyPlugin)
-        .add_systems(Startup, setup)
+        .add_plugins(crate::dmd2::plugin)
         .add_systems(Update, quit_on_q)
         .add_systems(Update, resume_after_play)
         .add_systems(Update, gui_update.run_if(in_state(LoadingState::Ready)))
@@ -147,8 +151,4 @@ pub fn guifrontend(config: ResolvedConfig, vpx_files_with_tableinfo: Vec<Indexed
         .add_systems(Update, show_info.run_if(in_state(LoadingState::Ready)))
         .init_state::<LoadingState>()
         .run();
-}
-
-fn setup(mut commands: Commands) {
-    commands.spawn(Camera2d);
 }
