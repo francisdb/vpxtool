@@ -40,7 +40,10 @@ pub(crate) fn wheel_plugin(app: &mut App) {
     app.insert_resource(AssetPaths::default());
     app.insert_resource(WheelInfo::default());
     app.add_systems(Startup, create_wheels);
-    app.add_systems(Update, update_selected_wheel);
+    app.add_systems(
+        Update,
+        update_selected_wheel.run_if(in_state(LoadingState::Ready)),
+    );
 }
 
 pub const BOTTOM_MARGIN: f32 = 40.;

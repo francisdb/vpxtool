@@ -100,18 +100,25 @@ fn list_update(
     selected_item: Res<SelectedItem>,
 ) {
     // TODO we should only be making changes if the selected item has changed
+
     let selected_item = selected_item.index.unwrap_or(0);
     let table_indices = generate_table_indices(tables.indexed_tables.len(), selected_item);
     for (mut table_text, mut text) in text_items.iter_mut() {
         let list_index = table_text.list_index;
-        let table_index = table_indices[list_index];
-        let table = &tables.indexed_tables[table_index];
-        let table_name = display_table_line(table);
-        let table_description = table
-            .table_info
-            .table_description
-            .clone()
-            .unwrap_or("Description missing".to_string());
+        let (table_name, table_description) = if tables.indexed_tables.is_empty() {
+            ("".to_string(), "".to_string())
+        } else {
+            let table_index = table_indices[list_index];
+            let table = &tables.indexed_tables[table_index];
+            let table_name = display_table_line(table);
+            let table_description = table
+                .table_info
+                .table_description
+                .clone()
+                .unwrap_or("Description missing".to_string());
+            (table_name, table_description)
+        };
+
         table_text.table_text = table_description;
         text.0 = table_name;
     }
@@ -205,7 +212,9 @@ fn generate_table_indices(max_index: usize, selected_index: usize) -> [usize; IT
 
 /// Wraps a number around a maximum value.
 fn wrap_around(n: i16, max: usize) -> usize {
-    if n >= max as i16 {
+    if n == 0 || max == 0 {
+        0
+    } else if n >= max as i16 {
         n as usize % max
     } else if n < 0 {
         ((n % max as i16 + max as i16) % max as i16) as usize
@@ -234,7 +243,9 @@ mod test {
 
     #[test]
     fn test_wrap() {
+        assert_eq!(wrap_around(0, 0), 0);
         assert_eq!(wrap_around(0, 10), 0);
+        assert_eq!(wrap_around(10, 0), 0);
         assert_eq!(wrap_around(10, 10), 0);
         assert_eq!(wrap_around(11, 10), 1);
         assert_eq!(wrap_around(-1, 10), 9);

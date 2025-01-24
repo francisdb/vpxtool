@@ -1,11 +1,15 @@
+use crate::event_channel::{ChannelExternalEvent, StreamSender};
+use crate::guifrontend::Config;
 use crate::pipelines::PipelinesReady;
-use crate::process::process_plugin;
 use crate::wheel::AssetPaths;
 use bevy::image::Image;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use bevy_asset::{AssetServer, RecursiveDependencyLoadState, UntypedHandle};
 use bevy_egui::{egui, EguiContexts};
+use shared::indexer;
+use shared::indexer::VoidProgress;
+use std::thread;
 
 const SLOW_LOADING: bool = false;
 
@@ -33,6 +37,7 @@ pub(crate) struct LoadingData {
     confirmation_frames_target: usize,
     // Current number of confirmation frames.
     confirmation_frames_count: usize,
+    tables_loaded: bool,
 }
 
 impl LoadingData {
@@ -41,18 +46,19 @@ impl LoadingData {
             loading_assets: Vec::new(),
             confirmation_frames_target,
             confirmation_frames_count: 0,
+            tables_loaded: false,
         }
     }
 }
 
 // TODO create a plugin that also pulls in the pipelines_ready plugin
 pub(crate) fn loading_plugin(app: &mut App) {
-    app.add_plugins(process_plugin);
     app.insert_resource(LoadingData::new(5));
     app.insert_resource(LoadingDialogBox {
         title: "Loading...".to_owned(),
         text: "blank".to_owned(),
     });
+    app.add_systems(Startup, load_tables);
     app.add_systems(Update, display_loading_screen);
     app.add_systems(
         Update,
@@ -76,56 +82,67 @@ fn update_loading_data(
     pipelines_ready: Res<PipelinesReady>,
     asset_paths: Res<AssetPaths>,
 ) {
-    dialog.title = format!("Loading {}...", loading_data.loading_assets.len());
-    if !loading_data.loading_assets.is_empty() || !pipelines_ready.0 {
-        // If we are still loading assets / pipelines are not fully compiled,
-        // we reset the confirmation frame count.
-        loading_data.confirmation_frames_count = 0;
-
-        // Go through each asset and verify their load states.
-        // Any assets that are loaded are then added to the pop list for later removal.
-        let mut pop_list: Vec<usize> = Vec::new();
-        for (index, asset) in loading_data.loading_assets.iter().enumerate() {
-            // log asset name
-            // info!("asset {:?}", asset);
-            if let Some((_, _, RecursiveDependencyLoadState::Loaded)) =
-                asset_server.get_load_states(asset)
-            {
-                let id = asset.id().typed_unchecked::<Image>();
-                // Since for example the default asset is shared this will repeatedly the last
-                // path that was loaded.
-                // info!("loading {}", asset_paths.paths.get(&id).cloned().unwrap());
-                dialog.text = asset_paths.paths.get(&id).cloned().unwrap();
-                pop_list.push(index);
-            }
-        }
-
-        // Remove all loaded assets from the loading_assets list.
-        if !pop_list.is_empty() {
-            debug!("Removing {} loaded assets.", pop_list.len());
-            // remove all items from the pop list
-            if SLOW_LOADING {
-                for index in pop_list.iter().rev().take(1) {
-                    loading_data.loading_assets.remove(*index);
-                }
-            } else {
-                for index in pop_list.iter().rev() {
-                    loading_data.loading_assets.remove(*index);
-                }
-            }
-        }
-
-        // If there are no more assets being monitored, and pipelines
-        // are compiled, then start counting confirmation frames.
-        // Once enough confirmations have passed, everything will be
-        // considered to be fully loaded.
+    if !loading_data.tables_loaded {
+        dialog.title = "Loading tables...".to_owned();
+        dialog.text = "Please wait...".to_owned();
     } else {
-        loading_data.confirmation_frames_count += 1;
-        if loading_data.confirmation_frames_count == loading_data.confirmation_frames_target {
-            info!("All assets loaded.");
-            game_state.set(LoadingState::Ready);
+        dialog.title = format!("Loading images {}...", loading_data.loading_assets.len());
+        if !loading_data.loading_assets.is_empty() || !pipelines_ready.0 {
+            // If we are still loading assets / pipelines are not fully compiled,
+            // we reset the confirmation frame count.
+            loading_data.confirmation_frames_count = 0;
+
+            // Go through each asset and verify their load states.
+            // Any assets that are loaded are then added to the pop list for later removal.
+            let mut pop_list: Vec<usize> = Vec::new();
+            for (index, asset) in loading_data.loading_assets.iter().enumerate() {
+                // log asset name
+                // info!("asset {:?}", asset);
+                if let Some((_, _, RecursiveDependencyLoadState::Loaded)) =
+                    asset_server.get_load_states(asset)
+                {
+                    let id = asset.id().typed_unchecked::<Image>();
+                    // Since for example the default asset is shared this will repeatedly the last
+                    // path that was loaded.
+                    // info!("loading {}", asset_paths.paths.get(&id).cloned().unwrap());
+                    dialog.text = asset_paths.paths.get(&id).cloned().unwrap();
+                    pop_list.push(index);
+                }
+            }
+
+            // Remove all loaded assets from the loading_assets list.
+            if !pop_list.is_empty() {
+                debug!("Removing {} loaded assets.", pop_list.len());
+                // remove all items from the pop list
+                if SLOW_LOADING {
+                    for index in pop_list.iter().rev().take(1) {
+                        loading_data.loading_assets.remove(*index);
+                    }
+                } else {
+                    for index in pop_list.iter().rev() {
+                        loading_data.loading_assets.remove(*index);
+                    }
+                }
+            }
+
+            // If there are no more assets being monitored, and pipelines
+            // are compiled, then start counting confirmation frames.
+            // Once enough confirmations have passed, everything will be
+            // considered to be fully loaded.
+        } else {
+            loading_data.confirmation_frames_count += 1;
+            if loading_data.confirmation_frames_count == loading_data.confirmation_frames_target {
+                info!("All assets loaded.");
+                game_state.set(LoadingState::Ready);
+            }
         }
     }
+}
+
+pub(crate) fn mark_tables_loaded(loading_data: &mut ResMut<LoadingData>) {
+    loading_data.tables_loaded = true;
+
+    // TODO reload the images
 }
 
 // Marker tag for loading screen components.
@@ -182,7 +199,7 @@ fn load_loading_screen(
     */
 
     egui::Area::new(egui::Id::new("my area"))
-        .current_pos(egui::Pos2::new((width / 3.0) - 10.0, height / 3.0))
+        .current_pos(egui::Pos2::new((width / 5.0) - 10.0, height / 3.0))
         .show(ctx, |ui| {
             ui.label(
                 egui::RichText::new(title)
@@ -213,4 +230,35 @@ pub(crate) fn display_loading_screen(
         //      *loading_screen.get_single_mut().unwrap() = Visibility::Hidden;
         //     *loading_screen.get_single_mut().unwrap() = Visibility::Hidden;
     };
+}
+
+fn load_tables(resolved_config: Res<Config>, stream_sender: Res<StreamSender>) {
+    // perform below loading in a separate thread, then report back to bevy
+    let tx = stream_sender.clone();
+    let resolved_config = resolved_config.config.clone();
+    let _vpinball_thread = thread::spawn(move || {
+        let recursive = true;
+        // TODO make a progress that sends events and update loading gui
+        let progress = VoidProgress;
+        let index_result = indexer::index_folder(
+            recursive,
+            &resolved_config.tables_folder,
+            &resolved_config.tables_index_path,
+            Some(&resolved_config.global_pinmame_rom_folder()),
+            &progress,
+            Vec::new(),
+        );
+        match index_result {
+            Ok(index) => {
+                info!("{} tables loaded", index.len());
+                tx.send(ChannelExternalEvent::TablesLoaded(index.tables()))
+                    .unwrap();
+            }
+            Err(e) => {
+                error!("Error loading tables: {:?}", e);
+                tx.send(ChannelExternalEvent::TablesLoaded(Vec::new()))
+                    .unwrap();
+            }
+        }
+    });
 }

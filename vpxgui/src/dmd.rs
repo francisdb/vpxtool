@@ -1,3 +1,4 @@
+use crate::loading::LoadingState;
 use crate::wheel::{WheelInfo, BOTTOM_MARGIN};
 use bevy::color::palettes::css::{GHOST_WHITE, GOLDENROD};
 use bevy::color::Color;
@@ -36,7 +37,7 @@ const DMD_HEIGHT: f32 = 128.;
 
 pub(crate) fn dmd_plugin(app: &mut App) {
     app.add_systems(Startup, create_dmd);
-    app.add_systems(Update, dmd_update);
+    app.add_systems(Update, dmd_update.run_if(in_state(LoadingState::Ready)));
 }
 
 fn dmd_update(
