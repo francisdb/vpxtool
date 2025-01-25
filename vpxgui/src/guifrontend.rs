@@ -129,8 +129,8 @@ pub fn guifrontend(config: ResolvedConfig) {
     let vpinball_config = VPinballConfig::read(&vpinball_ini_path).unwrap();
     let window = windowing::setup_playfield_window(&vpinball_config);
 
-    App::new()
-        .insert_resource(Config { config })
+    let mut app = App::new();
+    app.insert_resource(Config { config })
         .insert_resource(VpxConfig {
             config: vpinball_config,
         })
@@ -146,7 +146,6 @@ pub fn guifrontend(config: ResolvedConfig) {
             ..Default::default()
         }))
         .add_plugins(WindowingPlugin)
-        .add_plugins(fps_plugin!())
         .add_plugins(crate::event_channel::plugin)
         .add_plugins(music_plugin)
         .add_plugins((wheel_plugin, flipper_plugin, dmd_plugin, list_plugin))
@@ -160,12 +159,13 @@ pub fn guifrontend(config: ResolvedConfig) {
         .add_systems(Update, launcher.run_if(in_state(LoadingState::Ready)))
         .add_systems(Update, dmd_update.run_if(in_state(LoadingState::Ready)))
         .add_systems(Update, show_info.run_if(in_state(LoadingState::Ready)))
-        .init_state::<LoadingState>()
-        .run();
+        .init_state::<LoadingState>();
 
-    // TODO do we want to create sets of systems that are run_if(in_state(LoadingState::Ready))?
-    //   does that work with plugins?
-    // https://bevy-cheatbook.github.io/programming/run-conditions.html
+    // only for development
+    #[cfg(debug_assertions)]
+    app.add_plugins(fps_plugin!());
+
+    app.run();
 }
 
 fn setup(mut commands: Commands) {

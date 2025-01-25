@@ -107,7 +107,7 @@ fn update_loading_data(
             dialog.text = "Please wait...".to_owned();
         }
         LoadingState::LoadingImages => {
-            dialog.title = format!("Loading images...");
+            dialog.title = "Loading images...".to_string();
             if !loading_data.loading_assets.is_empty() || !pipelines_ready.0 {
                 // If we are still loading assets / pipelines are not fully compiled,
                 // we reset the confirmation frame count.
