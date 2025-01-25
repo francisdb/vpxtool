@@ -7,7 +7,6 @@ use crate::loading::LoadingState;
 use crate::loading::{loading_plugin, mark_tables_loaded, LoadingData};
 use crate::menus::*;
 use crate::music::{music_plugin, resume_music, suspend_music, ControlMusicEvent};
-use crate::pipelines::PipelinesReadyPlugin;
 use crate::process::do_launch;
 use crate::wheel::{wheel_plugin, LoadWheelsSystem};
 use crate::windowing;
@@ -154,7 +153,6 @@ pub fn guifrontend(config: ResolvedConfig) {
         .add_plugins(loading_plugin)
         .add_plugins(crate::gradient_background::plugin)
         .add_plugins(EguiPlugin)
-        .add_plugins(PipelinesReadyPlugin)
         .add_systems(Startup, setup)
         .add_systems(Update, quit_on_q)
         .add_systems(Update, handle_external_events)

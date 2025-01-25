@@ -1,6 +1,6 @@
 use crate::event_channel::{ChannelExternalEvent, StreamSender};
 use crate::guifrontend::Config;
-use crate::pipelines::PipelinesReady;
+use crate::pipelines::{PipelinesReady, PipelinesReadyPlugin};
 use crate::wheel::{AssetPaths, LoadWheelsSystem};
 use bevy::image::Image;
 use bevy::prelude::*;
@@ -52,8 +52,20 @@ impl LoadingData {
     }
 }
 
+// TODO implement proper state handling
+// eg
+// app.add_systems(OnEnter(MyAppState::MainMenu), (
+//     setup_main_menu_ui,
+//     setup_main_menu_camera,
+// ));
+// app.add_systems(OnExit(MyAppState::MainMenu), (
+//     despawn_main_menu,
+// ));
+// https://bevy-cheatbook.github.io/programming/states.html
+
 // TODO create a plugin that also pulls in the pipelines_ready plugin
 pub(crate) fn loading_plugin(app: &mut App) {
+    app.add_plugins(PipelinesReadyPlugin);
     app.insert_resource(LoadingData::new(5));
     app.insert_resource(LoadingDialogBox {
         title: "Loading...".to_owned(),
