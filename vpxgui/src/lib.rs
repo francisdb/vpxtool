@@ -1,4 +1,5 @@
 mod dmd;
+mod event_channel;
 mod flippers;
 mod gradient_background;
 pub mod guifrontend;
@@ -11,4 +12,3 @@ mod pipelines;
 mod process;
 mod wheel;
 mod windowing;
-mod event_channel;
