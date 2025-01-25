@@ -1,3 +1,4 @@
+use crate::loading::LoadingState;
 use crate::wheel::WheelInfo;
 use bevy::math::{Quat, Vec3};
 use bevy::prelude::*;
@@ -19,7 +20,10 @@ struct FlipperBundle {
 
 pub(crate) fn flipper_plugin(app: &mut App) {
     app.add_systems(Startup, create_flippers);
-    app.add_systems(Update, update_flippers);
+    app.add_systems(
+        Update,
+        update_flippers.run_if(in_state(LoadingState::Ready)),
+    );
 }
 
 const Z_LEVEL: f32 = -1.;

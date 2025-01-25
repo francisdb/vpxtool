@@ -1,4 +1,5 @@
 mod dmd;
+mod event_channel;
 mod flippers;
 mod gradient_background;
 pub mod guifrontend;

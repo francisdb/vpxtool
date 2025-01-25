@@ -269,47 +269,8 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
         Some((CMD_GUI_FRONTEND, _sub_matches)) => {
             let (config_path, config) = config::load_or_setup_config()?;
             println!("Using config file {}", config_path.display())?;
-            let roms = indexer::find_roms(&config.global_pinmame_rom_folder())?;
-            if roms.is_empty() {
-                let warning = format!(
-                    "No roms found in {}",
-                    config.global_pinmame_rom_folder().display()
-                )
-                .yellow();
-                eprintln!("{}", warning)?;
-            } else {
-                println!(
-                    "Found {} roms in {}",
-                    roms.len(),
-                    config.global_pinmame_rom_folder().display()
-                )?;
-            }
-            match frontend::frontend_index(&config, true, vec![]) {
-                Ok(tables) if tables.is_empty() => {
-                    let warning =
-                        format!("No tables found in {}", config.tables_folder.display()).red();
-                    eprintln!("{}", warning)?;
-                    Ok(ExitCode::FAILURE)
-                }
-                Ok(vpx_files_with_tableinfo) => {
-                    guifrontend::guifrontend(config.clone(), vpx_files_with_tableinfo);
-                    Ok(ExitCode::SUCCESS)
-                }
-                Err(IndexError::FolderDoesNotExist(path)) => {
-                    let warning = format!(
-                        "Configured tables folder does not exist: {}",
-                        path.display()
-                    )
-                    .red();
-                    eprintln!("{}", warning)?;
-                    Ok(ExitCode::FAILURE)
-                }
-                Err(IndexError::IoError(e)) => {
-                    let warning = format!("Error running frontend: {}", e).red();
-                    eprintln!("{}", warning)?;
-                    Ok(ExitCode::FAILURE)
-                }
-            }
+            guifrontend::guifrontend(config.clone());
+            Ok(ExitCode::SUCCESS)
         }
 
         Some(("index", sub_matches)) => {

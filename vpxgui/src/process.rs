@@ -1,51 +1,15 @@
 // manages background vpinball process
 
 use bevy::prelude::*;
-use crossbeam_channel::{bounded, Receiver, Sender};
+use crossbeam_channel::Sender;
 use is_executable::IsExecutable;
 use std::path::Path;
 use std::process::{exit, ExitStatus};
 
+use crate::event_channel::ChannelExternalEvent;
 use std::{io, thread};
 
-#[derive(Debug)]
-pub(crate) enum VpxResult {
-    VpxDone,
-}
-
-#[derive(Resource, Deref)]
-pub(crate) struct StreamReceiver(Receiver<VpxResult>);
-
-#[derive(Resource, Deref)]
-pub(crate) struct StreamSender(Sender<VpxResult>);
-
-#[derive(Event, Debug)]
-pub(crate) struct VpxEvent(pub(crate) VpxResult);
-
-pub(crate) fn process_plugin(app: &mut App) {
-    app.add_event::<VpxEvent>();
-    app.add_systems(Startup, setup_channel);
-    app.add_systems(Update, forward_events_to_bevy);
-}
-
-fn setup_channel(mut commands: Commands) {
-    let (tx, rx) = bounded::<VpxResult>(10);
-    commands.insert_resource(StreamSender(tx));
-    commands.insert_resource(StreamReceiver(rx));
-}
-
-// This system reads from the receiver and sends events to Bevy
-pub(crate) fn forward_events_to_bevy(
-    receiver: Res<StreamReceiver>,
-    mut events: EventWriter<VpxEvent>,
-) {
-    let _event_writer = &events;
-    for from_stream in receiver.try_iter() {
-        events.send(VpxEvent(from_stream));
-    }
-}
-
-pub(crate) fn do_launch(tx: Sender<VpxResult>, path: &Path, executable: &Path) {
+pub(crate) fn do_launch(tx: Sender<ChannelExternalEvent>, path: &Path, executable: &Path) {
     info!("Launching table {}", path.display());
     let tx = tx.clone();
     let path = path.to_path_buf();
@@ -54,7 +18,7 @@ pub(crate) fn do_launch(tx: Sender<VpxResult>, path: &Path, executable: &Path) {
     let _vpinball_thread = thread::spawn(move || {
         launch(&path, &executable, None);
         info!("Vpinball done, sending event");
-        tx.send(VpxResult::VpxDone).unwrap();
+        tx.send(ChannelExternalEvent::VpxDone).unwrap();
     });
 }
 

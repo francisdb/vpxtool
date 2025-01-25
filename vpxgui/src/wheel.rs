@@ -1,6 +1,7 @@
 use crate::guifrontend::{Config, VpxTables};
 use crate::list::SelectedItem;
 use crate::loading::{LoadingData, LoadingState};
+use bevy::ecs::system::SystemId;
 use bevy::image::Image;
 use bevy::log::{debug, info, warn};
 use bevy::math::Vec3;
@@ -25,6 +26,9 @@ pub struct Wheel {
     pub item_number: usize,
 }
 
+#[derive(Resource)]
+pub(crate) struct LoadWheelsSystem(pub(crate) SystemId);
+
 #[derive(Bundle)]
 struct WheelBundle {
     sprite: Sprite,
@@ -39,8 +43,13 @@ struct WheelBundle {
 pub(crate) fn wheel_plugin(app: &mut App) {
     app.insert_resource(AssetPaths::default());
     app.insert_resource(WheelInfo::default());
-    app.add_systems(Startup, create_wheels);
-    app.add_systems(Update, update_selected_wheel);
+    //app.add_systems(Startup, create_wheels);
+    let load_system = app.register_system(create_wheels);
+    app.insert_resource(LoadWheelsSystem(load_system));
+    app.add_systems(
+        Update,
+        update_selected_wheel.run_if(in_state(LoadingState::Ready)),
+    );
 }
 
 pub const BOTTOM_MARGIN: f32 = 40.;
@@ -73,7 +82,7 @@ fn update_selected_wheel(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn create_wheels(
+pub(crate) fn create_wheels(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     mut loading_data: ResMut<LoadingData>,
@@ -83,7 +92,15 @@ fn create_wheels(
     vpx_tables: Res<VpxTables>,
     mut asset_paths: ResMut<AssetPaths>,
     mut wheel_info: ResMut<WheelInfo>,
+    mut wheel_query: Query<Entity, With<Wheel>>,
 ) {
+    info!("Creating wheels...");
+
+    // remove any existing wheels
+    for entity in wheel_query.iter_mut() {
+        commands.entity(entity).despawn_recursive();
+    }
+
     let tables = &vpx_tables.indexed_tables;
 
     let window = window_query.single();
@@ -143,7 +160,7 @@ fn create_wheels(
         });
     }
     info!("Wheels assets loading...");
-    game_state.set(LoadingState::Loading);
+    game_state.set(LoadingState::LoadingImages);
 }
 
 fn derive_wheel_size(window: &Window) -> f32 {
