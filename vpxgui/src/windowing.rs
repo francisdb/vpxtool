@@ -1,7 +1,22 @@
 use crate::guifrontend::VpxConfig;
 use bevy::prelude::*;
-use bevy::window::{PrimaryWindow, WindowMode, WindowResized, WindowResolution};
+use bevy::render::camera::RenderTarget;
+use bevy::render::view::RenderLayers;
+use bevy::utils::HashMap;
+use bevy::window::{PrimaryWindow, WindowMode, WindowRef, WindowResized, WindowResolution};
 use shared::config::VPinballConfig;
+use std::time::Duration;
+
+/// Layers are used to assigne meshes to a specific camera/window
+/// For UI elements this works differently, they are assigned to a camera using the TargetCamera component
+/// see https://github.com/bevyengine/bevy/issues/12468
+pub(crate) const DMD_LAYER: RenderLayers = RenderLayers::layer(1);
+
+#[derive(Component)]
+pub(crate) struct PlayfieldCamera;
+
+#[derive(Component)]
+pub(crate) struct DMDCamera;
 
 pub struct WindowingPlugin;
 
@@ -25,9 +40,6 @@ struct ResizedWindow {
 struct ResizedWindows {
     windows: HashMap<Entity, ResizedWindow>,
 }
-
-use bevy::utils::HashMap;
-use std::time::Duration;
 
 fn log_window_moved(
     mut events: EventReader<WindowMoved>,
@@ -103,6 +115,45 @@ fn log_window_resized(
     }
 }
 
+pub(crate) fn setup_windows(mut commands: Commands) {
+    let playfield_window_camera = commands.spawn((PlayfieldCamera, Camera2d)).id();
+
+    // Spawn a second window
+    let second_window = commands
+        .spawn(Window {
+            title: "Vpxtool - DMD".to_owned(),
+            ..default()
+        })
+        .id();
+
+    let second_window_camera = commands
+        .spawn((
+            DMDCamera,
+            Camera2d,
+            Camera {
+                target: RenderTarget::Window(WindowRef::Entity(second_window)),
+                ..default()
+            },
+            DMD_LAYER,
+        ))
+        .id();
+    let node = Node {
+        position_type: PositionType::Absolute,
+        top: Val::Px(12.0),
+        left: Val::Px(12.0),
+        ..default()
+    };
+
+    commands.spawn((
+        Text::new("Playfield"),
+        node.clone(),
+        // Since we are using multiple cameras, we need to specify which camera UI should be rendered to
+        TargetCamera(playfield_window_camera),
+    ));
+
+    commands.spawn((Text::new("DMD"), node, TargetCamera(second_window_camera)));
+}
+
 pub(crate) fn setup_playfield_window(vpinball_config: &VPinballConfig) -> Window {
     let mut position = WindowPosition::default();
     let mut mode = WindowMode::Fullscreen(MonitorSelection::Primary);
@@ -132,7 +183,7 @@ pub(crate) fn setup_playfield_window(vpinball_config: &VPinballConfig) -> Window
     );
     Window {
         name: Some("playfield".to_string()),
-        title: "VPXTOOL".to_string(),
+        title: "Vpxtool - Playfield".to_string(),
         // window_level: WindowLevel::AlwaysOnTop,
         resolution,
         mode, // WindowMode::Windowed,

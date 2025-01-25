@@ -1,6 +1,7 @@
 use crate::dmd::dmd_plugin;
 use crate::event_channel::{ChannelExternalEvent, ExternalEvent, StreamSender};
 use crate::flippers::flipper_plugin;
+use crate::gradient_background::setup_gradient_background;
 use crate::info::show_info;
 use crate::list::{display_table_line, list_plugin, SelectedItem};
 use crate::loading::LoadingState;
@@ -152,7 +153,10 @@ pub fn guifrontend(config: ResolvedConfig) {
         .add_plugins(loading_plugin)
         .add_plugins(crate::gradient_background::plugin)
         .add_plugins(EguiPlugin)
-        .add_systems(Startup, setup)
+        .add_systems(
+            Startup,
+            (crate::windowing::setup_windows, setup_gradient_background).chain(),
+        )
         .add_systems(Update, quit_on_q)
         .add_systems(Update, handle_external_events)
         .add_systems(Update, gui_update.run_if(in_state(LoadingState::Ready)))
@@ -166,8 +170,4 @@ pub fn guifrontend(config: ResolvedConfig) {
     app.add_plugins(fps_plugin!());
 
     app.run();
-}
-
-fn setup(mut commands: Commands) {
-    commands.spawn(Camera2d);
 }

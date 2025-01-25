@@ -24,7 +24,7 @@ impl Material2d for GradientMaterial {
 }
 
 pub(crate) fn plugin(app: &mut App) {
-    app.add_systems(Startup, setup_gradient_background);
+    //app.add_systems(Startup, setup_gradient_background);
     app.add_systems(Update, update_background_on_resize);
     app.add_plugins(Material2dPlugin::<GradientMaterial>::default());
 }
@@ -46,7 +46,7 @@ fn update_background_on_resize(
     }
 }
 
-fn setup_gradient_background(
+pub(crate) fn setup_gradient_background(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<GradientMaterial>>,
