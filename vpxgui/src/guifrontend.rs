@@ -9,7 +9,7 @@ use crate::menus::*;
 use crate::music::{music_plugin, resume_music, suspend_music, ControlMusicEvent};
 use crate::pipelines::PipelinesReadyPlugin;
 use crate::process::do_launch;
-use crate::wheel::wheel_plugin;
+use crate::wheel::{wheel_plugin, LoadWheelsSystem};
 use crate::windowing;
 use crate::windowing::WindowingPlugin;
 use bevy::prelude::*;
@@ -86,6 +86,7 @@ fn gui_update(_time: Res<Time>, window_query: Query<&Window, With<PrimaryWindow>
     window.window_level = WindowLevel::Normal;
 }
 
+#[allow(clippy::too_many_arguments)]
 fn handle_external_events(
     mut reader: EventReader<ExternalEvent>,
     mut event_writer: EventWriter<ControlMusicEvent>,
@@ -93,6 +94,8 @@ fn handle_external_events(
     mut vpx_tables: ResMut<VpxTables>,
     mut loading_data: ResMut<LoadingData>,
     mut window_query: Query<&mut Window, With<PrimaryWindow>>,
+    mut commands: Commands,
+    load_wheels_system: Res<LoadWheelsSystem>,
 ) {
     for event in reader.read() {
         match &event.0 {
@@ -115,7 +118,7 @@ fn handle_external_events(
                 vpx_tables
                     .indexed_tables
                     .sort_by_key(|indexed| display_table_line(indexed).to_lowercase());
-                mark_tables_loaded(&mut loading_data);
+                mark_tables_loaded(&mut loading_data, &mut commands, &load_wheels_system);
             }
         }
     }
@@ -161,6 +164,10 @@ pub fn guifrontend(config: ResolvedConfig) {
         .add_systems(Update, show_info.run_if(in_state(LoadingState::Ready)))
         .init_state::<LoadingState>()
         .run();
+
+    // TODO do we want to create sets of systems that are run_if(in_state(LoadingState::Ready))?
+    //   does that work with plugins?
+    // https://bevy-cheatbook.github.io/programming/run-conditions.html
 }
 
 fn setup(mut commands: Commands) {
