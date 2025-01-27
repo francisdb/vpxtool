@@ -40,7 +40,7 @@ regex = { version = "1.11.1", features = [] }
 vpin = { version = "0.17.2" }
 
 edit = "0.1.5"
-pinmame-nvram = "0.3.9"
+pinmame-nvram = "0.3.10"
 
 [dev-dependencies]
 pretty_assertions = "1.4.1"
