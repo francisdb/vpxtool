@@ -72,18 +72,20 @@ fn launcher(
     }
 }
 
-fn quit_on_q(
+fn quit_on_q_or_window_closed(
     keys: Res<ButtonInput<KeyCode>>,
-    mut app_exit_events: ResMut<Events<bevy::app::AppExit>>,
+    mut window_events: EventReader<WindowEvent>,
+    mut app_exit_event_writer: EventWriter<AppExit>,
 ) {
     if keys.just_pressed(KeyCode::KeyQ) {
-        app_exit_events.send(bevy::app::AppExit::Success);
+        app_exit_event_writer.send(AppExit::Success);
     }
-}
-
-fn gui_update(_time: Res<Time>, window_query: Query<&Window, With<PrimaryWindow>>) {
-    let mut window = window_query.get_single().unwrap().clone();
-    window.window_level = WindowLevel::Normal;
+    // closing any window closes the app
+    for event in window_events.read() {
+        if let WindowEvent::WindowCloseRequested(_) = event {
+            app_exit_event_writer.send(AppExit::Success);
+        }
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -153,13 +155,9 @@ pub fn guifrontend(config: ResolvedConfig) {
         .add_plugins(loading_plugin)
         .add_plugins(crate::gradient_background::plugin)
         .add_plugins(EguiPlugin)
-        .add_systems(
-            Startup,
-            (crate::windowing::setup_windows, setup_gradient_background).chain(),
-        )
-        .add_systems(Update, quit_on_q)
+        .add_systems(Startup, setup_gradient_background)
+        .add_systems(Update, quit_on_q_or_window_closed)
         .add_systems(Update, handle_external_events)
-        .add_systems(Update, gui_update.run_if(in_state(LoadingState::Ready)))
         .add_systems(Update, launcher.run_if(in_state(LoadingState::Ready)))
         .add_systems(Update, dmd_update.run_if(in_state(LoadingState::Ready)))
         .add_systems(Update, show_info.run_if(in_state(LoadingState::Ready)))

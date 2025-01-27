@@ -50,6 +50,7 @@ fn section_name(window_type: &WindowType) -> String {
 /// PlayfieldHeight = 960
 ///
 /// Note: For macOS with hidpi screen this these are logical sizes/locations, not pixel sizes
+#[derive(Debug, Clone)]
 pub struct WindowInfo {
     pub fullscreen: bool,
     pub x: Option<u32>,

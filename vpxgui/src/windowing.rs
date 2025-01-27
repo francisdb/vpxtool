@@ -3,12 +3,15 @@ use bevy::prelude::*;
 use bevy::render::camera::RenderTarget;
 use bevy::render::view::RenderLayers;
 use bevy::utils::HashMap;
-use bevy::window::{PrimaryWindow, WindowMode, WindowRef, WindowResized, WindowResolution};
+use bevy::window::{
+    WindowBackendScaleFactorChanged, WindowCreated, WindowMode, WindowRef, WindowResized,
+    WindowResolution,
+};
 use shared::vpinball_config::WindowType;
 use shared::vpinball_config::{VPinballConfig, WindowInfo};
 use std::time::Duration;
 
-/// Layers are used to assigne meshes to a specific camera/window
+/// Layers are used to assign meshes to a specific camera/window
 /// For UI elements this works differently, they are assigned to a camera using the TargetCamera component
 /// see https://github.com/bevyengine/bevy/issues/12468
 pub(crate) const DMD_LAYER: RenderLayers = RenderLayers::layer(1);
@@ -23,8 +26,14 @@ pub struct WindowingPlugin;
 
 impl Plugin for WindowingPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, correct_window_size_and_position);
-        app.add_systems(Update, (log_window_moved, log_window_resized));
+        app.add_systems(
+            Startup,
+            (setup_windows, correct_window_size_and_position).chain(),
+        );
+        app.add_systems(
+            Update,
+            (log_window_moved, log_window_resized, resize_on_crated),
+        );
     }
 }
 #[derive(Default)]
@@ -73,12 +82,26 @@ fn log_window_moved(
 
 fn log_window_resized(
     mut events: EventReader<WindowResized>,
+    mut scale_events: EventReader<WindowBackendScaleFactorChanged>,
     window_query: Query<(Entity, &Window)>,
     time: Res<Time>,
     mut timer: Local<Timer>,
     mut resized_windows: Local<ResizedWindows>,
 ) {
     timer.tick(time.delta());
+
+    for event in scale_events.read() {
+        if let Some((entity, scaled_window)) = window_query
+            .iter()
+            .find(|(entity, _)| entity == &event.window)
+        {
+            let name = window_name(entity, scaled_window);
+            info!(
+                "Scale factor for {} changed to {}",
+                name, event.scale_factor
+            );
+        }
+    }
 
     for event in events.read() {
         resized_windows.windows.insert(
@@ -124,6 +147,7 @@ pub(crate) fn setup_windows(mut commands: Commands, vpx_config: Res<VpxConfig>) 
 
     if let Some(window_info) = vpx_config.config.get_window_info(&WindowType::B2SBackglass) {
         let mut window = Window {
+            name: Some("backglass".to_owned()),
             title: "Vpxtool - Backglass".to_owned(),
             resizable: false,
             focused: false,
@@ -131,17 +155,19 @@ pub(crate) fn setup_windows(mut commands: Commands, vpx_config: Res<VpxConfig>) 
             skip_taskbar: true,
             ..default()
         };
-        setup_window(window_info, &mut window, &WindowType::B2SBackglass);
+        setup_window(&window_info, &mut window, &WindowType::B2SBackglass);
 
-        // Spawn a second window
-        let second_window = commands.spawn(window).id();
-
-        let second_window_camera = commands
+        info!("Creating backglass window");
+        let vpx_window_info = VpxWindowInfo {
+            window_info: window_info.clone(),
+        };
+        let backglass_window = commands.spawn((window, vpx_window_info)).id();
+        let backglass_window_camera = commands
             .spawn((
                 DMDCamera,
                 Camera2d,
                 Camera {
-                    target: RenderTarget::Window(WindowRef::Entity(second_window)),
+                    target: RenderTarget::Window(WindowRef::Entity(backglass_window)),
                     ..default()
                 },
                 DMD_LAYER,
@@ -149,7 +175,7 @@ pub(crate) fn setup_windows(mut commands: Commands, vpx_config: Res<VpxConfig>) 
             .id();
 
         #[cfg(debug_assertions)]
-        label_window(&mut commands, second_window_camera, "Backglass");
+        label_window(&mut commands, backglass_window_camera, "Backglass");
     }
 }
 
@@ -175,44 +201,99 @@ pub(crate) fn setup_playfield_window(vpinball_config: &VPinballConfig) -> Window
         ..Default::default()
     };
     if let Some(playfield_info) = vpinball_config.get_window_info(&WindowType::Playfield) {
-        setup_window(playfield_info, &mut window, &WindowType::Playfield);
+        setup_window(&playfield_info, &mut window, &WindowType::Playfield);
     }
     window
 }
 
+#[derive(Component)]
+pub(crate) struct VpxWindowInfo {
+    window_info: WindowInfo,
+}
+
+/// NOTE: This is NOT triggered on startup for the primary window creation.
+fn resize_on_crated(
+    mut window_created_event_reader: EventReader<WindowCreated>,
+    mut window_query: Query<(Entity, &VpxWindowInfo, &mut Window)>,
+) {
+    for event in window_created_event_reader.read() {
+        // find the window
+        for (window_entity, info, mut window) in window_query.iter_mut() {
+            if window_entity == event.window {
+                let window_name = window_name(window_entity, &window);
+                info!(
+                    "Window {} created: {:?} scale_factor {}",
+                    window_name,
+                    event,
+                    &window.scale_factor()
+                );
+
+                if cfg!(target_os = "linux") {
+                    // TODO document wayland vs x11
+                    // In vpinball the window sizes are configured in physical pixels.
+                    // The bevy window constructor requires setting the resolution in physical pixels.
+                    // However it seems that this size is used as the logical size once the window is created.
+                    // Therefore on startup we again configure the window size to the physical size.
+
+                    if let (Some(width), Some(height)) =
+                        (info.window_info.width, info.window_info.height)
+                    {
+                        info!(
+                            "Setting window {} physical resolution to {}x{}",
+                            window_name, width, height
+                        );
+                        window.resolution.set_physical_resolution(width, height);
+                    }
+                }
+
+                if cfg!(target_os = "macos") {
+                    // TODO implement
+                }
+            }
+        }
+    }
+}
+
 pub fn correct_window_size_and_position(
-    mut window_query: Query<&mut Window, With<PrimaryWindow>>,
+    mut window_query: Query<(Entity, &mut Window)>,
     vpx_config: Res<VpxConfig>,
 ) {
-    // only on Linux
     // #[cfg(target_os = "linux")] is annoying because it causes clippy to complain about dead code
     if cfg!(target_os = "linux") {
-        // Under wayland the window size is not correct, we need to scale it down.
-        // In vpinball the playfield window size is configured in physical pixels.
-        // The window constructor will create a window with the size in logical pixels.
-        let mut window = window_query.single_mut();
-        if window.resolution.scale_factor() != 1.0 {
+        // TODO document wayland vs x11
+        // In vpinball the window sizes are configured in physical pixels.
+        // The bevy window constructor requires setting the resolution in physical pixels.
+        // However it seems that this size is used as the logical size once the window is created.
+        // Therefore on startup we again configure the window size to the physical size.
+        for (window_entity, mut window) in window_query.iter_mut() {
             info!(
-                "Resizing window for Linux with scale factor {}",
+                "Window {} resolution: {}x{} scale factor {}",
+                window_name(window_entity, &window),
+                window.resolution.width(),
+                window.resolution.height(),
                 window.resolution.scale_factor(),
             );
-            let vpinball_config = &vpx_config.config;
-            if let Some(playfield) = vpinball_config.get_window_info(&WindowType::Playfield) {
-                if let (Some(physical_width), Some(physical_height)) =
-                    (playfield.width, playfield.height)
-                {
-                    let logical_width = physical_width as f32 / window.resolution.scale_factor();
-                    let logical_height = physical_height as f32 / window.resolution.scale_factor();
-                    info!(
-                        "Setting window size to {}x{}",
-                        logical_width, logical_height
-                    );
-                    window.resolution.set(logical_width, logical_height);
-                    if let (Some(x), Some(y)) = (playfield.x, playfield.y) {
-                        info!("Setting window position to {}, {}", x, y);
-                        window.position = WindowPosition::At(IVec2::new(x as i32, y as i32));
+            if window.resolution.scale_factor() != 1.0 {
+                let window_name = window_name(window_entity, &window);
+                info!(
+                    "Resizing window {} for Linux with scale factor {}",
+                    window_name,
+                    window.resolution.scale_factor(),
+                );
+                let vpinball_config = &vpx_config.config;
+                if let Some(playfield) = vpinball_config.get_window_info(&WindowType::Playfield) {
+                    if let (Some(physical_width), Some(physical_height)) =
+                        (playfield.width, playfield.height)
+                    {
+                        window
+                            .resolution
+                            .set_physical_resolution(physical_width, physical_height);
+                        if let (Some(x), Some(y)) = (playfield.x, playfield.y) {
+                            info!("Setting window {} position to {}, {}", window_name, x, y);
+                            window.position = WindowPosition::At(IVec2::new(x as i32, y as i32));
+                        }
+                        //window.set_changed();
                     }
-                    window.set_changed();
                 }
             }
         }
@@ -221,10 +302,12 @@ pub fn correct_window_size_and_position(
     // only on macOS
     // #[cfg(target_os = "macos")] is annoying because it causes clippy to complain about dead code
     if cfg!(target_os = "macos") {
-        let mut window = window_query.single_mut();
+        let (window_entity, mut window) = window_query.single_mut();
         if window.resolution.scale_factor() != 1.0 {
+            let window_name = window_name(window_entity, &window);
             info!(
-                "Repositioning window for macOS with scale factor {}",
+                "Repositioning window {} for macOS with scale factor {}",
+                window_name,
                 window.resolution.scale_factor(),
             );
             let vpinball_config = &vpx_config.config;
@@ -234,7 +317,10 @@ pub fn correct_window_size_and_position(
                     // factor before the window is created.
                     let physical_x = logical_x as f32 * window.resolution.scale_factor();
                     let physical_y = logical_y as f32 * window.resolution.scale_factor();
-                    info!("Setting window position to {}, {}", physical_x, physical_y,);
+                    info!(
+                        "Setting window {} position to {}, {}",
+                        window_name, physical_x, physical_y,
+                    );
                     // this will apply the width as if it was set in logical pixels
                     window.position =
                         WindowPosition::At(IVec2::new(physical_x as i32, physical_y as i32));
@@ -245,10 +331,7 @@ pub fn correct_window_size_and_position(
     }
 }
 
-fn setup_window(window_info: WindowInfo, window: &mut Window, window_type: &WindowType) {
-    // TODO get the scaling factor for the primary monitor using winit
-    // https://docs.rs/winit/0.22.2/winit/monitor/struct.MonitorHandle.html#method.scale_factor
-
+fn setup_window(window_info: &WindowInfo, window: &mut Window, window_type: &WindowType) {
     let position = if let (Some(x), Some(y)) = (window_info.x, window_info.y) {
         // For macOS with scale factor > 1 this is not correct, but we don't know the scale
         // factor before the window is created. We will correct the position later using the
@@ -259,6 +342,10 @@ fn setup_window(window_info: WindowInfo, window: &mut Window, window_type: &Wind
     } else {
         WindowPosition::default()
     };
+
+    // TODO get the scaling factor for the primary monitor using winit
+    // https://docs.rs/winit/0.22.2/winit/monitor/struct.MonitorHandle.html#method.scale_factor
+
     let resolution = if let (Some(width), Some(height)) = (window_info.width, window_info.height) {
         WindowResolution::new(width as f32, height as f32)
     } else {

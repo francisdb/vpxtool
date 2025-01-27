@@ -60,23 +60,25 @@ fn update_selected_wheel(
     selected_item_res: Res<SelectedItem>,
     window_query: Query<&Window, With<PrimaryWindow>>,
 ) {
-    let selected_item = selected_item_res.index.unwrap_or(0);
-    let window = window_query.single();
-    let window_height = window.height();
-    wheel_info.wheel_size = derive_wheel_size(window);
-    let wheel_size = wheel_info.wheel_size;
-    // update currently selected item to new value
-    for (mut visibility, mut sprite, wheel, mut transform) in wheel_query.iter_mut() {
-        if wheel.item_number != selected_item {
-            *visibility = Visibility::Hidden;
-        } else {
-            sprite.custom_size = Some(Vec2::new(wheel_size, wheel_size));
-            *visibility = Visibility::Visible;
-            transform.translation = Vec3::new(
-                0.,
-                (-(window_height / 2.0)) + (wheel_size / 2.) + BOTTOM_MARGIN,
-                0.,
-            );
+    // TODO only update if window size changes?
+    if let Ok(window) = window_query.get_single() {
+        let window_height = window.height();
+        wheel_info.wheel_size = derive_wheel_size(window);
+        let wheel_size = wheel_info.wheel_size;
+        let selected_item = selected_item_res.index.unwrap_or(0);
+        // update currently selected item to new value
+        for (mut visibility, mut sprite, wheel, mut transform) in wheel_query.iter_mut() {
+            if wheel.item_number != selected_item {
+                *visibility = Visibility::Hidden;
+            } else {
+                sprite.custom_size = Some(Vec2::new(wheel_size, wheel_size));
+                *visibility = Visibility::Visible;
+                transform.translation = Vec3::new(
+                    0.,
+                    (-(window_height / 2.0)) + (wheel_size / 2.) + BOTTOM_MARGIN,
+                    0.,
+                );
+            }
         }
     }
 }
