@@ -72,7 +72,7 @@ fn log_window_moved(
                 .iter()
                 .find(|(entity, _)| entity == moved_window)
             {
-                let name = window_name(entity, &window);
+                let name = window_name(entity, window);
                 info!("Window [{}] moved to {},{}", name, position.x, position.y);
             }
         }
@@ -124,7 +124,7 @@ fn log_window_resized(
                 let scale_factor = window.scale_factor();
                 let physical_width = resized.logical_width * scale_factor;
                 let physical_height = resized.logical_height * scale_factor;
-                let name = window_name(entity, &window);
+                let name = window_name(entity, window);
                 info!(
                     "Window [{}] resized to {}x{} (physical: {}x{})",
                     name,

@@ -154,7 +154,7 @@ impl VPinballConfig {
                     None
                 }
             }
-            WindowType::B2SBackglass => self.lookup_window_info(&window_type),
+            WindowType::B2SBackglass => self.lookup_window_info(window_type),
             _ => None,
         }
     }
