@@ -4,8 +4,8 @@ use bevy::render::camera::RenderTarget;
 use bevy::render::view::RenderLayers;
 use bevy::utils::HashMap;
 use bevy::window::{
-    WindowBackendScaleFactorChanged, WindowCreated, WindowMode, WindowRef, WindowResized,
-    WindowResolution,
+    PrimaryWindow, WindowBackendScaleFactorChanged, WindowCreated, WindowMode, WindowRef,
+    WindowResized, WindowResolution,
 };
 use shared::vpinball_config::WindowType;
 use shared::vpinball_config::{VPinballConfig, WindowInfo};
@@ -14,7 +14,8 @@ use std::time::Duration;
 /// Layers are used to assign meshes to a specific camera/window
 /// For UI elements this works differently, they are assigned to a camera using the TargetCamera component
 /// see https://github.com/bevyengine/bevy/issues/12468
-pub(crate) const DMD_LAYER: RenderLayers = RenderLayers::layer(1);
+pub(crate) const BACKGLASS_LAYER: RenderLayers = RenderLayers::layer(1);
+pub(crate) const B2SDMD_LAYER: RenderLayers = RenderLayers::layer(2);
 
 #[derive(Component)]
 pub(crate) struct PlayfieldCamera;
@@ -97,7 +98,7 @@ fn log_window_resized(
         {
             let name = window_name(entity, scaled_window);
             info!(
-                "Scale factor for {} changed to {}",
+                "Window [{}] Scale factor changed to {}",
                 name, event.scale_factor
             );
         }
@@ -140,43 +141,67 @@ fn log_window_resized(
 }
 
 pub(crate) fn setup_windows(mut commands: Commands, vpx_config: Res<VpxConfig>) {
-    let playfield_window_camera = commands.spawn((PlayfieldCamera, Camera2d)).id();
+    setup_playfield_window2(&mut commands);
+    setup_other_window(
+        &mut commands,
+        &vpx_config,
+        &WindowType::B2SBackglass,
+        BACKGLASS_LAYER,
+    );
+    setup_other_window(
+        &mut commands,
+        &vpx_config,
+        &WindowType::B2SDMD,
+        B2SDMD_LAYER,
+    );
+}
 
-    #[cfg(debug_assertions)]
-    label_window(&mut commands, playfield_window_camera, "Playfield");
-
-    if let Some(window_info) = vpx_config.config.get_window_info(&WindowType::B2SBackglass) {
+fn setup_other_window(
+    commands: &mut Commands,
+    vpx_config: &VpxConfig,
+    window_type: &WindowType,
+    render_layers: RenderLayers,
+) {
+    if let Some(window_info) = vpx_config.config.get_window_info(window_type) {
         let mut window = Window {
-            name: Some("backglass".to_owned()),
-            title: "Vpxtool - Backglass".to_owned(),
+            name: Some(window_type.to_string()),
+            title: format!("Vpxtool - {}", window_type),
             resizable: false,
             focused: false,
             decorations: false,
             skip_taskbar: true,
             ..default()
         };
-        setup_window(&window_info, &mut window, &WindowType::B2SBackglass);
+        setup_window(&window_info, &mut window, window_type);
 
-        info!("Creating backglass window");
+        info!("Window [{}] spawn", window_type);
         let vpx_window_info = VpxWindowInfo {
             window_info: window_info.clone(),
         };
-        let backglass_window = commands.spawn((window, vpx_window_info)).id();
-        let backglass_window_camera = commands
+        let window_entity = commands.spawn((window, vpx_window_info)).id();
+        let window_camera = commands
             .spawn((
                 DMDCamera,
                 Camera2d,
                 Camera {
-                    target: RenderTarget::Window(WindowRef::Entity(backglass_window)),
+                    target: RenderTarget::Window(WindowRef::Entity(window_entity)),
                     ..default()
                 },
-                DMD_LAYER,
+                render_layers,
             ))
             .id();
 
         #[cfg(debug_assertions)]
-        label_window(&mut commands, backglass_window_camera, "Backglass");
+        label_window(commands, window_camera, &window_type.to_string());
+    } else {
+        info!("Window [{}] is not enabled", window_type);
     }
+}
+
+fn setup_playfield_window2(commands: &mut Commands) {
+    let playfield_window_camera = commands.spawn((PlayfieldCamera, Camera2d)).id();
+    #[cfg(debug_assertions)]
+    label_window(commands, playfield_window_camera, "Playfield");
 }
 
 fn label_window(commands: &mut Commands, window_camera: Entity, name: &str) {
@@ -222,9 +247,8 @@ fn resize_on_crated(
             if window_entity == event.window {
                 let window_name = window_name(window_entity, &window);
                 info!(
-                    "Window {} created: {:?} scale_factor {}",
+                    "Window [{}] created: scale_factor {}",
                     window_name,
-                    event,
                     &window.scale_factor()
                 );
 
@@ -239,10 +263,14 @@ fn resize_on_crated(
                         (info.window_info.width, info.window_info.height)
                     {
                         info!(
-                            "Setting window {} physical resolution to {}x{}",
+                            "Window [{}] setting physical resolution to {}x{}",
                             window_name, width, height
                         );
                         window.resolution.set_physical_resolution(width, height);
+                    }
+                    if let (Some(x), Some(y)) = (info.window_info.x, info.window_info.y) {
+                        info!("Window [{}] setting position to {}, {}", window_name, x, y);
+                        window.position = WindowPosition::At(IVec2::new(x as i32, y as i32));
                     }
                 }
 
@@ -255,7 +283,7 @@ fn resize_on_crated(
 }
 
 pub fn correct_window_size_and_position(
-    mut window_query: Query<(Entity, &mut Window)>,
+    mut window_query: Query<(Entity, &mut Window), With<PrimaryWindow>>,
     vpx_config: Res<VpxConfig>,
 ) {
     // #[cfg(target_os = "linux")] is annoying because it causes clippy to complain about dead code
@@ -267,7 +295,7 @@ pub fn correct_window_size_and_position(
         // Therefore on startup we again configure the window size to the physical size.
         for (window_entity, mut window) in window_query.iter_mut() {
             info!(
-                "Window {} resolution: {}x{} scale factor {}",
+                "Window [{}] resolution: {}x{} scale factor {}",
                 window_name(window_entity, &window),
                 window.resolution.width(),
                 window.resolution.height(),
@@ -276,7 +304,7 @@ pub fn correct_window_size_and_position(
             if window.resolution.scale_factor() != 1.0 {
                 let window_name = window_name(window_entity, &window);
                 info!(
-                    "Resizing window {} for Linux with scale factor {}",
+                    "Window [{}] Resizing for Linux with scale factor {}",
                     window_name,
                     window.resolution.scale_factor(),
                 );
@@ -289,7 +317,7 @@ pub fn correct_window_size_and_position(
                             .resolution
                             .set_physical_resolution(physical_width, physical_height);
                         if let (Some(x), Some(y)) = (playfield.x, playfield.y) {
-                            info!("Setting window {} position to {}, {}", window_name, x, y);
+                            info!("Window [{}] Setting position to {}, {}", window_name, x, y);
                             window.position = WindowPosition::At(IVec2::new(x as i32, y as i32));
                         }
                         //window.set_changed();
@@ -306,7 +334,7 @@ pub fn correct_window_size_and_position(
         if window.resolution.scale_factor() != 1.0 {
             let window_name = window_name(window_entity, &window);
             info!(
-                "Repositioning window {} for macOS with scale factor {}",
+                "Window [{}] Repositioning for macOS with scale factor {}",
                 window_name,
                 window.resolution.scale_factor(),
             );
@@ -358,7 +386,7 @@ fn setup_window(window_info: &WindowInfo, window: &mut Window, window_type: &Win
     };
 
     info!(
-        "Positioning window {:?} window at {:?}, resolution {:?}, mode {:?}",
+        "Window [{}] Positioning at {:?}, resolution {:?}, mode {:?}",
         window_type, position, resolution, mode
     );
 

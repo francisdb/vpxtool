@@ -1,4 +1,5 @@
 use log::info;
+use std::fmt::Display;
 use std::path::Path;
 
 #[derive(Debug)]
@@ -14,6 +15,22 @@ pub enum WindowType {
     PUPDMD,
     PUPPlayfield,
     PUPFullDMD,
+}
+impl Display for WindowType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            WindowType::Playfield => write!(f, "Playfield"),
+            WindowType::PinMAME => write!(f, "PinMAME"),
+            WindowType::FlexDMD => write!(f, "FlexDMD"),
+            WindowType::B2SBackglass => write!(f, "B2SBackglass"),
+            WindowType::B2SDMD => write!(f, "B2SDMD"),
+            WindowType::PUPTopper => write!(f, "PUPTopper"),
+            WindowType::PUPBackglass => write!(f, "PUPBackglass"),
+            WindowType::PUPDMD => write!(f, "PUPDMD"),
+            WindowType::PUPPlayfield => write!(f, "PUPPlayfield"),
+            WindowType::PUPFullDMD => write!(f, "PUPFullDMD"),
+        }
+    }
 }
 
 fn config_prefix(window_type: &WindowType) -> &'static str {
@@ -81,10 +98,21 @@ impl VPinballConfig {
     pub fn is_window_enabled(&self, window: WindowType) -> bool {
         match window {
             WindowType::Playfield => true,
-            WindowType::B2SBackglass | WindowType::B2SDMD => {
+            WindowType::B2SBackglass => {
                 let section = section_name(&window);
                 if let Some(ini_section) = self.ini.section(Some(section)) {
+                    // TODO what are the defaults here>
                     ini_section.get("B2SWindows") == Some("1")
+                } else {
+                    false
+                }
+            }
+            WindowType::B2SDMD => {
+                let section = section_name(&window);
+                if let Some(ini_section) = self.ini.section(Some(section)) {
+                    // TODO what are the defaults here>
+                    ini_section.get("B2SWindows") == Some("1")
+                        && ini_section.get("B2SHideB2SDMD") == Some("0")
                 } else {
                     false
                 }
@@ -154,8 +182,7 @@ impl VPinballConfig {
                     None
                 }
             }
-            WindowType::B2SBackglass => self.lookup_window_info(window_type),
-            _ => None,
+            other => self.lookup_window_info(other),
         }
     }
 
