@@ -15,9 +15,9 @@ use crate::windowing::WindowingPlugin;
 use bevy::prelude::*;
 use bevy::window::*;
 use bevy_egui::EguiPlugin;
-use bevy_mini_fps::fps_plugin;
-use shared::config::{ResolvedConfig, VPinballConfig};
+use shared::config::ResolvedConfig;
 use shared::indexer::IndexedTable;
+use shared::vpinball_config::VPinballConfig;
 
 #[derive(Resource)]
 pub struct Config {
@@ -167,7 +167,7 @@ pub fn guifrontend(config: ResolvedConfig) {
 
     // only for development
     #[cfg(debug_assertions)]
-    app.add_plugins(fps_plugin!());
+    app.add_plugins(bevy_mini_fps::fps_plugin!());
 
     app.run();
 }

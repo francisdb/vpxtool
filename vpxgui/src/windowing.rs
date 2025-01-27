@@ -4,7 +4,8 @@ use bevy::render::camera::RenderTarget;
 use bevy::render::view::RenderLayers;
 use bevy::utils::HashMap;
 use bevy::window::{PrimaryWindow, WindowMode, WindowRef, WindowResized, WindowResolution};
-use shared::config::VPinballConfig;
+use shared::vpinball_config::WindowType;
+use shared::vpinball_config::{VPinballConfig, WindowInfo};
 use std::time::Duration;
 
 /// Layers are used to assigne meshes to a specific camera/window
@@ -115,81 +116,68 @@ fn log_window_resized(
     }
 }
 
-pub(crate) fn setup_windows(mut commands: Commands) {
+pub(crate) fn setup_windows(mut commands: Commands, vpx_config: Res<VpxConfig>) {
     let playfield_window_camera = commands.spawn((PlayfieldCamera, Camera2d)).id();
 
-    // Spawn a second window
-    let second_window = commands
-        .spawn(Window {
-            title: "Vpxtool - DMD".to_owned(),
-            ..default()
-        })
-        .id();
+    #[cfg(debug_assertions)]
+    label_window(&mut commands, playfield_window_camera, "Playfield");
 
-    let second_window_camera = commands
-        .spawn((
-            DMDCamera,
-            Camera2d,
-            Camera {
-                target: RenderTarget::Window(WindowRef::Entity(second_window)),
-                ..default()
-            },
-            DMD_LAYER,
-        ))
-        .id();
-    let node = Node {
+    if let Some(window_info) = vpx_config.config.get_window_info(&WindowType::B2SBackglass) {
+        let mut window = Window {
+            title: "Vpxtool - Backglass".to_owned(),
+            resizable: false,
+            focused: false,
+            decorations: false,
+            skip_taskbar: true,
+            ..default()
+        };
+        setup_window(window_info, &mut window, &WindowType::B2SBackglass);
+
+        // Spawn a second window
+        let second_window = commands.spawn(window).id();
+
+        let second_window_camera = commands
+            .spawn((
+                DMDCamera,
+                Camera2d,
+                Camera {
+                    target: RenderTarget::Window(WindowRef::Entity(second_window)),
+                    ..default()
+                },
+                DMD_LAYER,
+            ))
+            .id();
+
+        #[cfg(debug_assertions)]
+        label_window(&mut commands, second_window_camera, "Backglass");
+    }
+}
+
+fn label_window(commands: &mut Commands, window_camera: Entity, name: &str) {
+    let window_label_node = Node {
         position_type: PositionType::Absolute,
         top: Val::Px(12.0),
         left: Val::Px(12.0),
         ..default()
     };
-
     commands.spawn((
-        Text::new("Playfield"),
-        node.clone(),
-        // Since we are using multiple cameras, we need to specify which camera UI should be rendered to
-        TargetCamera(playfield_window_camera),
+        Text::new(name),
+        TextFont::from_font_size(8.0),
+        window_label_node,
+        TargetCamera(window_camera),
     ));
-
-    commands.spawn((Text::new("DMD"), node, TargetCamera(second_window_camera)));
 }
 
 pub(crate) fn setup_playfield_window(vpinball_config: &VPinballConfig) -> Window {
-    let mut position = WindowPosition::default();
-    let mut mode = WindowMode::Fullscreen(MonitorSelection::Primary);
-    let mut resolution = WindowResolution::default();
-    if let Some(playfield) = vpinball_config.get_playfield_info() {
-        if let (Some(x), Some(y)) = (playfield.x, playfield.y) {
-            // For macOS with scale factor > 1 this is not correct but we don't know the scale
-            // factor before the window is created. We will correct the position later using the
-            // system "correct_mac_window_size".
-            info!("Setting window position to x={}, y={}", x, y);
-            let physical_x = x as i32;
-            let physical_y = y as i32;
-            position = WindowPosition::At(IVec2::new(physical_x, physical_y));
-        }
-        if let (Some(width), Some(height)) = (playfield.width, playfield.height) {
-            resolution = WindowResolution::new(width as f32, height as f32);
-        }
-        mode = if playfield.fullscreen {
-            WindowMode::Fullscreen(MonitorSelection::Primary)
-        } else {
-            WindowMode::Windowed
-        };
-    }
-    info!(
-        "Positioning window at {:?}, resolution {:?}",
-        position, resolution
-    );
-    Window {
+    let mut window = Window {
         name: Some("playfield".to_string()),
         title: "Vpxtool - Playfield".to_string(),
-        // window_level: WindowLevel::AlwaysOnTop,
-        resolution,
-        mode, // WindowMode::Windowed,
-        position,
         ..Default::default()
+    };
+    if let Some(playfield_info) = vpinball_config.get_window_info(&WindowType::Playfield) {
+        setup_window(playfield_info, &mut window, &WindowType::Playfield);
     }
+    window
 }
 
 pub fn correct_window_size_and_position(
@@ -209,7 +197,7 @@ pub fn correct_window_size_and_position(
                 window.resolution.scale_factor(),
             );
             let vpinball_config = &vpx_config.config;
-            if let Some(playfield) = vpinball_config.get_playfield_info() {
+            if let Some(playfield) = vpinball_config.get_window_info(&WindowType::Playfield) {
                 if let (Some(physical_width), Some(physical_height)) =
                     (playfield.width, playfield.height)
                 {
@@ -240,7 +228,7 @@ pub fn correct_window_size_and_position(
                 window.resolution.scale_factor(),
             );
             let vpinball_config = &vpx_config.config;
-            if let Some(playfield) = vpinball_config.get_playfield_info() {
+            if let Some(playfield) = vpinball_config.get_window_info(&WindowType::Playfield) {
                 if let (Some(logical_x), Some(logical_y)) = (playfield.x, playfield.y) {
                     // For macOS with scales factor > 1 this is not correct but we don't know the scale
                     // factor before the window is created.
@@ -257,7 +245,42 @@ pub fn correct_window_size_and_position(
     }
 }
 
-fn window_name(entity: Entity, window: &&Window) -> String {
+fn setup_window(window_info: WindowInfo, window: &mut Window, window_type: &WindowType) {
+    // TODO get the scaling factor for the primary monitor using winit
+    // https://docs.rs/winit/0.22.2/winit/monitor/struct.MonitorHandle.html#method.scale_factor
+
+    let position = if let (Some(x), Some(y)) = (window_info.x, window_info.y) {
+        // For macOS with scale factor > 1 this is not correct, but we don't know the scale
+        // factor before the window is created. We will correct the position later using the
+        // system "correct_mac_window_size".
+        let physical_x = x as i32;
+        let physical_y = y as i32;
+        WindowPosition::At(IVec2::new(physical_x, physical_y))
+    } else {
+        WindowPosition::default()
+    };
+    let resolution = if let (Some(width), Some(height)) = (window_info.width, window_info.height) {
+        WindowResolution::new(width as f32, height as f32)
+    } else {
+        WindowResolution::default()
+    };
+    let mode = if window_info.fullscreen {
+        WindowMode::Fullscreen(MonitorSelection::Primary)
+    } else {
+        WindowMode::Windowed
+    };
+
+    info!(
+        "Positioning window {:?} window at {:?}, resolution {:?}, mode {:?}",
+        window_type, position, resolution, mode
+    );
+
+    window.position = position;
+    window.resolution = resolution;
+    window.mode = mode;
+}
+
+fn window_name(entity: Entity, window: &Window) -> String {
     match &window.name {
         Some(name) => name.clone(),
         None => format!("unnamed/{}", entity),
