@@ -16,6 +16,12 @@ use std::time::Duration;
 /// see https://github.com/bevyengine/bevy/issues/12468
 pub(crate) const BACKGLASS_LAYER: RenderLayers = RenderLayers::layer(1);
 pub(crate) const B2SDMD_LAYER: RenderLayers = RenderLayers::layer(2);
+pub(crate) const PINMAME_LAYER: RenderLayers = RenderLayers::layer(3);
+pub(crate) const FLEXDMD_LAYER: RenderLayers = RenderLayers::layer(4);
+
+pub(crate) const PUPBACKGLASS_LAYER: RenderLayers = RenderLayers::layer(5);
+
+pub(crate) const PUPDMD_LAYER: RenderLayers = RenderLayers::layer(6);
 
 #[derive(Component)]
 pub(crate) struct PlayfieldCamera;
@@ -140,29 +146,36 @@ fn log_window_resized(
     }
 }
 
-pub(crate) fn setup_windows(mut commands: Commands, vpx_config: Res<VpxConfig>) {
-    setup_playfield_window2(&mut commands);
-    setup_other_window(
-        &mut commands,
-        &vpx_config,
-        &WindowType::B2SBackglass,
-        BACKGLASS_LAYER,
-    );
-    setup_other_window(
-        &mut commands,
-        &vpx_config,
-        &WindowType::B2SDMD,
-        B2SDMD_LAYER,
-    );
+fn layer_for_window_type(window_type: WindowType) -> RenderLayers {
+    match window_type {
+        WindowType::B2SBackglass => BACKGLASS_LAYER,
+        WindowType::B2SDMD => B2SDMD_LAYER,
+        WindowType::PinMAME => PINMAME_LAYER,
+        WindowType::FlexDMD => FLEXDMD_LAYER,
+        WindowType::PUPBackglass => PUPBACKGLASS_LAYER,
+        WindowType::PUPDMD => PUPDMD_LAYER,
+        other => {
+            warn!("No layer set up for WindowType: {:?}", other);
+            BACKGLASS_LAYER
+        }
+    }
 }
 
-fn setup_other_window(
-    commands: &mut Commands,
-    vpx_config: &VpxConfig,
-    window_type: &WindowType,
-    render_layers: RenderLayers,
-) {
+pub(crate) fn setup_windows(mut commands: Commands, vpx_config: Res<VpxConfig>) {
+    setup_playfield_window2(&mut commands);
+    setup_other_window(&mut commands, &vpx_config, WindowType::B2SBackglass);
+    setup_other_window(&mut commands, &vpx_config, WindowType::B2SDMD);
+    setup_other_window(&mut commands, &vpx_config, WindowType::PinMAME);
+    setup_other_window(&mut commands, &vpx_config, WindowType::FlexDMD);
+    setup_other_window(&mut commands, &vpx_config, WindowType::PUPBackglass);
+    setup_other_window(&mut commands, &vpx_config, WindowType::PUPDMD);
+    setup_other_window(&mut commands, &vpx_config, WindowType::PUPFullDMD);
+    setup_other_window(&mut commands, &vpx_config, WindowType::PUPTopper);
+}
+
+fn setup_other_window(commands: &mut Commands, vpx_config: &VpxConfig, window_type: WindowType) {
     if let Some(window_info) = vpx_config.config.get_window_info(window_type) {
+        info!("Window [{}] vpinball config {:?}", window_type, window_info);
         let mut window = Window {
             name: Some(window_type.to_string()),
             title: format!("Vpxtool - {}", window_type),
@@ -179,6 +192,7 @@ fn setup_other_window(
             window_info: window_info.clone(),
         };
         let window_entity = commands.spawn((window, vpx_window_info)).id();
+        let render_layers = layer_for_window_type(window_type);
         let window_camera = commands
             .spawn((
                 DMDCamera,
@@ -223,10 +237,11 @@ pub(crate) fn setup_playfield_window(vpinball_config: &VPinballConfig) -> Window
     let mut window = Window {
         name: Some("playfield".to_string()),
         title: "Vpxtool - Playfield".to_string(),
+        decorations: false,
         ..Default::default()
     };
-    if let Some(playfield_info) = vpinball_config.get_window_info(&WindowType::Playfield) {
-        setup_window(&playfield_info, &mut window, &WindowType::Playfield);
+    if let Some(playfield_info) = vpinball_config.get_window_info(WindowType::Playfield) {
+        setup_window(&playfield_info, &mut window, WindowType::Playfield);
     }
     window
 }
@@ -309,7 +324,7 @@ pub fn correct_window_size_and_position(
                     window.resolution.scale_factor(),
                 );
                 let vpinball_config = &vpx_config.config;
-                if let Some(playfield) = vpinball_config.get_window_info(&WindowType::Playfield) {
+                if let Some(playfield) = vpinball_config.get_window_info(WindowType::Playfield) {
                     if let (Some(physical_width), Some(physical_height)) =
                         (playfield.width, playfield.height)
                     {
@@ -339,7 +354,7 @@ pub fn correct_window_size_and_position(
                 window.resolution.scale_factor(),
             );
             let vpinball_config = &vpx_config.config;
-            if let Some(playfield) = vpinball_config.get_window_info(&WindowType::Playfield) {
+            if let Some(playfield) = vpinball_config.get_window_info(WindowType::Playfield) {
                 if let (Some(logical_x), Some(logical_y)) = (playfield.x, playfield.y) {
                     // For macOS with scales factor > 1 this is not correct but we don't know the scale
                     // factor before the window is created.
@@ -359,7 +374,7 @@ pub fn correct_window_size_and_position(
     }
 }
 
-fn setup_window(window_info: &WindowInfo, window: &mut Window, window_type: &WindowType) {
+fn setup_window(window_info: &WindowInfo, window: &mut Window, window_type: WindowType) {
     let position = if let (Some(x), Some(y)) = (window_info.x, window_info.y) {
         // For macOS with scale factor > 1 this is not correct, but we don't know the scale
         // factor before the window is created. We will correct the position later using the
@@ -371,14 +386,14 @@ fn setup_window(window_info: &WindowInfo, window: &mut Window, window_type: &Win
         WindowPosition::default()
     };
 
-    // TODO get the scaling factor for the primary monitor using winit
-    // https://docs.rs/winit/0.22.2/winit/monitor/struct.MonitorHandle.html#method.scale_factor
-
-    let resolution = if let (Some(width), Some(height)) = (window_info.width, window_info.height) {
-        WindowResolution::new(width as f32, height as f32)
-    } else {
-        WindowResolution::default()
-    };
+    // TODO since these sizes qre seen as logical sizes, we start with a very small size no to have repositioning
+    // see https://github.com/bevyengine/bevy/issues/17563
+    // let resolution = if let (Some(width), Some(height)) = (window_info.width, window_info.height) {
+    //     WindowResolution::new(width as f32, height as f32)
+    // } else {
+    //     WindowResolution::default()
+    // };
+    let resolution = WindowResolution::new(100.0, 100.0);
     let mode = if window_info.fullscreen {
         WindowMode::Fullscreen(MonitorSelection::Primary)
     } else {

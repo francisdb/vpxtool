@@ -47,7 +47,7 @@ fn launcher(
     config: Res<Config>,
     selected_item: Res<SelectedItem>,
     mut globals: ResMut<Globals>,
-    mut window_query: Query<&mut Window, With<PrimaryWindow>>,
+    //mut window_query: Query<&mut Window, With<PrimaryWindow>>,
     tables: Res<VpxTables>,
 ) {
     if keys.just_pressed(KeyCode::Enter) {
@@ -57,11 +57,10 @@ fn launcher(
         };
 
         if let Some(selected_item) = selected_item.index {
-            let mut window = window_query.single_mut();
+            //let mut playfield_window = window_query.single_mut();
             suspend_music(&mut control_music_event_writer);
             let table = tables.indexed_tables.get(selected_item).unwrap();
-            info!("Hide window");
-            window.visible = false;
+            //playfield_window.visible = false;
             globals.vpinball_running = true;
             do_launch(
                 stream_sender.clone(),
@@ -106,9 +105,9 @@ fn handle_external_events(
                 globals.vpinball_running = false;
                 resume_music(&mut event_writer);
                 let mut window = window_query.single_mut();
-                info!("Window visibility: {}", window.visible);
-                info!("Showing window");
-                window.visible = true;
+                // info!("Window visibility: {}", window.visible);
+                // info!("Showing window");
+                // window.visible = true;
                 // bring window to front
                 // window.window_level = WindowLevel::AlwaysOnTop;
                 // request focus
@@ -130,7 +129,7 @@ pub fn guifrontend(config: ResolvedConfig) {
     let tables: Vec<IndexedTable> = Vec::new();
     let vpinball_ini_path = config.vpinball_ini_file();
     let vpinball_config = VPinballConfig::read(&vpinball_ini_path).unwrap();
-    let window = windowing::setup_playfield_window(&vpinball_config);
+    let playfield_window = windowing::setup_playfield_window(&vpinball_config);
 
     let mut app = App::new();
     app.insert_resource(Config { config })
@@ -145,7 +144,7 @@ pub fn guifrontend(config: ResolvedConfig) {
         })
         .insert_resource(ClearColor(Color::srgb(0.1, 0.1, 0.1)))
         .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(window),
+            primary_window: Some(playfield_window),
             ..Default::default()
         }))
         .add_plugins(WindowingPlugin)

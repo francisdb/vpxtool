@@ -2,7 +2,7 @@ use log::info;
 use std::fmt::Display;
 use std::path::Path;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum WindowType {
     Playfield,
     PinMAME,
@@ -33,22 +33,22 @@ impl Display for WindowType {
     }
 }
 
-fn config_prefix(window_type: &WindowType) -> &'static str {
+fn config_prefix(window_type: WindowType) -> &'static str {
     match window_type {
         WindowType::Playfield => "Playfield",
-        WindowType::PinMAME => "PinMAME",
-        WindowType::FlexDMD => "FlexDMD",
+        WindowType::PinMAME => "PinMAMEWindow",
+        WindowType::FlexDMD => "FlexDMDWindow",
         WindowType::B2SBackglass => "B2SBackglass",
         WindowType::B2SDMD => "B2SDMD",
-        WindowType::PUPTopper => "PUPTopper",
-        WindowType::PUPBackglass => "PUPBackglass",
-        WindowType::PUPDMD => "PUPDMD",
-        WindowType::PUPPlayfield => "PUPPlayfield",
-        WindowType::PUPFullDMD => "PUPFullDMD",
+        WindowType::PUPTopper => "PUPTopperWindow",
+        WindowType::PUPBackglass => "PUPBackglassWindow",
+        WindowType::PUPDMD => "PUPDMDWindow",
+        WindowType::PUPPlayfield => "PUPPlayfieldWindow",
+        WindowType::PUPFullDMD => "PUPFullDMDWindow",
     }
 }
 
-fn section_name(window_type: &WindowType) -> String {
+fn section_name(window_type: WindowType) -> String {
     match window_type {
         WindowType::Playfield => "Player".to_string(),
         _ => "Standalone".to_string(),
@@ -95,11 +95,11 @@ impl VPinballConfig {
         }
     }
 
-    pub fn is_window_enabled(&self, window: WindowType) -> bool {
-        match window {
+    pub fn is_window_enabled(&self, window_type: WindowType) -> bool {
+        match window_type {
             WindowType::Playfield => true,
             WindowType::B2SBackglass => {
-                let section = section_name(&window);
+                let section = section_name(window_type);
                 if let Some(ini_section) = self.ini.section(Some(section)) {
                     // TODO what are the defaults here>
                     ini_section.get("B2SWindows") == Some("1")
@@ -108,7 +108,7 @@ impl VPinballConfig {
                 }
             }
             WindowType::B2SDMD => {
-                let section = section_name(&window);
+                let section = section_name(window_type);
                 if let Some(ini_section) = self.ini.section(Some(section)) {
                     // TODO what are the defaults here>
                     ini_section.get("B2SWindows") == Some("1")
@@ -122,7 +122,7 @@ impl VPinballConfig {
             | WindowType::PUPTopper
             | WindowType::PUPFullDMD
             | WindowType::PUPPlayfield => {
-                let section = section_name(&window);
+                let section = section_name(window_type);
                 if let Some(ini_section) = self.ini.section(Some(section)) {
                     ini_section.get("PUPWindows") == Some("1")
                 } else {
@@ -130,8 +130,8 @@ impl VPinballConfig {
                 }
             }
             WindowType::FlexDMD | WindowType::PinMAME => {
-                let section = section_name(&window);
-                let prefix = config_prefix(&window);
+                let section = section_name(window_type);
+                let prefix = config_prefix(window_type);
                 self.ini.section(Some(section)).is_some_and(|ini_section| {
                     ini_section.get(format!("{}Window", prefix)) == Some("1")
                 })
@@ -139,7 +139,7 @@ impl VPinballConfig {
         }
     }
 
-    pub fn get_window_info(&self, window_type: &WindowType) -> Option<WindowInfo> {
+    pub fn get_window_info(&self, window_type: WindowType) -> Option<WindowInfo> {
         match window_type {
             WindowType::Playfield => {
                 if let Some(standalone_section) = self.ini.section(Some("Player")) {
@@ -186,7 +186,7 @@ impl VPinballConfig {
         }
     }
 
-    fn lookup_window_info(&self, window_type: &WindowType) -> Option<WindowInfo> {
+    fn lookup_window_info(&self, window_type: WindowType) -> Option<WindowInfo> {
         let section = section_name(window_type);
         if let Some(ini_section) = self.ini.section(Some(section)) {
             let prefix = config_prefix(window_type);
@@ -194,6 +194,7 @@ impl VPinballConfig {
                 .get(format!("{}{}", prefix, "FullScreen"))
                 .map(|s| s == "1")
                 .unwrap_or(false);
+            info!("{}{}", prefix, "X");
             let x = ini_section
                 .get(format!("{}{}", prefix, "X"))
                 .and_then(|s| s.parse::<u32>().ok());
