@@ -194,7 +194,6 @@ impl VPinballConfig {
                 .get(format!("{}{}", prefix, "FullScreen"))
                 .map(|s| s == "1")
                 .unwrap_or(false);
-            info!("{}{}", prefix, "X");
             let x = ini_section
                 .get(format!("{}{}", prefix, "X"))
                 .and_then(|s| s.parse::<u32>().ok());
@@ -207,6 +206,9 @@ impl VPinballConfig {
             let height = ini_section
                 .get(format!("{}{}", prefix, "Height"))
                 .and_then(|s| s.parse::<u32>().ok());
+            if x.is_none() && y.is_none() && width.is_none() && height.is_none() {
+                return None;
+            }
             Some(WindowInfo {
                 fullscreen,
                 x,
