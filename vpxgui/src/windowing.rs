@@ -304,13 +304,13 @@ fn correct_window_size_and_position(
         // Therefore, on startup/created we again configure the window size to the physical size.
         info!(
             "Window [{}] resolution: {}x{} scale factor {}",
-            window_name(window_entity, &window),
+            window_name(window_entity, window),
             window.resolution.width(),
             window.resolution.height(),
             window.resolution.scale_factor(),
         );
         if window.resolution.scale_factor() != 1.0 {
-            let window_name = window_name(window_entity, &window);
+            let window_name = window_name(window_entity, window);
             info!(
                 "Window [{}] Resizing for Linux with scale factor {}",
                 window_name,
@@ -338,7 +338,7 @@ fn correct_window_size_and_position(
         // But the position is configured in logical pixels. We need to correct the position
         // for the scale factor.
         if window.resolution.scale_factor() != 1.0 {
-            let window_name = window_name(window_entity, &window);
+            let window_name = window_name(window_entity, window);
             info!(
                 "Window [{}] Repositioning for macOS with scale factor {}",
                 window_name,
