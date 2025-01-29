@@ -1,3 +1,5 @@
+use bevy::core_pipeline::bloom::Bloom;
+use bevy::core_pipeline::tonemapping::Tonemapping;
 /// A DMD Shader that renders first to a texture
 /// and then renders the texture with a DMD shader.
 ///
@@ -61,8 +63,22 @@ fn setup(
     mut materials2: ResMut<Assets<DotMatrixShader>>,
     mut images: ResMut<Assets<Image>>,
 ) {
-    commands.spawn(Camera2d);
+    // TODO add this and try to come up with something realistic
+    //   https://bevyengine.org/examples/2d-rendering/bloom-2d/
+    commands.spawn((
+        Camera2d,
+        Camera {
+            hdr: true, // 1. HDR is required for bloom
+            ..default()
+        },
+        Tonemapping::TonyMcMapface, // 2. Using a tonemapper that desaturates to white is recommended
+        Bloom {
+            intensity: 0.1,
+            low_frequency_boost: 0.0,
 
+            ..default()
+        }, // 3. Enable bloom for the camera
+    ));
     let size = Extent3d {
         width: 1280,
         height: 320,
