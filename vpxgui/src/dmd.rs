@@ -45,19 +45,21 @@ fn dmd_update(
     wheel_info: Res<WheelInfo>,
     window_query: Query<&Window, With<PrimaryWindow>>,
 ) {
-    let window = window_query.single();
-    let width = window.width();
-    let height = window.height();
-    let wheel_size = wheel_info.wheel_size;
-    for (mut node, mut visibility) in dmd_query.iter_mut() {
-        //let (mut node1, mut visibility) = &query.p3().get_single_mut();
-        //println!("node: {:?}", node);
-        node.left = Val::Px((width / 2.) - DMD_WIDTH / 2.);
-        node.top = Val::Px(height - wheel_size - DMD_HEIGHT - BOTTOM_MARGIN);
+    // TODO should only happen if the window is resized
+    if let Ok(window) = window_query.get_single() {
+        let width = window.width();
+        let height = window.height();
+        let wheel_size = wheel_info.wheel_size;
+        for (mut node, mut visibility) in dmd_query.iter_mut() {
+            //let (mut node1, mut visibility) = &query.p3().get_single_mut();
+            //println!("node: {:?}", node);
+            node.left = Val::Px((width / 2.) - DMD_WIDTH / 2.);
+            node.top = Val::Px(height - wheel_size - DMD_HEIGHT - BOTTOM_MARGIN);
 
-        //   node.top = Val::Px((-(height / 2.0)) + wsize + 20.);
-        //transform.translation = Vec3::new(0. - 326.0, (-(height / 2.0)) + wsize + 20., 0.);
-        *visibility = Visibility::Visible;
+            //   node.top = Val::Px((-(height / 2.0)) + wsize + 20.);
+            //transform.translation = Vec3::new(0. - 326.0, (-(height / 2.0)) + wsize + 20., 0.);
+            *visibility = Visibility::Visible;
+        }
     }
 }
 

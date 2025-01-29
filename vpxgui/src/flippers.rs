@@ -37,26 +37,29 @@ fn update_flippers(
     wheel_info: Res<WheelInfo>,
     window_query: Query<&Window, With<PrimaryWindow>>,
 ) {
-    let window = window_query.single();
-    let height = window.height();
+    // TODO resizing only when window is resized
+    // TODO showing / hiding only when entering the loaded state
+    if let Ok(window) = window_query.get_single() {
+        let height = window.height();
 
-    for (mut transform, mut visibility) in set.p0().iter_mut() {
-        transform.translation = Vec3::new(
-            (wheel_info.wheel_size / 2.) * -1.0,
-            (-(height / 2.)) + (wheel_info.wheel_size / 4.),
-            Z_LEVEL,
-        );
-        *visibility = Visibility::Visible;
-    }
+        for (mut transform, mut visibility) in set.p0().iter_mut() {
+            transform.translation = Vec3::new(
+                (wheel_info.wheel_size / 2.) * -1.0,
+                (-(height / 2.)) + (wheel_info.wheel_size / 4.),
+                Z_LEVEL,
+            );
+            *visibility = Visibility::Visible;
+        }
 
-    // TODO why should flippers get closer to each other when the window height is reduced?
-    for (mut transform, mut visibility) in set.p1().iter_mut() {
-        transform.translation = Vec3::new(
-            wheel_info.wheel_size / 2.,
-            (-(height / 2.0)) + (wheel_info.wheel_size / 4.),
-            Z_LEVEL,
-        );
-        *visibility = Visibility::Visible;
+        // TODO why should flippers get closer to each other when the window height is reduced?
+        for (mut transform, mut visibility) in set.p1().iter_mut() {
+            transform.translation = Vec3::new(
+                wheel_info.wheel_size / 2.,
+                (-(height / 2.0)) + (wheel_info.wheel_size / 4.),
+                Z_LEVEL,
+            );
+            *visibility = Visibility::Visible;
+        }
     }
 }
 

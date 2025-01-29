@@ -1,9 +1,9 @@
 use crate::list::{SelectedItem, TableText, TextItem};
 use bevy::input::ButtonInput;
 use bevy::prelude::{
-    default, ColorMaterial, Commands, KeyCode, Mesh, Query, Res, ResMut, Text, Window, With,
+    ColorMaterial, Commands, KeyCode, Mesh, Query, Res, ResMut, Text, Window, With,
 };
-use bevy::window::{PrimaryWindow, WindowLevel};
+use bevy::window::PrimaryWindow;
 use bevy_asset::Assets;
 use bevy_egui::egui::Align2;
 use bevy_egui::{egui, EguiContexts};
@@ -20,44 +20,46 @@ pub(crate) fn show_info(
     window_query: Query<&Window, With<PrimaryWindow>>,
     contexts: EguiContexts,
 ) {
+    // TODO why is this modifying a unrelated global?
     if keys.just_pressed(KeyCode::Digit1) {
         globals.vpinball_running = !globals.vpinball_running;
     }
-    let window = window_query.get_single().unwrap();
+    if let Ok(window) = window_query.get_single() {
+        let mut wtitle = " ".to_owned();
+        let mut gametext = " ".to_owned();
+        //let mut gameblurb = " ".to_owned();
 
-    let mut wtitle = " ".to_owned();
-    let mut gametext = " ".to_owned();
-    //let mut gameblurb = " ".to_owned();
+        let selected_item = selected_item_res.index.unwrap_or(0);
 
-    let selected_item = selected_item_res.index.unwrap_or(0);
-
-    // change name of game
-    for (item, text) in items.iter() {
-        if item.list_index == selected_item {
-            gametext = item.table_text.clone();
-            //gameblurb = item.table_blurb.clone();
-            wtitle = text.to_string();
+        // change name of game
+        for (item, text) in items.iter() {
+            if item.list_index == selected_item {
+                gametext = item.table_text.clone();
+                //gameblurb = item.table_blurb.clone();
+                wtitle = text.to_string();
+            }
         }
-    }
 
-    if globals.vpinball_running {
-        create_info_box(
-            commands,
-            keys,
-            meshes,
-            materials,
-            window,
-            contexts,
-            wtitle,
-            gametext.to_owned(),
-        );
-    };
+        // FIXME, this keeps creating windows???
+        if globals.vpinball_running {
+            create_info_box(
+                commands,
+                keys,
+                meshes,
+                materials,
+                window,
+                contexts,
+                wtitle,
+                gametext.to_owned(),
+            );
+        };
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
 fn create_info_box(
     _commands: Commands,
-    keys: Res<ButtonInput<KeyCode>>,
+    _keys: Res<ButtonInput<KeyCode>>,
     _meshes: ResMut<Assets<Mesh>>,
     _materials: ResMut<Assets<ColorMaterial>>,
     window: &Window,
@@ -98,24 +100,24 @@ fn create_info_box(
         });
     //});
 
-    let mut _loopstop = false;
-
-    //println!("key: {:?}",keys.get_pressed());
-    if keys.pressed(KeyCode::ShiftRight) {
-        // println!("broken");
-        _loopstop = true;
-    }
-
-    let _window = Window {
-        // Enable transparent support for the window
-        transparent: true,
-        decorations: true,
-        window_level: WindowLevel::AlwaysOnTop,
-        //       cursor: Cursor {
-        //           // Allow inputs to pass through to apps behind this app.
-        //           hit_test: false,
-        //           ..default()
-        //       },
-        ..default()
-    };
+    // let mut _loopstop = false;
+    //
+    // //println!("key: {:?}",keys.get_pressed());
+    // if keys.pressed(KeyCode::ShiftRight) {
+    //     // println!("broken");
+    //     _loopstop = true;
+    // }
+    //
+    // let _window = Window {
+    //     // Enable transparent support for the window
+    //     transparent: true,
+    //     decorations: true,
+    //     window_level: WindowLevel::AlwaysOnTop,
+    //     //       cursor: Cursor {
+    //     //           // Allow inputs to pass through to apps behind this app.
+    //     //           hit_test: false,
+    //     //           ..default()
+    //     //       },
+    //     ..default()
+    // };
 }
