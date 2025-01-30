@@ -3,7 +3,7 @@ use crate::list::SelectedItem;
 use crate::loading::{LoadingData, LoadingState};
 use bevy::ecs::system::SystemId;
 use bevy::image::Image;
-use bevy::log::{debug, info, warn};
+use bevy::log::{debug, info};
 use bevy::math::Vec3;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
@@ -116,7 +116,6 @@ pub(crate) fn create_wheels(
     blank_path.push("/wheels/blankwheel.png");
     if !Path::new(&blank_path).exists() {
         // will be loaded from assets
-        warn!("Please copy the blankwheel.png to {:?}", blank_path);
         blank_path = PathBuf::from("blankwheel.png");
     }
 

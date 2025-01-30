@@ -4,14 +4,23 @@ use crate::pipelines::{PipelinesReady, PipelinesReadyPlugin};
 use crate::wheel::{AssetPaths, LoadWheelsSystem};
 use bevy::image::Image;
 use bevy::prelude::*;
-use bevy::window::PrimaryWindow;
 use bevy_asset::{AssetServer, RecursiveDependencyLoadState, UntypedHandle};
-use bevy_egui::{egui, EguiContexts};
+use crossbeam_channel::Sender;
 use shared::indexer;
-use shared::indexer::VoidProgress;
+use shared::indexer::Progress;
 use std::thread;
 
 const SLOW_LOADING: bool = false;
+
+/// Marker tag for top-level loading screen components.
+#[derive(Component)]
+struct PartOfLoadingScreen;
+
+#[derive(Component)]
+struct LoadingScreenTitle;
+
+#[derive(Component)]
+struct LoadingScreenText;
 
 #[derive(Resource, Debug)]
 struct LoadingDialogBox {
@@ -28,6 +37,13 @@ pub(crate) enum LoadingState {
     Ready,
 }
 
+#[derive(Event)]
+pub(crate) enum TableLoadingEvent {
+    Length(u64),
+    Position(u64),
+    FinishAndClear,
+}
+
 #[derive(Resource, Debug, Default)]
 pub(crate) struct LoadingData {
     // This will hold the currently unloaded/loading assets.
@@ -38,7 +54,8 @@ pub(crate) struct LoadingData {
     confirmation_frames_target: usize,
     // Current number of confirmation frames.
     confirmation_frames_count: usize,
-    tables_loaded: bool,
+    num_tables: u64,
+    loaded_tables: u64,
 }
 
 impl LoadingData {
@@ -47,44 +64,30 @@ impl LoadingData {
             loading_assets: Vec::new(),
             confirmation_frames_target,
             confirmation_frames_count: 0,
-            tables_loaded: false,
+            num_tables: 0,
+            loaded_tables: 0,
         }
     }
 }
 
-// TODO implement proper state handling
-// eg
-// app.add_systems(OnEnter(MyAppState::MainMenu), (
-//     setup_main_menu_ui,
-//     setup_main_menu_camera,
-// ));
-// app.add_systems(OnExit(MyAppState::MainMenu), (
-//     despawn_main_menu,
-// ));
-// https://bevy-cheatbook.github.io/programming/states.html
-
-// TODO create a plugin that also pulls in the pipelines_ready plugin
 pub(crate) fn loading_plugin(app: &mut App) {
     app.add_plugins(PipelinesReadyPlugin);
+    app.add_event::<TableLoadingEvent>();
     app.insert_resource(LoadingData::new(5));
     app.insert_resource(LoadingDialogBox {
-        title: "Loading...".to_owned(),
-        text: "blank".to_owned(),
+        title: "Loading".to_owned(),
+        text: "".to_owned(),
     });
     app.add_systems(Startup, load_tables);
-    app.add_systems(Update, display_loading_screen);
     app.add_systems(
         Update,
-        load_loading_screen.run_if(
+        (update_loading_data, update_loading_screen).chain().run_if(
             in_state(LoadingState::LoadingTables).or(in_state(LoadingState::LoadingImages)),
         ),
     );
-    app.add_systems(
-        Update,
-        update_loading_data.run_if(
-            in_state(LoadingState::LoadingTables).or(in_state(LoadingState::LoadingImages)),
-        ),
-    );
+    app.add_systems(OnEnter(LoadingState::LoadingTables), setup_loading_screen);
+    app.add_systems(OnEnter(LoadingState::LoadingImages), load_images);
+    app.add_systems(OnExit(LoadingState::LoadingImages), despawn_loading_screen);
 }
 
 // Monitors current loading status of assets.
@@ -97,17 +100,36 @@ fn update_loading_data(
     asset_server: Res<AssetServer>,
     pipelines_ready: Res<PipelinesReady>,
     asset_paths: Res<AssetPaths>,
+    mut table_loading_event_reader: EventReader<TableLoadingEvent>,
 ) {
+    for event in table_loading_event_reader.read() {
+        match event {
+            TableLoadingEvent::Length(length) => {
+                loading_data.num_tables = *length;
+            }
+            TableLoadingEvent::Position(position) => {
+                loading_data.loaded_tables = *position;
+            }
+            TableLoadingEvent::FinishAndClear => {
+                // we might want to do something here
+            }
+        }
+    }
+
     match current_state.get() {
         LoadingState::Initializing => {
             // should never happen
         }
         LoadingState::LoadingTables => {
-            dialog.title = "Loading tables...".to_owned();
-            dialog.text = "Please wait...".to_owned();
+            dialog.title = "Loading tables".to_owned();
+            if loading_data.num_tables != 0 {
+                dialog.text = format!("{}/{}", loading_data.loaded_tables, loading_data.num_tables);
+            } else {
+                dialog.text = "scanning tables folder...".to_owned();
+            }
         }
         LoadingState::LoadingImages => {
-            dialog.title = "Loading images...".to_string();
+            dialog.title = "Loading images".to_string();
             if !loading_data.loading_assets.is_empty() || !pipelines_ready.0 {
                 // If we are still loading assets / pipelines are not fully compiled,
                 // we reset the confirmation frame count.
@@ -159,7 +181,7 @@ fn update_loading_data(
                 if loading_data.confirmation_frames_count == loading_data.confirmation_frames_target
                 {
                     info!("All assets loaded.");
-                    next_state.set(LoadingState::Ready);
+                    mark_images_loaded(&mut next_state);
                 }
             }
         }
@@ -169,100 +191,128 @@ fn update_loading_data(
     }
 }
 
-pub(crate) fn mark_tables_loaded(
-    loading_data: &mut ResMut<LoadingData>,
-    commands: &mut Commands,
-    load_wheels_system: &Res<LoadWheelsSystem>,
-) {
-    loading_data.tables_loaded = true;
+fn mark_images_loaded(next_state: &mut ResMut<NextState<LoadingState>>) {
+    next_state.set(LoadingState::Ready);
+}
+
+pub(crate) fn mark_tables_loaded(next_state: &mut NextState<LoadingState>) {
+    next_state.set(LoadingState::LoadingImages);
+    // TODO request all images to be loaded here?
+}
+
+fn load_images(mut commands: Commands, load_wheels_system: Res<LoadWheelsSystem>) {
     commands.run_system(load_wheels_system.0);
 }
 
-// Marker tag for loading screen components.
-//#[derive(Component)]
-//struct LoadingScreen;
-
-// Spawns the necessary components for the loading screen.
-fn load_loading_screen(
-    _commands: Commands,
-    dialog: ResMut<LoadingDialogBox>,
-    mut contexts: EguiContexts,
-    //asset_server: Res<AssetServer>,
-    window_query: Query<&Window, With<PrimaryWindow>>,
-) {
-    // let _text_style = TextFont {
-    //     font_size: 80.0,
-    //     ..default()
-    // };
-    let window = window_query.single();
-
+fn setup_loading_screen(mut commands: Commands, dialog: ResMut<LoadingDialogBox>) {
     let title = &dialog.title;
     let text = &dialog.text;
 
-    let width = window.resolution.width();
-    let height = window.resolution.height();
-    let ctx = contexts.ctx_mut();
-    //let _raw_input = egui::RawInput::default();
-    //let x = TextColor::from(GHOST_WHITE);
-
-    // Check if the texture is loaded if let Some(texture) = textures.get(texture_handle) { // Display the image using egui egui::Window::new("Image Window").show(egui_context.ctx_mut(), |ui| { let texture_id = egui::TextureId::User(texture_handle.id); ui.image(texture_id, [texture.size.width as f32, texture.size.height as f32
-    //let texture_handle: Handle<Texture> = asset_server.load("//usr/tables/wheels/blankwheel.png");
-    // let _x: Handle<Image> = asset_server.load("left-flipper.png");
-
-    /*   commands.spawn(FlipperBundle1 {
-            sprite: Sprite {
-                image: asset_server.load("right-flipper.png"),
-                ..default()
+    // outer node with 2 cells below each other
+    commands
+        .spawn((
+            // center the loading screen
+            Node {
+                display: Display::Flex,
+                height: Val::Percent(100.0),
+                width: Val::Percent(100.0),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                ..Default::default()
             },
-            visibility: Visibility::Visible,
-
-            transform: Transform {
-                translation: Vec3::new(
-                    100.0, 100.0,
-                    //  window_width - (window_width * 0.60),
-                    // window_height * 0.25 + 60.,
-                    0.,
-                ),
-                scale: (Vec3::new(0.5, 0.5, 1.0)),
-                rotation: Quat::from_rotation_z(0.25),
-                ..default()
-            },
-            flipper1: Flipper1,
-        });
-    */
-
-    egui::Area::new(egui::Id::new("my area"))
-        .current_pos(egui::Pos2::new((width / 5.0) - 10.0, height / 3.0))
-        .show(ctx, |ui| {
-            ui.label(
-                egui::RichText::new(title)
-                    .size(50.0)
-                    .color(egui::Color32::WHITE),
-            );
-            ui.label(
-                egui::RichText::new(text)
-                    .size(20.0)
-                    .color(egui::Color32::WHITE),
-            );
-            //ui.image(("file://assets/left-flipper.png"));
-
-            //   if ui.button("Click me").clicked() {
-            // take some action here
-            //   }
+            PartOfLoadingScreen,
+        ))
+        .with_children(|parent| {
+            parent
+                .spawn((
+                    // flex box for title and text
+                    Node {
+                        display: Display::Flex,
+                        flex_direction: FlexDirection::Column,
+                        justify_content: JustifyContent::Center,
+                        align_items: AlignItems::Center,
+                        ..Default::default()
+                    },
+                ))
+                .with_children(|parent| {
+                    // title
+                    parent.spawn((
+                        Text::new(title),
+                        TextFont {
+                            font_size: 30.0,
+                            ..default()
+                        },
+                        TextColor::from(Color::WHITE),
+                        Node {
+                            display: Display::Flex,
+                            ..default()
+                        },
+                        LoadingScreenTitle,
+                    ));
+                    // text
+                    parent.spawn((
+                        Text::new(text),
+                        TextFont {
+                            font_size: 16.0,
+                            ..default()
+                        },
+                        TextColor::from(Color::WHITE),
+                        Node {
+                            display: Display::Flex,
+                            ..default()
+                        },
+                        LoadingScreenText,
+                    ));
+                });
         });
 }
 
-// Determines when to show the loading screen
-pub(crate) fn display_loading_screen(
-    // mut loading_screen: Query<&mut Visibility, With<LoadingScreen>>,
-    loading_state: ResMut<State<LoadingState>>,
-    //  loading_state: Res<LoadingState>,
+#[allow(clippy::type_complexity)]
+fn update_loading_screen(
+    dialog: ResMut<LoadingDialogBox>,
+    mut set: ParamSet<(
+        Query<&mut Text, With<LoadingScreenTitle>>,
+        Query<&mut Text, With<LoadingScreenText>>,
+    )>,
 ) {
-    //println!("loading state {:?}", loading_state.get());
-    if loading_state.get() == &LoadingState::LoadingImages {
-        //      *loading_screen.get_single_mut().unwrap() = Visibility::Hidden;
-        //     *loading_screen.get_single_mut().unwrap() = Visibility::Hidden;
-    };
+    for mut text in &mut set.p0() {
+        **text = dialog.title.clone();
+    }
+    for mut text in &mut set.p1() {
+        **text = dialog.text.clone();
+    }
+}
+
+fn despawn_loading_screen(mut commands: Commands, query: Query<Entity, With<PartOfLoadingScreen>>) {
+    for entity in query.iter() {
+        commands.entity(entity).despawn_recursive();
+    }
+    // remove resources
+    commands.remove_resource::<LoadingDialogBox>();
+    commands.remove_resource::<LoadingData>();
+}
+
+struct EventSendingProgress {
+    sender: Sender<ChannelExternalEvent>,
+}
+impl Progress for EventSendingProgress {
+    fn set_length(&self, len: u64) {
+        self.sender
+            .send(ChannelExternalEvent::ProgressLength(len))
+            .unwrap();
+    }
+
+    fn set_position(&self, i: u64) {
+        self.sender
+            .send(ChannelExternalEvent::ProgressPosition(i))
+            .unwrap();
+    }
+
+    fn finish_and_clear(&self) {
+        self.sender
+            .send(ChannelExternalEvent::ProgressFinishAndClear)
+            .unwrap();
+    }
 }
 
 fn load_tables(
@@ -270,7 +320,7 @@ fn load_tables(
     stream_sender: Res<StreamSender>,
     mut next_state: ResMut<NextState<LoadingState>>,
 ) {
-    next_state.set(LoadingState::LoadingTables);
+    mark_ready_for_loading_tables(&mut next_state);
 
     // perform below loading in a separate thread, then report back to bevy
     let tx = stream_sender.clone();
@@ -278,7 +328,7 @@ fn load_tables(
     let _vpinball_thread = thread::spawn(move || {
         let recursive = true;
         // TODO make a progress that sends events and update loading gui
-        let progress = VoidProgress;
+        let progress = EventSendingProgress { sender: tx.clone() };
         let index_result = indexer::index_folder(
             recursive,
             &resolved_config.tables_folder,
@@ -287,6 +337,7 @@ fn load_tables(
             &progress,
             Vec::new(),
         );
+        progress.finish_and_clear();
         match index_result {
             Ok(index) => {
                 info!("{} tables loaded", index.len());
@@ -300,4 +351,8 @@ fn load_tables(
             }
         }
     });
+}
+
+fn mark_ready_for_loading_tables(next_state: &mut ResMut<NextState<LoadingState>>) {
+    next_state.set(LoadingState::LoadingTables);
 }

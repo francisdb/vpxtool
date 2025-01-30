@@ -1,4 +1,6 @@
 use chrono::{DateTime, Utc};
+use log::info;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::fs::Metadata;
@@ -10,8 +12,6 @@ use std::{
     io,
     path::{Path, PathBuf},
 };
-
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use vpin::vpx;
 use vpin::vpx::jsonmodel::json_to_info;
 use vpin::vpx::tableinfo::TableInfo;
@@ -341,7 +341,7 @@ pub fn index_folder(
     let global_roms = global_roms_path
         .map(find_roms)
         .unwrap_or_else(|| Ok(HashMap::new()))?;
-    println!("Indexing {}", tables_folder.display());
+    info!("Indexing {}", tables_folder.display());
 
     if !tables_folder.exists() {
         return Err(IndexError::FolderDoesNotExist(tables_folder.to_path_buf()));
@@ -349,7 +349,7 @@ pub fn index_folder(
 
     let existing_index = read_index_json(tables_index_path)?;
     if let Some(index) = &existing_index {
-        println!(
+        info!(
             "  Found existing index with {} tables at {}",
             index.tables.len(),
             tables_index_path.display()
@@ -358,10 +358,10 @@ pub fn index_folder(
     let mut index = existing_index.unwrap_or(TablesIndex::empty());
 
     let vpx_files = find_vpx_files(recursive, tables_folder)?;
-    println!("  Found {} tables", vpx_files.len());
+    info!("  Found {} tables", vpx_files.len());
     // remove files that are missing
     let removed_len = index.remove_missing(&vpx_files);
-    println!("  {} missing tables have been removed", removed_len);
+    info!("  {} missing tables have been removed", removed_len);
 
     let tables_with_missing_rom = index
         .tables()
@@ -373,7 +373,7 @@ pub fn index_folder(
                 .map(|_| table.path.clone())
         })
         .collect::<HashSet<PathBuf>>();
-    println!(
+    info!(
         "  {} tables will be re-indexed because their rom is missing",
         tables_with_missing_rom.len()
     );
@@ -389,7 +389,7 @@ pub fn index_folder(
         }
     }
 
-    println!("  {} tables need (re)indexing.", vpx_files_to_index.len());
+    info!("  {} tables need (re)indexing.", vpx_files_to_index.len());
     let vpx_files_with_table_info = index_vpx_files(&vpx_files_to_index, &global_roms, progress);
 
     // add new files to index

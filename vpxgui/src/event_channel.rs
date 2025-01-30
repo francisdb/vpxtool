@@ -7,6 +7,9 @@ use shared::indexer::IndexedTable;
 #[derive(Event, Debug)]
 pub(crate) enum ChannelExternalEvent {
     VpxDone,
+    ProgressLength(u64),
+    ProgressPosition(u64),
+    ProgressFinishAndClear,
     TablesLoaded(Vec<IndexedTable>),
 }
 

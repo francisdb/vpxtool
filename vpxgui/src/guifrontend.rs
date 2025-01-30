@@ -4,12 +4,12 @@ use crate::flippers::flipper_plugin;
 use crate::gradient_background::setup_gradient_background;
 use crate::info::show_info;
 use crate::list::{display_table_line, list_plugin, SelectedItem};
-use crate::loading::LoadingState;
-use crate::loading::{loading_plugin, mark_tables_loaded, LoadingData};
+use crate::loading::{loading_plugin, mark_tables_loaded};
+use crate::loading::{LoadingState, TableLoadingEvent};
 use crate::menus::*;
 use crate::music::{music_plugin, resume_music, suspend_music, ControlMusicEvent};
 use crate::process::do_launch;
-use crate::wheel::{wheel_plugin, LoadWheelsSystem};
+use crate::wheel::wheel_plugin;
 use crate::windowing;
 use crate::windowing::WindowingPlugin;
 use bevy::prelude::*;
@@ -90,20 +90,19 @@ fn quit_on_q_or_window_closed(
 #[allow(clippy::too_many_arguments)]
 fn handle_external_events(
     mut reader: EventReader<ExternalEvent>,
-    mut event_writer: EventWriter<ControlMusicEvent>,
+    mut music_event_writer: EventWriter<ControlMusicEvent>,
+    mut table_loading_event_writer: EventWriter<TableLoadingEvent>,
     mut globals: ResMut<Globals>,
     mut vpx_tables: ResMut<VpxTables>,
-    mut loading_data: ResMut<LoadingData>,
     mut window_query: Query<&mut Window, With<PrimaryWindow>>,
-    mut commands: Commands,
-    load_wheels_system: Res<LoadWheelsSystem>,
+    mut next_state: ResMut<NextState<LoadingState>>,
 ) {
     for event in reader.read() {
         match &event.0 {
             ChannelExternalEvent::VpxDone => {
                 info!("Event: {:?}", event);
                 globals.vpinball_running = false;
-                resume_music(&mut event_writer);
+                resume_music(&mut music_event_writer);
                 let mut window = window_query.single_mut();
                 // info!("Window visibility: {}", window.visible);
                 // info!("Showing window");
@@ -119,7 +118,16 @@ fn handle_external_events(
                 vpx_tables
                     .indexed_tables
                     .sort_by_key(|indexed| display_table_line(indexed).to_lowercase());
-                mark_tables_loaded(&mut loading_data, &mut commands, &load_wheels_system);
+                mark_tables_loaded(&mut next_state);
+            }
+            ChannelExternalEvent::ProgressLength(length) => {
+                table_loading_event_writer.send(TableLoadingEvent::Length(*length));
+            }
+            ChannelExternalEvent::ProgressPosition(position) => {
+                table_loading_event_writer.send(TableLoadingEvent::Position(*position));
+            }
+            ChannelExternalEvent::ProgressFinishAndClear => {
+                table_loading_event_writer.send(TableLoadingEvent::FinishAndClear);
             }
         }
     }
@@ -164,7 +172,49 @@ pub fn guifrontend(config: ResolvedConfig) {
 
     // only for development
     #[cfg(debug_assertions)]
-    app.add_plugins(bevy_mini_fps::fps_plugin!());
+    {
+        app.add_plugins(bevy_mini_fps::fps_plugin!());
+        app.add_plugins(bevy_dev_tools::ui_debug_overlay::DebugUiPlugin)
+            .add_systems(Update, toggle_overlay);
+        app.add_plugins(bevy_dev_tools::fps_overlay::FpsOverlayPlugin {
+            config: bevy_dev_tools::fps_overlay::FpsOverlayConfig {
+                text_config: TextFont {
+                    font: Default::default(),
+                    font_size: 12.0,
+                    ..Default::default()
+                },
+                text_color: Color::WHITE,
+                enabled: false,
+            },
+        })
+        .add_systems(Update, toggle_fps);
+    }
 
     app.run();
+}
+
+#[cfg(debug_assertions)]
+// The system that will enable/disable the debug outlines around the nodes
+fn toggle_overlay(
+    input: Res<ButtonInput<KeyCode>>,
+    mut options: ResMut<bevy_dev_tools::ui_debug_overlay::UiDebugOptions>,
+) {
+    info_once!("The debug outlines are enabled, press Space to turn them on/off");
+    if input.just_pressed(KeyCode::KeyD) {
+        // The toggle method will enable the debug_overlay if disabled and disable if enabled
+        options.toggle();
+    }
+}
+
+#[cfg(debug_assertions)]
+// The system that will enable/disable the debug outlines around the nodes
+fn toggle_fps(
+    input: Res<ButtonInput<KeyCode>>,
+    mut options: ResMut<bevy_dev_tools::fps_overlay::FpsOverlayConfig>,
+) {
+    info_once!("The debug outlines are enabled, press Space to turn them on/off");
+    if input.just_pressed(KeyCode::KeyF) {
+        // The toggle method will enable the debug_overlay if disabled and disable if enabled
+        options.enabled = !options.enabled;
+    }
 }
