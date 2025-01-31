@@ -10,12 +10,16 @@ jobs:
         platform:
           - os: ubuntu-24.04
             name: vpxtool-gui-linux-x86_64
+            bin_ext: ""
           - os: ubuntu-24.04-arm
             name: vpxtool-gui-linux-arm64
+            bin_ext: ""
           - os: windows-latest
             name: vpxtool-windows-x86_64
+            bin_ext: ".exe"
           - os: macos-latest
             name: vpxtool-gui-macOS-aarch64
+            bin_ext: ""
 
     runs-on: ${{ matrix.platform.os }}
     steps:
