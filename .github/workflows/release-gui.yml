@@ -40,8 +40,9 @@ jobs:
           if [[ "${{ matrix.platform.os }}" == "windows-latest" ]]; then
             EXTENSION="zip"
           fi
-          echo "ARCHIVE_DIR=${{ matrix.platform.name }}-${VERSION}" >> $GITHUB_ENV
-          echo "ARCHIVE_NAME=${ARCHIVE_DIR}-${VERSION}.$EXTENSION" >> $GITHUB_ENV
+          ARCHIVE_DIR=${{ matrix.platform.name }}-${VERSION}
+          echo "ARCHIVE_DIR=${ARCHIVE_DIR}" >> $GITHUB_ENV
+          echo "ARCHIVE_NAME=${ARCHIVE_DIR}.${EXTENSION}" >> $GITHUB_ENV
           echo "GUI_BINARY_NAME=target/release/vpxtool-gui${{ matrix.platform.bin_ext }}" >> $GITHUB_ENV
       - name: Package as archive
         shell: bash
