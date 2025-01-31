@@ -15,12 +15,12 @@ jobs:
             name: vpxtool-Linux-x86_64-musl
             cargo_command: cargo
 
-          #          - os_name: Linux-aarch64
-          #            os: ubuntu-20.04
-          #            target: aarch64-unknown-linux-musl
-          #            bin_ext: ""
-          #            name: vpxtool-Linux-aarch64-musl
-          #            cargo_command: cargo
+          - os_name: Linux-aarch64
+            os: ubuntu-20.04
+            target: aarch64-unknown-linux-musl
+            bin_ext: ""
+            name: vpxtool-Linux-aarch64-musl
+            cargo_command: cargo
 
           - os_name: Windows-aarch64
             os: windows-latest
@@ -52,6 +52,9 @@ jobs:
 
     runs-on: ${{ matrix.platform.os }}
     steps:
+      - name: Install bevy linux dependencies
+        run: sudo apt-get update && sudo apt-get install g++ pkg-config libx11-dev libasound2-dev libudev-dev libxkbcommon-x11-0 libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev
+        if: contains(matrix.platform.os, 'ubuntu')
       - name: Checkout
         uses: actions/checkout@v4
       - name: Install toolchain
