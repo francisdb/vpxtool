@@ -68,7 +68,7 @@ jobs:
       - name: Set full archive name as env variable
         shell: bash
         run: |
-          VERSION=$(if [[ $GITHUB_REF == refs/tags/* ]]; then echo ${GITHUB_REF#refs/tags/} | sed 's/\//-/g'; else echo $GITHUB_SHA; fi)
+          VERSION=$(if [[ $GITHUB_REF == refs/tags/* ]]; then echo ${GITHUB_REF#refs/tags/} | sed 's/\//-/g'; else git rev-parse --short $GITHUB_SHA; fi)
           EXTENSION="tar.gz"
           if [[ "${{ matrix.platform.os }}" == "windows-latest" ]]; then
             EXTENSION="zip"
