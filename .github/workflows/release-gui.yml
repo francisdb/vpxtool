@@ -42,9 +42,9 @@ jobs:
         shell: bash
         run: |
           if [[ "${{ matrix.platform.os }}" == "windows-latest" ]]; then
-            7z a $ARCHIVE_NAME GUI_BINARY_NAME vpxtool_gui/assets
+            7z a $ARCHIVE_NAME $GUI_BINARY_NAME vpxtool_gui/assets
           else
-            tar czvf $ARCHIVE_NAME GUI_BINARY_NAME vpxtool_gui/assets
+            tar czvf $ARCHIVE_NAME $GUI_BINARY_NAME vpxtool_gui/assets
           fi
       - name: Publish release artifacts
         uses: actions/upload-artifact@v4
