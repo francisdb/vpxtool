@@ -12,3 +12,7 @@ mod pipelines;
 mod process;
 mod wheel;
 mod windowing;
+
+// only for development
+#[cfg(debug_assertions)]
+mod debug_window_labels;
