@@ -4,7 +4,7 @@ permissions:
   contents: write
 jobs:
   release:
-    name: Gui Release - ${{ matrix.platform.os_name }}
+    name: Gui Release - ${{ matrix.platform.os }}
     strategy:
       matrix:
         platform:
@@ -37,14 +37,14 @@ jobs:
             EXTENSION="zip"
           fi
           echo "ARCHIVE_NAME=${{ matrix.platform.name }}-${VERSION}.$EXTENSION" >> $GITHUB_ENV
-          echo "VPINBALL_GUI_BINARY_NAME=target/release/vpinball-gui${{ matrix.platform.bin_ext }}" >> $GITHUB_ENV
+          echo "GUI_BINARY_NAME=target/release/vpxtool-gui${{ matrix.platform.bin_ext }}" >> $GITHUB_ENV
       - name: Package as archive
         shell: bash
         run: |
           if [[ "${{ matrix.platform.os }}" == "windows-latest" ]]; then
-            7z a $ARCHIVE_NAME $VPINBALL_GUI_BINARY_NAME vpxtool_gui/assets
+            7z a $ARCHIVE_NAME GUI_BINARY_NAME vpxtool_gui/assets
           else
-            tar czvf $ARCHIVE_NAME $VPINBALL_GUI_BINARY_NAME vpxtool_gui/assets
+            tar czvf $ARCHIVE_NAME GUI_BINARY_NAME vpxtool_gui/assets
           fi
       - name: Publish release artifacts
         uses: actions/upload-artifact@v4
