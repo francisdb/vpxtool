@@ -1,14 +1,14 @@
 [package]
-name = "vpxgui"
+name = "vpxtool_gui"
 edition = "2021"
 
 [[bin]]
-name = "vpxgui"
+name = "vpxtool-gui"
 path = "src/main.rs"
 
 
 [dependencies]
-shared = { path = "../shared" }
+vpxtool_shared = { path = "../vpxtool_shared" }
 bevy = "0.15.1"
 bevy_asset = "0.15.1"
 bevy_dev_tools = "0.15.1"

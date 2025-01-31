@@ -13,9 +13,6 @@ use console::Emoji;
 use git_version::git_version;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use pinmame_nvram::dips::get_all_dip_switches;
-use shared::config::{ResolvedConfig, SetupConfigResult};
-use shared::indexer::{IndexError, Progress};
-use shared::{config, indexer};
 use std::error::Error;
 use std::ffi::OsStr;
 use std::fmt::Display;
@@ -28,7 +25,9 @@ use vpin::directb2s::read;
 use vpin::vpx;
 use vpin::vpx::jsonmodel::{game_data_to_json, info_to_json};
 use vpin::vpx::{expanded, extractvbs, importvbs, verify, ExtractResult, VerifyResult};
-use vpxgui::guifrontend;
+use vpxtool_shared::config::{ResolvedConfig, SetupConfigResult};
+use vpxtool_shared::indexer::{IndexError, Progress};
+use vpxtool_shared::{config, indexer};
 
 pub mod fixprint;
 mod frontend;
@@ -41,7 +40,6 @@ const OK: Emoji = Emoji("✅", "[launch]");
 const NOK: Emoji = Emoji("❌", "[crash]");
 
 const CMD_FRONTEND: &str = "frontend";
-const CMD_GUI_FRONTEND: &str = "gui";
 const CMD_DIFF: &str = "diff";
 const CMD_EXTRACT: &str = "extract";
 const CMD_ASSEMBLE: &str = "assemble";
@@ -266,13 +264,6 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 }
             }
         }
-        Some((CMD_GUI_FRONTEND, _sub_matches)) => {
-            let (config_path, config) = config::load_or_setup_config()?;
-            println!("Using config file {}", config_path.display())?;
-            guifrontend::guifrontend(config.clone());
-            Ok(ExitCode::SUCCESS)
-        }
-
         Some(("index", sub_matches)) => {
             let recursive = sub_matches.get_flag("RECURSIVE");
             let path = sub_matches
@@ -827,18 +818,6 @@ fn build_command() -> Command {
                         .long("recursive")
                         .num_args(0)
                         .help("Recursively index subdirectories")
-                        .default_value("true"),
-                )
-        )
-        .subcommand(
-            Command::new(CMD_GUI_FRONTEND)
-                .about("Gui Frontend test")
-                .arg(
-                    Arg::new("RECURSIVE")
-                        .short('r')
-                        .long("recursive")
-                        .num_args(0)
-                        .help("Recursivly index subdirectories")
                         .default_value("true"),
                 )
         )

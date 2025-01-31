@@ -15,9 +15,9 @@ use crate::windowing::WindowingPlugin;
 use bevy::prelude::*;
 use bevy::window::*;
 use bevy_egui::EguiPlugin;
-use shared::config::ResolvedConfig;
-use shared::indexer::IndexedTable;
-use shared::vpinball_config::VPinballConfig;
+use vpxtool_shared::config::ResolvedConfig;
+use vpxtool_shared::indexer::IndexedTable;
+use vpxtool_shared::vpinball_config::VPinballConfig;
 
 #[derive(Resource)]
 pub struct Config {

@@ -7,9 +7,9 @@ use bevy::window::{
     PrimaryWindow, WindowBackendScaleFactorChanged, WindowCreated, WindowMode, WindowRef,
     WindowResized, WindowResolution,
 };
-use shared::vpinball_config::WindowType;
-use shared::vpinball_config::{VPinballConfig, WindowInfo};
 use std::time::Duration;
+use vpxtool_shared::vpinball_config::WindowType;
+use vpxtool_shared::vpinball_config::{VPinballConfig, WindowInfo};
 
 /// Layers are used to assign meshes to a specific camera/window
 /// For UI elements this works differently, they are assigned to a camera using the TargetCamera component

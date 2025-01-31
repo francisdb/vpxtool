@@ -12,9 +12,6 @@ use dialoguer::{FuzzySelect, Input, MultiSelect, Select};
 use indicatif::{ProgressBar, ProgressStyle};
 use is_executable::IsExecutable;
 use pinmame_nvram::dips::{get_all_dip_switches, set_dip_switches};
-use shared::config::ResolvedConfig;
-use shared::indexer;
-use shared::indexer::{IndexError, IndexedTable, Progress};
 use std::fs::OpenOptions;
 use std::{
     fs::File,
@@ -23,6 +20,9 @@ use std::{
     path::{Path, PathBuf},
     process::{exit, ExitStatus},
 };
+use vpxtool_shared::config::ResolvedConfig;
+use vpxtool_shared::indexer;
+use vpxtool_shared::indexer::{IndexError, IndexedTable, Progress};
 
 const LAUNCH: Emoji = Emoji("🚀", "[launch]");
 const CRASH: Emoji = Emoji("💥", "[crash]");

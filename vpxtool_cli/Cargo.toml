@@ -1,5 +1,5 @@
 [package]
-name = "vpxtool"
+name = "vpxtool_cli"
 edition = "2021"
 rust-version = "1.71.1"
 default-run = "vpxtool"
@@ -14,8 +14,7 @@ name = "vpxtool"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-shared = { path = "../shared" }
-vpxgui = { path = "../vpxgui" }
+vpxtool_shared = { path = "../vpxtool_shared" }
 base64 = "0.22.1"
 clap = { version = "4.5.27", features = ["derive", "string"] }
 colored = "3.0.0"
@@ -24,18 +23,12 @@ dialoguer = { version = "0.11.0", features = ["fuzzy-select"] }
 git-version = "0.3.9"
 indicatif = "0.17.9"
 jojodiff = "0.1.2"
-log = "0.4.22"
-logging_timer = "1.1.1"
-pretty_env_logger = "0.5.0"
-quick-xml = { version = "0.37.1", features = ["serialize"] }
 serde = { version = "1.0.217", features = ["derive"] }
 serde_json = { version = "1.0.137", features = ["preserve_order"] }
 shellexpand = "3.1.0"
 wild = "2.2.1"
-figment = { version = "0.10", features = ["toml", "env"] }
 
 is_executable = "1.0.4"
-imagesize = "0.13.0"
 regex = { version = "1.11.1", features = [] }
 vpin = { version = "0.17.2" }
 

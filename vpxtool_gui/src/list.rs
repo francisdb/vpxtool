@@ -4,8 +4,8 @@ use bevy::color::palettes::css::{GHOST_WHITE, GOLD};
 use bevy::input::ButtonInput;
 use bevy::prelude::*;
 use bevy::time::Stopwatch;
-use shared::indexer::IndexedTable;
 use std::cmp::Ordering;
+use vpxtool_shared::indexer::IndexedTable;
 
 #[derive(Component, Debug)]
 pub(crate) struct TableText {

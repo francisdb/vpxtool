@@ -6,9 +6,9 @@ use bevy::image::Image;
 use bevy::prelude::*;
 use bevy_asset::{AssetServer, RecursiveDependencyLoadState, UntypedHandle};
 use crossbeam_channel::Sender;
-use shared::indexer;
-use shared::indexer::Progress;
 use std::thread;
+use vpxtool_shared::indexer;
+use vpxtool_shared::indexer::Progress;
 
 const SLOW_LOADING: bool = false;
 
