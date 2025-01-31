@@ -11,50 +11,41 @@ jobs:
           - os_name: Linux-x86_64
             os: ubuntu-20.04
             target: x86_64-unknown-linux-musl
-            bin_ext: ""
+            bin: vpxtool
             name: vpxtool-Linux-x86_64-musl
-            cargo_command: cargo
 
-          #          - os_name: Linux-aarch64
-          #            os: ubuntu-20.04
-          #            target: aarch64-unknown-linux-musl
-          #            bin_ext: ""
-          #            name: vpxtool-Linux-aarch64-musl
-          #            cargo_command: cargo
+          - os_name: Linux-aarch64
+            os: ubuntu-20.04
+            target: aarch64-unknown-linux-musl
+            bin: vpxtool
+            name: vpxtool-Linux-aarch64-musl
 
           - os_name: Windows-aarch64
             os: windows-latest
             target: aarch64-pc-windows-msvc
-            bin_ext: .exe
+            bin: vpxtool.exe
             name: vpxtool-Windows-aarch64
-            cargo_command: cargo
 
           - os_name: Windows-x86_64
             os: windows-latest
             target: x86_64-pc-windows-msvc
-            bin_ext: .exe
+            bin: vpxtool.exe
             name: vpxtool-Windows-x86_64
-            cargo_command: cargo
 
           - os_name: macOS-x86_64
             os: macos-latest
             target: x86_64-apple-darwin
-            bin_ext: ""
+            bin: vpxtool
             name: vpxtool-macOS-x86_64
-            cargo_command: cargo
 
           - os_name: macOS-aarch64
             os: macos-latest
             target: aarch64-apple-darwin
-            bin_ext: ""
+            bin: vpxtool
             name: vpxtool-macOS-aarch64
-            cargo_command: cargo
 
     runs-on: ${{ matrix.platform.os }}
     steps:
-      - name: Install bevy linux dependencies
-        run: sudo apt-get update && sudo apt-get install g++ pkg-config libx11-dev libasound2-dev libudev-dev libxkbcommon-x11-0 libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev
-        if: contains(matrix.platform.os, 'ubuntu')
       - name: Checkout
         uses: actions/checkout@v4
       - name: Install toolchain
@@ -64,7 +55,7 @@ jobs:
       - name: Build binary (*nix)
         shell: bash
         run: |
-          ${{ matrix.platform.cargo_command }} build --locked --release --target ${{ matrix.platform.target }}
+          cargo build  --package vpxtool_cli --locked --release --target ${{ matrix.platform.target }}
         if: ${{ !contains(matrix.platform.os, 'windows') }}
       - name: Build binary (Windows)
         # We have to use the platform's native shell. If we use bash on
@@ -72,7 +63,7 @@ jobs:
         # the platform's native paths and refuses to build.
         shell: powershell
         run: |
-          & ${{ matrix.platform.cargo_command }} build --locked --release --target ${{ matrix.platform.target }}
+          & cargo build --package vpxtool_cli --locked --release --target ${{ matrix.platform.target }}
         if: contains(matrix.platform.os, 'windows')
       - name: Set full archive name as env variable
         shell: bash
@@ -83,16 +74,16 @@ jobs:
             EXTENSION="zip"
           fi
           echo "ARCHIVE_NAME=${{ matrix.platform.name }}-${VERSION}.$EXTENSION" >> $GITHUB_ENV
-          echo "VPINBALL_BINARY_NAME=target/${{ matrix.platform.target }}/release/vpinball${{ matrix.platform.bin_ext }}" >> $GITHUB_ENV
-          echo "VPINBALL_GUI_BINARY_NAME=target/${{ matrix.platform.target }}/release/vpinball-gui${{ matrix.platform.bin_ext }}" >> $GITHUB_ENV
       - name: Package as archive
         shell: bash
         run: |
+          cd target/${{ matrix.platform.target }}/release
           if [[ "${{ matrix.platform.os }}" == "windows-latest" ]]; then
-            7z a $ARCHIVE_NAME $VPINBALL_BINARY_NAME $VPINBALL_GUI_BINARY_NAME vpxtool_gui/assets
+            7z a ../../../$ARCHIVE_NAME ${{ matrix.platform.bin }}
           else
-            tar czvf $ARCHIVE_NAME $VPINBALL_BINARY_NAME $VPINBALL_GUI_BINARY_NAME vpxtool_gui/assets
+            tar czvf ../../../$ARCHIVE_NAME ${{ matrix.platform.bin }}
           fi
+          cd -
       - name: Publish release artifacts
         uses: actions/upload-artifact@v4
         with:

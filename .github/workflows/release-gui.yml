@@ -1,0 +1,68 @@
+name: Gui Release build
+on: [ push ]
+permissions:
+  contents: write
+jobs:
+  release:
+    name: Gui Release - ${{ matrix.platform.os_name }}
+    strategy:
+      matrix:
+        platform:
+          - os: ubuntu-24.04
+            name: vpxtool-gui-linux-x86_64
+          - os: ubuntu-24.04-arm
+            name: vpxtool-gui-linux-arm64
+          - os: windows-latest
+            name: vpxtool-windows-x86_64
+          - os: macos-latest
+            name: vpxtool-gui-macOS-aarch64
+
+    runs-on: ${{ matrix.platform.os }}
+    steps:
+      - name: Install bevy linux dependencies
+        run: sudo apt-get update && sudo apt-get install g++ pkg-config libx11-dev libasound2-dev libudev-dev libxkbcommon-x11-0 libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev
+        if: contains(matrix.platform.os, 'ubuntu')
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Build binary (*nix)
+        shell: bash
+        run: |
+          cargo build --package vpxtool_gui --locked --release
+        if: ${{ !contains(matrix.platform.os, 'windows') }}
+      - name: Build binary (Windows)
+        # We have to use the platform's native shell. If we use bash on
+        # Windows then OpenSSL complains that the Perl it finds doesn't use
+        # the platform's native paths and refuses to build.
+        shell: powershell
+        run: |
+          & cargo build --package vpxtool_gui --locked --release
+        if: contains(matrix.platform.os, 'windows')
+      - name: Set full archive name as env variable
+        shell: bash
+        run: |
+          VERSION=$(if [[ $GITHUB_REF == refs/tags/* ]]; then echo ${GITHUB_REF#refs/tags/} | sed 's/\//-/g'; else echo $GITHUB_SHA; fi)
+          EXTENSION="tar.gz"
+          if [[ "${{ matrix.platform.os }}" == "windows-latest" ]]; then
+            EXTENSION="zip"
+          fi
+          echo "ARCHIVE_NAME=${{ matrix.platform.name }}-${VERSION}.$EXTENSION" >> $GITHUB_ENV
+          echo "VPINBALL_GUI_BINARY_NAME=target/release/vpinball-gui${{ matrix.platform.bin_ext }}" >> $GITHUB_ENV
+      - name: Package as archive
+        shell: bash
+        run: |
+          if [[ "${{ matrix.platform.os }}" == "windows-latest" ]]; then
+            7z a $ARCHIVE_NAME $VPINBALL_GUI_BINARY_NAME vpxtool_gui/assets
+          else
+            tar czvf $ARCHIVE_NAME $VPINBALL_GUI_BINARY_NAME vpxtool_gui/assets
+          fi
+      - name: Publish release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: $ARCHIVE_NAME
+          path: $ARCHIVE_NAME
+        if: startsWith( github.ref, 'refs/tags/v' ) == false
+#      - name: Publish GitHub release
+#        uses: softprops/action-gh-release@v2
+#        with:
+#          files: "vpxtool*"
+#        if: startsWith( github.ref, 'refs/tags/v' )
