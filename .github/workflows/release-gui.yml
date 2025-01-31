@@ -50,12 +50,11 @@ jobs:
           else
             tar czvf $ARCHIVE_NAME $GUI_BINARY_NAME vpxtool_gui/assets
           fi
-          ls -l $ARCHIVE_NAME
       - name: Publish release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: $ARCHIVE_NAME
-          path: $ARCHIVE_NAME
+          name: ${{ env.ARCHIVE_NAME }}
+          path: ${{ env.ARCHIVE_NAME }}
           if-no-files-found: error
         if: startsWith( github.ref, 'refs/tags/v' ) == false
 #      - name: Publish GitHub release
