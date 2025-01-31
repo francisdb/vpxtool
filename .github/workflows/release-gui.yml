@@ -1,5 +1,8 @@
 name: Gui Release build
-on: [ push ]
+on:
+  push:
+    branches:
+      - main
 permissions:
   contents: write
 jobs:
