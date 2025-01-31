@@ -174,7 +174,8 @@ pub fn guifrontend(config: ResolvedConfig) {
     #[cfg(debug_assertions)]
     {
         app.add_plugins(bevy_mini_fps::fps_plugin!());
-        app.add_plugins(bevy_dev_tools::ui_debug_overlay::DebugUiPlugin)
+        app.add_plugins(crate::debug_window_labels::plugin)
+            //app.add_plugins(bevy_dev_tools::ui_debug_overlay::DebugUiPlugin)
             .add_systems(Update, toggle_overlay);
         app.add_plugins(bevy_dev_tools::fps_overlay::FpsOverlayPlugin {
             config: bevy_dev_tools::fps_overlay::FpsOverlayConfig {
@@ -197,12 +198,14 @@ pub fn guifrontend(config: ResolvedConfig) {
 // The system that will enable/disable the debug outlines around the nodes
 fn toggle_overlay(
     input: Res<ButtonInput<KeyCode>>,
-    mut options: ResMut<bevy_dev_tools::ui_debug_overlay::UiDebugOptions>,
+    //mut options: ResMut<bevy_dev_tools::ui_debug_overlay::UiDebugOptions>,
+    mut window_name_options: ResMut<crate::debug_window_labels::WindowNameOptions>,
 ) {
     info_once!("The debug outlines are enabled, press Space to turn them on/off");
     if input.just_pressed(KeyCode::KeyD) {
         // The toggle method will enable the debug_overlay if disabled and disable if enabled
-        options.toggle();
+        //options.toggle();
+        window_name_options.enabled = !window_name_options.enabled;
     }
 }
 

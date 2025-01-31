@@ -205,20 +205,15 @@ fn setup_other_window(commands: &mut Commands, vpx_config: &VpxConfig, window_ty
         };
         let window_entity = commands.spawn((window, vpx_window_info)).id();
         let render_layers = layer_for_window_type(window_type);
-        let window_camera = commands
-            .spawn((
-                DMDCamera,
-                Camera2d,
-                Camera {
-                    target: RenderTarget::Window(WindowRef::Entity(window_entity)),
-                    ..default()
-                },
-                render_layers,
-            ))
-            .id();
-
-        #[cfg(debug_assertions)]
-        label_window(commands, window_camera, &window_type.to_string());
+        commands.spawn((
+            DMDCamera,
+            Camera2d,
+            Camera {
+                target: RenderTarget::Window(WindowRef::Entity(window_entity)),
+                ..default()
+            },
+            render_layers,
+        ));
     } else {
         info!("Window [{}] disabled", window_type);
     }
@@ -229,9 +224,7 @@ fn setup_playfield_window2(
     vpx_config: &VpxConfig,
     primary_window_query: Query<Entity, With<PrimaryWindow>>,
 ) {
-    let playfield_window_camera = commands.spawn((PlayfieldCamera, Camera2d)).id();
-    #[cfg(debug_assertions)]
-    label_window(commands, playfield_window_camera, "Playfield");
+    commands.spawn((PlayfieldCamera, Camera2d));
     // add VpxWindowInfo to playfield window, don't think we can do this in the WindowPlugin
     if let Some(playfield_info) = vpx_config.config.get_window_info(WindowType::Playfield) {
         let vpx_window_info = VpxWindowInfo {
@@ -241,21 +234,6 @@ fn setup_playfield_window2(
             .entity(primary_window_query.single())
             .insert(vpx_window_info);
     }
-}
-
-fn label_window(commands: &mut Commands, window_camera: Entity, name: &str) {
-    let window_label_node = Node {
-        position_type: PositionType::Absolute,
-        top: Val::Px(12.0),
-        left: Val::Px(12.0),
-        ..default()
-    };
-    commands.spawn((
-        Text::new(name),
-        TextFont::from_font_size(8.0),
-        window_label_node,
-        TargetCamera(window_camera),
-    ));
 }
 
 pub(crate) fn setup_playfield_window(vpinball_config: &VPinballConfig) -> Window {
