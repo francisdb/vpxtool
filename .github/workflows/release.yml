@@ -1,53 +1,52 @@
-name: Release
+name: Release build
 on: [ push ]
 permissions:
   contents: write
 jobs:
   release:
     name: Release - ${{ matrix.platform.os_name }}
-    if: startsWith( github.ref, 'refs/tags/v' ) || github.ref == 'refs/tags/test-release'
     strategy:
       matrix:
         platform:
           - os_name: Linux-x86_64
             os: ubuntu-20.04
             target: x86_64-unknown-linux-musl
-            bin: vpxtool
+            bin_ext: ""
             name: vpxtool-Linux-x86_64-musl
             cargo_command: cargo
 
           - os_name: Linux-aarch64
             os: ubuntu-20.04
             target: aarch64-unknown-linux-musl
-            bin: vpxtool
+            bin_ext: ""
             name: vpxtool-Linux-aarch64-musl
             cargo_command: cargo
 
           - os_name: Windows-aarch64
             os: windows-latest
             target: aarch64-pc-windows-msvc
-            bin: vpxtool.exe
+            bin_ext: ".exe"
             name: vpxtool-Windows-aarch64
             cargo_command: cargo
 
           - os_name: Windows-x86_64
             os: windows-latest
             target: x86_64-pc-windows-msvc
-            bin: vpxtool.exe
+            bin_ext: .exe
             name: vpxtool-Windows-x86_64
             cargo_command: cargo
 
           - os_name: macOS-x86_64
             os: macos-latest
             target: x86_64-apple-darwin
-            bin: vpxtool
+            bin_ext: ""
             name: vpxtool-macOS-x86_64
             cargo_command: cargo
 
           - os_name: macOS-aarch64
             os: macos-latest
             target: aarch64-apple-darwin
-            bin: vpxtool
+            bin_ext: ""
             name: vpxtool-macOS-aarch64
             cargo_command: cargo
 
@@ -81,22 +80,22 @@ jobs:
             EXTENSION="zip"
           fi
           echo "ARCHIVE_NAME=${{ matrix.platform.name }}-${VERSION}.$EXTENSION" >> $GITHUB_ENV
+          echo "VPINBALL_BINARY_NAME=target/${{ matrix.platform.target }}/release/vpinball${{ matrix.platform.bin_ext }}" >> $GITHUB_ENV
+          echo "VPINBALL_GUI_BINARY_NAME=target/${{ matrix.platform.target }}/release/vpinball-gui${{ matrix.platform.bin_ext }}" >> $GITHUB_ENV
       - name: Package as archive
         shell: bash
         run: |
-          cd target/${{ matrix.platform.target }}/release
           if [[ "${{ matrix.platform.os }}" == "windows-latest" ]]; then
-            7z a ../../../$ARCHIVE_NAME ${{ matrix.platform.bin }}
+            7z a $ARCHIVE_NAME $VPINBALL_BINARY_NAME $VPINBALL_GUI_BINARY_NAME vpxtool_gui/assets
           else
-            tar czvf ../../../$ARCHIVE_NAME ${{ matrix.platform.bin }}
+            tar czvf $ARCHIVE_NAME $VPINBALL_BINARY_NAME $VPINBALL_GUI_BINARY_NAME vpxtool_gui/assets
           fi
-          cd -
       - name: Publish release artifacts
         uses: actions/upload-artifact@v4
         with:
           name: $ARCHIVE_NAME
           path: $ARCHIVE_NAME
-        if: github.ref == 'refs/tags/test-release'
+        if: startsWith( github.ref, 'refs/tags/v' ) == false
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
