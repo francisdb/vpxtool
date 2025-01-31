@@ -24,19 +24,10 @@ jobs:
         if: contains(matrix.platform.os, 'ubuntu')
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Build binary (*nix)
-        shell: bash
-        run: |
-          cargo build --package vpxtool_gui --locked --release
-        if: ${{ !contains(matrix.platform.os, 'windows') }}
-      - name: Build binary (Windows)
-        # We have to use the platform's native shell. If we use bash on
-        # Windows then OpenSSL complains that the Perl it finds doesn't use
-        # the platform's native paths and refuses to build.
-        shell: powershell
-        run: |
-          & cargo build --package vpxtool_gui --locked --release
-        if: contains(matrix.platform.os, 'windows')
+      - run: rustup toolchain install stable --profile minimal
+      - uses: Swatinem/rust-cache@v2.7.7
+      - name: Build
+        run: cargo build --package vpxtool_gui --locked --release
       - name: Set full archive name as env variable
         shell: bash
         run: |
