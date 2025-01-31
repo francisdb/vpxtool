@@ -16,4 +16,5 @@ target/
 # local vpxtool config file
 vpxtool.cfg
 
-./vscode/**
+# Visual Studio Code workspace file
+.vscode/

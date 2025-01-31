@@ -1,8 +1,8 @@
 [workspace]
 members = [
-    "vpxtool",
-    "vpxgui",
-    "shared"
+    "vpxtool_cli",
+    "vpxtool_gui",
+    "vpxtool_shared"
 ]
 resolver = "2"
 

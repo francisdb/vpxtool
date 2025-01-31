@@ -2,7 +2,7 @@
 use bevy::app::{App, PreStartup, Update};
 use bevy::prelude::{Commands, Deref, Event, EventWriter, Res, Resource};
 use crossbeam_channel::{bounded, Receiver, Sender};
-use shared::indexer::IndexedTable;
+use vpxtool_shared::indexer::IndexedTable;
 
 #[derive(Event, Debug)]
 pub(crate) enum ChannelExternalEvent {

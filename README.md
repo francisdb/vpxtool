@@ -1,6 +1,6 @@
 # vpxtool
 
-Cross-platform console based utility for the vpinball ecosystem
+Cross-platform utility for the vpinball ecosystem
 
 Join [#vpxtool on "Virtual Pinball Chat" discord](https://discord.gg/eYsvyMu8) for support and questions.
 
@@ -20,10 +20,29 @@ xattr -d com.apple.quarantine vpxtool
 
 ## Usage
 
+### Graphical User Interface (GUI)
+
+THe graphical frontend is tightly integrated with the command line interface. Therefor we suggest you start with
+the commandline tool to configure everything.
+
+```shell
+# Edit the default configuration. Make sure to set the path to your Visual Pinball executable and your tables folder.
+> vpxtool config edit
+# Launch the text based frontend to test the configuration.
+> vpxtool frontend
+# once everything works you can start the GUI 
+> vpxtool-gui
+```
+
+### Command Line Interface (CLI)
+
 Show help
 
-```
+```shell
 > vpxtool --help
+```
+
+```
 Vpxtool v0.16.0
 
 Extracts and assembles vpx files
@@ -58,7 +77,7 @@ Options:
 
 Show help for a specific command
 
-```
+```shell
 > vpxtool frontend --help`
 Acts as a frontend for launching vpx files
 
@@ -72,7 +91,7 @@ Options:
   -h, --help       Print help
 ```
 
-## Frontend
+#### TUI Frontend
 
 Vpxtool can act as a frontend for launching vpx files. It will index a directory of vpx files and then present a menu to
 launch them.

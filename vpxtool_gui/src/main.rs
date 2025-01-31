@@ -1,7 +1,7 @@
-use shared::config;
 use std::io;
 use std::process::ExitCode;
-use vpxgui::guifrontend;
+use vpxtool_gui::guifrontend;
+use vpxtool_shared::config;
 
 fn main() -> ExitCode {
     run().unwrap_or_else(|err| {

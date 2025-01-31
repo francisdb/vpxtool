@@ -308,7 +308,7 @@ fn default_vpinball_executable_detection() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
-
+    use pretty_assertions::assert_eq;
     use testdir::testdir;
 
     // test that we can read a incomplete config file with missing tables_folder
