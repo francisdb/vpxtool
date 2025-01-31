@@ -22,7 +22,7 @@ jobs:
 
     steps:
       - name: Install bevy linux dependencies
-        run: sudo apt update && sudo apt install g++ pkg-config libx11-dev libasound2-dev libudev-dev libxkbcommon-x11-0 libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev
+        run: sudo apt-get update && sudo apt-get install g++ pkg-config libx11-dev libasound2-dev libudev-dev libxkbcommon-x11-0 libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev
         if: contains(matrix.platform.os, 'ubuntu')
       - uses: actions/checkout@v4
       - run: rustup toolchain install stable --profile minimal
