@@ -15,12 +15,12 @@ jobs:
             name: vpxtool-Linux-x86_64-musl
             cargo_command: cargo
 
-          - os_name: Linux-aarch64
-            os: ubuntu-20.04
-            target: aarch64-unknown-linux-musl
-            bin_ext: ""
-            name: vpxtool-Linux-aarch64-musl
-            cargo_command: cargo
+          #          - os_name: Linux-aarch64
+          #            os: ubuntu-20.04
+          #            target: aarch64-unknown-linux-musl
+          #            bin_ext: ""
+          #            name: vpxtool-Linux-aarch64-musl
+          #            cargo_command: cargo
 
           - os_name: Windows-aarch64
             os: windows-latest
