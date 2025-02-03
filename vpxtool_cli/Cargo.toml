@@ -30,7 +30,7 @@ wild = "2.2.1"
 
 is_executable = "1.0.4"
 regex = { version = "1.11.1", features = [] }
-vpin = { version = "0.17.2" }
+vpin = { version = "0.17.3" }
 
 edit = "0.1.5"
 pinmame-nvram = "0.3.10"
