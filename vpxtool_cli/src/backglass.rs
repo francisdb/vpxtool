@@ -29,9 +29,9 @@ pub(crate) struct DMDHole {
 /// * `max_deviation_u8` - The maximum deviation in color to consider a color change
 ///
 pub(crate) fn find_hole(
-    image: DynamicImage,
+    image: &DynamicImage,
     divisions: u8,
-    min_width: f32,
+    min_width: u32,
     max_deviation_u8: u8,
 ) -> io::Result<Option<DMDHole>> {
     // TODO we could optimize this by skipping a part if is contained in the largest hole we found so far
@@ -48,11 +48,11 @@ pub(crate) fn find_hole(
             let center_x = ((x1 + x2) / 2.0) as u32;
             let center_y = ((y1 + y2) / 2.0) as u32;
 
-            let hole = find_hole_from(&image, center_x, center_y, max_deviation_u8)?;
+            let hole = find_hole_from(image, center_x, center_y, max_deviation_u8)?;
 
             let hole_width = hole.x2 - hole.x1;
             let hole_height = hole.y2 - hole.y1;
-            if hole_width > (image_width as f32 * min_width) as u32 {
+            if hole_width > min_width {
                 if let Some(old_max_hole) = &max_hole {
                     if hole_width > old_max_hole.x2 - old_max_hole.x1
                         && hole_height > old_max_hole.y2 - old_max_hole.y1
@@ -86,13 +86,14 @@ fn find_hole_from(
             ));
         }
     };
-    let color = rgba_image.get_pixel(center_x, center_y);
+    let center_color = rgba_image.get_pixel(center_x, center_y);
     // println!("Color at ({}, {}): {:?}", center_x, center_y, color);
 
     let mut left = center_x;
     while left > 0 {
         let color_x = rgba_image.get_pixel(left, center_y);
-        if !color_within_deviation(color, color_x, max_deviation_u8) {
+        if !color_within_deviation(center_color, color_x, max_deviation_u8) {
+            left += 1;
             break;
         }
         left -= 1;
@@ -100,7 +101,8 @@ fn find_hole_from(
     let mut right = center_x;
     while right < image_width {
         let color_x = rgba_image.get_pixel(right, center_y);
-        if !color_within_deviation(color, color_x, max_deviation_u8) {
+        if !color_within_deviation(center_color, color_x, max_deviation_u8) {
+            right -= 1;
             break;
         }
         right += 1;
@@ -108,7 +110,8 @@ fn find_hole_from(
     let mut top = center_y;
     while top > 0 {
         let color_y = rgba_image.get_pixel(center_x, top);
-        if !color_within_deviation(color, color_y, max_deviation_u8) {
+        if !color_within_deviation(center_color, color_y, max_deviation_u8) {
+            top += 1;
             break;
         }
         top -= 1;
@@ -116,7 +119,8 @@ fn find_hole_from(
     let mut bottom = center_y;
     while bottom < image_height {
         let color_y = rgba_image.get_pixel(center_x, bottom);
-        if !color_within_deviation(color, color_y, max_deviation_u8) {
+        if !color_within_deviation(center_color, color_y, max_deviation_u8) {
+            bottom -= 1;
             break;
         }
         bottom += 1;
@@ -145,8 +149,32 @@ mod tests {
     use super::*;
     use image::RgbaImage;
     use pretty_assertions::assert_eq;
-    use rand::prelude::ThreadRng;
     use rand::Rng;
+
+    #[test]
+    fn test_find_hole() {
+        let width = 320;
+        let height = 200;
+        let mut image = noise_image(width, height);
+        clear_square(
+            &mut image,
+            100,
+            50,
+            100,
+            50,
+            image::Rgba([0xFF, 0xAA, 0x22, 255]),
+        );
+        let dynamic_image = DynamicImage::ImageRgba8(image);
+
+        let hole = find_hole(&dynamic_image, 10, 50, 1).unwrap();
+        let expected = Some(DMDHole {
+            x1: 100,
+            y1: 50,
+            x2: 199,
+            y2: 99,
+        });
+        assert_eq!(hole, expected);
+    }
 
     #[test]
     fn test_find_hole_no_hole() {
@@ -155,7 +183,7 @@ mod tests {
         let image = noise_image(width, height);
         let dynamic_image = DynamicImage::ImageRgba8(image);
 
-        let hole = find_hole(dynamic_image, 10, 0.1, 1).unwrap();
+        let hole = find_hole(&dynamic_image, 10, 10, 1).unwrap();
         assert_eq!(hole, None);
     }
 
@@ -166,7 +194,7 @@ mod tests {
         let image = noise_image(width, height);
         let dynamic_image = DynamicImage::ImageRgba8(image);
 
-        let hole = find_hole(dynamic_image, 10, 0.1, 255).unwrap();
+        let hole = find_hole(&dynamic_image, 10, 100, 255).unwrap();
         let expected = Some(DMDHole {
             x1: 0,
             y1: 0,
@@ -175,46 +203,6 @@ mod tests {
         });
         assert_eq!(hole, expected);
     }
-
-    // #[test]
-    // fn test_find_hole_no_hole() {
-    //     let image = ImageReader::open("tests/resources/dmd_no_hole.png")
-    //         .unwrap()
-    //         .decode()
-    //         .unwrap();
-    //     let hole = find_hole(image, 10, 0.1, 10).unwrap();
-    //     assert!(hole.is_none());
-    // }
-    //
-    // #[test]
-    // fn test_find_hole_no_hole_small() {
-    //     let image = ImageReader::open("tests/resources/dmd_no_hole_small.png")
-    //         .unwrap()
-    //         .decode()
-    //         .unwrap();
-    //     let hole = find_hole(image, 10, 0.1, 10).unwrap();
-    //     assert!(hole.is_none());
-    // }
-    //
-    // #[test]
-    // fn test_find_hole_no_hole_large() {
-    //     let image = ImageReader::open("tests/resources/dmd_no_hole_large.png")
-    //         .unwrap()
-    //         .decode()
-    //         .unwrap();
-    //     let hole = find_hole(image, 10, 0.1, 10).unwrap();
-    //     assert!(hole.is_none());
-    // }
-
-    // #[test]
-    // fn test_find_hole_no_hole_large2() {
-    //     let image = ImageReader::open("tests/resources/dmd_no_hole_large2.png")
-    //         .unwrap()
-    //         .decode()
-    //         .unwrap();
-    //     let hole = find_hole(image, 10, 0.1, 10).unwrap();
-    //     assert!(hole.is_none());
-    // }
 
     fn noise_image(width: u32, height: u32) -> RgbaImage {
         let dynamic_image = DynamicImage::new_rgba8(width, height);
@@ -227,5 +215,20 @@ mod tests {
             }
         }
         image
+    }
+
+    fn clear_square(
+        image: &mut RgbaImage,
+        x1: u32,
+        y1: u32,
+        width: u32,
+        height: u32,
+        color: image::Rgba<u8>,
+    ) {
+        for x in x1..x1 + width {
+            for y in y1..y1 + height {
+                image.put_pixel(x, y, color);
+            }
+        }
     }
 }

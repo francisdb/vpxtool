@@ -471,7 +471,7 @@ fn table_menu(
                         // read the image with image crate
                         let image = image::load_from_memory(&decoded_data).unwrap();
                         // TODO find the hole in the image
-                        let hole_opt = find_hole(image, 6, 0.5, 5).unwrap();
+                        let hole_opt = find_hole(&image, 6, &image.width() / 2, 5).unwrap();
                         if let Some(hole) = hole_opt {
                             println!("Found hole: {:?}", hole);
                         }
