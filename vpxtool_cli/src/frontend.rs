@@ -1,10 +1,12 @@
+use crate::backglass::find_hole;
 use crate::patcher::LineEndingsResult::{NoChanges, Unified};
 use crate::patcher::{patch_vbs_file, unify_line_endings_vbs_file};
 use crate::{
-    confirm, info_diff, info_edit, info_gather, open_editor, run_diff, script_diff,
+    confirm, info_diff, info_edit, info_gather, open_editor, run_diff, script_diff, strip_cr_lf,
     vpx::{extractvbs, vbs_path_for, ExtractResult},
     DiffColor, ProgressBarProgress,
 };
+use base64::Engine;
 use colored::Colorize;
 use console::Emoji;
 use dialoguer::theme::ColorfulTheme;
@@ -13,6 +15,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use is_executable::IsExecutable;
 use pinmame_nvram::dips::{get_all_dip_switches, set_dip_switches};
 use std::fs::OpenOptions;
+use std::io::BufReader;
 use std::{
     fs::File,
     io,
@@ -23,6 +26,7 @@ use std::{
 use vpxtool_shared::config::ResolvedConfig;
 use vpxtool_shared::indexer;
 use vpxtool_shared::indexer::{IndexError, IndexedTable, Progress};
+use vpxtool_shared::vpinball_config::VPinballConfig;
 
 const LAUNCH: Emoji = Emoji("🚀", "[launch]");
 const CRASH: Emoji = Emoji("💥", "[crash]");
@@ -48,10 +52,11 @@ enum TableOption {
     CreateVBSPatch,
     DIPSwitches,
     NVRAMClear,
+    B2SAutoPositionDMD,
 }
 
 impl TableOption {
-    const ALL: [TableOption; 15] = [
+    const ALL: [TableOption; 16] = [
         TableOption::Launch,
         TableOption::LaunchFullscreen,
         TableOption::LaunchWindowed,
@@ -67,6 +72,7 @@ impl TableOption {
         TableOption::CreateVBSPatch,
         TableOption::DIPSwitches,
         TableOption::NVRAMClear,
+        TableOption::B2SAutoPositionDMD,
     ];
 
     fn from_index(index: usize) -> Option<TableOption> {
@@ -86,6 +92,7 @@ impl TableOption {
             12 => Some(TableOption::CreateVBSPatch),
             13 => Some(TableOption::DIPSwitches),
             14 => Some(TableOption::NVRAMClear),
+            15 => Some(TableOption::B2SAutoPositionDMD),
             _ => None,
         }
     }
@@ -107,6 +114,7 @@ impl TableOption {
             TableOption::CreateVBSPatch => "VBScript > Create patch file".to_string(),
             TableOption::DIPSwitches => "DIP Switches".to_string(),
             TableOption::NVRAMClear => "NVRAM > Clear".to_string(),
+            TableOption::B2SAutoPositionDMD => "Backglass > Auto-position DMD".to_string(),
         }
     }
 }
@@ -265,7 +273,7 @@ fn table_menu(
                 }
                 Err(err) => {
                     let msg = format!("Unable to reload tables: {:?}", err);
-                    prompt(msg.truecolor(255, 125, 0).to_string());
+                    prompt(&msg.truecolor(255, 125, 0).to_string());
                 }
             }
         }
@@ -283,30 +291,30 @@ fn table_menu(
                 }
                 Err(err) => {
                     let msg = format!("Unable to edit VBS: {}", err);
-                    prompt(msg.truecolor(255, 125, 0).to_string());
+                    prompt(&msg.truecolor(255, 125, 0).to_string());
                 }
             }
         }
         Some(TableOption::ExtractVBS) => match extractvbs(selected_path, None, false) {
             Ok(ExtractResult::Extracted(path)) => {
-                prompt(format!("VBS extracted to {}", path.to_string_lossy()));
+                prompt(&format!("VBS extracted to {}", path.to_string_lossy()));
             }
             Ok(ExtractResult::Existed(path)) => {
                 let msg = format!("VBS already exists at {}", path.to_string_lossy());
-                prompt(msg.truecolor(255, 125, 0).to_string());
+                prompt(&msg.truecolor(255, 125, 0).to_string());
             }
             Err(err) => {
                 let msg = format!("Unable to extract VBS: {}", err);
-                prompt(msg.truecolor(255, 125, 0).to_string());
+                prompt(&msg.truecolor(255, 125, 0).to_string());
             }
         },
         Some(TableOption::ShowVBSDiff) => match script_diff(selected_path) {
             Ok(diff) => {
-                prompt(diff);
+                prompt(&diff);
             }
             Err(err) => {
                 let msg = format!("Unable to diff VBS: {}", err);
-                prompt(msg.truecolor(255, 125, 0).to_string());
+                prompt(&msg.truecolor(255, 125, 0).to_string());
             }
         },
         Some(TableOption::PatchVBS) => {
@@ -315,19 +323,19 @@ fn table_menu(
                 Ok(ExtractResult::Extracted(path)) => path,
                 Err(err) => {
                     let msg = format!("Unable to extract VBS: {}", err);
-                    prompt(msg.truecolor(255, 125, 0).to_string());
+                    prompt(&msg.truecolor(255, 125, 0).to_string());
                     return;
                 }
             };
             match patch_vbs_file(&vbs_path) {
                 Ok(applied) => {
                     if applied.is_empty() {
-                        prompt("No patches applied.".to_string());
+                        prompt("No patches applied.");
                     } else {
                         applied.iter().for_each(|patch| {
                             println!("Applied patch: {}", patch);
                         });
-                        prompt(format!(
+                        prompt(&format!(
                             "Patched VBS file at {}",
                             vbs_path.to_string_lossy()
                         ));
@@ -335,7 +343,7 @@ fn table_menu(
                 }
                 Err(err) => {
                     let msg = format!("Unable to patch VBS: {}", err);
-                    prompt(msg.truecolor(255, 125, 0).to_string());
+                    prompt(&msg.truecolor(255, 125, 0).to_string());
                 }
             }
         }
@@ -346,23 +354,23 @@ fn table_menu(
                 Ok(ExtractResult::Extracted(path)) => path,
                 Err(err) => {
                     let msg = format!("Unable to extract VBS: {}", err);
-                    prompt(msg.truecolor(255, 125, 0).to_string());
+                    prompt(&msg.truecolor(255, 125, 0).to_string());
                     return;
                 }
             };
             match unify_line_endings_vbs_file(&vbs_path) {
                 Ok(NoChanges) => {
-                    prompt("No changes applied as file has correct line endings".to_string());
+                    prompt("No changes applied as file has correct line endings");
                 }
                 Ok(Unified) => {
-                    prompt(format!(
+                    prompt(&format!(
                         "Unified line endings in VBS file at {}",
                         vbs_path.to_string_lossy()
                     ));
                 }
                 Err(err) => {
                     let msg = format!("Unable to patch VBS: {}", err);
-                    prompt(msg.truecolor(255, 125, 0).to_string());
+                    prompt(&msg.truecolor(255, 125, 0).to_string());
                 }
             }
         }
@@ -373,7 +381,7 @@ fn table_menu(
                 Ok(ExtractResult::Extracted(path)) => path,
                 Err(err) => {
                     let msg = format!("Unable to extract VBS: {}", err);
-                    prompt(msg.truecolor(255, 125, 0).to_string());
+                    prompt(&msg.truecolor(255, 125, 0).to_string());
                     return;
                 }
             };
@@ -387,17 +395,17 @@ fn table_menu(
                 }
                 Err(err) => {
                     let msg = format!("Unable to diff VBS: {}", err);
-                    prompt(msg.truecolor(255, 125, 0).to_string());
+                    prompt(&msg.truecolor(255, 125, 0).to_string());
                 }
             }
         }
         Some(TableOption::InfoShow) => match info_gather(selected_path) {
             Ok(info) => {
-                prompt(info);
+                prompt(&info);
             }
             Err(err) => {
                 let msg = format!("Unable to gather table info: {}", err);
-                prompt(msg.truecolor(255, 125, 0).to_string());
+                prompt(&msg.truecolor(255, 125, 0).to_string());
             }
         },
         Some(TableOption::InfoEdit) => match info_edit(selected_path, Some(config)) {
@@ -406,16 +414,16 @@ fn table_menu(
             }
             Err(err) => {
                 let msg = format!("Unable to edit table info: {}", err);
-                prompt(msg.truecolor(255, 125, 0).to_string());
+                prompt(&msg.truecolor(255, 125, 0).to_string());
             }
         },
         Some(TableOption::InfoDiff) => match info_diff(selected_path) {
             Ok(diff) => {
-                prompt(diff);
+                prompt(&diff);
             }
             Err(err) => {
                 let msg = format!("Unable to diff info: {}", err);
-                prompt(msg.truecolor(255, 125, 0).to_string());
+                prompt(&msg.truecolor(255, 125, 0).to_string());
             }
         },
         Some(TableOption::DIPSwitches) => {
@@ -429,22 +437,63 @@ fn table_menu(
                         }
                         Err(err) => {
                             let msg = format!("Unable to edit DIP switches: {}", err);
-                            prompt(msg.truecolor(255, 125, 0).to_string());
+                            prompt(&msg.truecolor(255, 125, 0).to_string());
                         }
                     }
                 } else {
-                    prompt(
-                        "This table does not have an NVRAM file, try launching it once."
-                            .to_string(),
-                    );
+                    prompt("This table does not have an NVRAM file, try launching it once.");
                 }
             } else {
-                prompt("This table is not using used PinMAME".to_string());
+                prompt("This table is not using used PinMAME");
             }
         }
         Some(TableOption::NVRAMClear) => {
             clear_nvram(info);
         }
+        Some(TableOption::B2SAutoPositionDMD) => match &info.b2s_path {
+            Some(b2s_path) => {
+                // TODO move image reading parsing code to vpin
+                let reader = BufReader::new(File::open(b2s_path).unwrap());
+                let b2s = vpin::directb2s::read(reader).unwrap();
+
+                if let Some(dmd_image) = b2s.images.dmd_image {
+                    // load vpinball config
+
+                    let ini_file = config.vpinball_ini_file();
+                    if ini_file.exists() {
+                        let vpinball_config = VPinballConfig::read(&ini_file).unwrap();
+                        // if
+                        let base64data_with_cr_lf = dmd_image.value;
+                        let base64data = strip_cr_lf(&base64data_with_cr_lf);
+                        let decoded_data = base64::engine::general_purpose::STANDARD
+                            .decode(base64data)
+                            .unwrap();
+                        // read the image with image crate
+                        let image = image::load_from_memory(&decoded_data).unwrap();
+                        // TODO find the hole in the image
+                        let hole_opt = find_hole(image, 6, 0.5, 5).unwrap();
+                        if let Some(hole) = hole_opt {
+                            println!("Found hole: {:?}", hole);
+                        }
+                        // TODO read the local vpinball ini file
+                        let table_ini_path = info.path.with_extension("ini");
+                        println!("Reading table ini file: {:?}", table_ini_path);
+                        let table_ini = VPinballConfig::read(&table_ini_path).unwrap();
+                        // Reposition the PinMAME DMD window to the correct position
+                        // I wonder if there are tables that use both
+                        // Can we defer from the script that a table potentially uses flexdmd?
+                        prompt("Not implemented yet");
+                    } else {
+                        prompt("Unable to read vpinball ini file");
+                    }
+                } else {
+                    prompt("This table does not have a DMD image");
+                }
+            }
+            None => {
+                prompt("This table does not have a B2S file");
+            }
+        },
         None => (),
     }
 }
@@ -478,7 +527,7 @@ fn edit_dip_switches(nvram: PathBuf) -> io::Result<()> {
         });
 
         set_dip_switches(&mut nvram_file, &switches)?;
-        prompt("DIP switches updated".to_string());
+        prompt("DIP switches updated");
     }
     Ok(())
 }
@@ -495,33 +544,33 @@ fn clear_nvram(info: &IndexedTable) {
                     Ok(true) => {
                         match std::fs::remove_file(&nvram_file) {
                             Ok(_) => {
-                                prompt(format!("NVRAM file {} removed", nvram_file.display()));
+                                prompt(&format!("NVRAM file {} removed", nvram_file.display()));
                             }
                             Err(err) => {
                                 let msg = format!("Unable to remove NVRAM file: {}", err);
-                                prompt(msg.truecolor(255, 125, 0).to_string());
+                                prompt(&msg.truecolor(255, 125, 0).to_string());
                             }
                         }
                     }
                     Ok(false) => {
-                        prompt("NVRAM file removal canceled.".to_string());
+                        prompt("NVRAM file removal canceled.");
                     }
                     Err(err) => {
                         let msg = format!("Error during confirmation: {}", err);
-                        prompt(msg.truecolor(255, 125, 0).to_string());
+                        prompt(&msg.truecolor(255, 125, 0).to_string());
                     }
                 }
             } else {
-                prompt(format!(
+                prompt(&format!(
                     "NVRAM file {} does not exist",
                     nvram_file.display()
                 ));
             }
         } else {
-            prompt("This table does not have an NVRAM file".to_string());
+            prompt("This table does not have an NVRAM file");
         }
     } else {
-        prompt("This table is not using used PinMAME".to_string());
+        prompt("This table is not using used PinMAME");
     }
 }
 
@@ -537,9 +586,9 @@ fn nvram_for_rom(info: &IndexedTable) -> Option<PathBuf> {
     })
 }
 
-fn prompt<S: Into<String>>(msg: S) {
+fn prompt(msg: &str) {
     Input::<String>::new()
-        .with_prompt(format!("{} - Press enter to continue.", msg.into()))
+        .with_prompt(format!("{} - Press enter to continue.", msg))
         .default("".to_string())
         .show_default(false)
         .interact()
@@ -579,13 +628,13 @@ fn launch(selected_path: &PathBuf, vpinball_executable: &Path, fullscreen: Optio
                 //println!("Table exited normally");
             }
             Some(11) => {
-                prompt(format!("{} Visual Pinball exited with segfault, you might want to report this to the vpinball team.", CRASH));
+                prompt(&format!("{} Visual Pinball exited with segfault, you might want to report this to the vpinball team.", CRASH));
             }
             Some(139) => {
-                prompt(format!("{} Visual Pinball exited with segfault, you might want to report this to the vpinball team.", CRASH));
+                prompt(&format!("{} Visual Pinball exited with segfault, you might want to report this to the vpinball team.", CRASH));
             }
             Some(code) => {
-                prompt(format!(
+                prompt(&format!(
                     "{} Visual Pinball exited with code {}",
                     CRASH, code
                 ));
