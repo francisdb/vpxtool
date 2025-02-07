@@ -658,7 +658,7 @@ fn prompt(msg: &str) {
         .unwrap();
 }
 
-fn prompt_error(msg: &String) {
+fn prompt_error(msg: &str) {
     prompt(&msg.truecolor(255, 125, 0).to_string());
 }
 
