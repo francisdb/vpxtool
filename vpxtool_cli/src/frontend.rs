@@ -26,7 +26,7 @@ use std::{
 use vpxtool_shared::config::ResolvedConfig;
 use vpxtool_shared::indexer;
 use vpxtool_shared::indexer::{IndexError, IndexedTable, Progress};
-use vpxtool_shared::vpinball_config::VPinballConfig;
+use vpxtool_shared::vpinball_config::{VPinballConfig, WindowInfo, WindowType};
 
 const LAUNCH: Emoji = Emoji("🚀", "[launch]");
 const CRASH: Emoji = Emoji("💥", "[crash]");
@@ -470,19 +470,56 @@ fn table_menu(
                             .unwrap();
                         // read the image with image crate
                         let image = image::load_from_memory(&decoded_data).unwrap();
-                        // TODO find the hole in the image
                         let hole_opt = find_hole(&image, 6, &image.width() / 2, 5).unwrap();
+                        // TODO could be that the DMD was already positioned, so prefer the local ini file
                         if let Some(hole) = hole_opt {
-                            println!("Found hole: {:?}", hole);
+                            println!("Hole found at {:?}", hole);
+                            let table_ini_path = info.path.with_extension("ini");
+                            if let Some(WindowInfo {
+                                x: Some(x),
+                                y: Some(y),
+                                width: Some(width),
+                                height: Some(height),
+                                ..
+                            }) = vpinball_config.get_window_info(WindowType::B2SDMD)
+                            {
+                                // scale and position the hole to the vpinball FullDMD size
+                                // TODO we might want to preserve the aspect ratio
+                                let hole = hole.scale_to_parent(width, height);
+
+                                let mut table_ini = VPinballConfig::read(&table_ini_path).unwrap();
+                                let dmd_x = x + hole.x();
+                                let dmd_y = y + hole.y();
+                                if hole.width() < 10 || hole.height() < 10 {
+                                    prompt("Detected hole is too small, unable to update");
+                                    return;
+                                }
+                                table_ini.set_window_position(WindowType::PinMAME, dmd_x, dmd_y);
+                                table_ini.set_window_size(
+                                    WindowType::PinMAME,
+                                    hole.width(),
+                                    hole.height(),
+                                );
+                                table_ini.set_window_position(WindowType::FlexDMD, dmd_x, dmd_y);
+                                table_ini.set_window_size(
+                                    WindowType::FlexDMD,
+                                    hole.width(),
+                                    hole.height(),
+                                );
+                                table_ini.write(&table_ini_path).unwrap();
+                                prompt(&format!("DMD window dimensions an position in {} updated to {}x{} at {},{}",
+                                                table_ini_path.file_name().unwrap().to_string_lossy(),
+                                                hole.width(),
+                                                hole.height(),
+                                                dmd_x,
+                                                dmd_y
+                                ));
+                            } else {
+                                prompt("Unable to find B2SDMD window or dimensions not specified in vpinball ini file");
+                            }
+                        } else {
+                            prompt("Unable to find hole in DMD image");
                         }
-                        // TODO read the local vpinball ini file
-                        let table_ini_path = info.path.with_extension("ini");
-                        println!("Reading table ini file: {:?}", table_ini_path);
-                        let table_ini = VPinballConfig::read(&table_ini_path).unwrap();
-                        // Reposition the PinMAME DMD window to the correct position
-                        // I wonder if there are tables that use both
-                        // Can we defer from the script that a table potentially uses flexdmd?
-                        prompt("Not implemented yet");
                     } else {
                         prompt("Unable to read vpinball ini file");
                     }

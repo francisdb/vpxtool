@@ -1,5 +1,6 @@
 use log::info;
 use std::fmt::Display;
+use std::io;
 use std::path::Path;
 
 #[derive(Debug, Clone, Copy)]
@@ -140,9 +141,10 @@ impl VPinballConfig {
     }
 
     pub fn get_window_info(&self, window_type: WindowType) -> Option<WindowInfo> {
+        let section = section_name(window_type);
         match window_type {
             WindowType::Playfield => {
-                if let Some(standalone_section) = self.ini.section(Some("Player")) {
+                if let Some(standalone_section) = self.ini.section(Some(section)) {
                     // get all the values from PlayfieldXXX and fall back to the normal values
                     let fullscreen = match standalone_section.get("PlayfieldFullScreen") {
                         Some(value) => value == "1",
@@ -186,6 +188,30 @@ impl VPinballConfig {
         }
     }
 
+    pub fn set_window_position(&mut self, window_type: WindowType, x: u32, y: u32) {
+        let section = section_name(window_type);
+        let prefix = config_prefix(window_type);
+        // preferably we would write a comment but the ini crate does not support that
+        // see https://github.com/zonyitoo/rust-ini/issues/77
+        self.ini
+            .with_section(Some(&section))
+            .set(format!("{}{}", prefix, "X"), x.to_string())
+            .set(format!("{}{}", prefix, "Y"), y.to_string());
+    }
+
+    pub fn set_window_size(&mut self, window_type: WindowType, width: u32, height: u32) {
+        let section = section_name(window_type);
+        let prefix = config_prefix(window_type);
+        self.ini
+            .with_section(Some(&section))
+            .set(format!("{}{}", prefix, "Width"), width.to_string())
+            .set(format!("{}{}", prefix, "Height"), height.to_string());
+    }
+
+    pub fn write(&self, ini_path: &Path) -> io::Result<()> {
+        self.ini.write_to_file(ini_path)
+    }
+
     fn lookup_window_info(&self, window_type: WindowType) -> Option<WindowInfo> {
         let section = section_name(window_type);
         if let Some(ini_section) = self.ini.section(Some(section)) {
@@ -219,5 +245,87 @@ impl VPinballConfig {
         } else {
             None
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+    use testdir::testdir;
+
+    #[test]
+    fn test_read_vpinball_config() {
+        let testdir = testdir!();
+        // manually create test ini file
+        let ini_path = testdir.join("test.ini");
+        std::fs::write(
+            &ini_path,
+            r#"
+[Player]
+FullScreen=1
+PlayfieldFullScreen=1
+PlayfieldWndX=0
+PlayfieldWndY=0
+PlayfieldWidth=1920
+PlayfieldHeight=1080
+"#,
+        )
+        .unwrap();
+
+        let config = VPinballConfig::read(&ini_path).unwrap();
+        assert_eq!(
+            config
+                .get_window_info(WindowType::Playfield)
+                .unwrap()
+                .fullscreen,
+            true
+        );
+        assert_eq!(
+            config.get_window_info(WindowType::Playfield).unwrap().x,
+            Some(0)
+        );
+        assert_eq!(
+            config.get_window_info(WindowType::Playfield).unwrap().y,
+            Some(0)
+        );
+        assert_eq!(
+            config.get_window_info(WindowType::Playfield).unwrap().width,
+            Some(1920)
+        );
+        assert_eq!(
+            config
+                .get_window_info(WindowType::Playfield)
+                .unwrap()
+                .height,
+            Some(1080)
+        );
+    }
+
+    #[test]
+    fn test_write_vpinball_config() {
+        let testdir = testdir!();
+        // manually create test ini file
+        let ini_path = testdir.join("test.ini");
+        std::fs::write(&ini_path, "").unwrap();
+        let mut config = VPinballConfig::read(&ini_path).unwrap();
+        config.set_window_position(WindowType::Playfield, 100, 200);
+        config.set_window_size(WindowType::Playfield, 300, 400);
+        config.write(&ini_path).unwrap();
+        let config_read = VPinballConfig::read(&ini_path).unwrap();
+        assert_eq!(
+            config_read
+                .get_window_info(WindowType::Playfield)
+                .unwrap()
+                .x,
+            Some(100)
+        );
+        assert_eq!(
+            config_read
+                .get_window_info(WindowType::Playfield)
+                .unwrap()
+                .y,
+            Some(200)
+        );
     }
 }
