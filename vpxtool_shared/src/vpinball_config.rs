@@ -1,6 +1,7 @@
 use log::info;
 use std::fmt::Display;
 use std::io;
+use std::io::Read;
 use std::path::Path;
 
 #[derive(Debug, Clone, Copy)]
@@ -81,11 +82,36 @@ pub struct VPinballConfig {
     ini: ini::Ini,
 }
 
+impl Default for VPinballConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl VPinballConfig {
+    pub fn new() -> Self {
+        VPinballConfig {
+            ini: ini::Ini::new(),
+        }
+    }
+
     pub fn read(ini_path: &Path) -> Result<Self, ini::Error> {
         info!("Reading vpinball ini file: {:?}", ini_path);
         let ini = ini::Ini::load_from_file(ini_path)?;
         Ok(VPinballConfig { ini })
+    }
+
+    pub fn read_from<R: Read>(reader: &mut R) -> Result<Self, ini::Error> {
+        let ini = ini::Ini::read_from(reader)?;
+        Ok(VPinballConfig { ini })
+    }
+
+    pub fn write(&self, ini_path: &Path) -> io::Result<()> {
+        self.ini.write_to_file(ini_path)
+    }
+
+    pub fn write_to<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
+        self.ini.write_to(writer)
     }
 
     pub fn get_pinmame_path(&self) -> Option<String> {
@@ -144,33 +170,33 @@ impl VPinballConfig {
         let section = section_name(window_type);
         match window_type {
             WindowType::Playfield => {
-                if let Some(standalone_section) = self.ini.section(Some(section)) {
+                if let Some(ini_section) = self.ini.section(Some(section)) {
                     // get all the values from PlayfieldXXX and fall back to the normal values
-                    let fullscreen = match standalone_section.get("PlayfieldFullScreen") {
+                    let fullscreen = match ini_section.get("PlayfieldFullScreen") {
                         Some(value) => value == "1",
-                        None => match standalone_section.get("FullScreen") {
+                        None => match ini_section.get("FullScreen") {
                             Some(value) => value == "1",
                             None => true, // not sure if this is the correct default value for every os
                         },
                     };
-                    let x = standalone_section
+                    let x = ini_section
                         .get("PlayfieldWndX")
-                        .or_else(|| standalone_section.get("WindowPosX"))
+                        .or_else(|| ini_section.get("WindowPosX"))
                         .and_then(|s| s.parse::<u32>().ok());
 
-                    let y = standalone_section
+                    let y = ini_section
                         .get("PlayfieldWndY")
-                        .or_else(|| standalone_section.get("WindowPosY"))
+                        .or_else(|| ini_section.get("WindowPosY"))
                         .and_then(|s| s.parse::<u32>().ok());
 
-                    let width = standalone_section
+                    let width = ini_section
                         .get("PlayfieldWidth")
-                        .or_else(|| standalone_section.get("Width"))
+                        .or_else(|| ini_section.get("Width"))
                         .and_then(|s| s.parse::<u32>().ok());
 
-                    let height = standalone_section
+                    let height = ini_section
                         .get("PlayfieldHeight")
-                        .or_else(|| standalone_section.get("Height"))
+                        .or_else(|| ini_section.get("Height"))
                         .and_then(|s| s.parse::<u32>().ok());
 
                     Some(WindowInfo {
@@ -193,23 +219,36 @@ impl VPinballConfig {
         let prefix = config_prefix(window_type);
         // preferably we would write a comment but the ini crate does not support that
         // see https://github.com/zonyitoo/rust-ini/issues/77
+
+        let x_suffix = match window_type {
+            WindowType::Playfield => "WndX",
+            _ => "X",
+        };
+        let y_suffix = match window_type {
+            WindowType::Playfield => "WndY",
+            _ => "Y",
+        };
+
+        let x_key = format!("{}{}", prefix, x_suffix);
+        let y_key = format!("{}{}", prefix, y_suffix);
+
         self.ini
             .with_section(Some(&section))
-            .set(format!("{}{}", prefix, "X"), x.to_string())
-            .set(format!("{}{}", prefix, "Y"), y.to_string());
+            .set(x_key, x.to_string())
+            .set(y_key, y.to_string());
     }
 
     pub fn set_window_size(&mut self, window_type: WindowType, width: u32, height: u32) {
         let section = section_name(window_type);
         let prefix = config_prefix(window_type);
+
+        let width_key = format!("{}{}", prefix, "Width");
+        let height_key = format!("{}{}", prefix, "Height");
+
         self.ini
             .with_section(Some(&section))
-            .set(format!("{}{}", prefix, "Width"), width.to_string())
-            .set(format!("{}{}", prefix, "Height"), height.to_string());
-    }
-
-    pub fn write(&self, ini_path: &Path) -> io::Result<()> {
-        self.ini.write_to_file(ini_path)
+            .set(width_key, width.to_string())
+            .set(height_key, height.to_string());
     }
 
     fn lookup_window_info(&self, window_type: WindowType) -> Option<WindowInfo> {
@@ -304,20 +343,13 @@ PlayfieldHeight=1080
 
     #[test]
     fn test_write_vpinball_config() {
-        let testdir = testdir!();
-        // manually create test ini file
-        let ini_path = testdir.join("test.ini");
-        std::fs::write(&ini_path, "").unwrap();
-        let mut config = VPinballConfig::read(&ini_path).unwrap();
+        let mut config = VPinballConfig::default();
         config.set_window_position(WindowType::Playfield, 100, 200);
         config.set_window_size(WindowType::Playfield, 300, 400);
-        config.write(&ini_path).unwrap();
-        // this test fails on ci, let's see what the file contains
-        // read the file to string and print
-        let ini_content = std::fs::read_to_string(&ini_path).unwrap();
-        println!("{}", ini_content);
-
-        let config_read = VPinballConfig::read(&ini_path).unwrap();
+        let mut cursor = io::Cursor::new(Vec::new());
+        config.write_to(&mut cursor).unwrap();
+        cursor.set_position(0);
+        let config_read = VPinballConfig::read_from(&mut cursor).unwrap();
         assert_eq!(
             config_read
                 .get_window_info(WindowType::Playfield)
