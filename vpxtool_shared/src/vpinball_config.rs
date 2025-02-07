@@ -312,6 +312,11 @@ PlayfieldHeight=1080
         config.set_window_position(WindowType::Playfield, 100, 200);
         config.set_window_size(WindowType::Playfield, 300, 400);
         config.write(&ini_path).unwrap();
+        // this test fails on ci, let's see what the file contains
+        // read the file to string and print
+        let ini_content = std::fs::read_to_string(&ini_path).unwrap();
+        println!("{}", ini_content);
+
         let config_read = VPinballConfig::read(&ini_path).unwrap();
         assert_eq!(
             config_read
