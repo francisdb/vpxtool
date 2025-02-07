@@ -414,7 +414,7 @@ fn table_menu(
             }
             Err(err) => {
                 let msg = format!("Unable to edit table info: {}", err);
-                prompt(&msg.truecolor(255, 125, 0).to_string());
+                prompt_error(&msg);
             }
         },
         Some(TableOption::InfoDiff) => match info_diff(selected_path) {
@@ -423,7 +423,7 @@ fn table_menu(
             }
             Err(err) => {
                 let msg = format!("Unable to diff info: {}", err);
-                prompt(&msg.truecolor(255, 125, 0).to_string());
+                prompt_error(&msg);
             }
         },
         Some(TableOption::DIPSwitches) => {
@@ -437,7 +437,7 @@ fn table_menu(
                         }
                         Err(err) => {
                             let msg = format!("Unable to edit DIP switches: {}", err);
-                            prompt(&msg.truecolor(255, 125, 0).to_string());
+                            prompt_error(&msg);
                         }
                     }
                 } else {
@@ -450,88 +450,114 @@ fn table_menu(
         Some(TableOption::NVRAMClear) => {
             clear_nvram(info);
         }
-        Some(TableOption::B2SAutoPositionDMD) => match &info.b2s_path {
-            Some(b2s_path) => {
-                // TODO move image reading parsing code to vpin
-                let reader = BufReader::new(File::open(b2s_path).unwrap());
-                let b2s = vpin::directb2s::read(reader).unwrap();
-
-                if let Some(dmd_image) = b2s.images.dmd_image {
-                    // load vpinball config
-
-                    let ini_file = config.vpinball_ini_file();
-                    if ini_file.exists() {
-                        let vpinball_config = VPinballConfig::read(&ini_file).unwrap();
-                        // if
-                        let base64data_with_cr_lf = dmd_image.value;
-                        let base64data = strip_cr_lf(&base64data_with_cr_lf);
-                        let decoded_data = base64::engine::general_purpose::STANDARD
-                            .decode(base64data)
-                            .unwrap();
-                        // read the image with image crate
-                        let image = image::load_from_memory(&decoded_data).unwrap();
-                        let hole_opt = find_hole(&image, 6, &image.width() / 2, 5).unwrap();
-                        // TODO could be that the DMD was already positioned, so prefer the local ini file
-                        if let Some(hole) = hole_opt {
-                            println!("Hole found at {:?}", hole);
-                            let table_ini_path = info.path.with_extension("ini");
-                            if let Some(WindowInfo {
-                                x: Some(x),
-                                y: Some(y),
-                                width: Some(width),
-                                height: Some(height),
-                                ..
-                            }) = vpinball_config.get_window_info(WindowType::B2SDMD)
-                            {
-                                // scale and position the hole to the vpinball FullDMD size
-                                // TODO we might want to preserve the aspect ratio
-                                let hole = hole.scale_to_parent(width, height);
-
-                                let mut table_ini = VPinballConfig::read(&table_ini_path).unwrap();
-                                let dmd_x = x + hole.x();
-                                let dmd_y = y + hole.y();
-                                if hole.width() < 10 || hole.height() < 10 {
-                                    prompt("Detected hole is too small, unable to update");
-                                    return;
-                                }
-                                table_ini.set_window_position(WindowType::PinMAME, dmd_x, dmd_y);
-                                table_ini.set_window_size(
-                                    WindowType::PinMAME,
-                                    hole.width(),
-                                    hole.height(),
-                                );
-                                table_ini.set_window_position(WindowType::FlexDMD, dmd_x, dmd_y);
-                                table_ini.set_window_size(
-                                    WindowType::FlexDMD,
-                                    hole.width(),
-                                    hole.height(),
-                                );
-                                table_ini.write(&table_ini_path).unwrap();
-                                prompt(&format!("DMD window dimensions an position in {} updated to {}x{} at {},{}",
-                                                table_ini_path.file_name().unwrap().to_string_lossy(),
-                                                hole.width(),
-                                                hole.height(),
-                                                dmd_x,
-                                                dmd_y
-                                ));
-                            } else {
-                                prompt("Unable to find B2SDMD window or dimensions not specified in vpinball ini file");
-                            }
-                        } else {
-                            prompt("Unable to find hole in DMD image");
-                        }
-                    } else {
-                        prompt("Unable to read vpinball ini file");
-                    }
-                } else {
-                    prompt("This table does not have a DMD image");
-                }
+        Some(TableOption::B2SAutoPositionDMD) => match auto_position_dmd(config, &info) {
+            Ok(msg) => {
+                prompt(&msg);
             }
-            None => {
-                prompt("This table does not have a B2S file");
+            Err(err) => {
+                let msg = format!("Unable to auto-position DMD: {}", err);
+                prompt_error(&msg);
             }
         },
         None => (),
+    }
+}
+
+fn auto_position_dmd(config: &ResolvedConfig, info: &&IndexedTable) -> Result<String, String> {
+    match &info.b2s_path {
+        Some(b2s_path) => {
+            // TODO move image reading parsing code to vpin
+            let reader =
+                BufReader::new(File::open(b2s_path).map_err(|e| {
+                    format!("Unable to open B2S file {}: {}", b2s_path.display(), e)
+                })?);
+            let b2s = vpin::directb2s::read(reader)
+                .map_err(|e| format!("Unable to read B2S file: {}", e))?;
+
+            if let Some(dmd_image) = b2s.images.dmd_image {
+                // load vpinball config
+
+                let ini_file = config.vpinball_ini_file();
+                if ini_file.exists() {
+                    let base64data_with_cr_lf = dmd_image.value;
+                    let base64data = strip_cr_lf(&base64data_with_cr_lf);
+                    let decoded_data = base64::engine::general_purpose::STANDARD
+                        .decode(base64data)
+                        .map_err(|e| format!("Unable to decode base64 data: {}", e))?;
+                    // read the image with image crate
+                    let image = image::load_from_memory(&decoded_data)
+                        .map_err(|e| format!("Unable to read DMD image: {}", e))?;
+                    let hole_opt = find_hole(&image, 6, &image.width() / 2, 5)
+                        .map_err(|e| format!("Unable to find hole in DMD image: {}", e))?;
+                    if let Some(hole) = hole_opt {
+                        let table_ini_path = info.path.with_extension("ini");
+                        let vpinball_config = VPinballConfig::read(&ini_file)
+                            .map_err(|e| format!("Unable to read vpinball ini file: {}", e))?;
+                        let mut table_config = if table_ini_path.exists() {
+                            VPinballConfig::read(&table_ini_path)
+                                .map_err(|e| format!("Unable to read table ini file: {}", e))
+                        } else {
+                            Ok(VPinballConfig::default())
+                        }?;
+
+                        let window_info = table_config
+                            .get_window_info(WindowType::B2SDMD)
+                            .or(vpinball_config.get_window_info(WindowType::B2SDMD));
+
+                        if let Some(WindowInfo {
+                            x: Some(x),
+                            y: Some(y),
+                            width: Some(width),
+                            height: Some(height),
+                            ..
+                        }) = window_info
+                        {
+                            // Scale and position the hole to the vpinball FullDMD size.
+                            // We might want to preserve the aspect ratio.
+                            let hole = hole.scale_to_parent(width, height);
+
+                            let dmd_x = x + hole.x();
+                            let dmd_y = y + hole.y();
+                            if hole.width() < 10 || hole.height() < 10 {
+                                return Err(
+                                    "Detected hole is too small, unable to update".to_string()
+                                );
+                            }
+                            table_config.set_window_position(WindowType::PinMAME, dmd_x, dmd_y);
+                            table_config.set_window_size(
+                                WindowType::PinMAME,
+                                hole.width(),
+                                hole.height(),
+                            );
+                            table_config.set_window_position(WindowType::FlexDMD, dmd_x, dmd_y);
+                            table_config.set_window_size(
+                                WindowType::FlexDMD,
+                                hole.width(),
+                                hole.height(),
+                            );
+                            table_config.write(&table_ini_path).unwrap();
+                            Ok(format!(
+                                "DMD window dimensions an position in {} updated to {}x{} at {},{}",
+                                table_ini_path.file_name().unwrap().to_string_lossy(),
+                                hole.width(),
+                                hole.height(),
+                                dmd_x,
+                                dmd_y
+                            ))
+                        } else {
+                            Err("Unable to find B2SDMD window or dimensions not specified in vpinball ini file".to_string())
+                        }
+                    } else {
+                        Err("Unable to find hole in DMD image".to_string())
+                    }
+                } else {
+                    Err("Unable to read vpinball ini file".to_string())
+                }
+            } else {
+                Err("This table does not have a DMD image".to_string())
+            }
+        }
+        None => Err("This table does not have a B2S file".to_string()),
     }
 }
 
@@ -630,6 +656,10 @@ fn prompt(msg: &str) {
         .show_default(false)
         .interact()
         .unwrap();
+}
+
+fn prompt_error(msg: &String) {
+    prompt(&msg.truecolor(255, 125, 0).to_string());
 }
 
 fn choose_table_option(table_name: &str) -> Option<TableOption> {

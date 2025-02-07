@@ -95,14 +95,24 @@ impl VPinballConfig {
         }
     }
 
-    pub fn read(ini_path: &Path) -> Result<Self, ini::Error> {
+    pub fn read(ini_path: &Path) -> io::Result<Self> {
         info!("Reading vpinball ini file: {:?}", ini_path);
-        let ini = ini::Ini::load_from_file(ini_path)?;
+        let ini = ini::Ini::load_from_file(ini_path).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Failed to read ini file: {:?}", e),
+            )
+        })?;
         Ok(VPinballConfig { ini })
     }
 
-    pub fn read_from<R: Read>(reader: &mut R) -> Result<Self, ini::Error> {
-        let ini = ini::Ini::read_from(reader)?;
+    pub fn read_from<R: Read>(reader: &mut R) -> io::Result<Self> {
+        let ini = ini::Ini::read_from(reader).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Failed to read ini file: {:?}", e),
+            )
+        })?;
         Ok(VPinballConfig { ini })
     }
 
