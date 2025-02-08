@@ -103,6 +103,7 @@ pub struct IndexedTable {
     /// The rom path, in the table folder or in the global pinmame roms folder
     rom_path: Option<PathBuf>,
     /// deprecated: only used for reading the old index format
+    #[serde(skip_serializing_if = "Option::is_none")]
     local_rom_path: Option<PathBuf>,
     pub wheel_path: Option<PathBuf>,
     pub requires_pinmame: bool,

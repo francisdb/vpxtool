@@ -29,6 +29,7 @@ use vpxtool_shared::config::{ResolvedConfig, SetupConfigResult};
 use vpxtool_shared::indexer::{IndexError, Progress};
 use vpxtool_shared::{config, indexer};
 
+mod backglass;
 pub mod fixprint;
 mod frontend;
 pub mod patcher;
@@ -1134,7 +1135,7 @@ fn extract_directb2s(expanded_path: &PathBuf) -> io::Result<()> {
 
             let mut root_dir = std::fs::DirBuilder::new();
             root_dir.recursive(true);
-            root_dir.create(&root_dir_path).unwrap();
+            root_dir.create(&root_dir_path)?;
 
             println!("Writing to {}", root_dir_path.display())?;
             wite_images(b2s, root_dir_path.as_path());
