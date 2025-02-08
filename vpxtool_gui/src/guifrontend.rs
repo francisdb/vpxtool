@@ -15,6 +15,8 @@ use crate::windowing::WindowingPlugin;
 use bevy::prelude::*;
 use bevy::window::*;
 use bevy_egui::EguiPlugin;
+use std::io;
+use std::process::ExitCode;
 use vpxtool_shared::config::ResolvedConfig;
 use vpxtool_shared::indexer::IndexedTable;
 use vpxtool_shared::vpinball_config::VPinballConfig;
@@ -133,10 +135,26 @@ fn handle_external_events(
     }
 }
 
-pub fn guifrontend(config: ResolvedConfig) {
+pub fn guifrontend(config: ResolvedConfig) -> io::Result<ExitCode> {
     let tables: Vec<IndexedTable> = Vec::new();
     let vpinball_ini_path = config.vpinball_ini_file();
-    let vpinball_config = VPinballConfig::read(&vpinball_ini_path).unwrap();
+    let vpinball_config = if vpinball_ini_path.exists() {
+        VPinballConfig::read(&vpinball_ini_path).map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("Error reading vpinball.ini: {}", err),
+            )
+        })?
+    } else {
+        // FIXME logging is not set up at this point so this is not visible
+        //   however we need this window set up before we can launch the default window plugin
+        warn!(
+            "vpinball.ini not found at {:?}, using empty config",
+            vpinball_ini_path
+        );
+        VPinballConfig::default()
+    };
+
     let playfield_window = windowing::setup_playfield_window(&vpinball_config);
 
     let mut app = App::new();
@@ -192,6 +210,7 @@ pub fn guifrontend(config: ResolvedConfig) {
     }
 
     app.run();
+    Ok(ExitCode::SUCCESS)
 }
 
 #[cfg(debug_assertions)]

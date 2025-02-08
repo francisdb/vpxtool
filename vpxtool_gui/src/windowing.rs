@@ -202,6 +202,7 @@ fn setup_other_window(commands: &mut Commands, vpx_config: &VpxConfig, window_ty
         info!("Window [{}] spawn", window_type);
         let vpx_window_info = VpxWindowInfo {
             window_info: window_info.clone(),
+            window_type,
         };
         let window_entity = commands.spawn((window, vpx_window_info)).id();
         let render_layers = layer_for_window_type(window_type);
@@ -226,9 +227,11 @@ fn setup_playfield_window2(
 ) {
     commands.spawn((PlayfieldCamera, Camera2d));
     // add VpxWindowInfo to playfield window, don't think we can do this in the WindowPlugin
-    if let Some(playfield_info) = vpx_config.config.get_window_info(WindowType::Playfield) {
+    let window_type = WindowType::Playfield;
+    if let Some(playfield_info) = vpx_config.config.get_window_info(window_type) {
         let vpx_window_info = VpxWindowInfo {
             window_info: playfield_info.clone(),
+            window_type,
         };
         commands
             .entity(primary_window_query.single())
@@ -252,6 +255,7 @@ pub(crate) fn setup_playfield_window(vpinball_config: &VPinballConfig) -> Window
 #[derive(Component)]
 pub(crate) struct VpxWindowInfo {
     window_info: WindowInfo,
+    window_type: WindowType,
 }
 
 /// NOTE: This is NOT triggered on startup for the primary window creation.
@@ -271,9 +275,15 @@ fn resize_on_crated(
 
 fn correct_window_size_and_position(
     window_entity: Entity,
-    vpx_info: &&VpxWindowInfo,
+    vpx_info: &VpxWindowInfo,
     window: &mut Mut<Window>,
 ) {
+    let window_info = &vpx_info.window_info;
+    let window_type = vpx_info.window_type;
+    if is_fullscreen_playfield(window_type, window_info) {
+        return;
+    }
+
     // #[cfg(target_os = "linux")] is annoying because it causes clippy to complain about dead code
     if cfg!(target_os = "linux") {
         // For Linux in the vpinball config, the window sizes are configured in physical pixels.
@@ -294,12 +304,13 @@ fn correct_window_size_and_position(
                 window_name,
                 window.resolution.scale_factor(),
             );
-            let info = &vpx_info.window_info;
-            if let (Some(physical_width), Some(physical_height)) = (info.width, info.height) {
+            if let (Some(physical_width), Some(physical_height)) =
+                (window_info.width, window_info.height)
+            {
                 window
                     .resolution
                     .set_physical_resolution(physical_width, physical_height);
-                if let (Some(x), Some(y)) = (info.x, info.y) {
+                if let (Some(x), Some(y)) = (window_info.x, window_info.y) {
                     info!("Window [{}] Setting position to {}, {}", window_name, x, y);
                     window.position = WindowPosition::At(IVec2::new(x as i32, y as i32));
                 }
@@ -322,8 +333,7 @@ fn correct_window_size_and_position(
                 window_name,
                 window.resolution.scale_factor(),
             );
-            let info = &vpx_info.window_info;
-            if let (Some(logical_x), Some(logical_y)) = (info.x, info.y) {
+            if let (Some(logical_x), Some(logical_y)) = (window_info.x, window_info.y) {
                 // For macOS with scales factor > 1 this is not correct but we don't know the scale
                 // factor before the window is created.
                 let physical_x = logical_x as f32 * window.resolution.scale_factor();
@@ -341,7 +351,24 @@ fn correct_window_size_and_position(
     }
 }
 
+// TODO the logic in vpinball for fullscreen is complicated
+//  We should come up with a better way to handle this
+//  https://github.com/vpinball/vpinball/blob/e38d7365b0184e359371003c6606c5dabe915dda/src/renderer/Window.cpp#L49
+const PLAYFIELD_FULLSCREEN_DEFAULT: bool = true;
+const OTHER_SCREEN_FULLSCREEN_DEFAULT: bool = false;
+
+fn is_fullscreen_playfield(window_type: WindowType, window_info: &WindowInfo) -> bool {
+    window_type == WindowType::Playfield
+        && window_info
+            .fullscreen
+            .unwrap_or(PLAYFIELD_FULLSCREEN_DEFAULT)
+}
+
 fn setup_window(window_info: &WindowInfo, window: &mut Window, window_type: WindowType) {
+    if is_fullscreen_playfield(window_type, window_info) {
+        window.mode = WindowMode::Fullscreen(MonitorSelection::Primary);
+        return;
+    }
     let position = if let (Some(x), Some(y)) = (window_info.x, window_info.y) {
         // For macOS with scale factor > 1 the x and y coordinates in the config
         // are logical coordinates. But we don't know the scale
@@ -369,7 +396,10 @@ fn setup_window(window_info: &WindowInfo, window: &mut Window, window_type: Wind
         WindowResolution::new(100.0, 100.0)
     };
 
-    let mode = if window_info.fullscreen {
+    let mode = if window_info
+        .fullscreen
+        .unwrap_or(OTHER_SCREEN_FULLSCREEN_DEFAULT)
+    {
         WindowMode::Fullscreen(MonitorSelection::Primary)
     } else {
         WindowMode::Windowed

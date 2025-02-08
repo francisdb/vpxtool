@@ -4,7 +4,7 @@ use std::io;
 use std::io::Read;
 use std::path::Path;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum WindowType {
     Playfield,
     PinMAME,
@@ -71,7 +71,7 @@ fn section_name(window_type: WindowType) -> String {
 /// Note: For macOS with hidpi screen this these are logical sizes/locations, not pixel sizes
 #[derive(Debug, Clone)]
 pub struct WindowInfo {
-    pub fullscreen: bool,
+    pub fullscreen: Option<bool>,
     pub x: Option<u32>,
     pub y: Option<u32>,
     pub width: Option<u32>,
@@ -183,10 +183,22 @@ impl VPinballConfig {
                 if let Some(ini_section) = self.ini.section(Some(section)) {
                     // get all the values from PlayfieldXXX and fall back to the normal values
                     let fullscreen = match ini_section.get("PlayfieldFullScreen") {
-                        Some(value) => value == "1",
+                        Some("1") => Some(true),
+                        Some("0") => Some(false),
+                        Some(empty) if empty.trim().is_empty() => None,
+                        Some(other) => {
+                            log::warn!("Unexpected value for PlayfieldFullScreen: {}", other);
+                            None
+                        }
                         None => match ini_section.get("FullScreen") {
-                            Some(value) => value == "1",
-                            None => true, // not sure if this is the correct default value for every os
+                            Some("1") => Some(true),
+                            Some("0") => Some(false),
+                            Some(empty) if empty.trim().is_empty() => None,
+                            Some(other) => {
+                                log::warn!("Unexpected value for FullScreen: {}", other);
+                                None
+                            }
+                            None => None,
                         },
                     };
                     let x = ini_section
@@ -267,8 +279,7 @@ impl VPinballConfig {
             let prefix = config_prefix(window_type);
             let fullscreen = ini_section
                 .get(format!("{}{}", prefix, "FullScreen"))
-                .map(|s| s == "1")
-                .unwrap_or(false);
+                .map(|s| s == "1");
             let x = ini_section
                 .get(format!("{}{}", prefix, "X"))
                 .and_then(|s| s.parse::<u32>().ok());
@@ -328,7 +339,7 @@ PlayfieldHeight=1080
                 .get_window_info(WindowType::Playfield)
                 .unwrap()
                 .fullscreen,
-            true
+            Some(true)
         );
         assert_eq!(
             config.get_window_info(WindowType::Playfield).unwrap().x,
