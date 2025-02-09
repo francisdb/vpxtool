@@ -1,8 +1,7 @@
-use crate::list::{SelectedItem, TableText, TextItem};
+use crate::guifrontend::VpxTables;
+use crate::list::{display_table_line, SelectedItem};
 use bevy::input::ButtonInput;
-use bevy::prelude::{
-    ColorMaterial, Commands, KeyCode, Mesh, Query, Res, ResMut, Text, Window, With,
-};
+use bevy::prelude::{ColorMaterial, Commands, KeyCode, Mesh, Query, Res, ResMut, Window, With};
 use bevy::window::PrimaryWindow;
 use bevy_asset::Assets;
 use bevy_egui::egui::Align2;
@@ -10,7 +9,6 @@ use bevy_egui::{egui, EguiContexts};
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn show_info(
-    items: Query<(&TableText, &Text), With<TextItem>>,
     commands: Commands,
     keys: Res<ButtonInput<KeyCode>>,
     meshes: ResMut<Assets<Mesh>>,
@@ -19,26 +17,23 @@ pub(crate) fn show_info(
     selected_item_res: Res<SelectedItem>,
     window_query: Query<&Window, With<PrimaryWindow>>,
     contexts: EguiContexts,
+    tables: Res<VpxTables>,
 ) {
     // TODO why is this modifying a unrelated global?
     if keys.just_pressed(KeyCode::Digit1) {
         globals.vpinball_running = !globals.vpinball_running;
     }
     if let Ok(window) = window_query.get_single() {
-        let mut wtitle = " ".to_owned();
-        let mut gametext = " ".to_owned();
-        //let mut gameblurb = " ".to_owned();
-
         let selected_item = selected_item_res.index.unwrap_or(0);
+        let table = &tables.indexed_tables[selected_item];
 
-        // change name of game
-        for (item, text) in items.iter() {
-            if item.list_index == selected_item {
-                gametext = item.table_text.clone();
-                //gameblurb = item.table_blurb.clone();
-                wtitle = text.to_string();
-            }
-        }
+        let gametext = table
+            .table_info
+            .table_description
+            .clone()
+            .filter(|x| !x.trim().is_empty())
+            .unwrap_or("[no description]".to_string());
+        let wtitle = display_table_line(table);
 
         // FIXME, this keeps creating windows???
         if globals.vpinball_running {
