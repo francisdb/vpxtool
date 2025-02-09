@@ -267,7 +267,7 @@ fn resize_on_crated(
         // find the window
         for (window_entity, info, mut window) in window_query.iter_mut() {
             if window_entity == event.window {
-                correct_window_size_and_position(window_entity, &info, &mut window);
+                correct_window_size_and_position(window_entity, info, &mut window);
             }
         }
     }
