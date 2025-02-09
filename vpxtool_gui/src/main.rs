@@ -13,8 +13,7 @@ fn main() -> ExitCode {
 fn run() -> io::Result<ExitCode> {
     if let Some((_, resolved_config)) = config::load_config()? {
         // TODO we want to run the indexer once the frontend has started and report progress in the frontend
-        guifrontend::guifrontend(resolved_config.clone());
-        Ok(ExitCode::SUCCESS)
+        guifrontend::guifrontend(resolved_config.clone())
     } else {
         let warning = "No config file found. Run vpxtool to create one.";
         eprintln!("{}", warning);
