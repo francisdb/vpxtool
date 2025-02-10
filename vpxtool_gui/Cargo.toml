@@ -10,7 +10,7 @@ path = "src/main.rs"
 [dependencies]
 vpxtool_shared = { path = "../vpxtool_shared" }
 bevy = "0.15.1"
-bevy_asset = "0.15.1"
+bevy_asset = "0.15.2"
 bevy_dev_tools = "0.15.1"
 #bevy_asset_loader = "0.22.0"
 bevy_egui = "0.32.0"
