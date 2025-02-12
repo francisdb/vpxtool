@@ -535,6 +535,13 @@ fn auto_position_dmd(config: &ResolvedConfig, info: &&IndexedTable) -> Result<St
                                 hole.width(),
                                 hole.height(),
                             );
+
+                            table_config.set_window_position(WindowType::DMD, dmd_x, dmd_y);
+                            table_config.set_window_size(
+                                WindowType::DMD,
+                                hole.width(),
+                                hole.height(),
+                            );
                             table_config.write(&table_ini_path).unwrap();
                             Ok(format!(
                                 "DMD window dimensions an position in {} updated to {}x{} at {},{}",
