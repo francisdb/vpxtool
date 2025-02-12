@@ -17,6 +17,7 @@ pub enum WindowType {
     PUPDMD,
     PUPPlayfield,
     PUPFullDMD,
+    DMD,
 }
 impl Display for WindowType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -31,6 +32,7 @@ impl Display for WindowType {
             WindowType::PUPDMD => write!(f, "PUPDMD"),
             WindowType::PUPPlayfield => write!(f, "PUPPlayfield"),
             WindowType::PUPFullDMD => write!(f, "PUPFullDMD"),
+            WindowType::DMD => write!(f, "DMD"),
         }
     }
 }
@@ -47,12 +49,14 @@ fn config_prefix(window_type: WindowType) -> &'static str {
         WindowType::PUPDMD => "PUPDMDWindow",
         WindowType::PUPPlayfield => "PUPPlayfieldWindow",
         WindowType::PUPFullDMD => "PUPFullDMDWindow",
+        WindowType::DMD => "DMD",
     }
 }
 
 fn section_name(window_type: WindowType) -> String {
     match window_type {
         WindowType::Playfield => "Player".to_string(),
+        WindowType::DMD => "DMD".to_string(),
         _ => "Standalone".to_string(),
     }
 }
@@ -135,6 +139,15 @@ impl VPinballConfig {
     pub fn is_window_enabled(&self, window_type: WindowType) -> bool {
         match window_type {
             WindowType::Playfield => true,
+            WindowType::DMD => {
+                let section = section_name(window_type);
+                if let Some(ini_section) = self.ini.section(Some(section)) {
+                    let prefix = config_prefix(window_type);
+                    ini_section.get(format!("{}Output", prefix)) == Some("2")
+                } else {
+                    false
+                }
+            }
             WindowType::B2SBackglass => {
                 let section = section_name(window_type);
                 if let Some(ini_section) = self.ini.section(Some(section)) {
@@ -243,11 +256,11 @@ impl VPinballConfig {
         // see https://github.com/zonyitoo/rust-ini/issues/77
 
         let x_suffix = match window_type {
-            WindowType::Playfield => "WndX",
+            WindowType::Playfield | WindowType::DMD => "WndX",
             _ => "X",
         };
         let y_suffix = match window_type {
-            WindowType::Playfield => "WndY",
+            WindowType::Playfield | WindowType::DMD => "WndY",
             _ => "Y",
         };
 
