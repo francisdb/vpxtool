@@ -5,7 +5,7 @@ edition = "2021"
 [lib]
 
 [dependencies]
-vpin = { version = "0.17.3" }
+vpin = { version = "0.17.4" }
 #see https://github.com/chronotope/chrono/issues/602#issuecomment-1242149249
 chrono = { version = "0.4.39", default-features = false, features = ["clock"] }
 rust-ini = "0.21.1"
