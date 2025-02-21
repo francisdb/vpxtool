@@ -1,11 +1,11 @@
 use crate::guifrontend::VpxTables;
-use crate::list::{display_table_line, SelectedItem};
+use crate::list::{SelectedItem, display_table_line};
 use bevy::input::ButtonInput;
 use bevy::prelude::{ColorMaterial, Commands, KeyCode, Mesh, Query, Res, ResMut, Window, With};
 use bevy::window::PrimaryWindow;
 use bevy_asset::Assets;
 use bevy_egui::egui::Align2;
-use bevy_egui::{egui, EguiContexts};
+use bevy_egui::{EguiContexts, egui};
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn show_info(

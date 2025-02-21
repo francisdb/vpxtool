@@ -4,7 +4,7 @@ use bevy::prelude::*;
 use crossbeam_channel::Sender;
 use is_executable::IsExecutable;
 use std::path::Path;
-use std::process::{exit, ExitStatus};
+use std::process::{ExitStatus, exit};
 
 use crate::event_channel::ChannelExternalEvent;
 use std::{io, thread};
@@ -36,10 +36,14 @@ fn launch(selected_path: &Path, vpinball_executable: &Path, fullscreen: Option<b
                 //println!("Table exited normally");
             }
             Some(11) => {
-                eprintln!("Visual Pinball exited with segfault, you might want to report this to the vpinball team.");
+                eprintln!(
+                    "Visual Pinball exited with segfault, you might want to report this to the vpinball team."
+                );
             }
             Some(139) => {
-                eprintln!("Visual Pinball exited with segfault, you might want to report this to the vpinball team.");
+                eprintln!(
+                    "Visual Pinball exited with segfault, you might want to report this to the vpinball team."
+                );
             }
             Some(code) => {
                 eprintln!("Visual Pinball exited with code {}", code);

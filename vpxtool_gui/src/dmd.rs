@@ -1,7 +1,7 @@
 use crate::loading::LoadingState;
-use crate::wheel::{WheelInfo, BOTTOM_MARGIN};
-use bevy::color::palettes::css::{GHOST_WHITE, GOLDENROD};
+use crate::wheel::{BOTTOM_MARGIN, WheelInfo};
 use bevy::color::Color;
+use bevy::color::palettes::css::{GHOST_WHITE, GOLDENROD};
 use bevy::math::Vec3;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;

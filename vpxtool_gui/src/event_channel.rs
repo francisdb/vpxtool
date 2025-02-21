@@ -1,7 +1,7 @@
 /// Handles the communication between ano other thread and Bevy
 use bevy::app::{App, PreStartup, Update};
 use bevy::prelude::{Commands, Deref, Event, EventWriter, Res, Resource};
-use crossbeam_channel::{bounded, Receiver, Sender};
+use crossbeam_channel::{Receiver, Sender, bounded};
 use vpxtool_shared::indexer::IndexedTable;
 
 #[derive(Event, Debug)]
