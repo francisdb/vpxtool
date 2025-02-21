@@ -1,6 +1,6 @@
 [package]
 name = "vpxtool_shared"
-edition = "2021"
+edition = "2024"
 
 [lib]
 

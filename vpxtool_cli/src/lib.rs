@@ -7,7 +7,7 @@
 use crate::patcher::patch_vbs_file;
 use base64::Engine;
 use clap::builder::Str;
-use clap::{arg, Arg, ArgMatches, Command};
+use clap::{Arg, ArgMatches, Command, arg};
 use colored::Colorize;
 use console::Emoji;
 use git_version::git_version;
@@ -16,15 +16,15 @@ use pinmame_nvram::dips::get_all_dip_switches;
 use std::error::Error;
 use std::ffi::OsStr;
 use std::fmt::Display;
-use std::fs::{metadata, File, OpenOptions};
+use std::fs::{File, OpenOptions, metadata};
 use std::io;
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::{exit, ExitCode};
+use std::process::{ExitCode, exit};
 use vpin::directb2s::read;
 use vpin::vpx;
 use vpin::vpx::jsonmodel::{game_data_to_json, info_to_json};
-use vpin::vpx::{expanded, extractvbs, importvbs, verify, ExtractResult, VerifyResult};
+use vpin::vpx::{ExtractResult, VerifyResult, expanded, extractvbs, importvbs, verify};
 use vpxtool_shared::config::{ResolvedConfig, SetupConfigResult};
 use vpxtool_shared::indexer::{IndexError, Progress};
 use vpxtool_shared::{config, indexer};
@@ -423,7 +423,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                             return Err(io::Error::new(
                                 io::ErrorKind::InvalidInput,
                                 "Invalid directory path",
-                            ))
+                            ));
                         }
                     };
                     expanded_dir_path.with_file_name(file_name)

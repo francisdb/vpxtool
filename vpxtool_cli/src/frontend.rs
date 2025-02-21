@@ -2,9 +2,9 @@ use crate::backglass::find_hole;
 use crate::patcher::LineEndingsResult::{NoChanges, Unified};
 use crate::patcher::{patch_vbs_file, unify_line_endings_vbs_file};
 use crate::{
-    confirm, info_diff, info_edit, info_gather, open_editor, run_diff, script_diff, strip_cr_lf,
-    vpx::{extractvbs, vbs_path_for, ExtractResult},
-    DiffColor, ProgressBarProgress,
+    DiffColor, ProgressBarProgress, confirm, info_diff, info_edit, info_gather, open_editor,
+    run_diff, script_diff, strip_cr_lf,
+    vpx::{ExtractResult, extractvbs, vbs_path_for},
 };
 use base64::Engine;
 use colored::Colorize;
@@ -21,7 +21,7 @@ use std::{
     io,
     io::Write,
     path::{Path, PathBuf},
-    process::{exit, ExitStatus},
+    process::{ExitStatus, exit},
 };
 use vpxtool_shared::config::ResolvedConfig;
 use vpxtool_shared::indexer;
@@ -702,10 +702,16 @@ fn launch(selected_path: &PathBuf, vpinball_executable: &Path, fullscreen: Optio
                 //println!("Table exited normally");
             }
             Some(11) => {
-                prompt(&format!("{} Visual Pinball exited with segfault, you might want to report this to the vpinball team.", CRASH));
+                prompt(&format!(
+                    "{} Visual Pinball exited with segfault, you might want to report this to the vpinball team.",
+                    CRASH
+                ));
             }
             Some(139) => {
-                prompt(&format!("{} Visual Pinball exited with segfault, you might want to report this to the vpinball team.", CRASH));
+                prompt(&format!(
+                    "{} Visual Pinball exited with segfault, you might want to report this to the vpinball team.",
+                    CRASH
+                ));
             }
             Some(code) => {
                 prompt(&format!(

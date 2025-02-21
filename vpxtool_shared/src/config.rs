@@ -1,10 +1,10 @@
 use std::path::{Path, PathBuf};
 
-use dialoguer::theme::ColorfulTheme;
 use dialoguer::Select;
+use dialoguer::theme::ColorfulTheme;
 use figment::{
-    providers::{Format, Toml},
     Figment,
+    providers::{Format, Toml},
 };
 use serde::{Deserialize, Serialize};
 use std::fs::File;
