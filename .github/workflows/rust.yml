@@ -28,7 +28,12 @@ jobs:
         run: sudo apt-get update && sudo apt-get install g++ pkg-config libx11-dev libasound2-dev libudev-dev libxkbcommon-x11-0 libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev
         if: contains(matrix.platform.os, 'ubuntu')
       - uses: actions/checkout@v4
-      - run: rustup toolchain install stable --profile minimal
+      - name: Install minimal stable with clippy and rustfmt
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2.7.7
       - name: Build
         run: cargo build --verbose
