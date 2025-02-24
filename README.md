@@ -121,6 +121,7 @@ editor = "code"
 ## Projects using vpxtool
 
 * https://github.com/syd711/vpin-studio
+* https://github.com/jsm174/docker-vpxtool-resize
 * https://github.com/mpcarr/aztec-quest
 * https://github.com/francisdb/vpinball-example-table-extracted
 
