@@ -1,4 +1,4 @@
-use image::{DynamicImage, Rgba, RgbaImage};
+use image::{DynamicImage, RgbaImage};
 use std::io;
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -245,7 +245,7 @@ fn trace_line(
     rgba_image: &RgbaImage,
     start: Vec2,
     end: Vec2,
-    color: &Rgba<u8>,
+    color: &image::Rgba<u8>,
     max_deviation_u8: u8,
 ) -> Vec2 {
     let mut current = end;

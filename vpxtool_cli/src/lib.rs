@@ -229,7 +229,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     let tables_index_path = config::tables_index_path(&tables_path);
                     (tables_path, tables_index_path)
                 }
-                None => match config::load_config().unwrap() {
+                None => match config::load_config()? {
                     Some((config_path, config)) => {
                         println!("Using config file {}", config_path.display())?;
                         (config.tables_folder, config.tables_index_path)
@@ -255,8 +255,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 None,
                 &progress,
                 vec![],
-            )
-            .unwrap();
+            )?;
             progress.finish_and_clear();
             println!(
                 "Indexed {} vpx files into {}",
@@ -587,9 +586,9 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             },
             Some((CMD_CONFIG_SHOW, _)) => match config::config_path() {
                 Some(config_path) => {
-                    let mut file = File::open(config_path).unwrap();
+                    let mut file = File::open(config_path)?;
                     let mut text = String::new();
-                    file.read_to_string(&mut text).unwrap();
+                    file.read_to_string(&mut text)?;
                     println!("{}", text)?;
                     Ok(ExitCode::SUCCESS)
                 }

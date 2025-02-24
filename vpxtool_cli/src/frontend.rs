@@ -724,7 +724,7 @@ fn launch(selected_path: &PathBuf, vpinball_executable: &Path, fullscreen: Optio
             }
         },
         Err(e) => {
-            if e.kind() == std::io::ErrorKind::NotFound {
+            if e.kind() == io::ErrorKind::NotFound {
                 report_and_exit(format!(
                     "Unable to launch table, vpinball executable not found at {}",
                     vpinball_executable.display()
@@ -778,7 +778,7 @@ fn display_table_line(table: &IndexedTable) -> String {
             format!(
                 "{} {}",
                 capitalize_first_letter(s.unwrap_or_default().as_str()),
-                (format!("({})", file_name)).dimmed()
+                format!("({})", file_name).dimmed()
             )
         })
         .unwrap_or(file_name)
