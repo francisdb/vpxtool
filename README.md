@@ -144,4 +144,10 @@ https://github.com/vbousquet/flexdmd/tree/master/FlexDemo
 The project uses the default [rust](https://www.rust-lang.org/) build tool `cargo`. To get going read the docs on
 installation and first steps at https://doc.rust-lang.org/cargo/
 
-`cargo build --release`
+In case you are running Linux, the graphical frontend requires some extra operating system dependencies. These are
+listed in the [bevy linux dependencies](https://github.com/bevyengine/bevy/blob/main/docs/linux_dependencies.md)
+document.
+
+```
+cargo build --release
+```
