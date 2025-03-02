@@ -6,7 +6,6 @@ use crate::info::show_info;
 use crate::list::{SelectedItem, display_table_line, list_plugin};
 use crate::loading::{LoadingState, TableLoadingEvent};
 use crate::loading::{loading_plugin, mark_tables_loaded};
-use crate::menus::*;
 use crate::music::{ControlMusicEvent, music_plugin, resume_music, suspend_music};
 use crate::process::do_launch;
 use crate::wheel::wheel_plugin;
@@ -173,18 +172,17 @@ pub fn guifrontend(config: ResolvedConfig) -> io::Result<ExitCode> {
             primary_window: Some(playfield_window),
             ..Default::default()
         }))
+        .add_plugins(EguiPlugin)
         .add_plugins(WindowingPlugin)
         .add_plugins(crate::event_channel::plugin)
         .add_plugins(music_plugin)
         .add_plugins((wheel_plugin, flipper_plugin, dmd_plugin, list_plugin))
         .add_plugins(loading_plugin)
         .add_plugins(crate::gradient_background::plugin)
-        .add_plugins(EguiPlugin)
         .add_systems(Startup, setup_gradient_background)
         .add_systems(Update, quit_on_q_or_window_closed)
         .add_systems(Update, handle_external_events)
         .add_systems(Update, launcher.run_if(in_state(LoadingState::Ready)))
-        .add_systems(Update, dmd_update.run_if(in_state(LoadingState::Ready)))
         .add_systems(Update, show_info.run_if(in_state(LoadingState::Ready)))
         .init_state::<LoadingState>();
 

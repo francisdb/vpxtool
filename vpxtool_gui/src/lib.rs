@@ -6,7 +6,6 @@ pub mod guifrontend;
 mod info;
 mod list;
 mod loading;
-mod menus;
 mod music;
 mod pipelines;
 mod process;
