@@ -12,6 +12,8 @@ mod process;
 mod wheel;
 mod windowing;
 
+mod diagnostic;
+
 // only for development
 #[cfg(debug_assertions)]
 mod debug_window_labels;

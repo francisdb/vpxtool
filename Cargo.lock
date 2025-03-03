@@ -1080,15 +1080,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bevy_mini_fps"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9fa083e6ca62d88c33fd041620f870c931415cfb6b275a4efb5e09bf08e56c27"
-dependencies = [
- "sysinfo 0.33.1",
-]
-
-[[package]]
 name = "bevy_pbr"
 version = "0.15.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5960,10 +5951,10 @@ dependencies = [
  "bevy_asset",
  "bevy_dev_tools",
  "bevy_egui",
- "bevy_mini_fps",
  "crossbeam-channel",
  "is_executable",
  "pretty_assertions",
+ "sysinfo 0.33.1",
  "vpxtool_shared",
 ]
 

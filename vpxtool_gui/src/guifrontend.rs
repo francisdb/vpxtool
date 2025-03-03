@@ -16,6 +16,7 @@ use bevy::window::*;
 use bevy_egui::EguiPlugin;
 use std::io;
 use std::process::ExitCode;
+
 use vpxtool_shared::config::ResolvedConfig;
 use vpxtool_shared::indexer::IndexedTable;
 use vpxtool_shared::vpinball_config::VPinballConfig;
@@ -189,7 +190,28 @@ pub fn guifrontend(config: ResolvedConfig) -> io::Result<ExitCode> {
     // only for development
     #[cfg(debug_assertions)]
     {
-        app.add_plugins(bevy_mini_fps::fps_plugin!());
+        app.add_plugins((
+            bevy::diagnostic::FrameTimeDiagnosticsPlugin,
+            bevy::diagnostic::LogDiagnosticsPlugin {
+                debug: false,
+                wait_duration: std::time::Duration::from_secs(1),
+                filter: Some(vec![
+                    bevy::diagnostic::DiagnosticPath::new("fps"),
+                    bevy::diagnostic::DiagnosticPath::new("process/cpu_usage"),
+                    bevy::diagnostic::DiagnosticPath::new("process/mem_usage"),
+                ]),
+            },
+            // Any plugin can register diagnostics. Uncomment this to add an entity count diagnostics:
+            //bevy::diagnostic::EntityCountDiagnosticsPlugin::default(),
+            // Uncomment this to add an asset count diagnostics:
+            //bevy::asset::diagnostic::AssetCountDiagnosticsPlugin::<Texture>::default(),
+            // Uncomment this to add system info diagnostics:
+            //bevy::diagnostic::SystemInformationDiagnosticsPlugin::default(),
+            // we have our custom SystemInformationDiagnosticsPlugin that adds process cpu and mem usage
+            crate::diagnostic::SystemInformationDiagnosticsPlugin,
+            // Uncomment this to add rendering diagnostics:
+            //bevy::render::diagnostic::RenderDiagnosticsPlugin::default(),
+        ));
         app.add_plugins(crate::debug_window_labels::plugin)
             //app.add_plugins(bevy_dev_tools::ui_debug_overlay::DebugUiPlugin)
             .add_systems(Update, toggle_overlay);
@@ -197,11 +219,11 @@ pub fn guifrontend(config: ResolvedConfig) -> io::Result<ExitCode> {
             config: bevy_dev_tools::fps_overlay::FpsOverlayConfig {
                 text_config: TextFont {
                     font: Default::default(),
-                    font_size: 12.0,
+                    font_size: 8.0,
                     ..Default::default()
                 },
                 text_color: Color::WHITE,
-                enabled: false,
+                enabled: true,
             },
         })
         .add_systems(Update, toggle_fps);
