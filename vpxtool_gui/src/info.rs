@@ -1,18 +1,14 @@
 use crate::guifrontend::VpxTables;
 use crate::list::{SelectedItem, display_table_line};
 use bevy::input::ButtonInput;
-use bevy::prelude::{ColorMaterial, Commands, KeyCode, Mesh, Query, Res, ResMut, Window, With};
+use bevy::prelude::{KeyCode, Query, Res, ResMut, Window, With};
 use bevy::window::PrimaryWindow;
-use bevy_asset::Assets;
 use bevy_egui::egui::Align2;
 use bevy_egui::{EguiContexts, egui};
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn show_info(
-    commands: Commands,
     keys: Res<ButtonInput<KeyCode>>,
-    meshes: ResMut<Assets<Mesh>>,
-    materials: ResMut<Assets<ColorMaterial>>,
     mut globals: ResMut<crate::guifrontend::Globals>,
     selected_item_res: Res<SelectedItem>,
     window_query: Query<&Window, With<PrimaryWindow>>,
@@ -37,40 +33,13 @@ pub(crate) fn show_info(
 
         // FIXME, this keeps creating windows???
         if globals.vpinball_running {
-            create_info_box(
-                commands,
-                keys,
-                meshes,
-                materials,
-                window,
-                contexts,
-                wtitle,
-                gametext.to_owned(),
-            );
+            create_info_box(window, contexts, wtitle, gametext.to_owned());
         };
     }
 }
 
 #[allow(clippy::too_many_arguments)]
-fn create_info_box(
-    _commands: Commands,
-    _keys: Res<ButtonInput<KeyCode>>,
-    _meshes: ResMut<Assets<Mesh>>,
-    _materials: ResMut<Assets<ColorMaterial>>,
-    window: &Window,
-    mut contexts: EguiContexts,
-    wtitle: String,
-    wtext: String,
-) {
-    /*   MacOS window settings
-     pub movable_by_window_background: bool,
-    pub fullsize_content_view: bool,
-    pub has_shadow: bool,
-    pub titlebar_shown: bool,
-    pub titlebar_transparent: bool,
-    pub titlebar_show_title: bool,
-    pub titlebar_show_buttons: bool, */
-
+fn create_info_box(window: &Window, mut contexts: EguiContexts, wtitle: String, wtext: String) {
     let width = window.resolution.width();
     let height = window.resolution.height();
 
@@ -84,35 +53,6 @@ fn create_info_box(
         .min_height(500.0)
         .pivot(Align2::LEFT_TOP)
         .show(contexts.ctx_mut(), |ui| {
-            //  ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
-            //egui::ScrollArea::vertical()
-            //   .min_scrolled_width(500.0)
-            //  .auto_shrink(false)
-            // .animated(true)
-            //.show(ui, |ui| {
             ui.add(egui::Label::wrap(egui::Label::new(&wtext)));
-            // });
         });
-    //});
-
-    // let mut _loopstop = false;
-    //
-    // //println!("key: {:?}",keys.get_pressed());
-    // if keys.pressed(KeyCode::ShiftRight) {
-    //     // println!("broken");
-    //     _loopstop = true;
-    // }
-    //
-    // let _window = Window {
-    //     // Enable transparent support for the window
-    //     transparent: true,
-    //     decorations: true,
-    //     window_level: WindowLevel::AlwaysOnTop,
-    //     //       cursor: Cursor {
-    //     //           // Allow inputs to pass through to apps behind this app.
-    //     //           hit_test: false,
-    //     //           ..default()
-    //     //       },
-    //     ..default()
-    // };
 }
