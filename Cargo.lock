@@ -2620,13 +2620,13 @@ dependencies = [
 
 [[package]]
 name = "fake"
-version = "3.1.0"
+version = "4.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aef603df4ba9adbca6a332db7da6f614f21eafefbaf8e087844e452fdec152d0"
+checksum = "206294f947d314ea224901e0b409c25465d1014ea0c3af27baaec861061a0426"
 dependencies = [
  "deunicode",
  "dummy",
- "rand 0.8.5",
+ "rand 0.9.0",
 ]
 
 [[package]]
@@ -5892,9 +5892,9 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "vpin"
-version = "0.17.4"
+version = "0.17.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aff84fa15b078bffb81a7526032ebaafaa68001588a1e8854f26b9c5662379a6"
+checksum = "aeedaf97e8fc3dd73a1b346c515d899cf0bae2f30ccb91dfb37b0c2ebc1c75cf"
 dependencies = [
  "byteorder",
  "bytes",
