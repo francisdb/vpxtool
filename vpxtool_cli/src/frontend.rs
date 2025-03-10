@@ -53,10 +53,11 @@ enum TableOption {
     DIPSwitches,
     NVRAMClear,
     B2SAutoPositionDMD,
+    EditINI,
 }
 
 impl TableOption {
-    const ALL: [TableOption; 16] = [
+    const ALL: [TableOption; 17] = [
         TableOption::Launch,
         TableOption::LaunchFullscreen,
         TableOption::LaunchWindowed,
@@ -73,6 +74,7 @@ impl TableOption {
         TableOption::DIPSwitches,
         TableOption::NVRAMClear,
         TableOption::B2SAutoPositionDMD,
+        TableOption::EditINI,
     ];
 
     fn from_index(index: usize) -> Option<TableOption> {
@@ -93,6 +95,7 @@ impl TableOption {
             13 => Some(TableOption::DIPSwitches),
             14 => Some(TableOption::NVRAMClear),
             15 => Some(TableOption::B2SAutoPositionDMD),
+            16 => Some(TableOption::EditINI),
             _ => None,
         }
     }
@@ -115,6 +118,7 @@ impl TableOption {
             TableOption::DIPSwitches => "DIP Switches".to_string(),
             TableOption::NVRAMClear => "NVRAM > Clear".to_string(),
             TableOption::B2SAutoPositionDMD => "Backglass > Auto-position DMD".to_string(),
+            TableOption::EditINI => "INI > Edit".to_string(),
         }
     }
 }
@@ -459,6 +463,26 @@ fn table_menu(
                 prompt_error(&msg);
             }
         },
+        Some(TableOption::EditINI) => {
+            let path = PathBuf::from(selected_path).with_extension("ini");
+            let result = if path.exists() {
+                open_editor(&path, Some(config))
+            } else {
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    format!("File {} does not exist.", path.display()),
+                ))
+            };
+            match result {
+                Ok(_) => {
+                    println!("Launched editor for {}", path.display());
+                }
+                Err(err) => {
+                    let msg = format!("Unable to edit INI: {}", err);
+                    prompt(&msg.truecolor(255, 125, 0).to_string());
+                }
+            }
+        }
         None => (),
     }
 }
