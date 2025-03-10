@@ -23,7 +23,7 @@ git-version = "0.3.9"
 indicatif = "0.17.11"
 jojodiff = "0.1.2"
 serde = { version = "1.0.219", features = ["derive"] }
-serde_json = { version = "1.0.138", features = ["preserve_order"] }
+serde_json = { version = "1.0.140", features = ["preserve_order"] }
 shellexpand = "3.1.0"
 wild = "2.2.1"
 
