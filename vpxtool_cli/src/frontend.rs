@@ -4,7 +4,7 @@ use crate::patcher::{patch_vbs_file, unify_line_endings_vbs_file};
 use crate::{
     DiffColor, ProgressBarProgress, confirm, info_diff, info_edit, info_gather, open_editor,
     run_diff, script_diff, strip_cr_lf,
-    vpx::{ExtractResult, extractvbs, vbs_path_for},
+    vpx::{ExtractResult, extractvbs, ini_path_for, vbs_path_for},
 };
 use base64::Engine;
 use colored::Colorize;
@@ -464,7 +464,7 @@ fn table_menu(
             }
         },
         Some(TableOption::EditINI) => {
-            let path = PathBuf::from(selected_path).with_extension("ini");
+            let path = ini_path_for(selected_path);
             let result = if path.exists() {
                 open_editor(&path, Some(config))
             } else {
