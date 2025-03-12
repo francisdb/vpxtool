@@ -1568,13 +1568,16 @@ pub fn run_diff(
     let original_vbs_filename = original_vbs_path
         .file_name()
         .unwrap_or(original_vbs_path.as_os_str());
+    let original_vbs_file_name_no_tmp = original_vbs_filename.to_string_lossy().replace(".tmp", "");
     let vbs_filename = vbs_path.file_name().unwrap_or(vbs_path.as_os_str());
     let result = std::process::Command::new("diff")
         .current_dir(parent)
         .arg("-u")
         .arg("-w")
         .arg(format!("--color={}", color.to_diff_arg()))
+        .arg(format!("--label={}", original_vbs_file_name_no_tmp))
         .arg(original_vbs_filename)
+        .arg(format!("--label={}", vbs_filename.to_string_lossy()))
         .arg(vbs_filename)
         .output()
         .map(|o| o.stdout);
