@@ -36,6 +36,7 @@ const RECENT: &str = "> Recent";
 const SEARCH_INDEX: usize = 0;
 const RECENT_INDEX: usize = 1;
 
+#[derive(PartialEq, Eq)]
 enum TableOption {
     Launch,
     LaunchFullscreen,
@@ -259,231 +260,243 @@ fn table_menu(
     info_str: &str,
 ) {
     let selected_path = &info.path;
-    match choose_table_option(info_str) {
-        Some(TableOption::Launch) => {
-            launch(selected_path, vpinball_executable, None);
-        }
-        Some(TableOption::LaunchFullscreen) => {
-            launch(selected_path, vpinball_executable, Some(true));
-        }
-        Some(TableOption::LaunchWindowed) => {
-            launch(selected_path, vpinball_executable, Some(false));
-        }
-        Some(TableOption::ForceReload) => {
-            match frontend_index(config, true, vec![selected_path.clone()]) {
-                Ok(index) => {
-                    vpx_files_with_tableinfo.clear();
-                    vpx_files_with_tableinfo.extend(index);
-                }
-                Err(err) => {
-                    let msg = format!("Unable to reload tables: {:?}", err);
-                    prompt(&msg.truecolor(255, 125, 0).to_string());
-                }
+    let mut exit = false;
+    let mut option = None;
+    while !exit {
+        option = choose_table_option(info_str, option);
+        match option {
+            Some(TableOption::Launch) => {
+                launch(selected_path, vpinball_executable, None);
+                exit = true;
             }
-        }
-        Some(TableOption::EditVBS) => {
-            let path = vbs_path_for(selected_path);
-            let result = if path.exists() {
-                open_editor(&path, Some(config))
-            } else {
-                extractvbs(selected_path, None, false)
-                    .and_then(|_| open_editor(&path, Some(config)))
-            };
-            match result {
-                Ok(_) => {
-                    println!("Launched editor for {}", path.display());
-                }
-                Err(err) => {
-                    let msg = format!("Unable to edit VBS: {}", err);
-                    prompt(&msg.truecolor(255, 125, 0).to_string());
-                }
+            Some(TableOption::LaunchFullscreen) => {
+                launch(selected_path, vpinball_executable, Some(true));
+                exit = true;
             }
-        }
-        Some(TableOption::ExtractVBS) => match extractvbs(selected_path, None, false) {
-            Ok(ExtractResult::Extracted(path)) => {
-                prompt(&format!("VBS extracted to {}", path.to_string_lossy()));
+            Some(TableOption::LaunchWindowed) => {
+                launch(selected_path, vpinball_executable, Some(false));
+                exit = true;
             }
-            Ok(ExtractResult::Existed(path)) => {
-                let msg = format!("VBS already exists at {}", path.to_string_lossy());
-                prompt(&msg.truecolor(255, 125, 0).to_string());
-            }
-            Err(err) => {
-                let msg = format!("Unable to extract VBS: {}", err);
-                prompt(&msg.truecolor(255, 125, 0).to_string());
-            }
-        },
-        Some(TableOption::ShowVBSDiff) => match script_diff(selected_path) {
-            Ok(diff) => {
-                prompt(&diff);
-            }
-            Err(err) => {
-                let msg = format!("Unable to diff VBS: {}", err);
-                prompt(&msg.truecolor(255, 125, 0).to_string());
-            }
-        },
-        Some(TableOption::PatchVBS) => {
-            let vbs_path = match extractvbs(selected_path, None, false) {
-                Ok(ExtractResult::Existed(path)) => path,
-                Ok(ExtractResult::Extracted(path)) => path,
-                Err(err) => {
-                    let msg = format!("Unable to extract VBS: {}", err);
-                    prompt(&msg.truecolor(255, 125, 0).to_string());
-                    return;
-                }
-            };
-            match patch_vbs_file(&vbs_path) {
-                Ok(applied) => {
-                    if applied.is_empty() {
-                        prompt("No patches applied.");
-                    } else {
-                        applied.iter().for_each(|patch| {
-                            println!("Applied patch: {}", patch);
-                        });
-                        prompt(&format!(
-                            "Patched VBS file at {}",
-                            vbs_path.to_string_lossy()
-                        ));
+            Some(TableOption::ForceReload) => {
+                match frontend_index(config, true, vec![selected_path.clone()]) {
+                    Ok(index) => {
+                        vpx_files_with_tableinfo.clear();
+                        vpx_files_with_tableinfo.extend(index);
+                        // exit to not have to
+                        //  * check if the table is still in the list
+                        //  * check if the info_str has changed
+                        exit = true;
+                    }
+                    Err(err) => {
+                        let msg = format!("Unable to reload tables: {:?}", err);
+                        prompt(&msg.truecolor(255, 125, 0).to_string());
                     }
                 }
-                Err(err) => {
-                    let msg = format!("Unable to patch VBS: {}", err);
-                    prompt(&msg.truecolor(255, 125, 0).to_string());
+            }
+            Some(TableOption::EditVBS) => {
+                let path = vbs_path_for(selected_path);
+                let result = if path.exists() {
+                    open_editor(&path, Some(config))
+                } else {
+                    extractvbs(selected_path, None, false)
+                        .and_then(|_| open_editor(&path, Some(config)))
+                };
+                match result {
+                    Ok(_) => {
+                        println!("Launched editor for {}", path.display());
+                    }
+                    Err(err) => {
+                        let msg = format!("Unable to edit VBS: {}", err);
+                        prompt(&msg.truecolor(255, 125, 0).to_string());
+                    }
                 }
             }
-        }
-        Some(TableOption::UnifyLineEndings) => {
-            let vbs_path = vbs_path_for(selected_path);
-            let vbs_path = match extractvbs(selected_path, Some(vbs_path), false) {
-                Ok(ExtractResult::Existed(path)) => path,
-                Ok(ExtractResult::Extracted(path)) => path,
+            Some(TableOption::ExtractVBS) => match extractvbs(selected_path, None, false) {
+                Ok(ExtractResult::Extracted(path)) => {
+                    prompt(&format!("VBS extracted to {}", path.to_string_lossy()));
+                }
+                Ok(ExtractResult::Existed(path)) => {
+                    let msg = format!("VBS already exists at {}", path.to_string_lossy());
+                    prompt(&msg.truecolor(255, 125, 0).to_string());
+                }
                 Err(err) => {
                     let msg = format!("Unable to extract VBS: {}", err);
                     prompt(&msg.truecolor(255, 125, 0).to_string());
-                    return;
                 }
-            };
-            match unify_line_endings_vbs_file(&vbs_path) {
-                Ok(NoChanges) => {
-                    prompt("No changes applied as file has correct line endings");
-                }
-                Ok(Unified) => {
-                    prompt(&format!(
-                        "Unified line endings in VBS file at {}",
-                        vbs_path.to_string_lossy()
-                    ));
-                }
-                Err(err) => {
-                    let msg = format!("Unable to patch VBS: {}", err);
-                    prompt(&msg.truecolor(255, 125, 0).to_string());
-                }
-            }
-        }
-        Some(TableOption::CreateVBSPatch) => {
-            let vbs_path = selected_path.with_extension("vbs.original");
-            let original_path = match extractvbs(selected_path, Some(vbs_path), true) {
-                Ok(ExtractResult::Existed(path)) => path,
-                Ok(ExtractResult::Extracted(path)) => path,
-                Err(err) => {
-                    let msg = format!("Unable to extract VBS: {}", err);
-                    prompt(&msg.truecolor(255, 125, 0).to_string());
-                    return;
-                }
-            };
-            let vbs_path = vbs_path_for(selected_path);
-            let patch_path = vbs_path.with_extension("vbs.patch");
-
-            match run_diff(&original_path, &vbs_path, DiffColor::Never) {
+            },
+            Some(TableOption::ShowVBSDiff) => match script_diff(selected_path) {
                 Ok(diff) => {
-                    let mut file = File::create(patch_path).unwrap();
-                    file.write_all(&diff).unwrap();
+                    prompt(&diff);
                 }
                 Err(err) => {
                     let msg = format!("Unable to diff VBS: {}", err);
                     prompt(&msg.truecolor(255, 125, 0).to_string());
                 }
-            }
-        }
-        Some(TableOption::InfoShow) => match info_gather(selected_path) {
-            Ok(info) => {
-                prompt(&info);
-            }
-            Err(err) => {
-                let msg = format!("Unable to gather table info: {}", err);
-                prompt(&msg.truecolor(255, 125, 0).to_string());
-            }
-        },
-        Some(TableOption::InfoEdit) => match info_edit(selected_path, Some(config)) {
-            Ok(path) => {
-                println!("Launched editor for {}", path.display());
-            }
-            Err(err) => {
-                let msg = format!("Unable to edit table info: {}", err);
-                prompt_error(&msg);
-            }
-        },
-        Some(TableOption::InfoDiff) => match info_diff(selected_path) {
-            Ok(diff) => {
-                prompt(&diff);
-            }
-            Err(err) => {
-                let msg = format!("Unable to diff info: {}", err);
-                prompt_error(&msg);
-            }
-        },
-        Some(TableOption::DIPSwitches) => {
-            if info.requires_pinmame {
-                let nvram = nvram_for_rom(info);
-                if let Some(nvram) = nvram {
-                    // open file in read/write mode
-                    match edit_dip_switches(nvram) {
-                        Ok(_) => {
-                            // ok
-                        }
-                        Err(err) => {
-                            let msg = format!("Unable to edit DIP switches: {}", err);
-                            prompt_error(&msg);
+            },
+            Some(TableOption::PatchVBS) => {
+                let vbs_path = match extractvbs(selected_path, None, false) {
+                    Ok(ExtractResult::Existed(path)) => path,
+                    Ok(ExtractResult::Extracted(path)) => path,
+                    Err(err) => {
+                        let msg = format!("Unable to extract VBS: {}", err);
+                        prompt(&msg.truecolor(255, 125, 0).to_string());
+                        return;
+                    }
+                };
+                match patch_vbs_file(&vbs_path) {
+                    Ok(applied) => {
+                        if applied.is_empty() {
+                            prompt("No patches applied.");
+                        } else {
+                            applied.iter().for_each(|patch| {
+                                println!("Applied patch: {}", patch);
+                            });
+                            prompt(&format!(
+                                "Patched VBS file at {}",
+                                vbs_path.to_string_lossy()
+                            ));
                         }
                     }
-                } else {
-                    prompt("This table does not have an NVRAM file, try launching it once.");
+                    Err(err) => {
+                        let msg = format!("Unable to patch VBS: {}", err);
+                        prompt(&msg.truecolor(255, 125, 0).to_string());
+                    }
                 }
-            } else {
-                prompt("This table is not using used PinMAME");
             }
-        }
-        Some(TableOption::NVRAMClear) => {
-            clear_nvram(info);
-        }
-        Some(TableOption::B2SAutoPositionDMD) => match auto_position_dmd(config, &info) {
-            Ok(msg) => {
-                prompt(&msg);
+            Some(TableOption::UnifyLineEndings) => {
+                let vbs_path = vbs_path_for(selected_path);
+                let vbs_path = match extractvbs(selected_path, Some(vbs_path), false) {
+                    Ok(ExtractResult::Existed(path)) => path,
+                    Ok(ExtractResult::Extracted(path)) => path,
+                    Err(err) => {
+                        let msg = format!("Unable to extract VBS: {}", err);
+                        prompt(&msg.truecolor(255, 125, 0).to_string());
+                        return;
+                    }
+                };
+                match unify_line_endings_vbs_file(&vbs_path) {
+                    Ok(NoChanges) => {
+                        prompt("No changes applied as file has correct line endings");
+                    }
+                    Ok(Unified) => {
+                        prompt(&format!(
+                            "Unified line endings in VBS file at {}",
+                            vbs_path.to_string_lossy()
+                        ));
+                    }
+                    Err(err) => {
+                        let msg = format!("Unable to patch VBS: {}", err);
+                        prompt(&msg.truecolor(255, 125, 0).to_string());
+                    }
+                }
             }
-            Err(err) => {
-                let msg = format!("Unable to auto-position DMD: {}", err);
-                prompt_error(&msg);
+            Some(TableOption::CreateVBSPatch) => {
+                let vbs_path = selected_path.with_extension("vbs.original");
+                let original_path = match extractvbs(selected_path, Some(vbs_path), true) {
+                    Ok(ExtractResult::Existed(path)) => path,
+                    Ok(ExtractResult::Extracted(path)) => path,
+                    Err(err) => {
+                        let msg = format!("Unable to extract VBS: {}", err);
+                        prompt(&msg.truecolor(255, 125, 0).to_string());
+                        return;
+                    }
+                };
+                let vbs_path = vbs_path_for(selected_path);
+                let patch_path = vbs_path.with_extension("vbs.patch");
+
+                match run_diff(&original_path, &vbs_path, DiffColor::Never) {
+                    Ok(diff) => {
+                        let mut file = File::create(patch_path).unwrap();
+                        file.write_all(&diff).unwrap();
+                    }
+                    Err(err) => {
+                        let msg = format!("Unable to diff VBS: {}", err);
+                        prompt(&msg.truecolor(255, 125, 0).to_string());
+                    }
+                }
             }
-        },
-        Some(TableOption::EditINI) => {
-            let path = ini_path_for(selected_path);
-            let result = if path.exists() {
-                open_editor(&path, Some(config))
-            } else {
-                Err(std::io::Error::new(
-                    std::io::ErrorKind::NotFound,
-                    format!("File {} does not exist.", path.display()),
-                ))
-            };
-            match result {
-                Ok(_) => {
+            Some(TableOption::InfoShow) => match info_gather(selected_path) {
+                Ok(info) => {
+                    prompt(&info);
+                }
+                Err(err) => {
+                    let msg = format!("Unable to gather table info: {}", err);
+                    prompt(&msg.truecolor(255, 125, 0).to_string());
+                }
+            },
+            Some(TableOption::InfoEdit) => match info_edit(selected_path, Some(config)) {
+                Ok(path) => {
                     println!("Launched editor for {}", path.display());
                 }
                 Err(err) => {
-                    let msg = format!("Unable to edit INI: {}", err);
-                    prompt(&msg.truecolor(255, 125, 0).to_string());
+                    let msg = format!("Unable to edit table info: {}", err);
+                    prompt_error(&msg);
+                }
+            },
+            Some(TableOption::InfoDiff) => match info_diff(selected_path) {
+                Ok(diff) => {
+                    prompt(&diff);
+                }
+                Err(err) => {
+                    let msg = format!("Unable to diff info: {}", err);
+                    prompt_error(&msg);
+                }
+            },
+            Some(TableOption::DIPSwitches) => {
+                if info.requires_pinmame {
+                    let nvram = nvram_for_rom(info);
+                    if let Some(nvram) = nvram {
+                        // open file in read/write mode
+                        match edit_dip_switches(nvram) {
+                            Ok(_) => {
+                                // ok
+                            }
+                            Err(err) => {
+                                let msg = format!("Unable to edit DIP switches: {}", err);
+                                prompt_error(&msg);
+                            }
+                        }
+                    } else {
+                        prompt("This table does not have an NVRAM file, try launching it once.");
+                    }
+                } else {
+                    prompt("This table is not using used PinMAME");
                 }
             }
+            Some(TableOption::NVRAMClear) => {
+                clear_nvram(info);
+            }
+            Some(TableOption::B2SAutoPositionDMD) => match auto_position_dmd(config, &info) {
+                Ok(msg) => {
+                    prompt(&msg);
+                }
+                Err(err) => {
+                    let msg = format!("Unable to auto-position DMD: {}", err);
+                    prompt_error(&msg);
+                }
+            },
+            Some(TableOption::EditINI) => {
+                let path = ini_path_for(selected_path);
+                let result = if path.exists() {
+                    open_editor(&path, Some(config))
+                } else {
+                    Err(std::io::Error::new(
+                        std::io::ErrorKind::NotFound,
+                        format!("File {} does not exist.", path.display()),
+                    ))
+                };
+                match result {
+                    Ok(_) => {
+                        println!("Launched editor for {}", path.display());
+                    }
+                    Err(err) => {
+                        let msg = format!("Unable to edit INI: {}", err);
+                        prompt(&msg.truecolor(255, 125, 0).to_string());
+                    }
+                }
+            }
+            None => exit = true,
         }
-        None => (),
     }
 }
 
@@ -693,16 +706,22 @@ fn prompt_error(msg: &str) {
     prompt(&msg.truecolor(255, 125, 0).to_string());
 }
 
-fn choose_table_option(table_name: &str) -> Option<TableOption> {
+fn choose_table_option(table_name: &str, selected: Option<TableOption>) -> Option<TableOption> {
+    let mut default = 0;
     // iterate over table options
     let selections = TableOption::ALL
         .iter()
-        .map(|option| option.display())
+        .enumerate()
+        .map(|(index, option)| {
+            if Some(option) == selected.as_ref() {
+                default = index;
+            }
+            option.display()
+        })
         .collect::<Vec<String>>();
-
     let selection_opt = Select::with_theme(&ColorfulTheme::default())
         .with_prompt(table_name)
-        .default(0)
+        .default(default)
         .items(&selections[..])
         .interact_opt()
         .unwrap();
