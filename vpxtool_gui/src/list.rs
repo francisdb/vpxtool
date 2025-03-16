@@ -4,6 +4,7 @@ use bevy::color::palettes::css::{GHOST_WHITE, GOLD};
 use bevy::input::ButtonInput;
 use bevy::prelude::*;
 use bevy::time::Stopwatch;
+use bevy::window::{PrimaryWindow, WindowResized};
 use std::cmp::Ordering;
 use vpxtool_shared::indexer::IndexedTable;
 
@@ -20,6 +21,11 @@ pub struct SelectedItem {
 
 #[derive(Component)]
 pub struct TextItem;
+
+#[derive(Component)]
+pub struct TextContainer {
+    list_index: usize,
+}
 
 #[derive(Bundle)]
 struct MenuTextBundle {
@@ -39,59 +45,102 @@ pub(crate) fn list_plugin(app: &mut App) {
     app.add_systems(Startup, create_list);
     app.add_systems(
         Update,
-        (input_handling, list_update)
+        (input_handling, list_update, update_on_resize)
             .chain()
             .run_if(in_state(LoadingState::Ready)),
     );
 }
 
-fn create_list(mut commands: Commands) {
+fn create_list(
+    mut commands: Commands,
+    primary_window_query: Query<(Entity, &Window), With<PrimaryWindow>>,
+) {
+    let (_primary_window_entity, primary_window) = primary_window_query.single();
+
+    let default_text_color = TextColor::from(Color::srgb(
+        GHOST_WHITE.red,
+        GHOST_WHITE.green,
+        GHOST_WHITE.blue,
+    ));
+
+    let selected_text_color = TextColor::from(GOLD);
+
+    let list_container_height = text_container_height(primary_window);
     for list_index in 0..ITEMS_SHOWN {
         let distance = (list_index as i32 - ITEMS_AROUND_SELECTED as i32).abs() as f32;
         let alpha = 1.0 - (distance / ITEMS_AROUND_SELECTED as f32);
-        let mut text_color = TextColor::from(Color::srgba(
-            GHOST_WHITE.red,
-            GHOST_WHITE.green,
-            GHOST_WHITE.blue,
-            alpha,
-        ));
-        let mut font_size = 15.0;
 
-        if list_index == ITEMS_AROUND_SELECTED {
-            text_color = TextColor::from(GOLD);
-            font_size = 25.0;
-        }
+        let mut font_size = font_size_for(false, list_container_height);
 
-        let top = match list_index.cmp(&ITEMS_AROUND_SELECTED) {
-            Ordering::Less => Val::Px(25. + (((list_index as f32) + 1.) * 20.)),
-            Ordering::Equal => Val::Px(255. + (((list_index as f32) - 10.5) * 20.)),
-            Ordering::Greater => Val::Px(255. + (((list_index as f32) - 10.) * 20.)),
+        let text_color = if list_index == ITEMS_AROUND_SELECTED {
+            font_size = font_size_for(true, list_container_height);
+            selected_text_color
+        } else {
+            TextColor::from(default_text_color.with_alpha(alpha))
         };
 
-        commands.spawn(MenuTextBundle {
-            text: Text::new(""),
-            text_font: TextFont {
-                font_size,
-                ..default()
-            },
-            text_color,
-            text_node: Node {
-                // Set the justification of the Text
-                //.with_text_justify(JustifyText::Center)
-                display: Display::Block,
-                position_type: PositionType::Absolute,
-                left: Val::Px(20.),
-                top,
-                right: Val::Px(0.),
-                ..default()
-            },
-            table_text: TableText {
-                list_index,
-                table_text: "".to_string(),
-            },
-            text_item: TextItem,
-        });
+        let top = item_y_position(list_index, list_container_height);
+
+        commands
+            .spawn((
+                Node {
+                    position_type: PositionType::Absolute,
+                    justify_content: JustifyContent::Center,
+                    overflow: Overflow::clip(),
+                    //max_width: Val::Px(0.0),
+                    left: Val::Px(20.),
+                    right: Val::Px(text_container_right_margin(primary_window) - 20.),
+                    top,
+                    ..default()
+                },
+                TextContainer { list_index },
+            ))
+            .with_children(|builder| {
+                builder.spawn((
+                    MenuTextBundle {
+                        text: Text::new(""),
+                        text_font: TextFont {
+                            font_size,
+                            ..default()
+                        },
+                        text_color,
+                        text_node: Node {
+                            //display: Display::Block,
+                            overflow: Overflow::clip(),
+                            ..default()
+                        },
+                        table_text: TableText {
+                            list_index,
+                            table_text: "".to_string(),
+                        },
+                        text_item: TextItem,
+                    },
+                    BackgroundColor(Color::srgb(0.1, 0.1, 0.1)),
+                    TextLayout::default().with_no_wrap(),
+                ));
+            });
     }
+}
+
+fn text_container_height(primary_window: &Window) -> f32 {
+    if is_portrait(primary_window) {
+        primary_window.height() * 0.6
+    } else {
+        // we add a bottom margin for the help footer
+        primary_window.height() - 50.0
+    }
+}
+
+fn text_container_right_margin(primary_window: &Window) -> f32 {
+    if is_portrait(primary_window) {
+        0.0
+    } else {
+        primary_window.width() / 2.0
+    }
+}
+
+fn is_portrait(primary_window: &Window) -> bool {
+    primary_window.height() > primary_window.width()
 }
 
 fn list_update(
@@ -121,6 +170,52 @@ fn list_update(
 
         table_text.table_text = table_description;
         text.0 = table_name;
+    }
+}
+
+fn update_on_resize(
+    primary_window_query: Query<(Entity, &Window), With<PrimaryWindow>>,
+    mut text_items: Query<(&mut TextFont, &TableText), With<TextItem>>,
+    mut text_container_items: Query<(&mut Node, &TextContainer), With<TextContainer>>,
+    mut resize_events: EventReader<WindowResized>,
+) {
+    for event in resize_events.read() {
+        let (primary_window_entity, primary_window) = primary_window_query.single();
+        if event.window == primary_window_entity {
+            let list_container_height = text_container_height(primary_window);
+            for (mut text_font, table_text) in text_items.iter_mut() {
+                if table_text.list_index == ITEMS_AROUND_SELECTED {
+                    text_font.font_size = font_size_for(true, list_container_height); // Selected item
+                } else {
+                    text_font.font_size = font_size_for(false, list_container_height); // Unselected item
+                }
+            }
+            for (mut node, table_text) in text_container_items.iter_mut() {
+                node.top = item_y_position(table_text.list_index, list_container_height);
+                node.right = Val::Px(text_container_right_margin(primary_window) - 20.);
+            }
+        }
+    }
+}
+
+fn item_y_position(list_index: usize, items_height: f32) -> Val {
+    let item_height = items_height / (ITEMS_SHOWN as f32);
+    // the center item needs a bit more space
+    let center_spacing = item_height * 2.5 / 1.5 - item_height;
+    match list_index.cmp(&ITEMS_AROUND_SELECTED) {
+        Ordering::Less => Val::Px(list_index as f32 * item_height),
+        Ordering::Equal => Val::Px(list_index as f32 * item_height),
+        Ordering::Greater => Val::Px(list_index as f32 * item_height + center_spacing),
+    }
+}
+
+fn font_size_for(selected: bool, container_height: f32) -> f32 {
+    // Calculate base font size proportional to window width
+    let base_font_size = container_height * 0.02;
+    if selected {
+        base_font_size * 2.5
+    } else {
+        base_font_size * 1.5
     }
 }
 
