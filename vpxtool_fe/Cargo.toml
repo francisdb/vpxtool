@@ -1,0 +1,17 @@
+[package]
+name = "vpxtool_fe"
+edition = "2024"
+
+[[bin]]
+name = "vpxtool-fe"
+path = "src/main.rs"
+
+
+[dependencies]
+vpxtool_shared = { path = "../vpxtool_shared" }
+sdl3 = { version = "0.14.16", features = ["build-from-source-static"] }
+imgui = "0.12.0"
+
+
+[dev-dependencies]
+pretty_assertions = "1.4.1"
