@@ -22,8 +22,3 @@ sysinfo = "0.33.1"
 
 [dev-dependencies]
 pretty_assertions = "1.4.1"
-
-# https://bevy-cheatbook.github.io/pitfalls/performance.html
-# Enable max optimizations for dependencies, but not for our code:
-[profile.dev.package."*"]
-opt-level = 3
