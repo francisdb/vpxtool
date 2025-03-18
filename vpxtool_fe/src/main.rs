@@ -45,7 +45,7 @@ fn run() -> Result<ExitCode> {
 
     let sdl_context = sdl3::init().context("Failed to initialize SDL")?;
     let sdl_video = sdl_context.video()?;
-    let sdl_audio = sdl_context.audio()?;
+    //let sdl_audio = sdl_context.audio()?;
     // let sdl_ttf = sdl3::ttf::init()?;
     // sdl_image context not required
     // for now we don't do video, needs vlc or ffmpeg
