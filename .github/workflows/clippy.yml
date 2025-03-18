@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Install bevy linux dependencies
-        run: sudo apt-get update && sudo apt-get install g++ pkg-config libx11-dev libasound2-dev libudev-dev libxkbcommon-x11-0
+        run: sudo apt-get update && sudo apt-get install g++ pkg-config libx11-dev libxext-dev libasound2-dev libudev-dev libxkbcommon-x11-0 libharfbuzz-dev
       - uses: actions/checkout@v4
       - uses: actions/cache@v4
         with:
