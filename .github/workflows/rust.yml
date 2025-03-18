@@ -18,7 +18,9 @@ jobs:
       matrix:
         platform:
           - os: ubuntu-latest
-          - os: windows-latest
+          # windows-latest fails to compile sdl3
+          # https://github.com/actions/runner-images/issues/10980
+          - os: windows-2025
           - os: macos-latest
 
     runs-on: ${{ matrix.platform.os }}
