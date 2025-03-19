@@ -8,6 +8,7 @@ use std::io::Read;
 use std::time::SystemTime;
 use std::{
     ffi::OsStr,
+    fmt,
     fs::{self, File},
     io,
     path::{Path, PathBuf},
@@ -320,6 +321,19 @@ impl From<IndexError> for io::Error {
         io::Error::new(io::ErrorKind::Other, format!("{:?}", e))
     }
 }
+
+impl fmt::Display for IndexError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            IndexError::FolderDoesNotExist(path) => {
+                write!(f, "Folder does not exist: {}", path.display())
+            }
+            IndexError::IoError(e) => std::fmt::Debug::fmt(&e, f),
+        }
+    }
+}
+
+impl std::error::Error for IndexError {}
 
 impl From<io::Error> for IndexError {
     fn from(e: io::Error) -> Self {
