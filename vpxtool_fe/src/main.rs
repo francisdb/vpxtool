@@ -174,6 +174,7 @@ fn run() -> Result<ExitCode> {
     let mut backglass_canvas = backglass_window.into_canvas();
 
     let playfield_texture_creator = playfield_canvas.texture_creator();
+    let backglass_texture_creator = backglass_canvas.texture_creator();
 
     info!("Renderer name: {}", playfield_canvas.renderer_name);
 
@@ -189,6 +190,11 @@ fn run() -> Result<ExitCode> {
     let mut playfield_texture = load_texture(
         &playfield_texture_creator,
         &playfield_image_path(current_table),
+        &empty_surface,
+    )?;
+    let mut backglass_texture = load_texture(
+        &backglass_texture_creator,
+        &b2sbackglass_image_path(current_table),
         &empty_surface,
     )?;
 
@@ -215,12 +221,11 @@ fn run() -> Result<ExitCode> {
         i = (i + 1) % 255;
         playfield_canvas.set_draw_color(Color::RGB(i, 64, 255 - i));
         playfield_canvas.clear();
-
-        // render the playfield texture
         playfield_canvas.copy(&playfield_texture, None, None)?;
 
         backglass_canvas.set_draw_color(Color::RGB(i, 64, 255 - i));
         backglass_canvas.clear();
+        backglass_canvas.copy(&backglass_texture, None, None)?;
 
         for event in event_pump.poll_iter() {
             match event {
@@ -252,6 +257,11 @@ fn run() -> Result<ExitCode> {
                 &playfield_image_path(current_table),
                 &empty_surface,
             )?;
+            backglass_texture = load_texture(
+                &backglass_texture_creator,
+                &b2sbackglass_image_path(current_table),
+                &empty_surface,
+            )?;
         }
 
         playfield_canvas.present();
@@ -281,6 +291,15 @@ fn playfield_image_path(current_table: &IndexedTable) -> PathBuf {
         .unwrap()
         .join("captures")
         .join("playfield.png")
+}
+
+fn b2sbackglass_image_path(current_table: &IndexedTable) -> PathBuf {
+    current_table
+        .path
+        .parent()
+        .unwrap()
+        .join("captures")
+        .join("backglass.png")
 }
 
 fn load_texture<'a>(
