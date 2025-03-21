@@ -105,7 +105,7 @@ A configuration file will be written to store the Visual Pinball executable loca
 To show the current config location use the following command
 
 ```
-vpxtool config show
+vpxtool config path
 ```
 
 ### Configuring a custom editor
