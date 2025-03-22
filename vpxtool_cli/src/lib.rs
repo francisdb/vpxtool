@@ -610,9 +610,16 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             },
             Some((CMD_CONFIG_EDIT, _)) => match config::config_path() {
                 Some(config_path) => {
-                    let loaded_config = config::load_config()?;
-                    let config = loaded_config.as_ref().map(|c| &c.1);
-                    open_editor(&config_path, config)?;
+                    match config::load_config() {
+                        Ok(loaded_config) => {
+                            let config = loaded_config.as_ref().map(|c| &c.1);
+                            open_editor(&config_path, config)?;
+                        }
+                        Err(_) => {
+                            // if the config is invalid, we still want to allow editing
+                            open_editor(&config_path, None)?;
+                        }
+                    };
                     Ok(ExitCode::SUCCESS)
                 }
                 None => fail("No config file found"),
