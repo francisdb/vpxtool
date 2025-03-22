@@ -4,8 +4,10 @@ use sdl3::event::Event;
 use sdl3::image::LoadTexture;
 use sdl3::keyboard::Keycode;
 use sdl3::pixels::{Color, PixelFormat};
+use sdl3::rect::Rect;
 use sdl3::render::{Texture, TextureCreator};
 use sdl3::surface::Surface;
+use sdl3::ttf::Font;
 use sdl3::video::WindowContext;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -77,6 +79,36 @@ impl ShiftHandler {
     }
 }
 
+fn render_text<'a>(
+    font: &Font,
+    text: &str,
+    color: Color,
+    texture_creator: &'a TextureCreator<WindowContext>,
+) -> Result<Texture<'a>> {
+    let surface = font.render(text).blended(color)?;
+    let texture = texture_creator.create_texture_from_surface(&surface)?;
+    Ok(texture)
+}
+
+fn draw_text_box(
+    canvas: &mut sdl3::render::Canvas<sdl3::video::Window>,
+    texture: &Texture,
+    text_rect: Rect,
+) -> Result<()> {
+    let (width, height) = canvas.output_size()?;
+    let box_height = text_rect.height() + 20;
+    let box_rect = Rect::new(0, height as i32 - box_height as i32, width, box_height);
+
+    // Draw semi-transparent black rectangle
+    canvas.set_draw_color(Color::RGBA(0, 0, 0, 128));
+    canvas.fill_rect(box_rect)?;
+
+    // Draw text
+    canvas.copy(texture, None, text_rect)?;
+
+    Ok(())
+}
+
 fn main() -> ExitCode {
     // Initialize with INFO level by default, can be overridden with RUST_LOG env var
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
@@ -130,7 +162,7 @@ fn run() -> Result<ExitCode> {
     let sdl_context = sdl3::init().context("Failed to initialize SDL")?;
     let sdl_video = sdl_context.video()?;
     //let sdl_audio = sdl_context.audio()?;
-    // let sdl_ttf = sdl3::ttf::init()?;
+    let sdl_ttf = sdl3::ttf::init()?;
     // sdl_image context not required
     // for now we don't do video, needs vlc or ffmpeg
 
@@ -213,6 +245,9 @@ fn run() -> Result<ExitCode> {
 
     let mut shift_handler = ShiftHandler::new();
 
+    let font_path = Path::new("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf");
+    let font = sdl_ttf.load_font(font_path, 24.0)?;
+
     'running: loop {
         let now = Instant::now();
         let delta_time = now.duration_since(past_time);
@@ -263,6 +298,24 @@ fn run() -> Result<ExitCode> {
                 &empty_surface,
             )?;
         }
+
+        // Render the text box
+        let table_name = display_table_line(current_table);
+        let file_name = current_table.path.file_name().unwrap().to_str().unwrap();
+        let text = format!("{} - {}", table_name, file_name);
+        let text_texture = render_text(
+            &font,
+            &text,
+            Color::RGB(255, 255, 255),
+            &playfield_texture_creator,
+        )?;
+        let text_rect = Rect::new(
+            10,
+            playfield_height as i32 - 40,
+            text_texture.query().width,
+            text_texture.query().height,
+        );
+        draw_text_box(&mut playfield_canvas, &text_texture, text_rect)?;
 
         playfield_canvas.present();
         backglass_canvas.present();

@@ -9,10 +9,10 @@ path = "src/main.rs"
 
 [dependencies]
 vpxtool_shared = { path = "../vpxtool_shared" }
-sdl3 = { version = "0.14.16", features = ["build-from-source-static", "image"] }
+sdl3 = { version = "0.14.18", features = ["build-from-source-static", "image", "ttf"] }
 # add ttf feature above and remove once this is fixed https://github.com/vhspace/sdl3-rs/pull/134
 sdl3-ttf-sys = { version = "0.1.0", features = ["build-from-source-static"] }
-imgui = "0.12.0"
+#imgui = "0.12.0"
 anyhow = "1.0.97"
 log = "0.4.26"
 env_logger = "0.11.7"
