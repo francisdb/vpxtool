@@ -5161,9 +5161,8 @@ dependencies = [
 
 [[package]]
 name = "sdl3"
-version = "0.14.18"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83d8f55874d57d592ac28d40d220e5717ecd3645cb11f1242d09e0ee40ee2cb8"
+version = "0.14.19"
+source = "git+https://github.com/vhspace/sdl3-rs.git?rev=d4c4bc7#d4c4bc7368e9af1367edf52dba9807084d32bda1"
 dependencies = [
  "bitflags 2.9.0",
  "lazy_static",
@@ -6118,7 +6117,6 @@ dependencies = [
  "log",
  "pretty_assertions",
  "sdl3",
- "sdl3-ttf-sys",
  "vpxtool_shared",
 ]
 

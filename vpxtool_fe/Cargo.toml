@@ -9,7 +9,10 @@ path = "src/main.rs"
 
 [dependencies]
 vpxtool_shared = { path = "../vpxtool_shared" }
-sdl3 = { version = "0.14.18", features = ["build-from-source-static", "image", "ttf"] }
+#sdl3 = { version = "0.14.18", features = ["build-from-source-static", "image", "ttf"] }
+# TODO this was supposed to be released in 0.14.19 but that build is broken
+sdl3 = { git = "https://github.com/vhspace/sdl3-rs.git", rev = "d4c4bc7", features = ["build-from-source-static", "image", "ttf"] }
+
 #imgui = "0.12.0"
 anyhow = "1.0.97"
 log = "0.4.26"
