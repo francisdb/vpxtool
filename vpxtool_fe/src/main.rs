@@ -1,3 +1,12 @@
+mod display;
+mod gradient;
+mod input;
+mod text;
+mod ui;
+
+use crate::display::{display_file_name, display_table_name};
+use crate::input::{AlphabeticJumper, ShiftHandler};
+use crate::text::{draw_text_box, render_text};
 use anyhow::{Context, Result};
 use log::*;
 use sdl3::event::Event;
@@ -7,7 +16,7 @@ use sdl3::pixels::{Color, PixelFormat};
 use sdl3::rect::Rect;
 use sdl3::render::{Texture, TextureCreator};
 use sdl3::surface::Surface;
-use sdl3::ttf::Font;
+use sdl3::ttf::Sdl3TtfContext;
 use sdl3::video::WindowContext;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -20,94 +29,7 @@ use vpxtool_shared::{config, indexer};
 const DEFAULT_PLAYFIELD_WINDOW_WIDTH: u32 = 1080;
 const DEFAULT_PLAYFIELD_WINDOW_HEIGHT: u32 = 1920;
 
-const INITIAL_SHIFT_SPEED: f32 = 1.0;
-const RAMP_UP_DURATION: f32 = 10.0; // seconds until max speed
-const MAX_SHIFT_SPEED: f32 = 200.0; // Maximum jump per second
-
-/// Handles shift key presses to change the current table index
-/// The shift key can be held down to scroll through the tables
-/// The speed of the scroll increases over time
-struct ShiftHandler {
-    shift_start: Option<Instant>,
-    shift_applied: f32,
-}
-
-impl ShiftHandler {
-    fn new() -> Self {
-        Self {
-            shift_start: None,
-            shift_applied: 0.0,
-        }
-    }
-
-    fn handle_shift(&mut self, now: Instant, delta_time: Duration, direction: i16) -> i16 {
-        if self.shift_start.is_none() {
-            self.shift_start = Some(now);
-            return direction;
-        }
-
-        let held_duration = now.duration_since(self.shift_start.unwrap()).as_secs_f32();
-        let speed = (INITIAL_SHIFT_SPEED
-            + (held_duration / RAMP_UP_DURATION) * (MAX_SHIFT_SPEED - INITIAL_SHIFT_SPEED))
-            .min(MAX_SHIFT_SPEED);
-
-        self.shift_applied += delta_time.as_secs_f32() * speed * direction as f32;
-        if self.shift_applied.abs() >= 1.0 {
-            let index_change = self.shift_applied.floor() as i16 * direction;
-            self.shift_applied = self.shift_applied.fract();
-            return index_change;
-        }
-
-        0
-    }
-
-    fn update(
-        &mut self,
-        now: Instant,
-        delta_time: Duration,
-        keystates: &sdl3::keyboard::KeyboardState,
-    ) -> i16 {
-        if keystates.is_scancode_pressed(sdl3::keyboard::Scancode::LShift) {
-            self.handle_shift(now, delta_time, -1)
-        } else if keystates.is_scancode_pressed(sdl3::keyboard::Scancode::RShift) {
-            self.handle_shift(now, delta_time, 1)
-        } else {
-            self.shift_start = None;
-            self.shift_applied = 0.0;
-            0
-        }
-    }
-}
-
-fn render_text<'a>(
-    font: &Font,
-    text: &str,
-    color: Color,
-    texture_creator: &'a TextureCreator<WindowContext>,
-) -> Result<Texture<'a>> {
-    let surface = font.render(text).blended(color)?;
-    let texture = texture_creator.create_texture_from_surface(&surface)?;
-    Ok(texture)
-}
-
-fn draw_text_box(
-    canvas: &mut sdl3::render::Canvas<sdl3::video::Window>,
-    texture: &Texture,
-    text_rect: Rect,
-) -> Result<()> {
-    let (width, height) = canvas.output_size()?;
-    let box_height = text_rect.height() + 20;
-    let box_rect = Rect::new(0, height as i32 - box_height as i32, width, box_height);
-
-    // Draw semi-transparent black rectangle
-    canvas.set_draw_color(Color::RGBA(0, 0, 0, 128));
-    canvas.fill_rect(box_rect)?;
-
-    // Draw text
-    canvas.copy(texture, None, text_rect)?;
-
-    Ok(())
-}
+const TITLE_BOTTOM_PADDING: u32 = 40;
 
 fn main() -> ExitCode {
     // Initialize with INFO level by default, can be overridden with RUST_LOG env var
@@ -150,7 +72,7 @@ fn run() -> Result<ExitCode> {
     )?;
     let tables = {
         let mut loaded = index.tables();
-        loaded.sort_by_key(|indexed| display_table_line(indexed).to_lowercase());
+        loaded.sort_by_key(|indexed| display_table_name(indexed).to_lowercase());
         loaded
     };
 
@@ -212,6 +134,9 @@ fn run() -> Result<ExitCode> {
 
     let mut current_index = 0usize;
     let mut current_table = &tables[current_index];
+    let mut last_table_index = None;
+    let mut title_textures = Vec::new();
+    let mut title_rects = Vec::new();
 
     // Rectangle to define the position and size of the table name text
     // let mut table_name_rect = Rect::new(0, 0, 0, 0);
@@ -234,7 +159,6 @@ fn run() -> Result<ExitCode> {
     playfield_canvas.clear();
     playfield_canvas.present();
     let mut event_pump = sdl_context.event_pump()?;
-    let mut i = 0;
 
     let mut last_time = Instant::now();
     let mut accumulator = 0u64;
@@ -244,21 +168,18 @@ fn run() -> Result<ExitCode> {
     const FRAME_TIME: Duration = Duration::from_nanos(1_000_000_000 / TARGET_FPS);
 
     let mut shift_handler = ShiftHandler::new();
+    let mut alpha_jumper = AlphabeticJumper::new();
 
     let font_path = Path::new("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf");
-    let font = sdl_ttf.load_font(font_path, 24.0)?;
 
     'running: loop {
         let now = Instant::now();
         let delta_time = now.duration_since(past_time);
         past_time = now;
 
-        i = (i + 1) % 255;
-        playfield_canvas.set_draw_color(Color::RGB(i, 64, 255 - i));
         playfield_canvas.clear();
         playfield_canvas.copy(&playfield_texture, None, None)?;
 
-        backglass_canvas.set_draw_color(Color::RGB(i, 64, 255 - i));
         backglass_canvas.clear();
         backglass_canvas.copy(&backglass_texture, None, None)?;
 
@@ -276,17 +197,48 @@ fn run() -> Result<ExitCode> {
                 _ => {}
             }
         }
-        // The rest of the game loop goes here...
 
-        // get the keyboard state
-        // Increment the shift_applied value based on the time the shift key has been held
+        // Handle shift key index changes
         let keystates = event_pump.keyboard_state();
         let index_change = shift_handler.update(now, delta_time, &keystates);
-
         if index_change != 0 {
             current_index =
                 (current_index as i16 + index_change).rem_euclid(tables.len() as i16) as usize;
             current_table = &tables[current_index];
+
+            // Clear the current table index to force texture recreation
+            last_table_index = None;
+        }
+        // Handle alphabetic jumps with Ctrl keys
+        if keystates.is_scancode_pressed(sdl3::keyboard::Scancode::LCtrl) {
+            if let Some(new_index) = alpha_jumper.handle_jump(&tables, current_index, -1, |table| {
+                display_table_name(table)
+                    .chars()
+                    .next()
+                    .unwrap_or_default()
+                    .to_ascii_lowercase()
+            }) {
+                current_index = new_index;
+                current_table = &tables[current_index];
+                last_table_index = None;
+            }
+        } else if keystates.is_scancode_pressed(sdl3::keyboard::Scancode::RCtrl) {
+            if let Some(new_index) = alpha_jumper.handle_jump(&tables, current_index, 1, |table| {
+                display_table_name(table)
+                    .chars()
+                    .next()
+                    .unwrap_or_default()
+                    .to_ascii_lowercase()
+            }) {
+                current_index = new_index;
+                current_table = &tables[current_index];
+                last_table_index = None;
+            }
+        }
+
+        // Only create textures when the table changes
+        if last_table_index != Some(current_index) {
+            // Load table images
             playfield_texture = load_texture(
                 &playfield_texture_creator,
                 &playfield_image_path(current_table),
@@ -297,26 +249,20 @@ fn run() -> Result<ExitCode> {
                 &b2sbackglass_image_path(current_table),
                 &empty_surface,
             )?;
+            let (textures, rects) = render_title(
+                &sdl_ttf,
+                playfield_height,
+                &playfield_texture_creator,
+                current_table,
+                font_path,
+            )?;
+            title_textures = textures;
+            title_rects = rects;
+            last_table_index = Some(current_index);
         }
 
-        // Render the text box
-        let table_name = display_table_line(current_table);
-        let file_name = current_table.path.file_name().unwrap().to_str().unwrap();
-        let text = format!("{} - {}", table_name, file_name);
-        let text_texture = render_text(
-            &font,
-            &text,
-            Color::RGB(255, 255, 255),
-            &playfield_texture_creator,
-        )?;
-        let text_rect = Rect::new(
-            10,
-            playfield_height as i32 - 40,
-            text_texture.query().width,
-            text_texture.query().height,
-        );
-        draw_text_box(&mut playfield_canvas, &text_texture, text_rect)?;
-
+        // Draw the text box
+        draw_text_box(&mut playfield_canvas, &title_textures, &title_rects)?;
         playfield_canvas.present();
         backglass_canvas.present();
 
@@ -334,6 +280,71 @@ fn run() -> Result<ExitCode> {
     }
 
     Ok(ExitCode::SUCCESS)
+}
+
+fn render_title<'a>(
+    sdl_ttf: &Sdl3TtfContext,
+    playfield_height: u32,
+    playfield_texture_creator: &'a TextureCreator<WindowContext>,
+    current_table: &IndexedTable,
+    font_path: &Path,
+) -> Result<(Vec<Texture<'a>>, Vec<Rect>)> {
+    let table_name = display_table_name(current_table);
+    let file_name = display_file_name(current_table);
+
+    // Pre-calculate text dimensions to position correctly
+    let mut textures = Vec::new();
+    let mut text_rects = Vec::new();
+
+    // Create textures first
+    let font_large = sdl_ttf.load_font(font_path, 48.0)?;
+    let font_small = sdl_ttf.load_font(font_path, 24.0)?;
+
+    let table_name_texture = render_text(
+        &font_large,
+        &table_name,
+        Color::RGB(255, 255, 255),
+        playfield_texture_creator,
+    )?;
+
+    let file_name_texture = render_text(
+        &font_small,
+        &file_name,
+        Color::RGB(255, 255, 255),
+        playfield_texture_creator,
+    )?;
+
+    // Calculate positions with proper spacing
+    let margin = 20; // Space between text elements
+    let table_height = table_name_texture.query().height as i32;
+    let file_height = file_name_texture.query().height as i32;
+    let total_height = table_height + margin + file_height;
+
+    // Start position from the bottom with some padding
+    let start_y = playfield_height as i32 - TITLE_BOTTOM_PADDING as i32 - total_height;
+
+    // Create rectangles with the correct positions
+    let table_rect = Rect::new(
+        10,
+        start_y,
+        table_name_texture.query().width,
+        table_name_texture.query().height,
+    );
+
+    let file_rect = Rect::new(
+        10,
+        start_y + table_height + margin, // Position after the table name plus margin
+        file_name_texture.query().width,
+        file_name_texture.query().height,
+    );
+
+    // Add in the correct order for rendering
+    textures.push(table_name_texture);
+    textures.push(file_name_texture);
+    text_rects.push(table_rect);
+    text_rects.push(file_rect);
+
+    Ok((textures, text_rects))
 }
 
 // TODO this is something the indexer should provide
@@ -376,27 +387,4 @@ fn load_texture<'a>(
         empty_surface.as_texture(creator)?
     };
     Ok(texture)
-}
-
-pub(crate) fn display_table_line(table: &IndexedTable) -> String {
-    let file_name = table
-        .path
-        .file_stem()
-        .unwrap()
-        .to_str()
-        .unwrap()
-        .to_string();
-    Some(table.table_info.table_name.to_owned())
-        .filter(|s| !s.clone().unwrap_or_default().trim().is_empty())
-        .map(|s| {
-            match s {
-                Some(name) => capitalize_first_letter(&name),
-                None => capitalize_first_letter(&file_name),
-            }
-            // TODO we probably want to show both the file name and the table name
-        })
-        .unwrap_or(file_name)
-}
-fn capitalize_first_letter(s: &str) -> String {
-    s[0..1].to_uppercase() + &s[1..]
 }

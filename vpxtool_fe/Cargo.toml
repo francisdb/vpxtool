@@ -12,6 +12,8 @@ vpxtool_shared = { path = "../vpxtool_shared" }
 #sdl3 = { version = "0.14.18", features = ["build-from-source-static", "image", "ttf"] }
 # TODO this was supposed to be released in 0.14.19 but that build is broken
 sdl3 = { git = "https://github.com/vhspace/sdl3-rs.git", rev = "d4c4bc7", features = ["build-from-source-static", "image", "ttf"] }
+# see https://github.com/maia-s/sdl3-sys-rs/issues/19
+sdl3-ttf-sys = { version = "0.1.0", features = ["build-from-source-static", "build-static-vendored"] }
 
 #imgui = "0.12.0"
 anyhow = "1.0.97"
