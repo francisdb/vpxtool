@@ -11,9 +11,11 @@ use colored::Colorize;
 use console::Emoji;
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::{FuzzySelect, Input, MultiSelect, Select};
+use image::{DynamicImage, RgbImage};
 use indicatif::{ProgressBar, ProgressStyle};
 use is_executable::IsExecutable;
 use pinmame_nvram::dips::{get_all_dip_switches, set_dip_switches};
+use std::collections::HashSet;
 use std::fs::OpenOptions;
 use std::io::BufReader;
 use std::{
@@ -27,6 +29,7 @@ use vpxtool_shared::config::ResolvedConfig;
 use vpxtool_shared::indexer;
 use vpxtool_shared::indexer::{IndexError, IndexedTable, Progress};
 use vpxtool_shared::vpinball_config::{VPinballConfig, WindowInfo, WindowType};
+use xcap::XCapError;
 
 const LAUNCH: Emoji = Emoji("🚀", "[launch]");
 const CRASH: Emoji = Emoji("💥", "[crash]");
@@ -42,6 +45,7 @@ enum TableOption {
     LaunchFullscreen,
     LaunchWindowed,
     ForceReload,
+    CaptureWindows,
     InfoShow,
     InfoEdit,
     InfoDiff,
@@ -58,11 +62,12 @@ enum TableOption {
 }
 
 impl TableOption {
-    const ALL: [TableOption; 17] = [
+    const ALL: [TableOption; 18] = [
         TableOption::Launch,
         TableOption::LaunchFullscreen,
         TableOption::LaunchWindowed,
         TableOption::ForceReload,
+        TableOption::CaptureWindows,
         TableOption::InfoShow,
         TableOption::InfoEdit,
         TableOption::InfoDiff,
@@ -84,19 +89,20 @@ impl TableOption {
             1 => Some(TableOption::LaunchFullscreen),
             2 => Some(TableOption::LaunchWindowed),
             3 => Some(TableOption::ForceReload),
-            4 => Some(TableOption::InfoShow),
-            5 => Some(TableOption::InfoEdit),
-            6 => Some(TableOption::InfoDiff),
-            7 => Some(TableOption::ExtractVBS),
-            8 => Some(TableOption::EditVBS),
-            9 => Some(TableOption::PatchVBS),
-            10 => Some(TableOption::UnifyLineEndings),
-            11 => Some(TableOption::ShowVBSDiff),
-            12 => Some(TableOption::CreateVBSPatch),
-            13 => Some(TableOption::DIPSwitches),
-            14 => Some(TableOption::NVRAMClear),
-            15 => Some(TableOption::B2SAutoPositionDMD),
-            16 => Some(TableOption::EditINI),
+            4 => Some(TableOption::CaptureWindows),
+            5 => Some(TableOption::InfoShow),
+            6 => Some(TableOption::InfoEdit),
+            7 => Some(TableOption::InfoDiff),
+            8 => Some(TableOption::ExtractVBS),
+            9 => Some(TableOption::EditVBS),
+            10 => Some(TableOption::PatchVBS),
+            11 => Some(TableOption::UnifyLineEndings),
+            12 => Some(TableOption::ShowVBSDiff),
+            13 => Some(TableOption::CreateVBSPatch),
+            14 => Some(TableOption::DIPSwitches),
+            15 => Some(TableOption::NVRAMClear),
+            16 => Some(TableOption::B2SAutoPositionDMD),
+            17 => Some(TableOption::EditINI),
             _ => None,
         }
     }
@@ -107,6 +113,7 @@ impl TableOption {
             TableOption::LaunchFullscreen => "Launch fullscreen".to_string(),
             TableOption::LaunchWindowed => "Launch windowed".to_string(),
             TableOption::ForceReload => "Force reload".to_string(),
+            TableOption::CaptureWindows => "Capture windows".to_string(),
             TableOption::InfoShow => "Info > Show".to_string(),
             TableOption::InfoEdit => "Info > Edit".to_string(),
             TableOption::InfoDiff => "Info > Diff".to_string(),
@@ -288,11 +295,18 @@ fn table_menu(
                         exit = true;
                     }
                     Err(err) => {
-                        let msg = format!("Unable to reload tables: {:?}", err);
-                        prompt(&msg.truecolor(255, 125, 0).to_string());
+                        prompt_error(&format!("Unable to reload tables: {:?}", err));
                     }
                 }
             }
+            Some(TableOption::CaptureWindows) => match capture_windows(info) {
+                Ok(count) => {
+                    prompt(&format!("Captured {} windows", count));
+                }
+                Err(err) => {
+                    prompt_error(&format!("Unable to capture windows: {:?}", err));
+                }
+            },
             Some(TableOption::EditVBS) => {
                 let path = vbs_path_for(selected_path);
                 let result = if path.exists() {
@@ -498,6 +512,66 @@ fn table_menu(
             None => exit = true,
         }
     }
+}
+
+fn capture_windows(table_info: &IndexedTable) -> Result<i8, XCapError> {
+    // Launch vpinball
+    // Wait 12 seconds (make configurable)
+    // Use xcap to find all windows that match the vpinball window titles
+    // Make captures with xcap
+    // Save captures to [tablefolder]/captures/[capturename].png
+    // Exit vpinball
+
+    // TODO launch vpinball
+
+    // TODO we probably want a map that stores to what file the capture belongs
+    let titles: HashSet<&str> = vec![
+        "Visual Pinball Player",
+        "Visual Pinball - Score",
+        "PUPPlayfield",
+        "PUPDMD",
+        "PUPBackglass",
+        "PUPFullDMD",
+        "PUPTopper",
+        "B2SBackglass",
+        "B2SDMD",
+        "PinMAME",
+        "FlexDMD",
+    ]
+    .into_iter()
+    .collect();
+
+    let windows = xcap::Window::all()?;
+    let mut captured = 0;
+    for window in windows {
+        if window.is_minimized()? {
+            continue;
+        }
+        let title = window.title()?;
+        if titles.contains(title.as_str()) {
+            println!(
+                "Window: {:?} {:?} {:?}",
+                window.title()?,
+                (window.x()?, window.y()?, window.width()?, window.height()?),
+                (window.is_minimized()?, window.is_maximized()?)
+            );
+            let image = window.capture_image()?;
+            let image_path = table_info
+                .path
+                .parent()
+                .unwrap()
+                .join("captures")
+                .join(format!("test{}.png", captured));
+            println!("Saving to {:?}", image_path);
+            // drop the alpha channel to reduce file size
+            let rgb_image: RgbImage = DynamicImage::from(image).to_rgb8();
+            rgb_image
+                .save(image_path)
+                .map_err(|e| XCapError::new(format!("Unable to save image: {}", e)))?;
+            captured += 1;
+        }
+    }
+    Ok(captured)
 }
 
 fn auto_position_dmd(config: &ResolvedConfig, info: &&IndexedTable) -> Result<String, String> {
