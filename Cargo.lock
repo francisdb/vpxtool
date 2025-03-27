@@ -1501,7 +1501,7 @@ dependencies = [
  "bitflags 2.9.0",
  "cexpr",
  "clang-sys",
- "itertools 0.12.1",
+ "itertools 0.13.0",
  "log",
  "prettyplease",
  "proc-macro2",
@@ -6118,6 +6118,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "env_logger",
+ "is_executable",
  "log",
  "pretty_assertions",
  "sdl3",

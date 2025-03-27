@@ -19,6 +19,7 @@ sdl3-ttf-sys = { version = "0.1.0", features = ["build-from-source-static", "bui
 anyhow = "1.0.97"
 log = "0.4.26"
 env_logger = "0.11.7"
+is_executable = "1.0.4"
 
 
 [dev-dependencies]
