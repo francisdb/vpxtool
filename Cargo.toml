@@ -2,6 +2,7 @@
 members = [
     "vpxtool_cli",
     "vpxtool_gui",
+    "vpxtool_fe",
     "vpxtool_shared"
 ]
 resolver = "2"
