@@ -137,9 +137,9 @@ fn handle_external_events(
 
 pub fn guifrontend(config: ResolvedConfig) -> io::Result<ExitCode> {
     let tables: Vec<IndexedTable> = Vec::new();
-    let vpinball_ini_path = config.vpinball_ini_file();
+    let vpinball_ini_path = &config.vpx_config;
     let vpinball_config = if vpinball_ini_path.exists() {
-        VPinballConfig::read(&vpinball_ini_path).map_err(|err| {
+        VPinballConfig::read(vpinball_ini_path).map_err(|err| {
             io::Error::new(
                 io::ErrorKind::Other,
                 format!("Error reading vpinball.ini: {}", err),
@@ -149,8 +149,8 @@ pub fn guifrontend(config: ResolvedConfig) -> io::Result<ExitCode> {
         // FIXME logging is not set up at this point so this is not visible
         //   however we need this window set up before we can launch the default window plugin
         warn!(
-            "vpinball.ini not found at {:?}, using empty config",
-            vpinball_ini_path
+            "vpinball.ini not found at {}, using empty config",
+            &config.vpx_config.display()
         );
         VPinballConfig::default()
     };

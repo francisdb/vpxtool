@@ -331,6 +331,14 @@ impl From<io::Error> for IndexError {
 /// Returns the index.
 /// If the index file already exists, it will be read and updated.
 /// If the index file does not exist, it will be created.
+///
+/// Arguments:
+/// * `recursive`: if true, all subdirectories will be searched for vpx files.
+/// * `tables_folder`: the folder to search for vpx files.
+/// * `tables_index_path`: the path to the index file.
+/// * `global_roms_path`: the path to the global roms folder. This can be relative to the vpx file.
+/// * `progress`: lister for progress updates.
+/// * `force_reindex`: a list of vpx files to reindex, even if they are not modified.
 pub fn index_folder(
     recursive: bool,
     tables_folder: &Path,
@@ -339,9 +347,6 @@ pub fn index_folder(
     progress: &impl Progress,
     force_reindex: Vec<PathBuf>,
 ) -> Result<TablesIndex, IndexError> {
-    let global_roms = global_roms_path
-        .map(find_roms)
-        .unwrap_or_else(|| Ok(HashMap::new()))?;
     info!("Indexing {}", tables_folder.display());
 
     if !tables_folder.exists() {
@@ -391,7 +396,8 @@ pub fn index_folder(
     }
 
     info!("  {} tables need (re)indexing.", vpx_files_to_index.len());
-    let vpx_files_with_table_info = index_vpx_files(&vpx_files_to_index, &global_roms, progress);
+    let vpx_files_with_table_info =
+        index_vpx_files(&vpx_files_to_index, global_roms_path, progress)?;
 
     // add new files to index
     index.merge(vpx_files_with_table_info);
@@ -404,9 +410,18 @@ pub fn index_folder(
 
 pub fn index_vpx_files(
     vpx_files: &[PathWithMetadata],
-    global_roms: &HashMap<String, PathBuf>,
+    pinmame_roms_path: Option<&Path>,
     progress: &impl Progress,
-) -> TablesIndex {
+) -> io::Result<TablesIndex> {
+    let global_roms = pinmame_roms_path
+        .map(|roms_path| {
+            if roms_path.is_absolute() {
+                find_roms(roms_path)
+            } else {
+                Ok(HashMap::new())
+            }
+        })
+        .unwrap_or_else(|| Ok(HashMap::new()))?;
     // TODO tried using rayon here but it's not faster and uses up all cpu
     // use rayon::prelude::*;
     // .par_iter() instead of .iter()
@@ -416,7 +431,7 @@ pub fn index_vpx_files(
         .iter()
         .enumerate()
         .flat_map(|(i, vpx_file)| {
-            let optional = match index_vpx_file(vpx_file, global_roms) {
+            let optional = match index_vpx_file(vpx_file, pinmame_roms_path, &global_roms) {
                 Ok(indexed_table) => Some(indexed_table),
                 Err(e) => {
                     // TODO we want to return any failures instead of printing here
@@ -433,13 +448,14 @@ pub fn index_vpx_files(
 
     // sort by name
     // vpx_files_with_table_info.sort_by(|a, b| table_name_compare(a, b));
-    TablesIndex {
+    Ok(TablesIndex {
         tables: vpx_files_with_table_info,
-    }
+    })
 }
 
 fn index_vpx_file(
     vpx_file_path: &PathWithMetadata,
+    pinmame_roms_path: Option<&Path>,
     global_roms: &HashMap<String, PathBuf>,
 ) -> io::Result<(PathBuf, IndexedTable)> {
     let path = &vpx_file_path.path;
@@ -456,14 +472,14 @@ fn index_vpx_file(
     //  also this sidecar should be part of the cache key
     let game_name = extract_game_name(&code);
     let requires_pinmame = requires_pinmame(&code);
-    let rom_path = find_local_rom_path(vpx_file_path, &game_name).or_else(|| {
+    let rom_path = find_local_rom_path(path, &game_name, pinmame_roms_path)?.or_else(|| {
         game_name
             .as_ref()
             .and_then(|game_name| global_roms.get(&game_name.to_lowercase()).cloned())
     });
-    let b2s_path = find_b2s_path(vpx_file_path);
-    let wheel_path = find_wheel_path(vpx_file_path);
-    let last_modified = last_modified(path).unwrap();
+    let b2s_path = find_b2s_path(path);
+    let wheel_path = find_wheel_path(path);
+    let last_modified = last_modified(path)?;
     let indexed_table_info = IndexedTableInfo::from(table_info);
 
     let indexed = IndexedTable {
@@ -510,32 +526,43 @@ fn read_table_info_json(info_file_path: &Path) -> io::Result<TableInfo> {
 }
 
 fn find_local_rom_path(
-    vpx_file_path: &PathWithMetadata,
+    vpx_file_path: &Path,
     game_name: &Option<String>,
-) -> Option<PathBuf> {
-    game_name.as_ref().and_then(|game_name| {
+    pinmame_roms_path: Option<&Path>,
+) -> io::Result<Option<PathBuf>> {
+    if let Some(game_name) = game_name {
         let rom_file_name = format!("{}.zip", game_name.to_lowercase());
+
+        let pinmame_roms_path = if let Some(pinmame_roms_path) = pinmame_roms_path {
+            if pinmame_roms_path.is_relative() {
+                pinmame_roms_path
+            } else {
+                &Path::new("pinmame").join("roms")
+            }
+        } else {
+            &Path::new("pinmame").join("roms")
+        };
+
         let rom_path = vpx_file_path
-            .path
             .parent()
             .unwrap()
-            .join("pinmame")
-            .join("roms")
+            .join(pinmame_roms_path)
             .join(rom_file_name);
-        if rom_path.exists() {
-            Some(rom_path)
+        return if rom_path.exists() {
+            Ok(Some(rom_path.canonicalize()?))
         } else {
-            None
-        }
-    })
+            Ok(None)
+        };
+    };
+    Ok(None)
 }
 
-fn find_b2s_path(vpx_file_path: &PathWithMetadata) -> Option<PathBuf> {
+fn find_b2s_path(vpx_file_path: &Path) -> Option<PathBuf> {
     let b2s_file_name = format!(
         "{}.directb2s",
-        vpx_file_path.path.file_stem().unwrap().to_string_lossy()
+        vpx_file_path.file_stem().unwrap().to_string_lossy()
     );
-    let b2s_path = vpx_file_path.path.parent().unwrap().join(b2s_file_name);
+    let b2s_path = vpx_file_path.parent().unwrap().join(b2s_file_name);
     if b2s_path.exists() {
         Some(b2s_path)
     } else {
@@ -547,16 +574,16 @@ fn find_b2s_path(vpx_file_path: &PathWithMetadata) -> Option<PathBuf> {
 /// 2 locations are tried:
 /// * ../wheels/<vpx_file_name>.png
 /// * <vpx_file_name>.wheel.png
-fn find_wheel_path(vpx_file_path: &PathWithMetadata) -> Option<PathBuf> {
+fn find_wheel_path(vpx_file_path: &Path) -> Option<PathBuf> {
     let wheel_file_name = format!(
         "wheels/{}.png",
-        vpx_file_path.path.file_stem().unwrap().to_string_lossy()
+        vpx_file_path.file_stem().unwrap().to_string_lossy()
     );
-    let wheel_path = vpx_file_path.path.parent().unwrap().join(wheel_file_name);
+    let wheel_path = vpx_file_path.parent().unwrap().join(wheel_file_name);
     if wheel_path.exists() {
         return Some(wheel_path);
     }
-    let wheel_path = vpx_file_path.path.with_extension("wheel.png");
+    let wheel_path = vpx_file_path.with_extension("wheel.png");
     if wheel_path.exists() {
         return Some(wheel_path);
     }
@@ -726,7 +753,7 @@ mod tests {
         assert_eq!(vpx_files.len(), 3);
         let global_roms = find_roms(&global_rom_dir)?;
         assert_eq!(global_roms.len(), 1);
-        let indexed_tables = index_vpx_files(&vpx_files, &global_roms, &VoidProgress);
+        let indexed_tables = index_vpx_files(&vpx_files, Some(&global_rom_dir), &VoidProgress)?;
         assert_eq!(indexed_tables.tables.len(), 3);
         let table1 = indexed_tables
             .tables
@@ -1023,5 +1050,44 @@ LoadVPM "01210000","sys80.vbs",3.10
         let code =
             "LoadVPM \"01210000\", \"sys80.VBS\", 3.1\r\r'Sub LoadVPM(VPMver, VBSfile, VBSver)\r";
         assert!(requires_pinmame(code));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn test_find_local_rom_path_relative_linux() {
+        // On Batocera the PinMAMEPath is configured as ./
+        // That gives us a roms path of ./roms
+        let test_table_dir = testdir!();
+        let vpx_path = test_table_dir.join("test.vpx");
+        let expected_rom_path = test_table_dir.join("roms").join("testgamename.zip");
+        fs::create_dir_all(expected_rom_path.parent().unwrap()).unwrap();
+        File::create(&expected_rom_path).unwrap();
+
+        let local_rom = find_local_rom_path(
+            &vpx_path,
+            &Some("testgamename".to_string()),
+            Some(&PathBuf::from("./roms")),
+        )
+        .unwrap();
+        assert_eq!(local_rom, Some(expected_rom_path));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn test_find_local_rom_path_relative_not_found_linux() {
+        // On Batocera the PinMAMEPath is configured as ./
+        // That gives us a roms path of ./roms
+        let test_table_dir = testdir!();
+        let vpx_path = test_table_dir.join("test.vpx");
+        let expected_rom_path = test_table_dir.join("roms").join("testgamename.zip");
+        fs::create_dir_all(expected_rom_path.parent().unwrap()).unwrap();
+
+        let local_rom = find_local_rom_path(
+            &vpx_path,
+            &Some("testgamename".to_string()),
+            Some(&PathBuf::from("./roms")),
+        )
+        .unwrap();
+        assert_eq!(local_rom, None);
     }
 }

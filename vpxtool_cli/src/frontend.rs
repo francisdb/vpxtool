@@ -141,7 +141,7 @@ pub fn frontend_index(
         recursive,
         &resolved_config.tables_folder,
         &resolved_config.tables_index_path,
-        Some(&resolved_config.global_pinmame_rom_folder()),
+        Some(&resolved_config.pinmame_rom_folder()),
         &progress,
         force_reindex,
     );
@@ -514,7 +514,7 @@ fn auto_position_dmd(config: &ResolvedConfig, info: &&IndexedTable) -> Result<St
             if let Some(dmd_image) = b2s.images.dmd_image {
                 // load vpinball config
 
-                let ini_file = config.vpinball_ini_file();
+                let ini_file = &config.vpx_config;
                 if ini_file.exists() {
                     let base64data_with_cr_lf = dmd_image.value;
                     let base64data = strip_cr_lf(&base64data_with_cr_lf);
@@ -528,7 +528,7 @@ fn auto_position_dmd(config: &ResolvedConfig, info: &&IndexedTable) -> Result<St
                         .map_err(|e| format!("Unable to find hole in DMD image: {}", e))?;
                     if let Some(hole) = hole_opt {
                         let table_ini_path = info.path.with_extension("ini");
-                        let vpinball_config = VPinballConfig::read(&ini_file)
+                        let vpinball_config = VPinballConfig::read(ini_file)
                             .map_err(|e| format!("Unable to read vpinball ini file: {}", e))?;
                         let mut table_config = if table_ini_path.exists() {
                             VPinballConfig::read(&table_ini_path)
