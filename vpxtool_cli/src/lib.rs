@@ -184,10 +184,11 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
         }
         Some((CMD_FRONTEND, _sub_matches)) => {
             let (config_path, config) = config::load_or_setup_config()?;
-            println!("Using config file {}", config_path.display())?;
+            println!("Using vpxtool config file {}", config_path.display())?;
+            println!("Using vpinball config file {}", config.vpx_config.display())?;
             println!(
-                "Using global pinmame rom folder {}",
-                config.global_pinmame_rom_folder().display()
+                "Using pinmame rom folder {}",
+                config.pinmame_rom_folder().display()
             )?;
             match frontend::frontend_index(&config, true, vec![]) {
                 Ok(tables) if tables.is_empty() => {

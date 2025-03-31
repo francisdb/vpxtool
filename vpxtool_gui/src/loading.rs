@@ -333,7 +333,7 @@ fn load_tables(
             recursive,
             &resolved_config.tables_folder,
             &resolved_config.tables_index_path,
-            Some(&resolved_config.global_pinmame_rom_folder()),
+            Some(&resolved_config.pinmame_rom_folder()),
             &progress,
             Vec::new(),
         );
