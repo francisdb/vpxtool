@@ -20,20 +20,6 @@ xattr -d com.apple.quarantine vpxtool
 
 ## Usage
 
-### Graphical User Interface (GUI)
-
-THe graphical frontend is tightly integrated with the command line interface. Therefor we suggest you start with
-the commandline tool to configure everything.
-
-```shell
-# Edit the default configuration. Make sure to set the path to your Visual Pinball executable and your tables folder.
-> vpxtool config edit
-# Launch the text based frontend to test the configuration.
-> vpxtool frontend
-# once everything works you can start the GUI 
-> vpxtool-gui
-```
-
 ### Command Line Interface (CLI)
 
 Show help
@@ -84,19 +70,40 @@ Acts as a frontend for launching vpx files
 Usage: vpxtool frontend [OPTIONS] [VPXROOTPATH]
 
 Arguments:
-  [VPXROOTPATH]  The path to the root directory of vpx files [default: /Users/francisdb/vpinball/tables]
+  [VPXROOTPATH]  The path to the root directory of vpx files [default: /Users/myuser/vpinball/tables]
 
 Options:
   -r, --recursive  Recursively index subdirectories
   -h, --help       Print help
 ```
 
-#### TUI Frontend
+#### Text UI Frontend
 
 Vpxtool can act as a frontend for launching vpx files. It will index a directory of vpx files and then present a menu to
 launch them.
 
+```
+> vpxtool frontend
+```
+
 ![Frontend](docs/frontend.png)
+
+### Graphical User Interface (GUI)
+
+The graphical frontend is tightly integrated with the command line interface. Therefor we suggest you start with
+the commandline tool to configure everything.
+
+```shell
+# Edit the default configuration. Make sure to set the path to your Visual Pinball executable and your tables folder.
+> vpxtool config edit
+# Launch the text based frontend to test the configuration.
+> vpxtool frontend
+# once everything works you can start the GUI 
+> vpxtool-gui
+```
+
+> [!NOTE]
+> The graphical frontend is currently not part of the release and needs to be downloaded from [ci builds](https://github.com/francisdb/vpxtool/actions).
 
 ## Configuration
 
@@ -108,9 +115,23 @@ To show the current config location use the following command
 vpxtool config path
 ```
 
+When launching the frontend for the first time it will help you to set up the required settings.
+
+### Configuring vpinball paths
+
+```yaml
+vpx_executable = "/home/myuser/vpinball/VPinballX_BGFX"
+
+# Optional settings below, only needed if the defaults don't work
+tables_folder = "/home/myuser/vpinball/tables"
+vpx_config = "/home/myuser/.vpinball/VPinballX.ini"
+```
+
+Further settings will be picked up from the Visual Pinball config.
+
 ### Configuring a custom editor
 
-When actions are invoked that open an editor the default editor configured for your system will be used. In case you
+When actions are invoked that open an editor, the default editor configured for your system will be used. In case you
 want to override this with a specific editor you can add the following line to the config file:
 
 ```yaml
@@ -124,10 +145,11 @@ editor = "code"
 * https://github.com/jsm174/docker-vpxtool-resize
 * https://github.com/mpcarr/aztec-quest
 * https://github.com/francisdb/vpinball-example-table-extracted
+* https://github.com/surtarso/vpx-gui-tools
 
 ## References / Research
 
-Other related projects that read assemble vpx files:
+Other related projects that read and/or assemble vpx files:
 
 * https://github.com/vpinball/vpinball
 * https://github.com/vpdb/vpx-js
