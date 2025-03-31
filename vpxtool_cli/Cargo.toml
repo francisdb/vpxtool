@@ -33,7 +33,7 @@ vpin = { version = "0.17.6" }
 
 edit = "0.1.5"
 pinmame-nvram = "0.3.11"
-image = "0.25.5"
+image = "0.25.6"
 
 [dev-dependencies]
 pretty_assertions = "1.4.1"
