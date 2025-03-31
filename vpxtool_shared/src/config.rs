@@ -322,42 +322,74 @@ mod tests {
     use pretty_assertions::assert_eq;
     use testdir::testdir;
 
-    // test that we can read a incomplete config file with missing tables_folder
+    // test that we can read an incomplete config file with missing tables_folder
+    #[cfg(target_os = "linux")]
     #[test]
-    fn test_read_incomplete_config() -> io::Result<()> {
-        // create a temporary file
+    fn test_read_incomplete_config_linux() -> io::Result<()> {
         let temp_dir = testdir!();
         let config_file = temp_dir.join(CONFIGURATION_FILE_NAME);
-        // write a string
         let mut file = File::create(&config_file)?;
         file.write_all(b"vpx_executable = \"/tmp/test/vpinball\"")?;
 
         let config = read_config(&config_file)?;
 
-        if cfg!(target_os = "macos") {
-            let expected_tables_dir = dirs::home_dir().unwrap().join(".vpinball").join("tables");
-            assert_eq!(
-                config,
-                ResolvedConfig {
-                    vpx_executable: PathBuf::from("/tmp/test/vpinball"),
-                    vpx_config: dirs::home_dir().unwrap().join(".vpinball/VPinballX.ini"),
-                    tables_folder: expected_tables_dir.clone(),
-                    tables_index_path: expected_tables_dir.join("vpxtool_index.json"),
-                    editor: None,
-                }
-            );
-        } else {
-            assert_eq!(
-                config,
-                ResolvedConfig {
-                    vpx_executable: PathBuf::from("/tmp/test/vpinball"),
-                    vpx_config: dirs::home_dir().unwrap().join(".vpinball/VPinballX.ini"),
-                    tables_folder: PathBuf::from("/tmp/test/tables"),
-                    tables_index_path: PathBuf::from("/tmp/test/tables/vpxtool_index.json"),
-                    editor: None,
-                }
-            );
-        }
+        assert_eq!(
+            config,
+            ResolvedConfig {
+                vpx_executable: PathBuf::from("/tmp/test/vpinball"),
+                vpx_config: dirs::home_dir().unwrap().join(".vpinball/VPinballX.ini"),
+                tables_folder: PathBuf::from("/tmp/test/tables"),
+                tables_index_path: PathBuf::from("/tmp/test/tables/vpxtool_index.json"),
+                editor: None,
+            }
+        );
+        Ok(())
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn test_read_incomplete_config_macos() -> io::Result<()> {
+        let temp_dir = testdir!();
+        let config_file = temp_dir.join(CONFIGURATION_FILE_NAME);
+        let mut file = File::create(&config_file)?;
+        file.write_all(b"vpx_executable = \"/tmp/test/vpinball\"")?;
+
+        let config = read_config(&config_file)?;
+
+        let expected_tables_dir = dirs::home_dir().unwrap().join(".vpinball").join("tables");
+        assert_eq!(
+            config,
+            ResolvedConfig {
+                vpx_executable: PathBuf::from("/tmp/test/vpinball"),
+                vpx_config: dirs::home_dir().unwrap().join(".vpinball/VPinballX.ini"),
+                tables_folder: expected_tables_dir.clone(),
+                tables_index_path: expected_tables_dir.join("vpxtool_index.json"),
+                editor: None,
+            }
+        );
+        Ok(())
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn test_read_incomplete_config_windows() -> io::Result<()> {
+        let temp_dir = testdir!();
+        let config_file = temp_dir.join(CONFIGURATION_FILE_NAME);
+        let mut file = File::create(&config_file)?;
+        file.write_all(b"vpx_executable = \"C:\\test\\vpinball\"")?;
+
+        let config = read_config(&config_file)?;
+
+        assert_eq!(
+            config,
+            ResolvedConfig {
+                vpx_executable: PathBuf::from("C:\\test\\vpinball"),
+                vpx_config: PathBuf::from("C:\\test\\VPinballX.ini"),
+                tables_folder: PathBuf::from("C:\\test\\tables"),
+                tables_index_path: PathBuf::from("C:\\test\\tables\\vpxtool_index.json"),
+                editor: None,
+            }
+        );
         Ok(())
     }
 }
