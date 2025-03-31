@@ -738,15 +738,15 @@ mod tests {
         // recursively create dir
         fs::create_dir_all(rom1_path_local.parent().unwrap())?;
         File::create(&rom1_path_local)?;
+        // this canonicalize makes a strange dir starting with //?/
         rom1_path_local = rom1_path_local.canonicalize()?;
 
         vpx::new_minimal_vpx(&vpx_2_path)?;
         let script2 = test_script(&temp_dir, "testgamename2")?;
         vpx::importvbs(&vpx_2_path, Some(script2))?;
         // global rom
-        let mut rom2_path_global = global_rom_dir.join("testgamename2.zip");
+        let rom2_path_global = global_rom_dir.join("testgamename2.zip");
         File::create(&rom2_path_global)?;
-        rom2_path_global = rom2_path_global.canonicalize()?;
 
         vpx::new_minimal_vpx(&vpx_3_path)?;
         // no rom
