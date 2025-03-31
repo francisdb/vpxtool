@@ -535,12 +535,12 @@ fn find_local_rom_path(
 
         let pinmame_roms_path = if let Some(pinmame_roms_path) = pinmame_roms_path {
             if pinmame_roms_path.is_relative() {
-                pinmame_roms_path
+                pinmame_roms_path.to_owned()
             } else {
-                &Path::new("pinmame").join("roms")
+                Path::new("pinmame").join("roms")
             }
         } else {
-            &Path::new("pinmame").join("roms")
+            Path::new("pinmame").join("roms")
         };
 
         let rom_path = vpx_file_path

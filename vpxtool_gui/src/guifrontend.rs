@@ -149,7 +149,7 @@ pub fn guifrontend(config: ResolvedConfig) -> io::Result<ExitCode> {
         // FIXME logging is not set up at this point so this is not visible
         //   however we need this window set up before we can launch the default window plugin
         warn!(
-            "vpinball.ini not found at {}, using empty config",
+            "Visual Pinball config file not found at {}, using empty config",
             &config.vpx_config.display()
         );
         VPinballConfig::default()
