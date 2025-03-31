@@ -172,7 +172,9 @@ pub fn frontend(
         let mut selections = vec![SEARCH.bold().to_string(), RECENT.bold().to_string()];
         selections.extend(tables.clone());
 
-        Term::stderr().clear_screen().unwrap();
+        if let Err(e) = Term::stderr().clear_screen() {
+            eprintln!("Failed to clear screen: {}", e);
+        }
         main_selection_opt = Select::with_theme(&ColorfulTheme::default())
             .with_prompt("Select a table")
             .default(main_selection_opt.unwrap_or(0))
