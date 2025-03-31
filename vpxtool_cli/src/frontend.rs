@@ -739,7 +739,9 @@ fn choose_table_option(table_name: &str, selected: Option<TableOption>) -> Optio
             option.display()
         })
         .collect::<Vec<String>>();
-    Term::stderr().clear_screen().unwrap();
+    if let Err(e) = Term::stderr().clear_screen() {
+        eprintln!("Failed to clear screen: {:?}", e);
+    }
     let selection_opt = Select::with_theme(&ColorfulTheme::default())
         .with_prompt(table_name)
         .default(default)
