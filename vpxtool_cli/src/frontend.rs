@@ -8,7 +8,7 @@ use crate::{
 };
 use base64::Engine;
 use colored::Colorize;
-use console::Emoji;
+use console::{Emoji, Term};
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::{FuzzySelect, Input, MultiSelect, Select};
 use indicatif::{ProgressBar, ProgressStyle};
@@ -54,11 +54,12 @@ enum TableOption {
     DIPSwitches,
     NVRAMClear,
     B2SAutoPositionDMD,
-    EditINI,
+    EditTableINI,
+    EditMainIni,
 }
 
 impl TableOption {
-    const ALL: [TableOption; 17] = [
+    const ALL: [TableOption; 18] = [
         TableOption::Launch,
         TableOption::LaunchFullscreen,
         TableOption::LaunchWindowed,
@@ -75,7 +76,8 @@ impl TableOption {
         TableOption::DIPSwitches,
         TableOption::NVRAMClear,
         TableOption::B2SAutoPositionDMD,
-        TableOption::EditINI,
+        TableOption::EditTableINI,
+        TableOption::EditMainIni,
     ];
 
     fn from_index(index: usize) -> Option<TableOption> {
@@ -96,7 +98,8 @@ impl TableOption {
             13 => Some(TableOption::DIPSwitches),
             14 => Some(TableOption::NVRAMClear),
             15 => Some(TableOption::B2SAutoPositionDMD),
-            16 => Some(TableOption::EditINI),
+            16 => Some(TableOption::EditTableINI),
+            17 => Some(TableOption::EditMainIni),
             _ => None,
         }
     }
@@ -119,7 +122,8 @@ impl TableOption {
             TableOption::DIPSwitches => "DIP Switches".to_string(),
             TableOption::NVRAMClear => "NVRAM > Clear".to_string(),
             TableOption::B2SAutoPositionDMD => "Backglass > Auto-position DMD".to_string(),
-            TableOption::EditINI => "INI > Edit".to_string(),
+            TableOption::EditTableINI => "INI > Edit table ini".to_string(),
+            TableOption::EditMainIni => "INI > Edit main ini".to_string(),
         }
     }
 }
@@ -168,6 +172,9 @@ pub fn frontend(
         let mut selections = vec![SEARCH.bold().to_string(), RECENT.bold().to_string()];
         selections.extend(tables.clone());
 
+        if let Err(e) = Term::stderr().clear_screen() {
+            eprintln!("Failed to clear screen: {}", e);
+        }
         main_selection_opt = Select::with_theme(&ColorfulTheme::default())
             .with_prompt("Select a table")
             .default(main_selection_opt.unwrap_or(0))
@@ -301,15 +308,7 @@ fn table_menu(
                     extractvbs(selected_path, None, false)
                         .and_then(|_| open_editor(&path, Some(config)))
                 };
-                match result {
-                    Ok(_) => {
-                        println!("Launched editor for {}", path.display());
-                    }
-                    Err(err) => {
-                        let msg = format!("Unable to edit VBS: {}", err);
-                        prompt(&msg.truecolor(255, 125, 0).to_string());
-                    }
-                }
+                report_launch_result(&path, result);
             }
             Some(TableOption::ExtractVBS) => match extractvbs(selected_path, None, false) {
                 Ok(ExtractResult::Extracted(path)) => {
@@ -475,27 +474,48 @@ fn table_menu(
                     prompt_error(&msg);
                 }
             },
-            Some(TableOption::EditINI) => {
+            Some(TableOption::EditTableINI) => {
                 let path = ini_path_for(selected_path);
-                let result = if path.exists() {
-                    open_editor(&path, Some(config))
-                } else {
-                    Err(std::io::Error::new(
-                        std::io::ErrorKind::NotFound,
-                        format!("File {} does not exist.", path.display()),
-                    ))
-                };
-                match result {
-                    Ok(_) => {
-                        println!("Launched editor for {}", path.display());
-                    }
-                    Err(err) => {
-                        let msg = format!("Unable to edit INI: {}", err);
-                        prompt(&msg.truecolor(255, 125, 0).to_string());
-                    }
+                if path.exists() {
+                    let result = open_editor(&path, Some(config));
+                    report_launch_result(&path, result);
+                } else if confirm(
+                    format!("Table ini {} does not exist", path.display()),
+                    "Do you want to create it?".to_string(),
+                )
+                .unwrap_or(false)
+                {
+                    let mut file = File::create(&path).unwrap();
+                    file.write_all(b"").unwrap();
+                    let result = open_editor(&path, Some(config));
+                    report_launch_result(&path, result);
                 }
             }
+            Some(TableOption::EditMainIni) => {
+                let path = &config.vpx_config;
+                let result = if path.exists() {
+                    open_editor(path, Some(config))
+                } else {
+                    Err(io::Error::new(
+                        io::ErrorKind::NotFound,
+                        format!("Virtual Pinball ini {} does not exist.", path.display()),
+                    ))
+                };
+                report_launch_result(path, result);
+            }
             None => exit = true,
+        }
+    }
+}
+
+fn report_launch_result(path: &Path, result: io::Result<()>) {
+    match result {
+        Ok(_) => {
+            println!("Launched editor for {}", path.display());
+        }
+        Err(err) => {
+            let msg = format!("Unable to launch editor for {}", err);
+            prompt(&msg.truecolor(255, 125, 0).to_string());
         }
     }
 }
@@ -719,6 +739,9 @@ fn choose_table_option(table_name: &str, selected: Option<TableOption>) -> Optio
             option.display()
         })
         .collect::<Vec<String>>();
+    if let Err(e) = Term::stderr().clear_screen() {
+        eprintln!("Failed to clear screen: {:?}", e);
+    }
     let selection_opt = Select::with_theme(&ColorfulTheme::default())
         .with_prompt(table_name)
         .default(default)
