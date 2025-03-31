@@ -376,7 +376,7 @@ mod tests {
         let temp_dir = testdir!();
         let config_file = temp_dir.join(CONFIGURATION_FILE_NAME);
         let mut file = File::create(&config_file)?;
-        file.write_all(b"vpx_executable = \"C:\\test\\vpinball\"")?;
+        file.write_all(b"vpx_executable = \"C:\\\\test\\\\vpinball\"")?;
 
         let config = read_config(&config_file)?;
 
