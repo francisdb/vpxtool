@@ -6004,6 +6004,7 @@ dependencies = [
  "figment",
  "log",
  "pretty_assertions",
+ "rayon",
  "regex",
  "rust-ini",
  "serde",

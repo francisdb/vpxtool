@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use log::info;
+use rayon::prelude::*;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
@@ -397,7 +398,7 @@ pub fn index_folder(
 
     info!("  {} tables need (re)indexing.", vpx_files_to_index.len());
     let vpx_files_with_table_info =
-        index_vpx_files(&vpx_files_to_index, global_roms_path, progress)?;
+        index_vpx_files(vpx_files_to_index, global_roms_path, progress)?;
 
     // add new files to index
     index.merge(vpx_files_with_table_info);
@@ -408,8 +409,10 @@ pub fn index_folder(
     Ok(index)
 }
 
+/// Indexes all vpx files in the given folder and returns the index.
+/// note: The index is unordered, so the order of the tables is not guaranteed.
 pub fn index_vpx_files(
-    vpx_files: &[PathWithMetadata],
+    vpx_files: Vec<PathWithMetadata>,
     pinmame_roms_path: Option<&Path>,
     progress: &impl Progress,
 ) -> io::Result<TablesIndex> {
@@ -422,32 +425,46 @@ pub fn index_vpx_files(
             }
         })
         .unwrap_or_else(|| Ok(HashMap::new()))?;
-    // TODO tried using rayon here but it's not faster and uses up all cpu
-    // use rayon::prelude::*;
-    // .par_iter() instead of .iter()
+
+    let pinmame_roms_path = pinmame_roms_path.map(|p| p.to_path_buf());
+
+    let (progress_tx, progress_rx) = std::sync::mpsc::channel();
+
     progress.set_length(vpx_files.len() as u64);
+    let index_thread = std::thread::spawn(move || {
+        vpx_files
+            .par_iter()
+            .flat_map(|vpx_file| {
+                let res = match index_vpx_file(vpx_file, pinmame_roms_path.as_deref(), &global_roms)
+                {
+                    Ok(indexed_table) => Some(indexed_table),
+                    Err(e) => {
+                        // TODO we want to return any failures instead of printing here
+                        let warning =
+                            format!("Not a valid vpx file {}: {}", vpx_file.path.display(), e);
+                        println!("{}", warning);
+                        None
+                    }
+                };
+                // We don't care if something fails, it's just progress reporting.
+                let _ = progress_tx.send(1);
+                res
+            })
+            .collect()
+    });
 
-    let vpx_files_with_table_info: HashMap<PathBuf, IndexedTable> = vpx_files
-        .iter()
-        .enumerate()
-        .flat_map(|(i, vpx_file)| {
-            let optional = match index_vpx_file(vpx_file, pinmame_roms_path, &global_roms) {
-                Ok(indexed_table) => Some(indexed_table),
-                Err(e) => {
-                    // TODO we want to return any failures instead of printing here
-                    let warning =
-                        format!("Not a valid vpx file {}: {}", vpx_file.path.display(), e);
-                    println!("{}", warning);
-                    None
-                }
-            };
-            progress.set_position((i + 1) as u64);
-            optional
-        })
-        .collect();
+    let mut finished = 0;
+    // The sender is automatically closed when it goes out of scope, we can be sure
+    // that this does not block forever.
+    for i in progress_rx {
+        finished += i;
+        progress.set_position(finished);
+    }
 
-    // sort by name
-    // vpx_files_with_table_info.sort_by(|a, b| table_name_compare(a, b));
+    let vpx_files_with_table_info = index_thread
+        .join()
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("{:?}", e)))?;
+
     Ok(TablesIndex {
         tables: vpx_files_with_table_info,
     })
@@ -755,7 +772,7 @@ mod tests {
         assert_eq!(vpx_files.len(), 3);
         let global_roms = find_roms(&global_rom_dir)?;
         assert_eq!(global_roms.len(), 1);
-        let indexed_tables = index_vpx_files(&vpx_files, Some(&global_rom_dir), &VoidProgress)?;
+        let indexed_tables = index_vpx_files(vpx_files, Some(&global_rom_dir), &VoidProgress)?;
         assert_eq!(indexed_tables.tables.len(), 3);
         let table1 = indexed_tables
             .tables
