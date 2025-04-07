@@ -15,7 +15,7 @@ name = "vpxtool"
 [dependencies]
 vpxtool_shared = { path = "../vpxtool_shared" }
 base64 = "0.22.1"
-clap = { version = "4.5.34", features = ["derive", "string"] }
+clap = { version = "4.5.35", features = ["derive", "string"] }
 colored = "3.0.0"
 console = "0.15.11"
 dialoguer = { version = "0.11.0", features = ["fuzzy-select"] }
