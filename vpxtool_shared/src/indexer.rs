@@ -430,7 +430,6 @@ pub fn index_vpx_files(
 
     let (progress_tx, progress_rx) = std::sync::mpsc::channel();
 
-    let total_expected = vpx_files.len();
     progress.set_length(vpx_files.len() as u64);
     let index_thread = std::thread::spawn(move || {
         vpx_files
@@ -455,14 +454,12 @@ pub fn index_vpx_files(
     });
 
     let mut finished = 0;
-    while !index_thread.is_finished() {
-        if let Ok(i) = progress_rx.recv_timeout(std::time::Duration::from_millis(50)) {
-            finished += i;
-            progress.set_position(finished);
-        }
+    // The sender is automatically closed when it goes out of scope, we can be sure
+    // that this does not block forever.
+    for i in progress_rx {
+        finished += i;
+        progress.set_position(finished);
     }
-    // make sure we progress fully as some results might still be in the queue
-    progress.set_position(total_expected as u64);
 
     let vpx_files_with_table_info = index_thread
         .join()
