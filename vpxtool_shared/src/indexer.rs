@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use log::info;
+use rayon::prelude::*;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
@@ -422,16 +423,16 @@ pub fn index_vpx_files(
             }
         })
         .unwrap_or_else(|| Ok(HashMap::new()))?;
-    // TODO tried using rayon here but it's not faster and uses up all cpu
-    // use rayon::prelude::*;
-    // .par_iter() instead of .iter()
-    progress.set_length(vpx_files.len() as u64);
 
+    progress.set_length(vpx_files.len() as u64);
+    // Since we are using rayon parallel iterator we can no longer show progress to the user.
+    // If we want to do this in the future we need some kind of thread safe event system and running the whole loop
+    // in a separate thread + polling for progress in the display thread. Or possibly switching to async?
     let vpx_files_with_table_info: HashMap<PathBuf, IndexedTable> = vpx_files
-        .iter()
+        .par_iter()
         .enumerate()
-        .flat_map(|(i, vpx_file)| {
-            let optional = match index_vpx_file(vpx_file, pinmame_roms_path, &global_roms) {
+        .flat_map(|(_i, vpx_file)| {
+            match index_vpx_file(vpx_file, pinmame_roms_path, &global_roms) {
                 Ok(indexed_table) => Some(indexed_table),
                 Err(e) => {
                     // TODO we want to return any failures instead of printing here
@@ -440,11 +441,11 @@ pub fn index_vpx_files(
                     println!("{}", warning);
                     None
                 }
-            };
-            progress.set_position((i + 1) as u64);
-            optional
+            }
+            //progress.set_position((i + 1) as u64);
         })
         .collect();
+    progress.set_position(vpx_files_with_table_info.len() as u64);
 
     // sort by name
     // vpx_files_with_table_info.sort_by(|a, b| table_name_compare(a, b));
