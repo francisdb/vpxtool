@@ -423,7 +423,7 @@ pub fn index_folder(
 /// Arguments:
 /// * `vpx_files`: the vpx files to index.
 /// * `global_roms_path`: the path to the global roms folder. Eg ~/.pinmame/roms on *nix systems.
-/// * `pinmame_roms_path`: the path to the local pinmame roms folder configureded in the vpinball config
+/// * `pinmame_roms_path`: the path to the local pinmame roms folder configured in the vpinball config
 /// * `progress`: lister for progress updates.
 ///
 /// see https://github.com/francisdb/vpxtool/issues/526
