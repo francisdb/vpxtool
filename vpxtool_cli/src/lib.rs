@@ -26,7 +26,7 @@ use vpin::vpx;
 use vpin::vpx::jsonmodel::{game_data_to_json, info_to_json};
 use vpin::vpx::{ExtractResult, VerifyResult, expanded, extractvbs, importvbs, verify};
 use vpxtool_shared::config::{ResolvedConfig, SetupConfigResult};
-use vpxtool_shared::indexer::{IndexError, Progress};
+use vpxtool_shared::indexer::{DEFAULT_INDEX_FILE_NAME, IndexError, Progress};
 use vpxtool_shared::{config, indexer};
 
 mod backglass;
@@ -84,6 +84,8 @@ const CMD_DIPSWITCHES: &str = "dipswitches";
 const CMD_DIPSWITCHES_SHOW: &str = "show";
 
 const CMD_ROMNAME: &str = "romname";
+
+const CMD_INDEX: &str = "index";
 
 pub struct ProgressBarProgress {
     pb: ProgressBar,
@@ -187,8 +189,15 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             println!("Using vpxtool config file {}", config_path.display())?;
             println!("Using vpinball config file {}", config.vpx_config.display())?;
             println!(
-                "Using pinmame rom folder {}",
-                config.pinmame_rom_folder().display()
+                "Using global pinmame folder {}",
+                config.global_pinmame_folder().display()
+            )?;
+            println!(
+                "Using configured pinmame folder {}",
+                config
+                    .configured_pinmame_folder()
+                    .map(|f| f.display().to_string())
+                    .unwrap_or_else(|| "None".to_string())
             )?;
             match frontend::frontend_index(&config, true, vec![]) {
                 Ok(tables) if tables.is_empty() => {
@@ -218,53 +227,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 }
             }
         }
-        Some(("index", sub_matches)) => {
-            let recursive = sub_matches.get_flag("RECURSIVE");
-            let path = sub_matches
-                .get_one::<String>("VPXROOTPATH")
-                .map(|s| s.as_str());
-
-            let (tables_folder_path, tables_index_path) = match path {
-                Some(path) => {
-                    let tables_path = expand_path_exists(path)?;
-                    let tables_index_path = config::tables_index_path(&tables_path);
-                    (tables_path, tables_index_path)
-                }
-                None => match config::load_config()? {
-                    Some((config_path, config)) => {
-                        println!("Using config file {}", config_path.display())?;
-                        (config.tables_folder, config.tables_index_path)
-                    }
-                    None => {
-                        eprintln!("No VPXROOTPATH provided up and no config file found")?;
-                        exit(1);
-                    }
-                },
-            };
-            let pb = ProgressBar::hidden();
-            pb.set_style(
-                ProgressStyle::with_template(
-                    "{spinner:.green} [{bar:.cyan/blue}] {pos}/{human_len} ({eta})",
-                )
-                .unwrap(),
-            );
-            let progress = ProgressBarProgress::new(pb);
-            let index = indexer::index_folder(
-                recursive,
-                &tables_folder_path,
-                &tables_index_path,
-                None,
-                &progress,
-                vec![],
-            )?;
-            progress.finish_and_clear();
-            println!(
-                "Indexed {} vpx files into {}",
-                index.len(),
-                &tables_index_path.display()
-            )?;
-            Ok(ExitCode::SUCCESS)
-        }
+        Some((CMD_INDEX, sub_matches)) => handle_index(sub_matches),
         Some((CMD_SCRIPT, sub_matches)) => match sub_matches.subcommand() {
             Some((CMD_SCRIPT_SHOW, sub_matches)) => {
                 let path = sub_matches
@@ -696,6 +659,77 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
     }
 }
 
+fn handle_index(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
+    let recursive = sub_matches.get_flag("RECURSIVE");
+    let tables_folders_path_arg = sub_matches
+        .get_one::<String>("VPXROOTPATH")
+        .map(|s| s.as_str());
+    let index_file_arg = sub_matches
+        .get_one::<String>("INDEX_FILE")
+        .map(|s| s.as_str());
+    let config = config::load_config()?;
+
+    let tables_folder_path = match tables_folders_path_arg {
+        Some(path) => {
+            let tables_path = expand_path_exists(path)?;
+            tables_path
+        }
+        None => match &config {
+            Some((_, config)) => config.tables_folder.clone(),
+            None => {
+                eprintln!("No VPXROOTPATH provided up and no vpxtool config file found")?;
+                exit(1);
+            }
+        },
+    };
+
+    let tables_index_path = match index_file_arg {
+        Some(path) => expand_path(path),
+        None => tables_folder_path.join(DEFAULT_INDEX_FILE_NAME),
+    };
+
+    let global_pinmame_folder = config.as_ref().map(|(_, c)| c.global_pinmame_folder());
+    let configured_pinmame_folder = config
+        .as_ref()
+        .and_then(|(_, c)| c.configured_pinmame_folder());
+
+    println!("Using tables folder {}", tables_folder_path.display())?;
+    match &global_pinmame_folder {
+        Some(folder) => {
+            println!("Using global pinmame folder {}", folder.display())?;
+        }
+        None => println!("Not looking for global pinmame roms as the folder is not configured.")?,
+    }
+    match &configured_pinmame_folder {
+        Some(folder) => {
+            println!("Using VPinballX.ini PinMAMEPath {}", folder.display())?;
+        }
+        None => println!("VPinballX.ini PinMAMEPath not used as not configured.")?,
+    }
+    println!("Storing index to {}", tables_index_path.display())?;
+
+    let pb = ProgressBar::hidden();
+    pb.set_style(
+        ProgressStyle::with_template(
+            "{spinner:.green} [{bar:.cyan/blue}] {pos}/{human_len} ({eta})",
+        )
+        .unwrap(),
+    );
+    let progress = ProgressBarProgress::new(pb);
+    let index = indexer::index_folder(
+        recursive,
+        &tables_folder_path,
+        &tables_index_path,
+        global_pinmame_folder.as_deref(),
+        configured_pinmame_folder.as_deref(),
+        &progress,
+        vec![],
+    )?;
+    progress.finish_and_clear();
+    println!("Indexed {} vpx files", index.len(),)?;
+    Ok(ExitCode::SUCCESS)
+}
+
 fn build_command() -> Command {
     // to allow for non-static strings in clap
     // I had to enable the "string" module
@@ -770,7 +804,7 @@ fn build_command() -> Command {
                 )
         )
         .subcommand(
-            Command::new("index")
+            Command::new(CMD_INDEX)
                 .about("Indexes a directory of vpx files")
                 .arg(
                     Arg::new("RECURSIVE")
@@ -781,7 +815,11 @@ fn build_command() -> Command {
                         .default_value("true"),
                 )
                 .arg(
-                    arg!(<VPXROOTPATH> "The path to the root directory of vpx files. Defaults to what is set up in the config file.")
+                    arg!(<VPXROOTPATH> "The path to the root directory of vpx files. Defaults to what is set up in the vpxtool config file.")
+                        .required(false)
+                )
+                .arg(
+                    arg!(<INDEX_FILE> "Where the index will be written. Defaults to VPXROOTPATH/vpxtool_index.json.")
                         .required(false)
                 ),
         )

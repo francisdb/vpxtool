@@ -33,21 +33,7 @@ pub struct ResolvedConfig {
 }
 
 impl ResolvedConfig {
-    /// This path can be absolute or relative.
-    /// In case it is relative, it will need to be resolved relative to the table vpx file.
     pub fn global_pinmame_folder(&self) -> PathBuf {
-        // first we try to read the ini file
-        if self.vpx_config.exists() {
-            let vpinball_config = VPinballConfig::read(&self.vpx_config).unwrap();
-            if let Some(value) = vpinball_config.get_pinmame_path() {
-                // if the path exists we return it
-                let path = PathBuf::from(value);
-                if path.is_relative() || path.exists() {
-                    return path;
-                }
-            }
-        }
-
         if cfg!(target_os = "windows") {
             self.vpx_executable.parent().unwrap().join("VPinMAME")
         } else {
@@ -57,8 +43,19 @@ impl ResolvedConfig {
 
     /// This path can be absolute or relative.
     /// In case it is relative, it will need to be resolved relative to the table vpx file.
-    pub fn pinmame_rom_folder(&self) -> PathBuf {
-        self.global_pinmame_folder().join("roms")
+    pub fn configured_pinmame_folder(&self) -> Option<PathBuf> {
+        // first we try to read the ini file
+        if self.vpx_config.exists() {
+            let vpinball_config = VPinballConfig::read(&self.vpx_config).unwrap();
+            if let Some(value) = vpinball_config.get_pinmame_path() {
+                if value.trim().is_empty() {
+                    return None;
+                }
+                let path = PathBuf::from(value);
+                return Some(path);
+            }
+        }
+        None
     }
 }
 
