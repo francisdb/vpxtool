@@ -670,10 +670,7 @@ fn handle_index(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
     let config = config::load_config()?;
 
     let tables_folder_path = match tables_folders_path_arg {
-        Some(path) => {
-            let tables_path = expand_path_exists(path)?;
-            tables_path
-        }
+        Some(path) => expand_path_exists(path)?,
         None => match &config {
             Some((_, config)) => config.tables_folder.clone(),
             None => {

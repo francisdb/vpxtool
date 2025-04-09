@@ -20,7 +20,7 @@ use walkdir::{DirEntry, FilterEntry, IntoIter, WalkDir};
 
 use vpx::gamedata::GameData;
 
-pub const DEFAULT_INDEX_FILE_NAME: &'static str = "vpxtool_index.json";
+pub const DEFAULT_INDEX_FILE_NAME: &str = "vpxtool_index.json";
 
 /// Introduced because we want full control over serialization
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
