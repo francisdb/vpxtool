@@ -20,6 +20,8 @@ use walkdir::{DirEntry, FilterEntry, IntoIter, WalkDir};
 
 use vpx::gamedata::GameData;
 
+pub const DEFAULT_INDEX_FILE_NAME: &str = "vpxtool_index.json";
+
 /// Introduced because we want full control over serialization
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct IndexedTableInfo {
@@ -337,14 +339,16 @@ impl From<io::Error> for IndexError {
 /// * `recursive`: if true, all subdirectories will be searched for vpx files.
 /// * `tables_folder`: the folder to search for vpx files.
 /// * `tables_index_path`: the path to the index file.
-/// * `global_roms_path`: the path to the global roms folder. This can be relative to the vpx file.
+/// * `global_pinmame_path`: the path to the global pinmame folder. Eg ~/.pinmame/roms on *nix systems.
+/// * `configured_pinmame_path`: the path to the local pinmame folder configured in the vpinball config.
 /// * `progress`: lister for progress updates.
 /// * `force_reindex`: a list of vpx files to reindex, even if they are not modified.
 pub fn index_folder(
     recursive: bool,
     tables_folder: &Path,
     tables_index_path: &Path,
-    global_roms_path: Option<&Path>,
+    global_pinmame_path: Option<&Path>,
+    configured_pinmame_path: Option<&Path>,
     progress: &impl Progress,
     force_reindex: Vec<PathBuf>,
 ) -> Result<TablesIndex, IndexError> {
@@ -397,8 +401,12 @@ pub fn index_folder(
     }
 
     info!("  {} tables need (re)indexing.", vpx_files_to_index.len());
-    let vpx_files_with_table_info =
-        index_vpx_files(vpx_files_to_index, global_roms_path, progress)?;
+    let vpx_files_with_table_info = index_vpx_files(
+        vpx_files_to_index,
+        global_pinmame_path,
+        configured_pinmame_path,
+        progress,
+    )?;
 
     // add new files to index
     index.merge(vpx_files_with_table_info);
@@ -411,22 +419,28 @@ pub fn index_folder(
 
 /// Indexes all vpx files in the given folder and returns the index.
 /// note: The index is unordered, so the order of the tables is not guaranteed.
+///
+/// Arguments:
+/// * `vpx_files`: the vpx files to index.
+/// * `global_roms_path`: the path to the global roms folder. Eg ~/.pinmame/roms on *nix systems.
+/// * `pinmame_roms_path`: the path to the local pinmame roms folder configured in the vpinball config
+/// * `progress`: lister for progress updates.
+///
+/// see https://github.com/francisdb/vpxtool/issues/526
 pub fn index_vpx_files(
     vpx_files: Vec<PathWithMetadata>,
-    pinmame_roms_path: Option<&Path>,
+    global_pinmame_path: Option<&Path>,
+    configured_pinmame_path: Option<&Path>,
     progress: &impl Progress,
 ) -> io::Result<TablesIndex> {
-    let global_roms = pinmame_roms_path
-        .map(|roms_path| {
-            if roms_path.is_absolute() {
-                find_roms(roms_path)
-            } else {
-                Ok(HashMap::new())
-            }
+    let global_roms = global_pinmame_path
+        .map(|pinmame_path| {
+            let roms_path = pinmame_path.join("roms");
+            find_roms(&roms_path)
         })
         .unwrap_or_else(|| Ok(HashMap::new()))?;
 
-    let pinmame_roms_path = pinmame_roms_path.map(|p| p.to_path_buf());
+    let pinmame_roms_path = configured_pinmame_path.map(|p| p.join("roms").to_path_buf());
 
     let (progress_tx, progress_rx) = std::sync::mpsc::channel();
 
@@ -472,7 +486,7 @@ pub fn index_vpx_files(
 
 fn index_vpx_file(
     vpx_file_path: &PathWithMetadata,
-    pinmame_roms_path: Option<&Path>,
+    configured_roms_path: Option<&Path>,
     global_roms: &HashMap<String, PathBuf>,
 ) -> io::Result<(PathBuf, IndexedTable)> {
     let path = &vpx_file_path.path;
@@ -489,7 +503,7 @@ fn index_vpx_file(
     //  also this sidecar should be part of the cache key
     let game_name = extract_game_name(&code);
     let requires_pinmame = requires_pinmame(&code);
-    let rom_path = find_local_rom_path(path, &game_name, pinmame_roms_path)?.or_else(|| {
+    let rom_path = find_local_rom_path(path, &game_name, configured_roms_path)?.or_else(|| {
         game_name
             .as_ref()
             .and_then(|game_name| global_roms.get(&game_name.to_lowercase()).cloned())
@@ -542,29 +556,32 @@ fn read_table_info_json(info_file_path: &Path) -> io::Result<TableInfo> {
     Ok(table_info)
 }
 
+/// Visual pinball always falls back to the [vpx_folder]/pinmame/roms folder,
+/// even if the PinMAMEPath folder is configured in the vpinball config.
 fn find_local_rom_path(
     vpx_file_path: &Path,
     game_name: &Option<String>,
-    pinmame_roms_path: Option<&Path>,
+    configured_roms_path: Option<&Path>,
 ) -> io::Result<Option<PathBuf>> {
     if let Some(game_name) = game_name {
         let rom_file_name = format!("{}.zip", game_name.to_lowercase());
 
-        let pinmame_roms_path = if let Some(pinmame_roms_path) = pinmame_roms_path {
-            if pinmame_roms_path.is_relative() {
-                pinmame_roms_path.to_owned()
+        let pinmame_roms_path = if let Some(configured_roms_path) = configured_roms_path {
+            let configured_roms_path = if configured_roms_path.is_relative() {
+                vpx_file_path.parent().unwrap().join(configured_roms_path)
             } else {
-                Path::new("pinmame").join("roms")
+                configured_roms_path.to_owned()
+            };
+            if configured_roms_path.exists() {
+                configured_roms_path
+            } else {
+                vpx_file_path.parent().unwrap().join("pinmame").join("roms")
             }
         } else {
-            Path::new("pinmame").join("roms")
+            vpx_file_path.parent().unwrap().join("pinmame").join("roms")
         };
 
-        let rom_path = vpx_file_path
-            .parent()
-            .unwrap()
-            .join(pinmame_roms_path)
-            .join(rom_file_name);
+        let rom_path = pinmame_roms_path.join(rom_file_name);
         return if rom_path.exists() {
             Ok(Some(rom_path.canonicalize()?))
         } else {
@@ -726,29 +743,35 @@ mod tests {
         // ├── pinmame/
         // │   └── roms/
         // │       └── testgamename.zip
-        // global_rom_dir/
-        // ├── testgamename2.zip
-        let global_rom_dir = testdir!();
-        let test_dir = testdir!();
-        let temp_dir = testdir!();
+        // global_pinmame/
+        // ├── roms/
+        // │   └── testgamename2.zip
+        let global_pinmame_dir = testdir!().join("global_pinmame");
+        fs::create_dir(&global_pinmame_dir)?;
+        let global_roms_dir = global_pinmame_dir.join("roms");
+        fs::create_dir(&global_roms_dir)?;
+        let tables_dir = testdir!().join("tables");
+        fs::create_dir(&tables_dir)?;
+        let temp_dir = testdir!().join("temp");
+        fs::create_dir(&temp_dir)?;
         // the next two folders should be ignored
-        let macosx = test_dir.join("__MACOSX");
+        let macosx = tables_dir.join("__MACOSX");
         fs::create_dir(&macosx)?;
         File::create(macosx.join("ignored.vpx"))?;
-        let git = test_dir.join(".git");
+        let git = tables_dir.join(".git");
         fs::create_dir(&git)?;
         File::create(git.join("ignored2.vpx"))?;
-        fs::create_dir(test_dir.join("subdir"))?;
+        fs::create_dir(tables_dir.join("subdir"))?;
         // actual vpx files to index
-        let vpx_1_path = test_dir.join("test.vpx");
-        let vpx_2_path = test_dir.join("test2.vpx");
-        let vpx_3_path = test_dir.join("subdir").join("test3.vpx");
+        let vpx_1_path = tables_dir.join("test.vpx");
+        let vpx_2_path = tables_dir.join("test2.vpx");
+        let vpx_3_path = tables_dir.join("subdir").join("test3.vpx");
 
         vpx::new_minimal_vpx(&vpx_1_path)?;
         let script1 = test_script(&temp_dir, "testgamename")?;
         vpx::importvbs(&vpx_1_path, Some(script1))?;
         // local rom
-        let mut rom1_path_local = test_dir
+        let mut rom1_path_local = tables_dir
             .join("pinmame")
             .join("roms")
             .join("testgamename.zip");
@@ -762,17 +785,37 @@ mod tests {
         let script2 = test_script(&temp_dir, "testgamename2")?;
         vpx::importvbs(&vpx_2_path, Some(script2))?;
         // global rom
-        let rom2_path_global = global_rom_dir.join("testgamename2.zip");
+        let rom2_path_global = global_roms_dir.join("testgamename2.zip");
         File::create(&rom2_path_global)?;
 
         vpx::new_minimal_vpx(&vpx_3_path)?;
         // no rom
 
-        let vpx_files = find_vpx_files(true, &test_dir)?;
+        // let output = std::process::Command::new("tree")
+        //     .arg(&tables_dir)
+        //     .output()
+        //     .expect("failed to execute process");
+        // let output_str = String::from_utf8_lossy(&output.stdout);
+        // println!("test_dir:\n{}", output_str);
+        //
+        // let output = std::process::Command::new("tree")
+        //     .arg(&global_pinmame_dir)
+        //     .output()
+        //     .expect("failed to execute process");
+        // let output_str = String::from_utf8_lossy(&output.stdout);
+        // println!("global_pinmame_dir:\n{}", output_str);
+
+        let vpx_files = find_vpx_files(true, &tables_dir)?;
         assert_eq!(vpx_files.len(), 3);
-        let global_roms = find_roms(&global_rom_dir)?;
+        let global_roms = find_roms(&global_roms_dir)?;
         assert_eq!(global_roms.len(), 1);
-        let indexed_tables = index_vpx_files(vpx_files, Some(&global_rom_dir), &VoidProgress)?;
+        let configured_roms_path = Some(PathBuf::from("./"));
+        let indexed_tables = index_vpx_files(
+            vpx_files,
+            Some(&global_pinmame_dir),
+            configured_roms_path.as_deref(),
+            &VoidProgress,
+        )?;
         assert_eq!(indexed_tables.tables.len(), 3);
         let table1 = indexed_tables
             .tables
