@@ -1498,7 +1498,7 @@ pub fn extract(vpx_file_path: &Path, yes: bool) -> io::Result<ExitCode> {
     root_dir.recursive(true);
     root_dir.create(root_dir_path)?;
     let result = {
-        let vpx = vpx::read(&vpx_file_path.to_path_buf())?;
+        let vpx = vpx::read(vpx_file_path)?;
         expanded::write(&vpx, &root_dir_path)
     };
     match result {

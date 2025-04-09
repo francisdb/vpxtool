@@ -5928,9 +5928,9 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "vpin"
-version = "0.17.6"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4958bbcb8e15fd55c2111bee9171c630809648ce3018764e5ccb4f0c9a78bab5"
+checksum = "cf1abe6b6ca9d387168d4c338b6d4eefe55a95b372215d015526a77e3a5bc554"
 dependencies = [
  "byteorder",
  "bytes",
