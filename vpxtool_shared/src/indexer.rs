@@ -748,8 +748,8 @@ mod tests {
         // │   └── testgamename2.zip
         let global_pinmame_dir = testdir!().join("global_pinmame");
         fs::create_dir(&global_pinmame_dir)?;
-        let global_rom_dir = global_pinmame_dir.join("roms");
-        fs::create_dir(&global_rom_dir)?;
+        let global_roms_dir = global_pinmame_dir.join("roms");
+        fs::create_dir(&global_roms_dir)?;
         let tables_dir = testdir!().join("tables");
         fs::create_dir(&tables_dir)?;
         let temp_dir = testdir!().join("temp");
@@ -785,7 +785,7 @@ mod tests {
         let script2 = test_script(&temp_dir, "testgamename2")?;
         vpx::importvbs(&vpx_2_path, Some(script2))?;
         // global rom
-        let rom2_path_global = global_rom_dir.join("testgamename2.zip");
+        let rom2_path_global = global_roms_dir.join("testgamename2.zip");
         File::create(&rom2_path_global)?;
 
         vpx::new_minimal_vpx(&vpx_3_path)?;
@@ -807,7 +807,7 @@ mod tests {
 
         let vpx_files = find_vpx_files(true, &tables_dir)?;
         assert_eq!(vpx_files.len(), 3);
-        let global_roms = find_roms(&global_rom_dir)?;
+        let global_roms = find_roms(&global_roms_dir)?;
         assert_eq!(global_roms.len(), 1);
         let configured_roms_path = Some(PathBuf::from("./"));
         let indexed_tables = index_vpx_files(
