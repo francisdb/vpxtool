@@ -32,7 +32,7 @@ regex = { version = "1.11.1", features = [] }
 vpin = { version = "0.18.0" }
 
 edit = "0.1.5"
-pinmame-nvram = "0.3.13"
+pinmame-nvram = "0.3.14"
 image = "0.25.6"
 
 [dev-dependencies]
