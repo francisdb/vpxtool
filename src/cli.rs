@@ -27,7 +27,12 @@ use vpin::vpx::jsonmodel::{game_data_to_json, info_to_json};
 use vpin::vpx::{ExtractResult, VerifyResult, expanded, extractvbs, importvbs, verify};
 
 // see https://github.com/fusion-engineering/rust-git-version/issues/21
-const GIT_VERSION: &str = git_version!(args = ["--tags", "--always", "--dirty=-modified"]);
+const GIT_VERSION: &str = git_version!(
+    args = ["--tags", "--always", "--dirty=-modified"],
+    prefix = "git:",
+    cargo_prefix = "cargo:",
+    fallback = "unknown"
+);
 
 const OK: Emoji = Emoji("✅", "[launch]");
 const NOK: Emoji = Emoji("❌", "[crash]");
