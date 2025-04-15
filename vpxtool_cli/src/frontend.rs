@@ -517,6 +517,7 @@ fn nvram_dip_switches(info: &IndexedTable) {
         }
     } else {
         prompt("This table is not using PinMAME");
+    }
 }
 
 fn nvram_show(info: &IndexedTable) {
@@ -542,6 +543,7 @@ fn nvram_show(info: &IndexedTable) {
         }
     } else {
         prompt("This table is not using PinMAME");
+    }
 }
 
 fn report_launch_result(path: &Path, result: io::Result<()>) {
