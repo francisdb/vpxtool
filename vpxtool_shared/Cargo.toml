@@ -1,5 +1,5 @@
 [package]
-name = "vpxtool_shared"
+name = "libvpxtool"
 edition = "2024"
 
 [lib]

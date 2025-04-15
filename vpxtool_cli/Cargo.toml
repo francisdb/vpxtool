@@ -1,7 +1,6 @@
 [package]
-name = "vpxtool_cli"
+name = "vpxtool"
 edition = "2024"
-default-run = "vpxtool"
 
 [lib]
 path = "src/lib.rs"
@@ -13,7 +12,7 @@ name = "vpxtool"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-vpxtool_shared = { path = "../vpxtool_shared" }
+libvpxtool = { path = "../vpxtool_shared" }
 base64 = "0.22.1"
 clap = { version = "4.5.36", features = ["derive", "string"] }
 colored = "3.0.0"
@@ -22,7 +21,6 @@ dialoguer = { version = "0.11.0", features = ["fuzzy-select"] }
 git-version = "0.3.9"
 indicatif = "0.17.11"
 jojodiff = "0.1.2"
-serde = { version = "1.0.219", features = ["derive"] }
 serde_json = { version = "1.0.140", features = ["preserve_order"] }
 shellexpand = "3.1.0"
 wild = "2.2.1"

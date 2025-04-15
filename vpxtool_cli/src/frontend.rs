@@ -13,6 +13,10 @@ use dialoguer::theme::ColorfulTheme;
 use dialoguer::{FuzzySelect, Input, MultiSelect, Select};
 use indicatif::{ProgressBar, ProgressStyle};
 use is_executable::IsExecutable;
+use libvpxtool::config::ResolvedConfig;
+use libvpxtool::indexer;
+use libvpxtool::indexer::{IndexError, IndexedTable, Progress};
+use libvpxtool::vpinball_config::{VPinballConfig, WindowInfo, WindowType};
 use pinmame_nvram::dips::{get_all_dip_switches, set_dip_switches};
 use std::fs::OpenOptions;
 use std::io::BufReader;
@@ -23,10 +27,6 @@ use std::{
     path::{Path, PathBuf},
     process::{ExitStatus, exit},
 };
-use vpxtool_shared::config::ResolvedConfig;
-use vpxtool_shared::indexer;
-use vpxtool_shared::indexer::{IndexError, IndexedTable, Progress};
-use vpxtool_shared::vpinball_config::{VPinballConfig, WindowInfo, WindowType};
 
 const LAUNCH: Emoji = Emoji("🚀", "[launch]");
 const CRASH: Emoji = Emoji("💥", "[crash]");
