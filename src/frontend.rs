@@ -1,6 +1,10 @@
 use crate::backglass::find_hole;
+use crate::config::ResolvedConfig;
+use crate::indexer;
+use crate::indexer::{IndexError, IndexedTable, Progress};
 use crate::patcher::LineEndingsResult::{NoChanges, Unified};
 use crate::patcher::{patch_vbs_file, unify_line_endings_vbs_file};
+use crate::vpinball_config::{VPinballConfig, WindowInfo, WindowType};
 use crate::{
     DiffColor, ProgressBarProgress, confirm, info_diff, info_edit, info_gather, open_editor,
     run_diff, script_diff, strip_cr_lf,
@@ -13,10 +17,6 @@ use dialoguer::theme::ColorfulTheme;
 use dialoguer::{FuzzySelect, Input, MultiSelect, Select};
 use indicatif::{ProgressBar, ProgressStyle};
 use is_executable::IsExecutable;
-use libvpxtool::config::ResolvedConfig;
-use libvpxtool::indexer;
-use libvpxtool::indexer::{IndexError, IndexedTable, Progress};
-use libvpxtool::vpinball_config::{VPinballConfig, WindowInfo, WindowType};
 use pinmame_nvram::dips::{get_all_dip_switches, set_dip_switches};
 use std::fs::OpenOptions;
 use std::io::BufReader;

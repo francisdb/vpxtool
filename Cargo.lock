@@ -1129,27 +1129,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "libvpxtool"
-version = "0.0.0"
-dependencies = [
- "chrono",
- "dialoguer",
- "dirs 6.0.0",
- "figment",
- "log",
- "pretty_assertions",
- "rayon",
- "regex",
- "rust-ini",
- "serde",
- "serde_json",
- "testdir",
- "toml",
- "vpin",
- "walkdir",
-]
-
-[[package]]
 name = "linux-raw-sys"
 version = "0.4.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1637,9 +1616,9 @@ dependencies = [
 
 [[package]]
 name = "redox_syscall"
-version = "0.5.10"
+version = "0.5.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b8c0c260b63a8219631167be35e6a988e9554dbd323f8bd08439c8ed1302bd1"
+checksum = "d2f103c6d277498fbceb16e84d317e2a400f160f46904d5f5410848c829511a3"
 dependencies = [
  "bitflags 2.9.0",
 ]
@@ -2157,27 +2136,36 @@ dependencies = [
 
 [[package]]
 name = "vpxtool"
-version = "0.0.0"
+version = "0.22.0"
 dependencies = [
  "base64",
+ "chrono",
  "clap",
  "colored",
  "console",
  "dialoguer",
+ "dirs 6.0.0",
  "edit",
+ "figment",
  "git-version",
  "image",
  "indicatif",
  "is_executable",
  "jojodiff",
- "libvpxtool",
+ "log",
  "pinmame-nvram",
  "pretty_assertions",
  "rand 0.9.0",
+ "rayon",
  "regex",
+ "rust-ini",
+ "serde",
  "serde_json",
  "shellexpand",
+ "testdir",
+ "toml",
  "vpin",
+ "walkdir",
  "wild",
 ]
 
@@ -2316,9 +2304,9 @@ dependencies = [
 
 [[package]]
 name = "whoami"
-version = "1.5.2"
+version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "372d5b87f58ec45c384ba03563b03544dc5fadc3983e434b286913f5b4a9bb6d"
+checksum = "6994d13118ab492c3c80c1f81928718159254c53c472bf9ce36f8dae4add02a7"
 dependencies = [
  "redox_syscall",
  "wasite",

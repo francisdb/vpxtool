@@ -4,6 +4,8 @@
 // https://clig.dev/#arguments-and-flags
 // https://clig.dev/#subcommands
 //
+use crate::config::{ResolvedConfig, SetupConfigResult};
+use crate::indexer::{DEFAULT_INDEX_FILE_NAME, IndexError, Progress};
 use crate::patcher::patch_vbs_file;
 use base64::Engine;
 use clap::builder::Str;
@@ -12,9 +14,6 @@ use colored::Colorize;
 use console::Emoji;
 use git_version::git_version;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
-use libvpxtool::config::{ResolvedConfig, SetupConfigResult};
-use libvpxtool::indexer::{DEFAULT_INDEX_FILE_NAME, IndexError, Progress};
-use libvpxtool::{config, indexer};
 use pinmame_nvram::dips::get_all_dip_switches;
 use std::error::Error;
 use std::ffi::OsStr;
@@ -33,6 +32,12 @@ mod backglass;
 pub mod fixprint;
 mod frontend;
 pub mod patcher;
+
+pub mod config;
+
+pub mod indexer;
+
+pub mod vpinball_config;
 
 // see https://github.com/fusion-engineering/rust-git-version/issues/21
 const GIT_VERSION: &str = git_version!(args = ["--tags", "--always", "--dirty=-modified"]);
