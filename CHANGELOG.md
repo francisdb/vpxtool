@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.3](https://github.com/francisdb/vpxtool/compare/v0.23.2...v0.23.3) - 2025-04-15
+
+### Other
+
+- switch to dtolnay/rust-toolchain instead of actions-rs/toolchain ([#539](https://github.com/francisdb/vpxtool/pull/539))
+- remove docs on gui frontend that was removed
+
 ## [0.23.2](https://github.com/francisdb/vpxtool/compare/v0.23.1...v0.23.2) - 2025-04-15
 
 ### Other
