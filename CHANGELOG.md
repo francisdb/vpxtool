@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.2](https://github.com/francisdb/vpxtool/compare/v0.23.1...v0.23.2) - 2025-04-15
+
+### Other
+
+- do not fail build if git is not available
+
 ## [0.23.1](https://github.com/francisdb/vpxtool/compare/v0.23.0...v0.23.1) - 2025-04-15
 
 ### Other
