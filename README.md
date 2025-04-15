@@ -9,6 +9,15 @@ Join [#vpxtool on "Virtual Pinball Chat" discord](https://discord.gg/eYsvyMu8) f
 Download the latest release for your operating system at https://github.com/francisdb/vpxtool/releases, extract it and
 if wanted copy or symlink the binary to `$HOME/bin` to put in on your path
 
+### Using cargo
+
+If you have [cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) installed you can install
+vpxtool with the following command:
+
+```
+cargo install vpxtool
+```
+
 ### macOS
 
 After extracting the archive you will have to remove the quarantine flag through
@@ -103,7 +112,8 @@ the commandline tool to configure everything.
 ```
 
 > [!NOTE]
-> The graphical frontend is currently not part of the release and needs to be downloaded from [ci builds](https://github.com/francisdb/vpxtool/actions).
+> The graphical frontend is currently not part of the release and needs to be downloaded
+> from [ci builds](https://github.com/francisdb/vpxtool/actions).
 
 ## Configuration
 
@@ -122,7 +132,7 @@ When launching the frontend for the first time it will help you to set up the re
 ```yaml
 vpx_executable = "/home/myuser/vpinball/VPinballX_BGFX"
 
-# Optional settings below, only needed if the defaults don't work
+  # Optional settings below, only needed if the defaults don't work
 tables_folder = "/home/myuser/vpinball/tables"
 vpx_config = "/home/myuser/.vpinball/VPinballX.ini"
 ```
