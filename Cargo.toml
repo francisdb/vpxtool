@@ -2,6 +2,11 @@
 name = "vpxtool"
 edition = "2024"
 version = "0.23.0"
+license = "MIT"
+description = "Terminal based frontend and utilities for Visual Pinball"
+repository = "https://github.com/francisdb/vpxtool"
+readme = "README.md"
+documentation = "https://docs.rs/vpxtool"
 
 [lib]
 path = "src/lib.rs"
