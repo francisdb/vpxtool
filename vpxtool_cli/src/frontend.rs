@@ -51,7 +51,8 @@ enum TableOption {
     UnifyLineEndings,
     ShowVBSDiff,
     CreateVBSPatch,
-    DIPSwitches,
+    NVRAMDipSwitches,
+    NVRAMShow,
     NVRAMClear,
     B2SAutoPositionDMD,
     EditTableINI,
@@ -59,7 +60,7 @@ enum TableOption {
 }
 
 impl TableOption {
-    const ALL: [TableOption; 18] = [
+    const ALL: [TableOption; 19] = [
         TableOption::Launch,
         TableOption::LaunchFullscreen,
         TableOption::LaunchWindowed,
@@ -73,7 +74,8 @@ impl TableOption {
         TableOption::UnifyLineEndings,
         TableOption::ShowVBSDiff,
         TableOption::CreateVBSPatch,
-        TableOption::DIPSwitches,
+        TableOption::NVRAMDipSwitches,
+        TableOption::NVRAMShow,
         TableOption::NVRAMClear,
         TableOption::B2SAutoPositionDMD,
         TableOption::EditTableINI,
@@ -95,11 +97,12 @@ impl TableOption {
             10 => Some(TableOption::UnifyLineEndings),
             11 => Some(TableOption::ShowVBSDiff),
             12 => Some(TableOption::CreateVBSPatch),
-            13 => Some(TableOption::DIPSwitches),
-            14 => Some(TableOption::NVRAMClear),
-            15 => Some(TableOption::B2SAutoPositionDMD),
-            16 => Some(TableOption::EditTableINI),
-            17 => Some(TableOption::EditMainIni),
+            13 => Some(TableOption::NVRAMDipSwitches),
+            14 => Some(TableOption::NVRAMShow),
+            15 => Some(TableOption::NVRAMClear),
+            16 => Some(TableOption::B2SAutoPositionDMD),
+            17 => Some(TableOption::EditTableINI),
+            18 => Some(TableOption::EditMainIni),
             _ => None,
         }
     }
@@ -119,7 +122,8 @@ impl TableOption {
             TableOption::UnifyLineEndings => "VBScript > Unify line endings".to_string(),
             TableOption::ShowVBSDiff => "VBScript > Diff".to_string(),
             TableOption::CreateVBSPatch => "VBScript > Create patch file".to_string(),
-            TableOption::DIPSwitches => "DIP Switches".to_string(),
+            TableOption::NVRAMDipSwitches => "NVRAM > DIP Switches".to_string(),
+            TableOption::NVRAMShow => "NVRAM > Show".to_string(),
             TableOption::NVRAMClear => "NVRAM > Clear".to_string(),
             TableOption::B2SAutoPositionDMD => "Backglass > Auto-position DMD".to_string(),
             TableOption::EditTableINI => "INI > Edit table ini".to_string(),
@@ -442,29 +446,14 @@ fn table_menu(
                     prompt_error(&msg);
                 }
             },
-            Some(TableOption::DIPSwitches) => {
-                if info.requires_pinmame {
-                    let nvram = nvram_for_rom(info);
-                    if let Some(nvram) = nvram {
-                        // open file in read/write mode
-                        match edit_dip_switches(nvram) {
-                            Ok(_) => {
-                                // ok
-                            }
-                            Err(err) => {
-                                let msg = format!("Unable to edit DIP switches: {}", err);
-                                prompt_error(&msg);
-                            }
-                        }
-                    } else {
-                        prompt("This table does not have an NVRAM file, try launching it once.");
-                    }
-                } else {
-                    prompt("This table is not using used PinMAME");
-                }
+            Some(TableOption::NVRAMDipSwitches) => {
+                nvram_dip_switches(info);
+            }
+            Some(TableOption::NVRAMShow) => {
+                nvram_show(info);
             }
             Some(TableOption::NVRAMClear) => {
-                clear_nvram(info);
+                nvram_clear(info);
             }
             Some(TableOption::B2SAutoPositionDMD) => match auto_position_dmd(config, &info) {
                 Ok(msg) => {
@@ -506,6 +495,54 @@ fn table_menu(
             }
             None => exit = true,
         }
+    }
+}
+
+fn nvram_dip_switches(info: &IndexedTable) {
+    if info.requires_pinmame {
+        let nvram = nvram_for_rom(info);
+        if let Some(nvram) = nvram {
+            // open file in read/write mode
+            match edit_dip_switches(nvram) {
+                Ok(_) => {
+                    // ok
+                }
+                Err(err) => {
+                    let msg = format!("Unable to edit DIP switches: {}", err);
+                    prompt_error(&msg);
+                }
+            }
+        } else {
+            prompt("This table does not have an NVRAM file, try launching it once.");
+        }
+    } else {
+        prompt("This table is not using used PinMAME");
+    }
+}
+
+fn nvram_show(info: &IndexedTable) {
+    if info.requires_pinmame {
+        if let Some(nvram_path) = nvram_for_rom(info) {
+            match pinmame_nvram::resolve::resolve(&nvram_path) {
+                Ok(Some(resolved)) => {
+                    print!("{} NVRAM file: ", nvram_path.display());
+                    // print as json
+                    let json = serde_json::to_string_pretty(&resolved).unwrap();
+                    prompt(&json);
+                }
+                Ok(None) => {
+                    prompt(&format!("{} currently not supported", nvram_path.display()));
+                }
+                Err(err) => {
+                    let msg = format!("Unable to resolve NVRAM file: {}", err);
+                    prompt_error(&msg);
+                }
+            }
+        } else {
+            prompt("This table does not have an NVRAM file, try launching it once.");
+        }
+    } else {
+        prompt("This table is not using used PinMAME");
     }
 }
 
@@ -660,7 +697,7 @@ fn edit_dip_switches(nvram: PathBuf) -> io::Result<()> {
     Ok(())
 }
 
-fn clear_nvram(info: &IndexedTable) {
+fn nvram_clear(info: &IndexedTable) {
     if info.requires_pinmame {
         let nvram_file = nvram_for_rom(info);
         if let Some(nvram_file) = nvram_file {
