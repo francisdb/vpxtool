@@ -1,10 +1,10 @@
-// Main module for the command line interface
-//
-// We try to adhere to the Command Line Interface Guidelines
-// https://clig.dev/#arguments-and-flags
-// https://clig.dev/#subcommands
-//
+use crate::config::{ResolvedConfig, SetupConfigResult};
+use crate::indexer::{DEFAULT_INDEX_FILE_NAME, IndexError, Progress};
 use crate::patcher::patch_vbs_file;
+use crate::{
+    RemoveOnDrop, config, expand_path, expand_path_exists, frontend, indexer,
+    os_independent_file_name, path_exists, strip_cr_lf,
+};
 use base64::Engine;
 use clap::builder::Str;
 use clap::{Arg, ArgMatches, Command, arg};
@@ -16,7 +16,7 @@ use pinmame_nvram::dips::get_all_dip_switches;
 use std::error::Error;
 use std::ffi::OsStr;
 use std::fmt::Display;
-use std::fs::{File, OpenOptions, metadata};
+use std::fs::{File, OpenOptions};
 use std::io;
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
@@ -25,14 +25,6 @@ use vpin::directb2s::read;
 use vpin::vpx;
 use vpin::vpx::jsonmodel::{game_data_to_json, info_to_json};
 use vpin::vpx::{ExtractResult, VerifyResult, expanded, extractvbs, importvbs, verify};
-use vpxtool_shared::config::{ResolvedConfig, SetupConfigResult};
-use vpxtool_shared::indexer::{DEFAULT_INDEX_FILE_NAME, IndexError, Progress};
-use vpxtool_shared::{config, indexer};
-
-mod backglass;
-pub mod fixprint;
-mod frontend;
-pub mod patcher;
 
 // see https://github.com/fusion-engineering/rust-git-version/issues/21
 const GIT_VERSION: &str = git_version!(args = ["--tags", "--always", "--dirty=-modified"]);
@@ -87,12 +79,12 @@ const CMD_ROMNAME: &str = "romname";
 
 const CMD_INDEX: &str = "index";
 
-pub struct ProgressBarProgress {
+pub(crate) struct ProgressBarProgress {
     pb: ProgressBar,
 }
 
 impl ProgressBarProgress {
-    fn new(pb: ProgressBar) -> Self {
+    pub(crate) fn new(pb: ProgressBar) -> Self {
         Self { pb }
     }
 }
@@ -127,23 +119,23 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
                 let path = path.unwrap_or("");
                 let expanded_path = expand_path_exists(path)?;
-                println!("showing info for {}", expanded_path.display())?;
+                crate::println!("showing info for {}", expanded_path.display())?;
                 let info = info_gather(&expanded_path)?;
-                println!("{}", info)?;
+                crate::println!("{}", info)?;
                 Ok(ExitCode::SUCCESS)
             }
             Some((CMD_INFO_EXTRACT, sub_matches)) => {
                 let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
                 let path = path.unwrap_or("");
                 let expanded_path = expand_path_exists(path)?;
-                println!("extracting info for {}", expanded_path.display())?;
+                crate::println!("extracting info for {}", expanded_path.display())?;
                 info_extract(&expanded_path)
             }
             Some((CMD_INFO_IMPORT, sub_matches)) => {
                 let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
                 let path = path.unwrap_or("");
                 let expanded_path = expand_path_exists(path)?;
-                println!("importing info for {}", expanded_path.display())?;
+                crate::println!("importing info for {}", expanded_path.display())?;
                 info_import(&expanded_path)
             }
             Some((CMD_INFO_EDIT, sub_matches)) => {
@@ -152,7 +144,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 let expanded_path = expand_path_exists(path)?;
                 let loaded_config = config::load_config()?;
                 let config = loaded_config.as_ref().map(|c| &c.1);
-                println!("editing info for {}", expanded_path.display())?;
+                crate::println!("editing info for {}", expanded_path.display())?;
                 info_edit(&expanded_path, config)?;
                 Ok(ExitCode::SUCCESS)
             }
@@ -160,9 +152,9 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
                 let path = path.unwrap_or("");
                 let expanded_path = expand_path_exists(path)?;
-                println!("diffing info for {}", expanded_path.display())?;
+                crate::println!("diffing info for {}", expanded_path.display())?;
                 let diff = info_diff(&expanded_path)?;
-                println!("{}", diff)?;
+                crate::println!("{}", diff)?;
                 Ok(ExitCode::SUCCESS)
             }
             _ => unreachable!(),
@@ -174,25 +166,25 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             let expanded_path = expand_path_exists(path)?;
             match script_diff(&expanded_path) {
                 Ok(output) => {
-                    println!("{}", output)?;
+                    crate::println!("{}", output)?;
                     Ok(ExitCode::SUCCESS)
                 }
                 Err(e) => {
                     let warning = format!("Error running diff: {}", e).red();
-                    println!("{}", warning)?;
+                    crate::println!("{}", warning)?;
                     Ok(ExitCode::FAILURE)
                 }
             }
         }
         Some((CMD_FRONTEND, _sub_matches)) => {
             let (config_path, config) = config::load_or_setup_config()?;
-            println!("Using vpxtool config file {}", config_path.display())?;
-            println!("Using vpinball config file {}", config.vpx_config.display())?;
-            println!(
+            crate::println!("Using vpxtool config file {}", config_path.display())?;
+            crate::println!("Using vpinball config file {}", config.vpx_config.display())?;
+            crate::println!(
                 "Using global pinmame folder {}",
                 config.global_pinmame_folder().display()
             )?;
-            println!(
+            crate::println!(
                 "Using configured pinmame folder {}",
                 config
                     .configured_pinmame_folder()
@@ -203,7 +195,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 Ok(tables) if tables.is_empty() => {
                     let warning =
                         format!("No tables found in {}", config.tables_folder.display()).red();
-                    eprintln!("{}", warning)?;
+                    crate::eprintln!("{}", warning)?;
                     Ok(ExitCode::FAILURE)
                 }
                 Ok(vpx_files_with_tableinfo) => {
@@ -217,12 +209,12 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                         path.display()
                     )
                     .red();
-                    eprintln!("{}", warning)?;
+                    crate::eprintln!("{}", warning)?;
                     Ok(ExitCode::FAILURE)
                 }
                 Err(IndexError::IoError(e)) => {
                     let warning = format!("Error running frontend: {}", e).red();
-                    eprintln!("{}", warning)?;
+                    crate::eprintln!("{}", warning)?;
                     Ok(ExitCode::FAILURE)
                 }
             }
@@ -240,7 +232,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 let game_data = vpx_file.read_gamedata()?;
                 let code = game_data.code.string;
 
-                println!("{}", code)?;
+                crate::println!("{}", code)?;
                 Ok(ExitCode::SUCCESS)
             }
             Some((CMD_SCRIPT_EXTRACT, sub_matches)) => handle_extractvbs(sub_matches),
@@ -258,12 +250,12 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 let expanded_path = expand_path_exists(path)?;
                 match importvbs(&expanded_path, vbs_path_opt) {
                     Ok(vbs_path) => {
-                        println!("IMPORTED {}", vbs_path.display())?;
+                        crate::println!("IMPORTED {}", vbs_path.display())?;
                         Ok(ExitCode::SUCCESS)
                     }
                     Err(e) => {
                         let warning = format!("Error importing vbs: {}", e).red();
-                        eprintln!("{}", warning)?;
+                        crate::eprintln!("{}", warning)?;
                         Ok(ExitCode::FAILURE)
                     }
                 }
@@ -294,7 +286,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
 
                 let expanded_path = expand_path_exists(path)?;
                 let diff = script_diff(&expanded_path)?;
-                println!("{}", diff)?;
+                crate::println!("{}", diff)?;
                 Ok(ExitCode::SUCCESS)
             }
             Some((CMD_SCRIPT_PATCH, sub_matches)) => {
@@ -308,11 +300,11 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     Ok(ExtractResult::Existed(vbs_path)) => {
                         let warning =
                             format!("EXISTED {}", vbs_path.display()).truecolor(255, 125, 0);
-                        println!("{}", warning)?;
+                        crate::println!("{}", warning)?;
                         vbs_path
                     }
                     Ok(ExtractResult::Extracted(vbs_path)) => {
-                        println!("CREATED {}", vbs_path.display())?;
+                        crate::println!("CREATED {}", vbs_path.display())?;
                         vbs_path
                     }
                     Err(e) => return fail_with_error("Error extracting vbs", e),
@@ -320,11 +312,11 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
 
                 let applied = patch_vbs_file(&vbs_path)?;
                 if applied.is_empty() {
-                    println!("No patches applied")?;
+                    crate::println!("No patches applied")?;
                 } else {
                     applied
                         .iter()
-                        .try_for_each(|patch| println!("Applied patch: {}", patch))?;
+                        .try_for_each(|patch| crate::println!("Applied patch: {}", patch))?;
                 }
                 Ok(ExitCode::SUCCESS)
             }
@@ -352,12 +344,12 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 let ext = expanded_path.extension().map(|e| e.to_ascii_lowercase());
                 match ext {
                     Some(ext) if ext == "directb2s" => {
-                        println!("extracting from {}", expanded_path.display())?;
+                        crate::println!("extracting from {}", expanded_path.display())?;
                         extract_directb2s(&expanded_path)?;
                         Ok(())
                     }
                     Some(ext) if ext == "vpx" => {
-                        println!("extracting from {}", expanded_path.display())?;
+                        crate::println!("extracting from {}", expanded_path.display())?;
                         extract(expanded_path.as_ref(), force)?;
                         Ok(())
                     }
@@ -401,7 +393,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                         "Do you want to overwrite it?".to_string(),
                     )?;
                     if !confirmed {
-                        println!("Aborted")?;
+                        crate::println!("Aborted")?;
                         return Ok(ExitCode::SUCCESS);
                     }
                     std::fs::remove_file(&vpx_path)?;
@@ -413,11 +405,11 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             };
             match result {
                 Ok(_) => {
-                    println!("Successfully assembled to {}", vpx_path.display())?;
+                    crate::println!("Successfully assembled to {}", vpx_path.display())?;
                     Ok(ExitCode::SUCCESS)
                 }
                 Err(e) => {
-                    println!("Failed to assemble: {}", e)?;
+                    crate::println!("Failed to assemble: {}", e)?;
                     Ok(ExitCode::FAILURE)
                 }
             }
@@ -428,12 +420,12 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             let expanded_path = expand_path_exists(path)?;
             match importvbs(&expanded_path, None) {
                 Ok(vbs_path) => {
-                    println!("IMPORTED {}", vbs_path.display())?;
+                    crate::println!("IMPORTED {}", vbs_path.display())?;
                     Ok(ExitCode::SUCCESS)
                 }
                 Err(e) => {
                     let warning = format!("Error importing vbs: {}", e).red();
-                    eprintln!("{}", warning)?;
+                    crate::eprintln!("{}", warning)?;
                     Ok(ExitCode::FAILURE)
                 }
             }
@@ -495,12 +487,12 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 let expanded_path = expand_path_exists(path)?;
                 match verify(&expanded_path) {
                     VerifyResult::Ok(vbs_path) => {
-                        println!("{OK} {}", vbs_path.display())?;
+                        crate::println!("{OK} {}", vbs_path.display())?;
                     }
                     VerifyResult::Failed(vbs_path, msg) => {
                         let warning =
                             format!("{NOK} {} {}", vbs_path.display(), msg).truecolor(255, 125, 0);
-                        eprintln!("{}", warning)?;
+                        crate::eprintln!("{}", warning)?;
                     }
                 }
             }
@@ -516,35 +508,35 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             };
 
             let expanded_path = shellexpand::tilde(path);
-            println!("creating new vpx file at {}", expanded_path)?;
+            crate::println!("creating new vpx file at {}", expanded_path)?;
             new(expanded_path.as_ref())?;
             Ok(ExitCode::SUCCESS)
         }
         Some((CMD_CONFIG, sub_matches)) => match sub_matches.subcommand() {
             Some((CMD_CONFIG_SETUP, _)) => match config::setup_config() {
                 Ok(SetupConfigResult::Configured(config_path)) => {
-                    println!("Created config file {}", config_path.display())?;
+                    crate::println!("Created config file {}", config_path.display())?;
                     Ok(ExitCode::SUCCESS)
                 }
                 Ok(SetupConfigResult::Existing(config_path)) => {
-                    println!(
+                    crate::println!(
                         "Config file already exists at \"{}\"",
                         config_path.display()
                     )?;
                     Ok(ExitCode::SUCCESS)
                 }
                 Err(e) => {
-                    eprintln!("Failed to create config file: {}", e)?;
+                    crate::eprintln!("Failed to create config file: {}", e)?;
                     Ok(ExitCode::FAILURE)
                 }
             },
             Some((CMD_CONFIG_PATH, _)) => match config::config_path() {
                 Some(config_path) => {
-                    println!("{}", config_path.display())?;
+                    crate::println!("{}", config_path.display())?;
                     Ok(ExitCode::SUCCESS)
                 }
                 None => {
-                    eprintln!("No config file found")?;
+                    crate::eprintln!("No config file found")?;
                     Ok(ExitCode::FAILURE)
                 }
             },
@@ -553,21 +545,21 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     let mut file = File::open(config_path)?;
                     let mut text = String::new();
                     file.read_to_string(&mut text)?;
-                    println!("{}", text)?;
+                    crate::println!("{}", text)?;
                     Ok(ExitCode::SUCCESS)
                 }
                 None => {
-                    eprintln!("No config file found")?;
+                    crate::eprintln!("No config file found")?;
                     Ok(ExitCode::FAILURE)
                 }
             },
             Some((CMD_CONFIG_CLEAR, _)) => match config::clear_config() {
                 Ok(Some(config_path)) => {
-                    println!("Cleared config file {}", config_path.display())?;
+                    crate::println!("Cleared config file {}", config_path.display())?;
                     Ok(ExitCode::SUCCESS)
                 }
                 Ok(None) => {
-                    println!("No config file found")?;
+                    crate::println!("No config file found")?;
                     Ok(ExitCode::SUCCESS)
                 }
                 Err(e) => fail_with_error("Failed to clear config file: {}", e),
@@ -601,15 +593,17 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 let images = vpx_file.images_to_webp()?;
                 if !images.is_empty() {
                     for image in images.iter() {
-                        println!(
+                        crate::println!(
                             "Updated {} from {} to {}",
-                            image.name, image.old_extension, image.new_extension
+                            image.name,
+                            image.old_extension,
+                            image.new_extension
                         )?;
                     }
-                    println!("Compacting vpx file")?;
+                    crate::println!("Compacting vpx file")?;
                     vpx::compact(&expanded_path)?;
                 } else {
-                    println!("No images to update")?;
+                    crate::println!("No images to update")?;
                 }
                 Ok(ExitCode::SUCCESS)
             }
@@ -626,7 +620,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 let game_data = vpx_file.read_gamedata()?;
                 let json = game_data_to_json(&game_data);
                 let pretty = serde_json::to_string_pretty(&json)?;
-                println!("{}", pretty)?;
+                crate::println!("{}", pretty)?;
                 Ok(ExitCode::SUCCESS)
             }
             _ => unreachable!(),
@@ -639,7 +633,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     .unwrap_or_default();
                 let expanded_path = expand_path_exists(path)?;
                 let summary = show_dip_switches(&expanded_path)?;
-                println!("{}", summary)?;
+                crate::println!("{}", summary)?;
                 Ok(ExitCode::SUCCESS)
             }
             _ => unreachable!(),
@@ -651,7 +645,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 .unwrap_or_default();
             let expanded_path = expand_path_exists(path)?;
             if let Some(rom_name) = indexer::get_romname_from_vpx(&expanded_path)? {
-                println!("{rom_name}")?;
+                crate::println!("{rom_name}")?;
             }
             Ok(ExitCode::SUCCESS)
         }
@@ -674,7 +668,7 @@ fn handle_index(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
         None => match &config {
             Some((_, config)) => config.tables_folder.clone(),
             None => {
-                eprintln!("No VPXROOTPATH provided up and no vpxtool config file found")?;
+                crate::eprintln!("No VPXROOTPATH provided up and no vpxtool config file found")?;
                 exit(1);
             }
         },
@@ -690,20 +684,22 @@ fn handle_index(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
         .as_ref()
         .and_then(|(_, c)| c.configured_pinmame_folder());
 
-    println!("Using tables folder {}", tables_folder_path.display())?;
+    crate::println!("Using tables folder {}", tables_folder_path.display())?;
     match &global_pinmame_folder {
         Some(folder) => {
-            println!("Using global pinmame folder {}", folder.display())?;
+            crate::println!("Using global pinmame folder {}", folder.display())?;
         }
-        None => println!("Not looking for global pinmame roms as the folder is not configured.")?,
+        None => {
+            crate::println!("Not looking for global pinmame roms as the folder is not configured.")?
+        }
     }
     match &configured_pinmame_folder {
         Some(folder) => {
-            println!("Using VPinballX.ini PinMAMEPath {}", folder.display())?;
+            crate::println!("Using VPinballX.ini PinMAMEPath {}", folder.display())?;
         }
-        None => println!("VPinballX.ini PinMAMEPath not used as not configured.")?,
+        None => crate::println!("VPinballX.ini PinMAMEPath not used as not configured.")?,
     }
-    println!("Storing index to {}", tables_index_path.display())?;
+    crate::println!("Storing index to {}", tables_index_path.display())?;
 
     let pb = ProgressBar::hidden();
     pb.set_style(
@@ -723,7 +719,7 @@ fn handle_index(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
         vec![],
     )?;
     progress.finish_and_clear();
-    println!("Indexed {} vpx files", index.len(),)?;
+    crate::println!("Indexed {} vpx files", index.len(),)?;
     Ok(ExitCode::SUCCESS)
 }
 
@@ -1060,7 +1056,7 @@ fn fail_with_error(message: impl Display, err: impl Error) -> io::Result<ExitCod
 
 fn fail<M: AsRef<str>>(message: M) -> io::Result<ExitCode> {
     let error = "error:".red();
-    eprintln!("{} {}", error, message.as_ref())?;
+    crate::eprintln!("{} {}", error, message.as_ref())?;
     Ok(ExitCode::FAILURE)
 }
 
@@ -1093,14 +1089,14 @@ fn handle_extractvbs(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
     match extractvbs(&expanded_vpx_path, vbs_path_opt, force) {
         Ok(ExtractResult::Existed(vbs_path)) => {
             let warning = format!("EXISTED {}", vbs_path.display()).truecolor(255, 125, 0);
-            println!("{}", warning)?;
+            crate::println!("{}", warning)?;
         }
         Ok(ExtractResult::Extracted(vbs_path)) => {
-            println!("CREATED {}", vbs_path.display())?;
+            crate::println!("CREATED {}", vbs_path.display())?;
         }
         Err(e) => {
             let warning = format!("Error extracting vbs: {}", e).red();
-            eprintln!("{}", warning)?;
+            crate::eprintln!("{}", warning)?;
         }
     }
 
@@ -1112,18 +1108,18 @@ fn extract_directb2s(expanded_path: &PathBuf) -> io::Result<()> {
     let reader = BufReader::new(file);
     match read(reader) {
         Ok(b2s) => {
-            println!("DirectB2S file version {}", b2s.version)?;
+            crate::println!("DirectB2S file version {}", b2s.version)?;
             let root_dir_path = expanded_path.with_extension("directb2s.extracted");
 
             let mut root_dir = std::fs::DirBuilder::new();
             root_dir.recursive(true);
             root_dir.create(&root_dir_path)?;
 
-            println!("Writing to {}", root_dir_path.display())?;
+            crate::println!("Writing to {}", root_dir_path.display())?;
             wite_images(b2s, root_dir_path.as_path());
         }
         Err(msg) => {
-            println!("Failed to load {}: {}", expanded_path.display(), msg)?;
+            crate::println!("Failed to load {}: {}", expanded_path.display(), msg)?;
             exit(1);
         }
     }
@@ -1241,53 +1237,7 @@ fn write_base64_to_file(
     file.write_all(&decoded_data).unwrap();
 }
 
-fn strip_cr_lf(s: &str) -> String {
-    s.chars().filter(|c| !c.is_ascii_whitespace()).collect()
-}
-
-fn os_independent_file_name(file_path: String) -> Option<String> {
-    // we can't use path here as this uses the system path encoding
-    // we might have to parse windows paths on mac/linux
-    if file_path.is_empty() {
-        return None;
-    }
-    file_path.rsplit(['/', '\\']).next().map(|f| f.to_string())
-}
-
-fn expand_path<S: AsRef<str>>(path: S) -> PathBuf {
-    shellexpand::tilde(path.as_ref()).to_string().into()
-}
-
-fn expand_path_exists<S: AsRef<str>>(path: S) -> io::Result<PathBuf> {
-    // TODO expand all instead of only tilde?
-    let expanded_path = shellexpand::tilde(path.as_ref());
-    path_exists(&PathBuf::from(expanded_path.to_string()))
-}
-
-fn path_exists(expanded_path: &Path) -> io::Result<PathBuf> {
-    match metadata(expanded_path) {
-        Ok(md) => {
-            if !md.is_file() && !md.is_dir() && md.is_symlink() {
-                Err(io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    format!("{} is not a file", expanded_path.display()),
-                ))
-            } else {
-                Ok(expanded_path.to_path_buf())
-            }
-        }
-        Err(msg) => {
-            let warning = format!(
-                "Failed to read metadata for {}: {}",
-                expanded_path.display(),
-                msg
-            );
-            Err(io::Error::new(io::ErrorKind::InvalidInput, warning))
-        }
-    }
-}
-
-fn info_gather(vpx_file_path: &PathBuf) -> io::Result<String> {
+pub(crate) fn info_gather(vpx_file_path: &PathBuf) -> io::Result<String> {
     let mut vpx_file = vpx::open(vpx_file_path)?;
     let version = vpx_file.read_version()?;
     // GameData also has a name field that we might want to display here
@@ -1376,12 +1326,12 @@ fn info_extract(vpx_file_path: &Path) -> io::Result<ExitCode> {
             "Do you want to overwrite the existing file?".to_string(),
         )?;
         if !confirmed {
-            println!("Aborted")?;
+            crate::println!("Aborted")?;
             return Ok(ExitCode::SUCCESS);
         }
     }
     write_info_json(vpx_file_path, &info_file_path)?;
-    println!("Extracted table info to {}", info_file_path.display())?;
+    crate::println!("Extracted table info to {}", info_file_path.display())?;
     Ok(ExitCode::SUCCESS)
 }
 
@@ -1395,7 +1345,10 @@ fn write_info_json(vpx_file_path: &Path, info_file_path: &Path) -> io::Result<()
     Ok(())
 }
 
-fn info_edit(vpx_file_path: &Path, config: Option<&ResolvedConfig>) -> io::Result<PathBuf> {
+pub(crate) fn info_edit(
+    vpx_file_path: &Path,
+    config: Option<&ResolvedConfig>,
+) -> io::Result<PathBuf> {
     let info_file_path = vpx_file_path.with_extension("info.json");
     if !info_file_path.exists() {
         write_info_json(vpx_file_path, &info_file_path)?;
@@ -1404,7 +1357,7 @@ fn info_edit(vpx_file_path: &Path, config: Option<&ResolvedConfig>) -> io::Resul
     Ok(info_file_path)
 }
 
-fn open_editor(file_to_edit: &Path, config: Option<&ResolvedConfig>) -> io::Result<()> {
+pub(crate) fn open_editor(file_to_edit: &Path, config: Option<&ResolvedConfig>) -> io::Result<()> {
     match config.iter().flat_map(|c| c.editor.clone()).next() {
         Some(editor) => open_configured_editor(file_to_edit, &editor),
         None => edit::edit_file(file_to_edit),
@@ -1462,15 +1415,15 @@ fn info_import(_vpx_file_path: &Path) -> io::Result<ExitCode> {
 pub fn ls(vpx_file_path: &Path) -> io::Result<()> {
     expanded::extract_directory_list(vpx_file_path)
         .iter()
-        .try_for_each(|file_path| println!("{}", file_path))
+        .try_for_each(|file_path| crate::println!("{}", file_path))
 }
 
 pub fn confirm(msg: String, yes_no_question: String) -> io::Result<bool> {
     // TODO do we need to check for terminal here?
     //   let use_color = stdout().is_terminal();
     let warning = msg.truecolor(255, 125, 0);
-    println!("{}", warning)?;
-    println!("{} (y/n)", yes_no_question)?;
+    crate::println!("{}", warning)?;
+    crate::println!("{} (y/n)", yes_no_question)?;
     let mut input = String::new();
     io::stdin().read_line(&mut input)?;
     Ok(input.trim() == "y")
@@ -1487,7 +1440,7 @@ pub fn extract(vpx_file_path: &Path, yes: bool) -> io::Result<ExitCode> {
             "Do you want to remove the existing directory?".to_string(),
         )?;
         if !confirmed {
-            println!("Aborted")?;
+            crate::println!("Aborted")?;
             return Ok(ExitCode::SUCCESS);
         }
     }
@@ -1503,7 +1456,7 @@ pub fn extract(vpx_file_path: &Path, yes: bool) -> io::Result<ExitCode> {
     };
     match result {
         Ok(_) => {
-            println!("Successfully extracted to \"{}\"", root_dir_path.display())?;
+            crate::println!("Successfully extracted to \"{}\"", root_dir_path.display())?;
             Ok(ExitCode::SUCCESS)
         }
         Err(e) => fail(format!("Failed to extract: {}", e)),
@@ -1558,29 +1511,6 @@ pub fn script_diff(vpx_file_path: &Path) -> io::Result<String> {
         // wrap the error
         let msg = format!("No sidecar vbs file found: {}", vbs_path.display());
         Err(io::Error::new(io::ErrorKind::NotFound, msg))
-    }
-}
-
-/// Path to file that will be removed when it goes out of scope
-struct RemoveOnDrop {
-    path: PathBuf,
-}
-impl RemoveOnDrop {
-    fn new(path: PathBuf) -> Self {
-        RemoveOnDrop { path }
-    }
-
-    fn path(&self) -> &Path {
-        &self.path
-    }
-}
-
-impl Drop for RemoveOnDrop {
-    fn drop(&mut self) {
-        if self.path.exists() {
-            // silently ignore any errors
-            let _ = std::fs::remove_file(&self.path);
-        }
     }
 }
 
@@ -1648,51 +1578,4 @@ fn show_dip_switches(nvram: &PathBuf) -> io::Result<String> {
 
     let summary = lines.join("\n");
     Ok(summary)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_os_independent_file_name_windows() {
-        let file_path = "C:\\Users\\user\\Desktop\\file.txt";
-        let result = os_independent_file_name(file_path.to_string());
-        assert_eq!(result, Some("file.txt".to_string()));
-    }
-
-    #[test]
-    fn test_os_independent_file_unix() {
-        let file_path = "/users/joe/file.txt";
-        let result = os_independent_file_name(file_path.to_string());
-        assert_eq!(result, Some("file.txt".to_string()));
-    }
-
-    #[test]
-    fn test_os_independent_file_name_no_extension() {
-        let file_path = "C:\\Users\\user\\Desktop\\file";
-        let result = os_independent_file_name(file_path.to_string());
-        assert_eq!(result, Some("file".to_string()));
-    }
-
-    #[test]
-    fn test_os_independent_file_name_no_path() {
-        let file_path = "file.txt";
-        let result = os_independent_file_name(file_path.to_string());
-        assert_eq!(result, Some("file.txt".to_string()));
-    }
-
-    #[test]
-    fn test_os_independent_file_name_no_path_no_extension() {
-        let file_path = "file";
-        let result = os_independent_file_name(file_path.to_string());
-        assert_eq!(result, Some("file".to_string()));
-    }
-
-    #[test]
-    fn test_os_independent_file_name_empty() {
-        let file_path = "";
-        let result = os_independent_file_name(file_path.to_string());
-        assert_eq!(result, None);
-    }
 }

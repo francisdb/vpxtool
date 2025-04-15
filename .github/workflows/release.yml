@@ -63,7 +63,7 @@ jobs:
       - name: Build binary (*nix)
         shell: bash
         run: |
-          cargo build  --package vpxtool_cli --locked --release --target ${{ matrix.platform.target }}
+          cargo build --locked --release --target ${{ matrix.platform.target }}
         if: ${{ !contains(matrix.platform.os, 'windows') }}
       - name: Build binary (Windows)
         # We have to use the platform's native shell. If we use bash on
@@ -71,7 +71,7 @@ jobs:
         # the platform's native paths and refuses to build.
         shell: powershell
         run: |
-          & cargo build --package vpxtool_cli --locked --release --target ${{ matrix.platform.target }}
+          & cargo build --locked --release --target ${{ matrix.platform.target }}
         if: contains(matrix.platform.os, 'windows')
       - name: Set full archive name as env variable
         shell: bash

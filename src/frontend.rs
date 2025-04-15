@@ -1,11 +1,14 @@
 use crate::backglass::find_hole;
+use crate::cli::{
+    DiffColor, ProgressBarProgress, confirm, info_diff, info_edit, info_gather, open_editor,
+    run_diff, script_diff,
+};
+use crate::config::ResolvedConfig;
+use crate::indexer::{IndexError, IndexedTable, Progress};
 use crate::patcher::LineEndingsResult::{NoChanges, Unified};
 use crate::patcher::{patch_vbs_file, unify_line_endings_vbs_file};
-use crate::{
-    DiffColor, ProgressBarProgress, confirm, info_diff, info_edit, info_gather, open_editor,
-    run_diff, script_diff, strip_cr_lf,
-    vpx::{ExtractResult, extractvbs, ini_path_for, vbs_path_for},
-};
+use crate::vpinball_config::{VPinballConfig, WindowInfo, WindowType};
+use crate::{indexer, strip_cr_lf};
 use base64::Engine;
 use colored::Colorize;
 use console::{Emoji, Term};
@@ -23,10 +26,7 @@ use std::{
     path::{Path, PathBuf},
     process::{ExitStatus, exit},
 };
-use vpxtool_shared::config::ResolvedConfig;
-use vpxtool_shared::indexer;
-use vpxtool_shared::indexer::{IndexError, IndexedTable, Progress};
-use vpxtool_shared::vpinball_config::{VPinballConfig, WindowInfo, WindowType};
+use vpin::vpx::{ExtractResult, extractvbs, ini_path_for, vbs_path_for};
 
 const LAUNCH: Emoji = Emoji("🚀", "[launch]");
 const CRASH: Emoji = Emoji("💥", "[crash]");
