@@ -516,8 +516,7 @@ fn nvram_dip_switches(info: &IndexedTable) {
             prompt("This table does not have an NVRAM file, try launching it once.");
         }
     } else {
-        prompt("This table is not using used PinMAME");
-    }
+        prompt("This table is not using PinMAME");
 }
 
 fn nvram_show(info: &IndexedTable) {
