@@ -1,5 +1,6 @@
 use std::process::ExitCode;
-use vpxtool::{fixprint, run};
+use vpxtool::cli::run;
+use vpxtool::fixprint;
 
 fn main() -> ExitCode {
     fixprint::safe_main(run)
