@@ -1,7 +1,10 @@
 use crate::config::{ResolvedConfig, SetupConfigResult};
 use crate::indexer::{DEFAULT_INDEX_FILE_NAME, IndexError, Progress};
 use crate::patcher::patch_vbs_file;
-use crate::{config, frontend, indexer, strip_cr_lf};
+use crate::{
+    RemoveOnDrop, config, expand_path, expand_path_exists, frontend, indexer,
+    os_independent_file_name, path_exists, strip_cr_lf,
+};
 use base64::Engine;
 use clap::builder::Str;
 use clap::{Arg, ArgMatches, Command, arg};
@@ -13,7 +16,7 @@ use pinmame_nvram::dips::get_all_dip_switches;
 use std::error::Error;
 use std::ffi::OsStr;
 use std::fmt::Display;
-use std::fs::{File, OpenOptions, metadata};
+use std::fs::{File, OpenOptions};
 use std::io;
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
@@ -1234,48 +1237,6 @@ fn write_base64_to_file(
     file.write_all(&decoded_data).unwrap();
 }
 
-fn os_independent_file_name(file_path: String) -> Option<String> {
-    // we can't use path here as this uses the system path encoding
-    // we might have to parse windows paths on mac/linux
-    if file_path.is_empty() {
-        return None;
-    }
-    file_path.rsplit(['/', '\\']).next().map(|f| f.to_string())
-}
-
-fn expand_path<S: AsRef<str>>(path: S) -> PathBuf {
-    shellexpand::tilde(path.as_ref()).to_string().into()
-}
-
-fn expand_path_exists<S: AsRef<str>>(path: S) -> io::Result<PathBuf> {
-    // TODO expand all instead of only tilde?
-    let expanded_path = shellexpand::tilde(path.as_ref());
-    path_exists(&PathBuf::from(expanded_path.to_string()))
-}
-
-fn path_exists(expanded_path: &Path) -> io::Result<PathBuf> {
-    match metadata(expanded_path) {
-        Ok(md) => {
-            if !md.is_file() && !md.is_dir() && md.is_symlink() {
-                Err(io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    format!("{} is not a file", expanded_path.display()),
-                ))
-            } else {
-                Ok(expanded_path.to_path_buf())
-            }
-        }
-        Err(msg) => {
-            let warning = format!(
-                "Failed to read metadata for {}: {}",
-                expanded_path.display(),
-                msg
-            );
-            Err(io::Error::new(io::ErrorKind::InvalidInput, warning))
-        }
-    }
-}
-
 pub(crate) fn info_gather(vpx_file_path: &PathBuf) -> io::Result<String> {
     let mut vpx_file = vpx::open(vpx_file_path)?;
     let version = vpx_file.read_version()?;
@@ -1553,29 +1514,6 @@ pub fn script_diff(vpx_file_path: &Path) -> io::Result<String> {
     }
 }
 
-/// Path to file that will be removed when it goes out of scope
-struct RemoveOnDrop {
-    path: PathBuf,
-}
-impl RemoveOnDrop {
-    fn new(path: PathBuf) -> Self {
-        RemoveOnDrop { path }
-    }
-
-    fn path(&self) -> &Path {
-        &self.path
-    }
-}
-
-impl Drop for RemoveOnDrop {
-    fn drop(&mut self) {
-        if self.path.exists() {
-            // silently ignore any errors
-            let _ = std::fs::remove_file(&self.path);
-        }
-    }
-}
-
 pub enum DiffColor {
     Always,
     Never,
@@ -1640,51 +1578,4 @@ fn show_dip_switches(nvram: &PathBuf) -> io::Result<String> {
 
     let summary = lines.join("\n");
     Ok(summary)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_os_independent_file_name_windows() {
-        let file_path = "C:\\Users\\user\\Desktop\\file.txt";
-        let result = os_independent_file_name(file_path.to_string());
-        assert_eq!(result, Some("file.txt".to_string()));
-    }
-
-    #[test]
-    fn test_os_independent_file_unix() {
-        let file_path = "/users/joe/file.txt";
-        let result = os_independent_file_name(file_path.to_string());
-        assert_eq!(result, Some("file.txt".to_string()));
-    }
-
-    #[test]
-    fn test_os_independent_file_name_no_extension() {
-        let file_path = "C:\\Users\\user\\Desktop\\file";
-        let result = os_independent_file_name(file_path.to_string());
-        assert_eq!(result, Some("file".to_string()));
-    }
-
-    #[test]
-    fn test_os_independent_file_name_no_path() {
-        let file_path = "file.txt";
-        let result = os_independent_file_name(file_path.to_string());
-        assert_eq!(result, Some("file.txt".to_string()));
-    }
-
-    #[test]
-    fn test_os_independent_file_name_no_path_no_extension() {
-        let file_path = "file";
-        let result = os_independent_file_name(file_path.to_string());
-        assert_eq!(result, Some("file".to_string()));
-    }
-
-    #[test]
-    fn test_os_independent_file_name_empty() {
-        let file_path = "";
-        let result = os_independent_file_name(file_path.to_string());
-        assert_eq!(result, None);
-    }
 }
