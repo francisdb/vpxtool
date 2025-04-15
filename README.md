@@ -9,15 +9,6 @@ Join [#vpxtool on "Virtual Pinball Chat" discord](https://discord.gg/eYsvyMu8) f
 Download the latest release for your operating system at https://github.com/francisdb/vpxtool/releases, extract it and
 if wanted copy or symlink the binary to `$HOME/bin` to put in on your path
 
-### Using cargo
-
-If you have [cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) installed you can install
-vpxtool with the following command:
-
-```
-cargo install vpxtool
-```
-
 ### macOS
 
 After extracting the archive you will have to remove the quarantine flag through
@@ -25,6 +16,15 @@ After extracting the archive you will have to remove the quarantine flag through
 
 ```
 xattr -d com.apple.quarantine vpxtool
+```
+
+### Using cargo
+
+If you have [cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) installed you can install
+vpxtool with the following command:
+
+```
+cargo install vpxtool
 ```
 
 ## Usage
@@ -96,24 +96,6 @@ launch them.
 ```
 
 ![Frontend](docs/frontend.png)
-
-### Graphical User Interface (GUI)
-
-The graphical frontend is tightly integrated with the command line interface. Therefor we suggest you start with
-the commandline tool to configure everything.
-
-```shell
-# Edit the default configuration. Make sure to set the path to your Visual Pinball executable and your tables folder.
-> vpxtool config edit
-# Launch the text based frontend to test the configuration.
-> vpxtool frontend
-# once everything works you can start the GUI 
-> vpxtool-gui
-```
-
-> [!NOTE]
-> The graphical frontend is currently not part of the release and needs to be downloaded
-> from [ci builds](https://github.com/francisdb/vpxtool/actions).
 
 ## Configuration
 
