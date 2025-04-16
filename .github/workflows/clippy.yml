@@ -16,8 +16,6 @@ jobs:
   clippy_check:
     runs-on: ubuntu-latest
     steps:
-      - name: Install bevy linux dependencies
-        run: sudo apt-get update && sudo apt-get install g++ pkg-config libx11-dev libasound2-dev libudev-dev libxkbcommon-x11-0
       - uses: actions/checkout@v4
       - uses: actions/cache@v4
         with:
