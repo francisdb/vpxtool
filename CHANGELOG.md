@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.5](https://github.com/francisdb/vpxtool/compare/v0.23.4...v0.23.5) - 2025-04-21
+
+### Fixed
+
+- --output-dir vbs file name was missing a part ([#547](https://github.com/francisdb/vpxtool/pull/547))
+
+### Other
+
+- *(deps)* bump rand from 0.9.0 to 0.9.1 ([#544](https://github.com/francisdb/vpxtool/pull/544))
+- *(deps)* bump pinmame-nvram from 0.3.15 to 0.3.16 ([#543](https://github.com/francisdb/vpxtool/pull/543))
+- *(deps)* bump clap from 4.5.36 to 4.5.37 ([#545](https://github.com/francisdb/vpxtool/pull/545))
+- *(deps)* bump shellexpand from 3.1.0 to 3.1.1 ([#546](https://github.com/francisdb/vpxtool/pull/546))
+- remove bevy linux deps installation
+- missed one more deprecated github action step
+
 ## [0.23.4](https://github.com/francisdb/vpxtool/compare/v0.23.3...v0.23.4) - 2025-04-15
 
 ### Other
