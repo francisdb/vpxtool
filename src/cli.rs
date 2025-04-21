@@ -1078,16 +1078,20 @@ fn handle_extractvbs(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
         .get_one::<String>("OUTPUT_DIRECTORY")
         .map(expand_path);
     let expanded_vpx_path = path_exists(&vpx_path.expect("should be checked by clap"))?;
+    if !expanded_vpx_path.is_file() {
+        return fail(format!(
+            "VPXPATH not a file: {}",
+            expanded_vpx_path.display()
+        ));
+    }
     if vbs_path.is_some() && directory.is_some() {
         return fail("Conflicting VBSPATH and DIRECTORY options, only one can be used");
     }
 
     let vbs_path_opt = vbs_path.or_else(|| {
         directory.map(|dir| {
-            let mut path = dir;
-            path.push(expanded_vpx_path.file_stem().unwrap());
-            path.set_extension("vbs");
-            path
+            dir.join(expanded_vpx_path.file_name().unwrap_or_default())
+                .with_extension("vbs")
         })
     });
 
