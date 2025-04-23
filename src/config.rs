@@ -284,7 +284,7 @@ fn create_default_config() -> io::Result<(PathBuf, ResolvedConfig)> {
         }
     }
 
-    write_default_config(&config_file, &mut vpx_executable)?;
+    write_default_config(&config_file, &vpx_executable)?;
 
     let resolved_config = read_config(&config_file)?;
     Ok((config_file, resolved_config))
