@@ -102,15 +102,15 @@ launch them.
 A configuration file will be written to store among others the Visual Pinball executable location. The config file is
 using the [TOML](https://toml.io) format.
 
-When launching the frontend for the first time it will help you to set up the required settings.
+When launching the frontend for the first time, it will help you to set up the required settings.
 
-To show the current config location use the following command
+To show the current config location, use the following command
 
 ```
 vpxtool config path
 ```
 
-To edit the config file using your system default editor do the following
+To edit the config file using your system default editor, do the following
 
 ```
 vpxtool config edit
@@ -131,7 +131,7 @@ Further settings will be picked up from the Visual Pinball config.
 ### Configuring a custom editor
 
 When actions are invoked that open an editor, the default editor configured for your system will be used. In case you
-want to override this with a specific editor you can add the following line to the config file:
+want to override this with a specific editor, you can add the following line to the config file:
 
 ```yaml
 # use Visual Studio Code as default editor
