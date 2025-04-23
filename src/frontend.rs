@@ -162,11 +162,7 @@ pub fn frontend_index(
     Ok(tables)
 }
 
-pub fn frontend(
-    config: &ResolvedConfig,
-    mut vpx_files_with_tableinfo: Vec<IndexedTable>,
-    vpinball_executable: &Path,
-) {
+pub fn frontend(config: &ResolvedConfig, mut vpx_files_with_tableinfo: Vec<IndexedTable>) {
     let mut main_selection_opt = None;
     loop {
         let tables: Vec<String> = vpx_files_with_tableinfo
@@ -206,13 +202,7 @@ pub fn frontend(
                                 .unwrap()
                                 .clone();
                             let info_str = display_table_line_full(&info);
-                            table_menu(
-                                config,
-                                &mut vpx_files_with_tableinfo,
-                                vpinball_executable,
-                                &info,
-                                &info_str,
-                            );
+                            table_menu(config, &mut vpx_files_with_tableinfo, &info, &info_str);
                         }
                     }
                     RECENT_INDEX => {
@@ -235,13 +225,7 @@ pub fn frontend(
                         if let Some(selected_index) = selected {
                             let info = last_modified.get(selected_index).unwrap();
                             let info_str = display_table_line_full(info);
-                            table_menu(
-                                config,
-                                &mut vpx_files_with_tableinfo,
-                                vpinball_executable,
-                                info,
-                                &info_str,
-                            );
+                            table_menu(config, &mut vpx_files_with_tableinfo, info, &info_str);
                         }
                     }
                     _ => {
@@ -249,13 +233,7 @@ pub fn frontend(
 
                         let info = vpx_files_with_tableinfo.get(index).unwrap().clone();
                         let info_str = display_table_line_full(&info);
-                        table_menu(
-                            config,
-                            &mut vpx_files_with_tableinfo,
-                            vpinball_executable,
-                            &info,
-                            &info_str,
-                        );
+                        table_menu(config, &mut vpx_files_with_tableinfo, &info, &info_str);
                     }
                 }
             }
@@ -267,7 +245,6 @@ pub fn frontend(
 fn table_menu(
     config: &ResolvedConfig,
     vpx_files_with_tableinfo: &mut Vec<IndexedTable>,
-    vpinball_executable: &Path,
     info: &IndexedTable,
     info_str: &str,
 ) {
@@ -278,15 +255,15 @@ fn table_menu(
         option = choose_table_option(info_str, option);
         match option {
             Some(TableOption::Launch) => {
-                launch(selected_path, vpinball_executable, None);
+                launch(selected_path, &config.vpx_executable, None);
                 exit = true;
             }
             Some(TableOption::LaunchFullscreen) => {
-                launch(selected_path, vpinball_executable, Some(true));
+                launch(selected_path, &config.vpx_executable, Some(true));
                 exit = true;
             }
             Some(TableOption::LaunchWindowed) => {
-                launch(selected_path, vpinball_executable, Some(false));
+                launch(selected_path, &config.vpx_executable, Some(false));
                 exit = true;
             }
             Some(TableOption::ForceReload) => {

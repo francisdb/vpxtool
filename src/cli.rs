@@ -204,8 +204,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     Ok(ExitCode::FAILURE)
                 }
                 Ok(vpx_files_with_tableinfo) => {
-                    let vpinball_executable = &config.vpx_executable;
-                    frontend::frontend(&config, vpx_files_with_tableinfo, vpinball_executable);
+                    frontend::frontend(&config, vpx_files_with_tableinfo);
                     Ok(ExitCode::SUCCESS)
                 }
                 Err(IndexError::FolderDoesNotExist(path)) => {

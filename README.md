@@ -99,7 +99,10 @@ launch them.
 
 ## Configuration
 
-A configuration file will be written to store the Visual Pinball executable location.
+A configuration file will be written to store among others the Visual Pinball executable location. The config file is
+using the [TOML](https://toml.io) format.
+
+When launching the frontend for the first time it will help you to set up the required settings.
 
 To show the current config location use the following command
 
@@ -107,7 +110,11 @@ To show the current config location use the following command
 vpxtool config path
 ```
 
-When launching the frontend for the first time it will help you to set up the required settings.
+To edit the config file using your system default editor do the following
+
+```
+vpxtool config edit
+```
 
 ### Configuring vpinball paths
 
