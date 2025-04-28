@@ -19,7 +19,7 @@ jobs:
   release-plz-release:
     name: Release-plz release
     runs-on: ubuntu-latest
-    if: ${{ github.repository_owner == 'francisdb' }}
+    if: ${{ github.repository_owner == 'francisdb' }} && github.actor != 'dependabot[bot]'
     permissions:
       contents: write
     steps:
