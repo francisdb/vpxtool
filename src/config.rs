@@ -453,7 +453,13 @@ mod tests {
                         executable: PathBuf::from("/tmp/test/vpinball"),
                         arguments: Some(vec!["-EnableTrueFullscreen".to_string()]),
                         env: None,
-                    }
+                    },
+                    LaunchTemplate {
+                        name: "Launch Windowed".to_string(),
+                        executable: PathBuf::from("/home/me/vpinball"),
+                        arguments: Some(vec!["-DisableTrueFullscreen".to_string()]),
+                        env: None,
+                    },
                 ),
                 vpx_config: dirs::home_dir().unwrap().join(".vpinball/VPinballX.ini"),
                 tables_folder: PathBuf::from("/tmp/test/tables"),
