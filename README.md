@@ -128,6 +128,24 @@ vpx_config = "/home/myuser/.vpinball/VPinballX.ini"
 
 Further settings will be picked up from the Visual Pinball config.
 
+### Launch templates
+
+Sometimes you want to use a different executables, extra arguments or environment variables. This can be done
+by setting up launch templates. Each entry will show up on top of the frontend table menu.
+
+```toml
+[[launch_template]]
+name = "Launch fullscreen"
+executable = "/home/myuser/vpinball/VPinballX_BGFX"
+args = ["-EnableTrueFullscreen"]
+
+[[launch_template]]
+name = "Launch GL"
+executable = "/home/myuser/vpinball/VPinballX_GL"
+[launch_template.env]
+SDL_VIDEODRIVER = "X11"
+```
+
 ### Configuring a custom editor
 
 When actions are invoked that open an editor, the default editor configured for your system will be used. In case you
