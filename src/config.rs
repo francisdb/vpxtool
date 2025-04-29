@@ -371,7 +371,6 @@ fn default_vpinball_executable() -> PathBuf {
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
-    use std::io::Read;
     use testdir::testdir;
 
     #[cfg(target_os = "linux")]
@@ -473,6 +472,29 @@ mod tests {
             config,
             ResolvedConfig {
                 vpx_executable: PathBuf::from("/tmp/test/vpinball"),
+                launch_templates: vec!(
+                    LaunchTemplate {
+                        name: "Launch".to_string(),
+                        executable: PathBuf::from("/tmp/test/vpinball"),
+                        arguments: None,
+                        env: Some(HashMap::from([
+                            ("SDL_VIDEODRIVER".to_string(), "".to_string()),
+                            ("SDL_RENDER_DRIVER".to_string(), "".to_string()),
+                        ])),
+                    },
+                    LaunchTemplate {
+                        name: "Launch Fullscreen".to_string(),
+                        executable: PathBuf::from("/tmp/test/vpinball"),
+                        arguments: Some(vec!["-EnableTrueFullscreen".to_string()]),
+                        env: None,
+                    },
+                    LaunchTemplate {
+                        name: "Launch Windowed".to_string(),
+                        executable: PathBuf::from("/tmp/test/vpinball"),
+                        arguments: Some(vec!["-DisableTrueFullscreen".to_string()]),
+                        env: None,
+                    }
+                ),
                 vpx_config: dirs::home_dir().unwrap().join(".vpinball/VPinballX.ini"),
                 tables_folder: expected_tables_dir.clone(),
                 tables_index_path: expected_tables_dir.join("vpxtool_index.json"),
