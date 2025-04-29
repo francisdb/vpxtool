@@ -456,7 +456,7 @@ mod tests {
                     },
                     LaunchTemplate {
                         name: "Launch Windowed".to_string(),
-                        executable: PathBuf::from("/home/me/vpinball"),
+                        executable: PathBuf::from("/tmp/test/vpinball"),
                         arguments: Some(vec!["-DisableTrueFullscreen".to_string()]),
                         env: None,
                     },
