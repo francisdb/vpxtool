@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use crate::vpinball_config::VPinballConfig;
 use dialoguer::Select;
 use dialoguer::theme::ColorfulTheme;
 use figment::{
@@ -7,13 +8,20 @@ use figment::{
     providers::{Format, Toml},
 };
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs::File;
+use std::io::Write;
 use std::{env, io};
 
-use crate::vpinball_config::VPinballConfig;
-use std::io::Write;
-
 const CONFIGURATION_FILE_NAME: &str = "vpxtool.cfg";
+
+#[derive(Deserialize, Serialize, Debug, PartialEq, Clone, Eq)]
+pub struct LaunchTemplate {
+    pub name: String,
+    pub executable: PathBuf,
+    pub arguments: Option<Vec<String>>,
+    pub env: Option<HashMap<String, String>>,
+}
 
 #[derive(Deserialize, Serialize)]
 pub struct Config {
@@ -21,11 +29,13 @@ pub struct Config {
     pub vpx_config: Option<PathBuf>,
     pub tables_folder: Option<PathBuf>,
     pub editor: Option<String>,
+    pub launch_templates: Option<Vec<LaunchTemplate>>,
 }
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct ResolvedConfig {
     pub vpx_executable: PathBuf,
+    pub launch_templates: Vec<LaunchTemplate>,
     pub vpx_config: PathBuf,
     pub tables_folder: PathBuf,
     pub tables_index_path: PathBuf,
@@ -133,14 +143,50 @@ fn read_config(config_path: &Path) -> io::Result<ResolvedConfig> {
     let vpx_config = config
         .vpx_config
         .unwrap_or_else(|| default_vpinball_ini_file(&config.vpx_executable));
+
+    // generate launch templates if not set
+    let launch_templates = config.launch_templates.unwrap_or_else(|| {
+        // normal, force fullscreen, force windowed
+        generate_default_launch_templates(&config.vpx_executable)
+    });
+
     let resolved_config = ResolvedConfig {
         vpx_executable: config.vpx_executable,
+        launch_templates,
         vpx_config,
         tables_folder: tables_folder.clone(),
         tables_index_path: tables_index_path(&tables_folder),
         editor: config.editor,
     };
     Ok(resolved_config)
+}
+
+fn generate_default_launch_templates(vpx_executable: &Path) -> Vec<LaunchTemplate> {
+    let default_env = HashMap::from([
+        ("SDL_VIDEODRIVER".to_string(), "".to_string()),
+        ("SDL_RENDER_DRIVER".to_string(), "".to_string()),
+    ]);
+
+    vec![
+        LaunchTemplate {
+            name: "Launch".to_string(),
+            executable: vpx_executable.to_owned(),
+            arguments: None,
+            env: Some(default_env.clone()),
+        },
+        LaunchTemplate {
+            name: "Launch Fullscreen".to_string(),
+            executable: vpx_executable.to_owned(),
+            arguments: Some(vec!["-EnableTrueFullscreen".to_string()]),
+            env: None,
+        },
+        LaunchTemplate {
+            name: "Launch Windowed".to_string(),
+            executable: vpx_executable.to_owned(),
+            arguments: Some(vec!["-DisableTrueFullscreen".to_string()]),
+            env: None,
+        },
+    ]
 }
 
 pub fn tables_index_path(tables_folder: &Path) -> PathBuf {
@@ -244,18 +290,26 @@ fn create_default_config() -> io::Result<(PathBuf, ResolvedConfig)> {
         }
     }
 
-    let vpx_config = default_vpinball_ini_file(&vpx_executable);
-    let tables_folder = default_tables_root(&vpx_executable);
+    write_default_config(&config_file, &vpx_executable)?;
+
+    let resolved_config = read_config(&config_file)?;
+    Ok((config_file, resolved_config))
+}
+
+fn write_default_config(config_file: &Path, vpx_executable: &Path) -> io::Result<()> {
+    let launch_templates = generate_default_launch_templates(vpx_executable);
+
+    let vpx_config = default_vpinball_ini_file(vpx_executable);
+    let tables_folder = default_tables_root(vpx_executable);
     let config = Config {
-        vpx_executable: vpx_executable.clone(),
+        vpx_executable: vpx_executable.to_owned(),
+        launch_templates: Some(launch_templates),
         vpx_config: Some(vpx_config.clone()),
         tables_folder: Some(tables_folder.clone()),
         editor: None,
     };
-    write_config(&config_file, &config)?;
-
-    let resolved_config = read_config(&config_file)?;
-    Ok((config_file, resolved_config))
+    write_config(config_file, &config)?;
+    Ok(())
 }
 
 fn write_config(config_file: &Path, config: &Config) -> io::Result<()> {
@@ -319,6 +373,56 @@ mod tests {
     use pretty_assertions::assert_eq;
     use testdir::testdir;
 
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn test_write_default_config_linux() -> io::Result<()> {
+        use std::io::Read;
+        let temp_dir = testdir!();
+        let config_file = temp_dir.join(CONFIGURATION_FILE_NAME);
+        write_default_config(&config_file, &PathBuf::from("/home/me/vpinball"))?;
+        // print the config file
+        let mut file = File::open(&config_file)?;
+        let mut contents = String::new();
+        file.read_to_string(&mut contents)?;
+        println!("Config file contents: {}", contents);
+        let config = read_config(&config_file)?;
+        assert_eq!(
+            config,
+            ResolvedConfig {
+                vpx_executable: PathBuf::from("/home/me/vpinball"),
+                launch_templates: vec!(
+                    LaunchTemplate {
+                        name: "Launch".to_string(),
+                        executable: PathBuf::from("/home/me/vpinball"),
+                        arguments: None,
+                        env: Some(HashMap::from([
+                            ("SDL_VIDEODRIVER".to_string(), "".to_string()),
+                            ("SDL_RENDER_DRIVER".to_string(), "".to_string()),
+                        ])),
+                    },
+                    LaunchTemplate {
+                        name: "Launch Fullscreen".to_string(),
+                        executable: PathBuf::from("/home/me/vpinball"),
+                        arguments: Some(vec!["-EnableTrueFullscreen".to_string()]),
+                        env: None,
+                    },
+                    LaunchTemplate {
+                        name: "Launch Windowed".to_string(),
+                        executable: PathBuf::from("/home/me/vpinball"),
+                        arguments: Some(vec!["-DisableTrueFullscreen".to_string()]),
+                        env: None,
+                    },
+                ),
+
+                vpx_config: dirs::home_dir().unwrap().join(".vpinball/VPinballX.ini"),
+                tables_folder: PathBuf::from("/home/me/tables"),
+                tables_index_path: PathBuf::from("/home/me/tables/vpxtool_index.json"),
+                editor: None,
+            }
+        );
+        Ok(())
+    }
+
     // test that we can read an incomplete config file with missing tables_folder
     #[cfg(target_os = "linux")]
     #[test]
@@ -334,6 +438,29 @@ mod tests {
             config,
             ResolvedConfig {
                 vpx_executable: PathBuf::from("/tmp/test/vpinball"),
+                launch_templates: vec!(
+                    LaunchTemplate {
+                        name: "Launch".to_string(),
+                        executable: PathBuf::from("/tmp/test/vpinball"),
+                        arguments: None,
+                        env: Some(HashMap::from([
+                            ("SDL_VIDEODRIVER".to_string(), "".to_string()),
+                            ("SDL_RENDER_DRIVER".to_string(), "".to_string()),
+                        ])),
+                    },
+                    LaunchTemplate {
+                        name: "Launch Fullscreen".to_string(),
+                        executable: PathBuf::from("/tmp/test/vpinball"),
+                        arguments: Some(vec!["-EnableTrueFullscreen".to_string()]),
+                        env: None,
+                    },
+                    LaunchTemplate {
+                        name: "Launch Windowed".to_string(),
+                        executable: PathBuf::from("/tmp/test/vpinball"),
+                        arguments: Some(vec!["-DisableTrueFullscreen".to_string()]),
+                        env: None,
+                    },
+                ),
                 vpx_config: dirs::home_dir().unwrap().join(".vpinball/VPinballX.ini"),
                 tables_folder: PathBuf::from("/tmp/test/tables"),
                 tables_index_path: PathBuf::from("/tmp/test/tables/vpxtool_index.json"),
@@ -358,6 +485,29 @@ mod tests {
             config,
             ResolvedConfig {
                 vpx_executable: PathBuf::from("/tmp/test/vpinball"),
+                launch_templates: vec!(
+                    LaunchTemplate {
+                        name: "Launch".to_string(),
+                        executable: PathBuf::from("/tmp/test/vpinball"),
+                        arguments: None,
+                        env: Some(HashMap::from([
+                            ("SDL_VIDEODRIVER".to_string(), "".to_string()),
+                            ("SDL_RENDER_DRIVER".to_string(), "".to_string()),
+                        ])),
+                    },
+                    LaunchTemplate {
+                        name: "Launch Fullscreen".to_string(),
+                        executable: PathBuf::from("/tmp/test/vpinball"),
+                        arguments: Some(vec!["-EnableTrueFullscreen".to_string()]),
+                        env: None,
+                    },
+                    LaunchTemplate {
+                        name: "Launch Windowed".to_string(),
+                        executable: PathBuf::from("/tmp/test/vpinball"),
+                        arguments: Some(vec!["-DisableTrueFullscreen".to_string()]),
+                        env: None,
+                    }
+                ),
                 vpx_config: dirs::home_dir().unwrap().join(".vpinball/VPinballX.ini"),
                 tables_folder: expected_tables_dir.clone(),
                 tables_index_path: expected_tables_dir.join("vpxtool_index.json"),
@@ -385,6 +535,29 @@ mod tests {
                 tables_folder: PathBuf::from("C:\\test\\tables"),
                 tables_index_path: PathBuf::from("C:\\test\\tables\\vpxtool_index.json"),
                 editor: None,
+                launch_templates: vec!(
+                    LaunchTemplate {
+                        name: "Launch".to_string(),
+                        executable: PathBuf::from("C:\\test\\vpinball"),
+                        arguments: None,
+                        env: Some(HashMap::from([
+                            ("SDL_VIDEODRIVER".to_string(), "".to_string()),
+                            ("SDL_RENDER_DRIVER".to_string(), "".to_string()),
+                        ])),
+                    },
+                    LaunchTemplate {
+                        name: "Launch Fullscreen".to_string(),
+                        executable: PathBuf::from("C:\\test\\vpinball"),
+                        arguments: Some(vec!["-EnableTrueFullscreen".to_string()]),
+                        env: None,
+                    },
+                    LaunchTemplate {
+                        name: "Launch Windowed".to_string(),
+                        executable: PathBuf::from("C:\\test\\vpinball"),
+                        arguments: Some(vec!["-DisableTrueFullscreen".to_string()]),
+                        env: None,
+                    }
+                )
             }
         );
         Ok(())

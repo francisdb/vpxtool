@@ -99,15 +99,22 @@ launch them.
 
 ## Configuration
 
-A configuration file will be written to store the Visual Pinball executable location.
+A configuration file will be written to store among others the Visual Pinball executable location. The config file is
+using the [TOML](https://toml.io) format.
 
-To show the current config location use the following command
+When launching the frontend for the first time, it will help you to set up the required settings.
+
+To show the current config location, use the following command
 
 ```
 vpxtool config path
 ```
 
-When launching the frontend for the first time it will help you to set up the required settings.
+To edit the config file using your system default editor, do the following
+
+```
+vpxtool config edit
+```
 
 ### Configuring vpinball paths
 
@@ -121,10 +128,28 @@ vpx_config = "/home/myuser/.vpinball/VPinballX.ini"
 
 Further settings will be picked up from the Visual Pinball config.
 
+### Launch templates
+
+Sometimes you want to use a different executables, extra arguments or environment variables. This can be done
+by setting up launch templates. Each entry will show up on top of the frontend table menu.
+
+```toml
+[[launch_template]]
+name = "Launch fullscreen"
+executable = "/home/myuser/vpinball/VPinballX_BGFX"
+args = ["-EnableTrueFullscreen"]
+
+[[launch_template]]
+name = "Launch GL"
+executable = "/home/myuser/vpinball/VPinballX_GL"
+[launch_template.env]
+SDL_VIDEODRIVER = "X11"
+```
+
 ### Configuring a custom editor
 
 When actions are invoked that open an editor, the default editor configured for your system will be used. In case you
-want to override this with a specific editor you can add the following line to the config file:
+want to override this with a specific editor, you can add the following line to the config file:
 
 ```yaml
 # use Visual Studio Code as default editor
