@@ -371,6 +371,7 @@ fn default_vpinball_executable() -> PathBuf {
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
+    use std::io::Read;
     use testdir::testdir;
 
     #[cfg(target_os = "linux")]
