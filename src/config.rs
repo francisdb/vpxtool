@@ -371,12 +371,12 @@ fn default_vpinball_executable() -> PathBuf {
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
-    use std::io::Read;
     use testdir::testdir;
 
     #[cfg(target_os = "linux")]
     #[test]
     fn test_write_default_config_linux() -> io::Result<()> {
+        use std::io::Read;
         let temp_dir = testdir!();
         let config_file = temp_dir.join(CONFIGURATION_FILE_NAME);
         write_default_config(&config_file, &PathBuf::from("/home/me/vpinball"))?;
@@ -535,6 +535,29 @@ mod tests {
                 tables_folder: PathBuf::from("C:\\test\\tables"),
                 tables_index_path: PathBuf::from("C:\\test\\tables\\vpxtool_index.json"),
                 editor: None,
+                launch_templates: vec!(
+                    LaunchTemplate {
+                        name: "Launch".to_string(),
+                        executable: PathBuf::from("C:\\test\\vpinball"),
+                        arguments: None,
+                        env: Some(HashMap::from([
+                            ("SDL_VIDEODRIVER".to_string(), "".to_string()),
+                            ("SDL_RENDER_DRIVER".to_string(), "".to_string()),
+                        ])),
+                    },
+                    LaunchTemplate {
+                        name: "Launch Fullscreen".to_string(),
+                        executable: PathBuf::from("C:\\test\\vpinball"),
+                        arguments: Some(vec!["-EnableTrueFullscreen".to_string()]),
+                        env: None,
+                    },
+                    LaunchTemplate {
+                        name: "Launch Windowed".to_string(),
+                        executable: PathBuf::from("C:\\test\\vpinball"),
+                        arguments: Some(vec!["-DisableTrueFullscreen".to_string()]),
+                        env: None,
+                    }
+                )
             }
         );
         Ok(())
