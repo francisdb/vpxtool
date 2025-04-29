@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.0](https://github.com/francisdb/vpxtool/compare/v0.23.5...v0.24.0) - 2025-04-29
+
+### Added
+
+- launch templates ([#548](https://github.com/francisdb/vpxtool/pull/548))
+
+### Other
+
+- ignore release step for dependabot
+- ignore release step for dependabot
+- *(deps)* bump toml from 0.8.20 to 0.8.21 ([#550](https://github.com/francisdb/vpxtool/pull/550))
+
 ## [0.23.5](https://github.com/francisdb/vpxtool/compare/v0.23.4...v0.23.5) - 2025-04-21
 
 ### Fixed
