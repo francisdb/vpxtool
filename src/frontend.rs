@@ -1,4 +1,5 @@
 use crate::backglass::find_hole;
+use crate::capture::capture_vpinball_windows;
 use crate::cli::{
     DiffColor, ProgressBarProgress, confirm, info_diff, info_edit, info_gather, open_editor,
     run_diff, script_diff,
@@ -7,6 +8,7 @@ use crate::config::{LaunchTemplate, ResolvedConfig};
 use crate::indexer::{IndexError, IndexedTable, Progress};
 use crate::patcher::LineEndingsResult::{NoChanges, Unified};
 use crate::patcher::{patch_vbs_file, unify_line_endings_vbs_file};
+use crate::vpinball::{OutputHandling, launch_table, launch_table_wait};
 use crate::vpinball_config::{VPinballConfig, WindowInfo, WindowType};
 use crate::{indexer, strip_cr_lf};
 use base64::Engine;
@@ -19,14 +21,17 @@ use is_executable::IsExecutable;
 use pinmame_nvram::dips::{get_all_dip_switches, set_dip_switches};
 use std::fs::OpenOptions;
 use std::io::BufReader;
+use std::process::exit;
+use std::thread::sleep;
+use std::time::Duration;
 use std::{
     fs::File,
     io,
     io::Write,
     path::{Path, PathBuf},
-    process::{ExitStatus, exit},
 };
 use vpin::vpx::{ExtractResult, extractvbs, ini_path_for, vbs_path_for};
+use xcap::XCapError;
 
 const LAUNCH: Emoji = Emoji("🚀", "[launch]");
 const CRASH: Emoji = Emoji("💥", "[crash]");
@@ -40,6 +45,7 @@ const RECENT_INDEX: usize = 1;
 enum TableOption {
     Launch { template: LaunchTemplate },
     ForceReload,
+    CaptureWindows,
     InfoShow,
     InfoEdit,
     InfoDiff,
@@ -69,6 +75,7 @@ impl TableOption {
 
         options.extend(vec![
             TableOption::ForceReload,
+            TableOption::CaptureWindows,
             TableOption::InfoShow,
             TableOption::InfoEdit,
             TableOption::InfoDiff,
@@ -94,6 +101,7 @@ impl TableOption {
                 template: LaunchTemplate { name, .. },
             } => name.clone(),
             TableOption::ForceReload => "Force reload".to_string(),
+            TableOption::CaptureWindows => "Capture windows".to_string(),
             TableOption::InfoShow => "Info > Show".to_string(),
             TableOption::InfoEdit => "Info > Edit".to_string(),
             TableOption::InfoDiff => "Info > Diff".to_string(),
@@ -252,6 +260,16 @@ fn table_menu(
                     Err(err) => {
                         let msg = format!("Unable to reload tables: {:?}", err);
                         prompt(&msg.truecolor(255, 125, 0).to_string());
+                    }
+                }
+            }
+            Some(TableOption::CaptureWindows) => {
+                match run_and_capture(info, config.launch_templates.first().unwrap()) {
+                    Ok(count) => {
+                        prompt(&format!("Captured {} windows", count));
+                    }
+                    Err(err) => {
+                        prompt_error(&format!("Unable to capture windows: {:?}", err));
                     }
                 }
             }
@@ -446,6 +464,28 @@ fn table_menu(
             None => exit = true,
         }
     }
+}
+
+fn run_and_capture(
+    table_info: &IndexedTable,
+    launch_template: &LaunchTemplate,
+) -> Result<i8, XCapError> {
+    let captures_path = table_info.path.parent().unwrap().join("captures");
+    std::fs::create_dir_all(&captures_path)?;
+
+    let wait_seconds = 12;
+
+    let mut vpinball_process =
+        launch_table(&table_info.path, launch_template, OutputHandling::Hide)?;
+    println!("Waiting {} seconds for table to load...", wait_seconds);
+    sleep(Duration::from_secs(wait_seconds));
+
+    let captured_result = capture_vpinball_windows(&captures_path);
+
+    // we want to be sure this is always run
+    vpinball_process.kill()?;
+
+    captured_result
 }
 
 fn nvram_dip_switches(info: &IndexedTable) {
@@ -757,7 +797,7 @@ fn launch(selected_path: &PathBuf, launch_template: &LaunchTemplate) {
         ));
     }
 
-    match launch_table(selected_path, launch_template) {
+    match launch_table_wait(selected_path, launch_template, OutputHandling::Show) {
         Ok(status) => match status.code() {
             Some(0) => {
                 //println!("Table exited normally");
@@ -800,29 +840,6 @@ fn launch(selected_path: &PathBuf, launch_template: &LaunchTemplate) {
 fn report_and_exit(msg: String) -> ! {
     eprintln!("{CRASH} {}", msg);
     exit(1);
-}
-
-fn launch_table(
-    selected_path: &PathBuf,
-    launch_template: &LaunchTemplate,
-) -> io::Result<ExitStatus> {
-    let mut cmd = std::process::Command::new(&launch_template.executable);
-    if let Some(env) = &launch_template.env {
-        for (key, value) in env.iter() {
-            cmd.env(key, value);
-        }
-    }
-    if let Some(args) = &launch_template.arguments {
-        cmd.args(args);
-    }
-    cmd.arg("-play");
-    cmd.arg(selected_path);
-
-    println!("Spawning command: {:?}", cmd);
-
-    let mut child = cmd.spawn()?;
-    let result = child.wait()?;
-    Ok(result)
 }
 
 fn display_table_line(table: &IndexedTable) -> String {
