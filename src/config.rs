@@ -15,7 +15,7 @@ use std::{env, io};
 
 const CONFIGURATION_FILE_NAME: &str = "vpxtool.cfg";
 
-#[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
+#[derive(Deserialize, Serialize, Debug, PartialEq, Clone, Eq)]
 pub struct LaunchTemplate {
     pub name: String,
     pub executable: PathBuf,
@@ -178,6 +178,12 @@ fn generate_default_launch_templates(vpx_executable: &Path) -> Vec<LaunchTemplat
             name: "Launch Fullscreen".to_string(),
             executable: vpx_executable.to_owned(),
             arguments: Some(vec!["-EnableTrueFullscreen".to_string()]),
+            env: None,
+        },
+        LaunchTemplate {
+            name: "Launch Windowed".to_string(),
+            executable: vpx_executable.to_owned(),
+            arguments: Some(vec!["-DisableTrueFullscreen".to_string()]),
             env: None,
         },
     ]

@@ -3,7 +3,7 @@ use crate::cli::{
     DiffColor, ProgressBarProgress, confirm, info_diff, info_edit, info_gather, open_editor,
     run_diff, script_diff,
 };
-use crate::config::ResolvedConfig;
+use crate::config::{LaunchTemplate, ResolvedConfig};
 use crate::indexer::{IndexError, IndexedTable, Progress};
 use crate::patcher::LineEndingsResult::{NoChanges, Unified};
 use crate::patcher::{patch_vbs_file, unify_line_endings_vbs_file};
@@ -36,11 +36,9 @@ const RECENT: &str = "> Recent";
 const SEARCH_INDEX: usize = 0;
 const RECENT_INDEX: usize = 1;
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Clone)]
 enum TableOption {
-    Launch,
-    LaunchFullscreen,
-    LaunchWindowed,
+    Launch { template: LaunchTemplate },
     ForceReload,
     InfoShow,
     InfoEdit,
@@ -60,58 +58,41 @@ enum TableOption {
 }
 
 impl TableOption {
-    const ALL: [TableOption; 19] = [
-        TableOption::Launch,
-        TableOption::LaunchFullscreen,
-        TableOption::LaunchWindowed,
-        TableOption::ForceReload,
-        TableOption::InfoShow,
-        TableOption::InfoEdit,
-        TableOption::InfoDiff,
-        TableOption::ExtractVBS,
-        TableOption::EditVBS,
-        TableOption::PatchVBS,
-        TableOption::UnifyLineEndings,
-        TableOption::ShowVBSDiff,
-        TableOption::CreateVBSPatch,
-        TableOption::NVRAMDipSwitches,
-        TableOption::NVRAMShow,
-        TableOption::NVRAMClear,
-        TableOption::B2SAutoPositionDMD,
-        TableOption::EditTableINI,
-        TableOption::EditMainIni,
-    ];
+    fn all(config: &ResolvedConfig) -> Vec<TableOption> {
+        let mut options: Vec<TableOption> = config
+            .launch_templates
+            .iter()
+            .map(|t| TableOption::Launch {
+                template: t.clone(),
+            })
+            .collect();
 
-    fn from_index(index: usize) -> Option<TableOption> {
-        match index {
-            0 => Some(TableOption::Launch),
-            1 => Some(TableOption::LaunchFullscreen),
-            2 => Some(TableOption::LaunchWindowed),
-            3 => Some(TableOption::ForceReload),
-            4 => Some(TableOption::InfoShow),
-            5 => Some(TableOption::InfoEdit),
-            6 => Some(TableOption::InfoDiff),
-            7 => Some(TableOption::ExtractVBS),
-            8 => Some(TableOption::EditVBS),
-            9 => Some(TableOption::PatchVBS),
-            10 => Some(TableOption::UnifyLineEndings),
-            11 => Some(TableOption::ShowVBSDiff),
-            12 => Some(TableOption::CreateVBSPatch),
-            13 => Some(TableOption::NVRAMDipSwitches),
-            14 => Some(TableOption::NVRAMShow),
-            15 => Some(TableOption::NVRAMClear),
-            16 => Some(TableOption::B2SAutoPositionDMD),
-            17 => Some(TableOption::EditTableINI),
-            18 => Some(TableOption::EditMainIni),
-            _ => None,
-        }
+        options.extend(vec![
+            TableOption::ForceReload,
+            TableOption::InfoShow,
+            TableOption::InfoEdit,
+            TableOption::InfoDiff,
+            TableOption::ExtractVBS,
+            TableOption::EditVBS,
+            TableOption::PatchVBS,
+            TableOption::UnifyLineEndings,
+            TableOption::ShowVBSDiff,
+            TableOption::CreateVBSPatch,
+            TableOption::NVRAMDipSwitches,
+            TableOption::NVRAMShow,
+            TableOption::NVRAMClear,
+            TableOption::B2SAutoPositionDMD,
+            TableOption::EditTableINI,
+            TableOption::EditMainIni,
+        ]);
+        options
     }
 
     fn display(&self) -> String {
         match self {
-            TableOption::Launch => "Launch".to_string(),
-            TableOption::LaunchFullscreen => "Launch fullscreen".to_string(),
-            TableOption::LaunchWindowed => "Launch windowed".to_string(),
+            TableOption::Launch {
+                template: LaunchTemplate { name, .. },
+            } => name.clone(),
             TableOption::ForceReload => "Force reload".to_string(),
             TableOption::InfoShow => "Info > Show".to_string(),
             TableOption::InfoEdit => "Info > Edit".to_string(),
@@ -252,18 +233,10 @@ fn table_menu(
     let mut exit = false;
     let mut option = None;
     while !exit {
-        option = choose_table_option(info_str, option);
+        option = choose_table_option(config, info_str, option);
         match option {
-            Some(TableOption::Launch) => {
-                launch(selected_path, &config.vpx_executable, None);
-                exit = true;
-            }
-            Some(TableOption::LaunchFullscreen) => {
-                launch(selected_path, &config.vpx_executable, Some(true));
-                exit = true;
-            }
-            Some(TableOption::LaunchWindowed) => {
-                launch(selected_path, &config.vpx_executable, Some(false));
+            Some(TableOption::Launch { ref template }) => {
+                launch(selected_path, &template);
                 exit = true;
             }
             Some(TableOption::ForceReload) => {
@@ -741,10 +714,15 @@ fn prompt_error(msg: &str) {
     prompt(&msg.truecolor(255, 125, 0).to_string());
 }
 
-fn choose_table_option(table_name: &str, selected: Option<TableOption>) -> Option<TableOption> {
+fn choose_table_option(
+    config: &ResolvedConfig,
+    table_name: &str,
+    selected: Option<TableOption>,
+) -> Option<TableOption> {
     let mut default = 0;
     // iterate over table options
-    let selections = TableOption::ALL
+    let all_options = TableOption::all(config);
+    let selections = all_options
         .iter()
         .enumerate()
         .map(|(index, option)| {
@@ -764,11 +742,13 @@ fn choose_table_option(table_name: &str, selected: Option<TableOption>) -> Optio
         .interact_opt()
         .unwrap();
 
-    selection_opt.and_then(TableOption::from_index)
+    selection_opt.and_then(|index| all_options.get(index).cloned())
 }
 
-fn launch(selected_path: &PathBuf, vpinball_executable: &Path, fullscreen: Option<bool>) {
+fn launch(selected_path: &PathBuf, launch_template: &LaunchTemplate) {
     println!("{} {}", LAUNCH, selected_path.display());
+
+    let vpinball_executable = &launch_template.executable;
 
     if !vpinball_executable.is_executable() {
         report_and_exit(format!(
@@ -777,7 +757,7 @@ fn launch(selected_path: &PathBuf, vpinball_executable: &Path, fullscreen: Optio
         ));
     }
 
-    match launch_table(selected_path, vpinball_executable, fullscreen) {
+    match launch_table(selected_path, launch_template) {
         Ok(status) => match status.code() {
             Some(0) => {
                 //println!("Table exited normally");
@@ -824,22 +804,22 @@ fn report_and_exit(msg: String) -> ! {
 
 fn launch_table(
     selected_path: &PathBuf,
-    vpinball_executable: &Path,
-    fullscreen: Option<bool>,
+    launch_template: &LaunchTemplate,
 ) -> io::Result<ExitStatus> {
-    // start process ./VPinballX_GL -play [table path]
-    let mut cmd = std::process::Command::new(vpinball_executable);
-    match fullscreen {
-        Some(true) => {
-            cmd.arg("-EnableTrueFullscreen");
+    let mut cmd = std::process::Command::new(&launch_template.executable);
+    if let Some(env) = &launch_template.env {
+        for (key, value) in env.iter() {
+            cmd.env(key, value);
         }
-        Some(false) => {
-            cmd.arg("-DisableTrueFullscreen");
-        }
-        None => (),
+    }
+    if let Some(args) = &launch_template.arguments {
+        cmd.args(args);
     }
     cmd.arg("-play");
     cmd.arg(selected_path);
+
+    println!("Spawning command: {:?}", cmd);
+
     let mut child = cmd.spawn()?;
     let result = child.wait()?;
     Ok(result)
