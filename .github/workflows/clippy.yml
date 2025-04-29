@@ -20,7 +20,7 @@ jobs:
       - name: Linux dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libxcb1-dev libxrandr libdbus-1-3 libpipewire-0.3-dev
+          sudo apt-get install -y libxcb1-dev libxrandr-dev libdbus-1-dev libpipewire-0.3-dev
       - uses: actions/cache@v4
         with:
           path: |
