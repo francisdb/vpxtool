@@ -1,5 +1,5 @@
 use crate::backglass::find_hole;
-use crate::capture::capture_vpinball_windows;
+use crate::capture::{CaptureError, capture_vpinball_windows};
 use crate::cli::{
     DiffColor, ProgressBarProgress, confirm, info_diff, info_edit, info_gather, open_editor,
     run_diff, script_diff,
@@ -31,7 +31,6 @@ use std::{
     path::{Path, PathBuf},
 };
 use vpin::vpx::{ExtractResult, extractvbs, ini_path_for, vbs_path_for};
-use xcap::XCapError;
 
 const LAUNCH: Emoji = Emoji("🚀", "[launch]");
 const CRASH: Emoji = Emoji("💥", "[crash]");
@@ -469,7 +468,7 @@ fn table_menu(
 fn run_and_capture(
     table_info: &IndexedTable,
     launch_template: &LaunchTemplate,
-) -> Result<i8, XCapError> {
+) -> Result<i8, CaptureError> {
     let captures_path = table_info.path.parent().unwrap().join("captures");
     std::fs::create_dir_all(&captures_path)?;
 

@@ -3326,6 +3326,7 @@ dependencies = [
  "serde_json",
  "shellexpand",
  "testdir",
+ "thiserror 2.0.12",
  "toml",
  "vpin",
  "walkdir",
