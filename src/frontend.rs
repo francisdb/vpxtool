@@ -236,7 +236,7 @@ fn table_menu(
         option = choose_table_option(config, info_str, option);
         match option {
             Some(TableOption::Launch { ref template }) => {
-                launch(selected_path, &template);
+                launch(selected_path, template);
                 exit = true;
             }
             Some(TableOption::ForceReload) => {
