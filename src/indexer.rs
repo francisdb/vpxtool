@@ -320,7 +320,7 @@ impl Debug for IndexError {
 }
 impl From<IndexError> for io::Error {
     fn from(e: IndexError) -> io::Error {
-        io::Error::new(io::ErrorKind::Other, format!("{:?}", e))
+        io::Error::other(format!("{:?}", e))
     }
 }
 
@@ -477,7 +477,7 @@ pub fn index_vpx_files(
 
     let vpx_files_with_table_info = index_thread
         .join()
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("{:?}", e)))?;
+        .map_err(|e| io::Error::other(format!("{:?}", e)))?;
 
     Ok(TablesIndex {
         tables: vpx_files_with_table_info,
@@ -543,14 +543,11 @@ pub fn get_romname_from_vpx(vpx_path: &Path) -> io::Result<Option<String>> {
 fn read_table_info_json(info_file_path: &Path) -> io::Result<TableInfo> {
     let mut info_file = File::open(info_file_path)?;
     let json = serde_json::from_reader(&mut info_file).map_err(|e| {
-        io::Error::new(
-            io::ErrorKind::Other,
-            format!(
-                "Failed to parse/read json {}: {}",
-                info_file_path.display(),
-                e
-            ),
-        )
+        io::Error::other(format!(
+            "Failed to parse/read json {}: {}",
+            info_file_path.display(),
+            e
+        ))
     })?;
     let (table_info, _custom_info_tags) = json_to_info(json, None)?;
     Ok(table_info)
@@ -649,8 +646,7 @@ fn last_modified(path: &Path) -> io::Result<SystemTime> {
 pub fn write_index_json(indexed_tables: &TablesIndex, json_path: &Path) -> io::Result<()> {
     let json_file = File::create(json_path)?;
     let indexed_tables_json: TablesIndexJson = indexed_tables.into();
-    serde_json::to_writer_pretty(json_file, &indexed_tables_json)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+    serde_json::to_writer_pretty(json_file, &indexed_tables_json).map_err(io::Error::other)
 }
 
 pub fn read_index_json(json_path: &Path) -> io::Result<Option<TablesIndex>> {

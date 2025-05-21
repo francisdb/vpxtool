@@ -1383,12 +1383,12 @@ fn open_configured_editor(file_to_edit: &Path, editor: &String) -> io::Result<()
                 Ok(())
             } else {
                 let warning = format!("Failed to open editor {}: {}", editor, status);
-                Err(io::Error::new(io::ErrorKind::Other, warning))
+                Err(io::Error::other(warning))
             }
         }
         Err(e) => {
             let warning = format!("Failed to open editor {}: {}", &editor, e);
-            Err(io::Error::new(io::ErrorKind::Other, warning))
+            Err(io::Error::other(warning))
         }
     }
 }
@@ -1567,7 +1567,7 @@ pub fn run_diff(
             "Failed to run 'diff'. Is it installed on your system? {}",
             e
         );
-        io::Error::new(io::ErrorKind::Other, msg)
+        io::Error::other(msg)
     })
 }
 
