@@ -134,15 +134,15 @@ Sometimes you want to use a different executables, extra arguments or environmen
 by setting up launch templates. Each entry will show up on top of the frontend table menu.
 
 ```toml
-[[launch_template]]
+[[launch_templates]]
 name = "Launch fullscreen"
 executable = "/home/myuser/vpinball/VPinballX_BGFX"
-args = ["-EnableTrueFullscreen"]
+arguments = ["-EnableTrueFullscreen"]
 
-[[launch_template]]
+[[launch_templates]]
 name = "Launch GL"
 executable = "/home/myuser/vpinball/VPinballX_GL"
-[launch_template.env]
+[launch_templates.env]
 SDL_VIDEODRIVER = "X11"
 ```
 
