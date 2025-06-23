@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.1](https://github.com/francisdb/vpxtool/compare/v0.24.0...v0.24.1) - 2025-06-23
+
+### Other
+
+- *(deps)* bump pinmame-nvram from 0.3.17 to 0.3.18 ([#565](https://github.com/francisdb/vpxtool/pull/565))
+- *(deps)* bump pinmame-nvram from 0.3.16 to 0.3.17 ([#562](https://github.com/francisdb/vpxtool/pull/562))
+- *(deps)* bump clap from 4.5.39 to 4.5.40 ([#563](https://github.com/francisdb/vpxtool/pull/563))
+- Fix typo in launch_templates doc in README ([#561](https://github.com/francisdb/vpxtool/pull/561))
+- *(deps)* bump toml from 0.8.22 to 0.8.23 ([#560](https://github.com/francisdb/vpxtool/pull/560))
+- *(deps)* bump clap from 4.5.38 to 4.5.39 ([#559](https://github.com/francisdb/vpxtool/pull/559))
+- new clippy rules ([#558](https://github.com/francisdb/vpxtool/pull/558))
+- linux developer dependencies
+- *(deps)* bump clap from 4.5.37 to 4.5.38 ([#557](https://github.com/francisdb/vpxtool/pull/557))
+- *(deps)* bump toml from 0.8.21 to 0.8.22 ([#555](https://github.com/francisdb/vpxtool/pull/555))
+- *(deps)* bump chrono from 0.4.40 to 0.4.41 ([#554](https://github.com/francisdb/vpxtool/pull/554))
+
 ## [0.24.0](https://github.com/francisdb/vpxtool/compare/v0.23.5...v0.24.0) - 2025-04-29
 
 ### Added
