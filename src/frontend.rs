@@ -155,7 +155,7 @@ pub fn frontend(config: &ResolvedConfig, mut vpx_files_with_tableinfo: Vec<Index
         selections.extend(tables.clone());
 
         if let Err(e) = Term::stderr().clear_screen() {
-            eprintln!("Failed to clear screen: {}", e);
+            eprintln!("Failed to clear screen: {e}");
         }
         main_selection_opt = Select::with_theme(&ColorfulTheme::default())
             .with_prompt("Select a table")
@@ -250,7 +250,7 @@ fn table_menu(
                         exit = true;
                     }
                     Err(err) => {
-                        let msg = format!("Unable to reload tables: {:?}", err);
+                        let msg = format!("Unable to reload tables: {err:?}");
                         prompt(&msg.truecolor(255, 125, 0).to_string());
                     }
                 }
@@ -274,7 +274,7 @@ fn table_menu(
                     prompt(&msg.truecolor(255, 125, 0).to_string());
                 }
                 Err(err) => {
-                    let msg = format!("Unable to extract VBS: {}", err);
+                    let msg = format!("Unable to extract VBS: {err}");
                     prompt(&msg.truecolor(255, 125, 0).to_string());
                 }
             },
@@ -283,7 +283,7 @@ fn table_menu(
                     prompt(&diff);
                 }
                 Err(err) => {
-                    let msg = format!("Unable to diff VBS: {}", err);
+                    let msg = format!("Unable to diff VBS: {err}");
                     prompt(&msg.truecolor(255, 125, 0).to_string());
                 }
             },
@@ -292,7 +292,7 @@ fn table_menu(
                     Ok(ExtractResult::Existed(path)) => path,
                     Ok(ExtractResult::Extracted(path)) => path,
                     Err(err) => {
-                        let msg = format!("Unable to extract VBS: {}", err);
+                        let msg = format!("Unable to extract VBS: {err}");
                         prompt(&msg.truecolor(255, 125, 0).to_string());
                         return;
                     }
@@ -303,7 +303,7 @@ fn table_menu(
                             prompt("No patches applied.");
                         } else {
                             applied.iter().for_each(|patch| {
-                                println!("Applied patch: {}", patch);
+                                println!("Applied patch: {patch}");
                             });
                             prompt(&format!(
                                 "Patched VBS file at {}",
@@ -312,7 +312,7 @@ fn table_menu(
                         }
                     }
                     Err(err) => {
-                        let msg = format!("Unable to patch VBS: {}", err);
+                        let msg = format!("Unable to patch VBS: {err}");
                         prompt(&msg.truecolor(255, 125, 0).to_string());
                     }
                 }
@@ -323,7 +323,7 @@ fn table_menu(
                     Ok(ExtractResult::Existed(path)) => path,
                     Ok(ExtractResult::Extracted(path)) => path,
                     Err(err) => {
-                        let msg = format!("Unable to extract VBS: {}", err);
+                        let msg = format!("Unable to extract VBS: {err}");
                         prompt(&msg.truecolor(255, 125, 0).to_string());
                         return;
                     }
@@ -339,7 +339,7 @@ fn table_menu(
                         ));
                     }
                     Err(err) => {
-                        let msg = format!("Unable to patch VBS: {}", err);
+                        let msg = format!("Unable to patch VBS: {err}");
                         prompt(&msg.truecolor(255, 125, 0).to_string());
                     }
                 }
@@ -350,7 +350,7 @@ fn table_menu(
                     Ok(ExtractResult::Existed(path)) => path,
                     Ok(ExtractResult::Extracted(path)) => path,
                     Err(err) => {
-                        let msg = format!("Unable to extract VBS: {}", err);
+                        let msg = format!("Unable to extract VBS: {err}");
                         prompt(&msg.truecolor(255, 125, 0).to_string());
                         return;
                     }
@@ -364,7 +364,7 @@ fn table_menu(
                         file.write_all(&diff).unwrap();
                     }
                     Err(err) => {
-                        let msg = format!("Unable to diff VBS: {}", err);
+                        let msg = format!("Unable to diff VBS: {err}");
                         prompt(&msg.truecolor(255, 125, 0).to_string());
                     }
                 }
@@ -374,7 +374,7 @@ fn table_menu(
                     prompt(&info);
                 }
                 Err(err) => {
-                    let msg = format!("Unable to gather table info: {}", err);
+                    let msg = format!("Unable to gather table info: {err}");
                     prompt(&msg.truecolor(255, 125, 0).to_string());
                 }
             },
@@ -383,7 +383,7 @@ fn table_menu(
                     println!("Launched editor for {}", path.display());
                 }
                 Err(err) => {
-                    let msg = format!("Unable to edit table info: {}", err);
+                    let msg = format!("Unable to edit table info: {err}");
                     prompt_error(&msg);
                 }
             },
@@ -392,7 +392,7 @@ fn table_menu(
                     prompt(&diff);
                 }
                 Err(err) => {
-                    let msg = format!("Unable to diff info: {}", err);
+                    let msg = format!("Unable to diff info: {err}");
                     prompt_error(&msg);
                 }
             },
@@ -410,7 +410,7 @@ fn table_menu(
                     prompt(&msg);
                 }
                 Err(err) => {
-                    let msg = format!("Unable to auto-position DMD: {}", err);
+                    let msg = format!("Unable to auto-position DMD: {err}");
                     prompt_error(&msg);
                 }
             },
@@ -458,7 +458,7 @@ fn nvram_dip_switches(info: &IndexedTable) {
                     // ok
                 }
                 Err(err) => {
-                    let msg = format!("Unable to edit DIP switches: {}", err);
+                    let msg = format!("Unable to edit DIP switches: {err}");
                     prompt_error(&msg);
                 }
             }
@@ -484,7 +484,7 @@ fn nvram_show(info: &IndexedTable) {
                     prompt(&format!("{} currently not supported", nvram_path.display()));
                 }
                 Err(err) => {
-                    let msg = format!("Unable to resolve NVRAM file: {}", err);
+                    let msg = format!("Unable to resolve NVRAM file: {err}");
                     prompt_error(&msg);
                 }
             }
@@ -502,7 +502,7 @@ fn report_launch_result(path: &Path, result: io::Result<()>) {
             println!("Launched editor for {}", path.display());
         }
         Err(err) => {
-            let msg = format!("Unable to launch editor for {}", err);
+            let msg = format!("Unable to launch editor for {err}");
             prompt(&msg.truecolor(255, 125, 0).to_string());
         }
     }
@@ -517,7 +517,7 @@ fn auto_position_dmd(config: &ResolvedConfig, info: &&IndexedTable) -> Result<St
                     format!("Unable to open B2S file {}: {}", b2s_path.display(), e)
                 })?);
             let b2s = vpin::directb2s::read(reader)
-                .map_err(|e| format!("Unable to read B2S file: {}", e))?;
+                .map_err(|e| format!("Unable to read B2S file: {e}"))?;
 
             if let Some(dmd_image) = b2s.images.dmd_image {
                 // load vpinball config
@@ -528,19 +528,19 @@ fn auto_position_dmd(config: &ResolvedConfig, info: &&IndexedTable) -> Result<St
                     let base64data = strip_cr_lf(&base64data_with_cr_lf);
                     let decoded_data = base64::engine::general_purpose::STANDARD
                         .decode(base64data)
-                        .map_err(|e| format!("Unable to decode base64 data: {}", e))?;
+                        .map_err(|e| format!("Unable to decode base64 data: {e}"))?;
                     // read the image with image crate
                     let image = image::load_from_memory(&decoded_data)
-                        .map_err(|e| format!("Unable to read DMD image: {}", e))?;
+                        .map_err(|e| format!("Unable to read DMD image: {e}"))?;
                     let hole_opt = find_hole(&image, 6, &image.width() / 2, 5)
-                        .map_err(|e| format!("Unable to find hole in DMD image: {}", e))?;
+                        .map_err(|e| format!("Unable to find hole in DMD image: {e}"))?;
                     if let Some(hole) = hole_opt {
                         let table_ini_path = info.path.with_extension("ini");
                         let vpinball_config = VPinballConfig::read(ini_file)
-                            .map_err(|e| format!("Unable to read vpinball ini file: {}", e))?;
+                            .map_err(|e| format!("Unable to read vpinball ini file: {e}"))?;
                         let mut table_config = if table_ini_path.exists() {
                             VPinballConfig::read(&table_ini_path)
-                                .map_err(|e| format!("Unable to read table ini file: {}", e))
+                                .map_err(|e| format!("Unable to read table ini file: {e}"))
                         } else {
                             Ok(VPinballConfig::default())
                         }?;
@@ -627,7 +627,7 @@ fn edit_dip_switches(nvram: PathBuf) -> io::Result<()> {
     let help = "(<␣> selects, <⏎> saves, <esc/q> exits)"
         .dimmed()
         .to_string();
-    let prompt_string = format!("Toggle switches {}", help);
+    let prompt_string = format!("Toggle switches {help}");
     let selection = MultiSelect::with_theme(&ColorfulTheme::default())
         .with_prompt(prompt_string)
         .items(&items)
@@ -662,7 +662,7 @@ fn nvram_clear(info: &IndexedTable) {
                                 prompt(&format!("NVRAM file {} removed", nvram_file.display()));
                             }
                             Err(err) => {
-                                let msg = format!("Unable to remove NVRAM file: {}", err);
+                                let msg = format!("Unable to remove NVRAM file: {err}");
                                 prompt(&msg.truecolor(255, 125, 0).to_string());
                             }
                         }
@@ -671,7 +671,7 @@ fn nvram_clear(info: &IndexedTable) {
                         prompt("NVRAM file removal canceled.");
                     }
                     Err(err) => {
-                        let msg = format!("Error during confirmation: {}", err);
+                        let msg = format!("Error during confirmation: {err}");
                         prompt(&msg.truecolor(255, 125, 0).to_string());
                     }
                 }
@@ -703,7 +703,7 @@ fn nvram_for_rom(info: &IndexedTable) -> Option<PathBuf> {
 
 fn prompt(msg: &str) {
     Input::<String>::new()
-        .with_prompt(format!("{} - Press enter to continue.", msg))
+        .with_prompt(format!("{msg} - Press enter to continue."))
         .default("".to_string())
         .show_default(false)
         .interact()
@@ -733,7 +733,7 @@ fn choose_table_option(
         })
         .collect::<Vec<String>>();
     if let Err(e) = Term::stderr().clear_screen() {
-        eprintln!("Failed to clear screen: {:?}", e);
+        eprintln!("Failed to clear screen: {e:?}");
     }
     let selection_opt = Select::with_theme(&ColorfulTheme::default())
         .with_prompt(table_name)
@@ -764,20 +764,17 @@ fn launch(selected_path: &PathBuf, launch_template: &LaunchTemplate) {
             }
             Some(11) => {
                 prompt(&format!(
-                    "{} Visual Pinball exited with segfault, you might want to report this to the vpinball team.",
-                    CRASH
+                    "{CRASH} Visual Pinball exited with segfault, you might want to report this to the vpinball team."
                 ));
             }
             Some(139) => {
                 prompt(&format!(
-                    "{} Visual Pinball exited with segfault, you might want to report this to the vpinball team.",
-                    CRASH
+                    "{CRASH} Visual Pinball exited with segfault, you might want to report this to the vpinball team."
                 ));
             }
             Some(code) => {
                 prompt(&format!(
-                    "{} Visual Pinball exited with code {}",
-                    CRASH, code
+                    "{CRASH} Visual Pinball exited with code {code}"
                 ));
             }
             None => {
@@ -791,14 +788,14 @@ fn launch(selected_path: &PathBuf, launch_template: &LaunchTemplate) {
                     vpinball_executable.display()
                 ));
             } else {
-                report_and_exit(format!("Unable to launch table: {:?}", e));
+                report_and_exit(format!("Unable to launch table: {e:?}"));
             }
         }
     }
 }
 
 fn report_and_exit(msg: String) -> ! {
-    eprintln!("{CRASH} {}", msg);
+    eprintln!("{CRASH} {msg}");
     exit(1);
 }
 
@@ -818,7 +815,7 @@ fn launch_table(
     cmd.arg("-play");
     cmd.arg(selected_path);
 
-    println!("Spawning command: {:?}", cmd);
+    println!("Spawning command: {cmd:?}");
 
     let mut child = cmd.spawn()?;
     let result = child.wait()?;
@@ -839,7 +836,7 @@ fn display_table_line(table: &IndexedTable) -> String {
             format!(
                 "{} {}",
                 capitalize_first_letter(s.unwrap_or_default().as_str()),
-                format!("({})", file_name).dimmed()
+                format!("({file_name})").dimmed()
             )
         })
         .unwrap_or(file_name)
@@ -866,7 +863,7 @@ fn display_table_line_full(table: &IndexedTable) -> String {
         Some(_) => " ▀".dimmed(),
         None => "".into(),
     };
-    format!("{}{}{}", base, gamename_suffix, b2s_suffix)
+    format!("{base}{gamename_suffix}{b2s_suffix}")
 }
 
 fn capitalize_first_letter(s: &str) -> String {

@@ -175,7 +175,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     Ok(ExitCode::SUCCESS)
                 }
                 Err(e) => {
-                    let warning = format!("Error running diff: {}", e).red();
+                    let warning = format!("Error running diff: {e}").red();
                     crate::println!("{}", warning)?;
                     Ok(ExitCode::FAILURE)
                 }
@@ -217,7 +217,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     Ok(ExitCode::FAILURE)
                 }
                 Err(IndexError::IoError(e)) => {
-                    let warning = format!("Error running frontend: {}", e).red();
+                    let warning = format!("Error running frontend: {e}").red();
                     crate::eprintln!("{}", warning)?;
                     Ok(ExitCode::FAILURE)
                 }
@@ -258,7 +258,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                         Ok(ExitCode::SUCCESS)
                     }
                     Err(e) => {
-                        let warning = format!("Error importing vbs: {}", e).red();
+                        let warning = format!("Error importing vbs: {e}").red();
                         crate::eprintln!("{}", warning)?;
                         Ok(ExitCode::FAILURE)
                     }
@@ -428,7 +428,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     Ok(ExitCode::SUCCESS)
                 }
                 Err(e) => {
-                    let warning = format!("Error importing vbs: {}", e).red();
+                    let warning = format!("Error importing vbs: {e}").red();
                     crate::eprintln!("{}", warning)?;
                     Ok(ExitCode::FAILURE)
                 }
@@ -1103,7 +1103,7 @@ fn handle_extractvbs(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
             crate::println!("CREATED {}", vbs_path.display())?;
         }
         Err(e) => {
-            let warning = format!("Error extracting vbs: {}", e).red();
+            let warning = format!("Error extracting vbs: {e}").red();
             crate::eprintln!("{}", warning)?;
         }
     }
@@ -1271,17 +1271,17 @@ pub(crate) fn info_gather(vpx_file_path: &PathBuf) -> io::Result<String> {
         Some(table_info.author_name)
             .map(|s| s.unwrap_or("[not set]".to_string()))
             .filter(|s| !s.is_empty())
-            .map(|s| format!("{} ", s))
+            .map(|s| format!("{s} "))
             .unwrap_or_default(),
         Some(table_info.author_email)
             .map(|s| s.unwrap_or("[not set]".to_string()))
             .filter(|s| !s.is_empty())
-            .map(|s| format!("{} ", s))
+            .map(|s| format!("{s} "))
             .unwrap_or_default(),
         Some(table_info.author_website)
             .map(|s| s.unwrap_or("[not set]".to_string()))
             .filter(|s| !s.is_empty())
-            .map(|s| format!("{} ", s))
+            .map(|s| format!("{s} "))
             .unwrap_or_default(),
     ));
     buffer.push_str(&format!(
@@ -1382,7 +1382,7 @@ fn open_configured_editor(file_to_edit: &Path, editor: &String) -> io::Result<()
             if status.success() {
                 Ok(())
             } else {
-                let warning = format!("Failed to open editor {}: {}", editor, status);
+                let warning = format!("Failed to open editor {editor}: {status}");
                 Err(io::Error::other(warning))
             }
         }
@@ -1467,7 +1467,7 @@ pub fn extract(vpx_file_path: &Path, yes: bool) -> io::Result<ExitCode> {
             crate::println!("Successfully extracted to \"{}\"", root_dir_path.display())?;
             Ok(ExitCode::SUCCESS)
         }
-        Err(e) => fail(format!("Failed to extract: {}", e)),
+        Err(e) => fail(format!("Failed to extract: {e}")),
     }
 }
 
@@ -1556,7 +1556,7 @@ pub fn run_diff(
         .arg("-u")
         .arg("-w")
         .arg(format!("--color={}", color.to_diff_arg()))
-        .arg(format!("--label={}", original_vbs_file_name_no_tmp))
+        .arg(format!("--label={original_vbs_file_name_no_tmp}"))
         .arg(original_vbs_filename)
         .arg(format!("--label={}", vbs_filename.to_string_lossy()))
         .arg(vbs_filename)
@@ -1564,8 +1564,7 @@ pub fn run_diff(
         .map(|o| o.stdout);
     result.map_err(|e| {
         let msg = format!(
-            "Failed to run 'diff'. Is it installed on your system? {}",
-            e
+            "Failed to run 'diff'. Is it installed on your system? {e}"
         );
         io::Error::other(msg)
     })

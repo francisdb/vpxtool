@@ -314,13 +314,13 @@ impl Debug for IndexError {
             IndexError::FolderDoesNotExist(path) => {
                 write!(f, "Folder does not exist: {}", path.display())
             }
-            IndexError::IoError(e) => write!(f, "IO error: {}", e),
+            IndexError::IoError(e) => write!(f, "IO error: {e}"),
         }
     }
 }
 impl From<IndexError> for io::Error {
     fn from(e: IndexError) -> io::Error {
-        io::Error::other(format!("{:?}", e))
+        io::Error::other(format!("{e:?}"))
     }
 }
 
@@ -372,7 +372,7 @@ pub fn index_folder(
     info!("  Found {} tables", vpx_files.len());
     // remove files that are missing
     let removed_len = index.remove_missing(&vpx_files);
-    info!("  {} missing tables have been removed", removed_len);
+    info!("  {removed_len} missing tables have been removed");
 
     let tables_with_missing_rom = index
         .tables()
@@ -456,7 +456,7 @@ pub fn index_vpx_files(
                         // TODO we want to return any failures instead of printing here
                         let warning =
                             format!("Not a valid vpx file {}: {}", vpx_file.path.display(), e);
-                        println!("{}", warning);
+                        println!("{warning}");
                         None
                     }
                 };
@@ -477,7 +477,7 @@ pub fn index_vpx_files(
 
     let vpx_files_with_table_info = index_thread
         .join()
-        .map_err(|e| io::Error::other(format!("{:?}", e)))?;
+        .map_err(|e| io::Error::other(format!("{e:?}")))?;
 
     Ok(TablesIndex {
         tables: vpx_files_with_table_info,
@@ -661,8 +661,7 @@ pub fn read_index_json(json_path: &Path) -> io::Result<Option<TablesIndex>> {
         }
         Err(e) => {
             println!(
-                "Failed to parse index file, ignoring existing index. ({})",
-                e
+                "Failed to parse index file, ignoring existing index. ({e})"
             );
             Ok(None)
         }
@@ -838,10 +837,9 @@ mod tests {
         // write simple script in tempdir
         let script = format!(
             r#"
-    Const cGameName = "{}"
+    Const cGameName = "{game_name}"
     Sub LoadVPM
-    "#,
-            game_name
+    "#
         );
         let script_path = temp_dir.join(game_name).with_extension("vbs");
         let mut script_file = File::create(&script_path)?;
