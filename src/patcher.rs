@@ -107,7 +107,7 @@ fn patch_standup_target_array(script: String) -> String {
         .replace_all(&script, |caps: &regex::Captures| {
             let ind = caps.get(1).unwrap().as_str();
             let ind2 = caps.get(2).unwrap().as_str();
-            format!("Set {}(new StandupTarget)({})", ind, ind2)
+            format!("Set {ind}(new StandupTarget)({ind2})")
         })
         .to_string();
 
@@ -141,7 +141,7 @@ fn patch_drop_target_array(script: String) -> String {
                 Some(c) => c.as_str().to_string(),
                 None => ", false".to_string(),
             };
-            format!("Set {}(new DropTarget)({}{})", ind, ind2, false_true)
+            format!("Set {ind}(new DropTarget)({ind2}{false_true})")
         })
         .to_string();
 
@@ -163,7 +163,7 @@ fn patch_drop_target_array(script: String) -> String {
 
 fn introduce_class(script: String, marker: &str, fallback_marker: &str, class_def: &str) -> String {
     if script.match_indices(marker).count() == 1 {
-        script.replace(marker, format!("{}\r\n{}", class_def, marker).as_str())
+        script.replace(marker, format!("{class_def}\r\n{marker}").as_str())
     } else {
         // Put class_def before the first line that contains "new DropTarget"
         // which we previously added.
@@ -173,12 +173,12 @@ fn introduce_class(script: String, marker: &str, fallback_marker: &str, class_de
             re.replace(&script, |caps: &regex::Captures| {
                 let first = caps.get(1).unwrap().as_str();
                 let second = caps.get(2).unwrap().as_str();
-                format!("\r\n{}\r\n{}{}", class_def, first, second)
+                format!("\r\n{class_def}\r\n{first}{second}")
             })
             .to_string()
         } else {
             // No better location found, append the class at the end of the file.
-            format!("{}\r\n{}", script, class_def)
+            format!("{script}\r\n{class_def}")
         }
     }
 }

@@ -132,7 +132,7 @@ fn read_config(config_path: &Path) -> io::Result<ResolvedConfig> {
     let config: Config = figment.extract().map_err(|e| {
         io::Error::new(
             io::ErrorKind::InvalidData,
-            format!("Failed to load config file: {}", e),
+            format!("Failed to load config file: {e}"),
         )
     })?;
     // apply defaults
@@ -256,7 +256,7 @@ fn create_default_config() -> io::Result<(PathBuf, ResolvedConfig)> {
         .items(
             &choices
                 .iter()
-                .map(|(choice, description)| format!("{} \x1b[90m{}\x1b[0m", choice, description))
+                .map(|(choice, description)| format!("{choice} \x1b[90m{description}\x1b[0m"))
                 .collect::<Vec<_>>(),
         )
         .interact_opt()
@@ -384,7 +384,7 @@ mod tests {
         let mut file = File::open(&config_file)?;
         let mut contents = String::new();
         file.read_to_string(&mut contents)?;
-        println!("Config file contents: {}", contents);
+        println!("Config file contents: {contents}");
         let config = read_config(&config_file)?;
         assert_eq!(
             config,

@@ -100,11 +100,11 @@ impl VPinballConfig {
     }
 
     pub fn read(ini_path: &Path) -> io::Result<Self> {
-        info!("Reading vpinball ini file: {:?}", ini_path);
+        info!("Reading vpinball ini file: {ini_path:?}");
         let ini = ini::Ini::load_from_file(ini_path).map_err(|e| {
             io::Error::new(
                 io::ErrorKind::InvalidData,
-                format!("Failed to read ini file: {:?}", e),
+                format!("Failed to read ini file: {e:?}"),
             )
         })?;
         Ok(VPinballConfig { ini })
@@ -114,7 +114,7 @@ impl VPinballConfig {
         let ini = ini::Ini::read_from(reader).map_err(|e| {
             io::Error::new(
                 io::ErrorKind::InvalidData,
-                format!("Failed to read ini file: {:?}", e),
+                format!("Failed to read ini file: {e:?}"),
             )
         })?;
         Ok(VPinballConfig { ini })
@@ -143,7 +143,7 @@ impl VPinballConfig {
                 let section = section_name(window_type);
                 if let Some(ini_section) = self.ini.section(Some(section)) {
                     let prefix = config_prefix(window_type);
-                    ini_section.get(format!("{}Output", prefix)) == Some("2")
+                    ini_section.get(format!("{prefix}Output")) == Some("2")
                 } else {
                     false
                 }
@@ -183,7 +183,7 @@ impl VPinballConfig {
                 let section = section_name(window_type);
                 let prefix = config_prefix(window_type);
                 self.ini.section(Some(section)).is_some_and(|ini_section| {
-                    ini_section.get(format!("{}Window", prefix)) == Some("1")
+                    ini_section.get(format!("{prefix}Window")) == Some("1")
                 })
             }
         }
@@ -200,7 +200,7 @@ impl VPinballConfig {
                         Some("0") => Some(false),
                         Some(empty) if empty.trim().is_empty() => None,
                         Some(other) => {
-                            log::warn!("Unexpected value for PlayfieldFullScreen: {}", other);
+                            log::warn!("Unexpected value for PlayfieldFullScreen: {other}");
                             None
                         }
                         None => match ini_section.get("FullScreen") {
@@ -208,7 +208,7 @@ impl VPinballConfig {
                             Some("0") => Some(false),
                             Some(empty) if empty.trim().is_empty() => None,
                             Some(other) => {
-                                log::warn!("Unexpected value for FullScreen: {}", other);
+                                log::warn!("Unexpected value for FullScreen: {other}");
                                 None
                             }
                             None => None,
@@ -264,8 +264,8 @@ impl VPinballConfig {
             _ => "Y",
         };
 
-        let x_key = format!("{}{}", prefix, x_suffix);
-        let y_key = format!("{}{}", prefix, y_suffix);
+        let x_key = format!("{prefix}{x_suffix}");
+        let y_key = format!("{prefix}{y_suffix}");
 
         self.ini
             .with_section(Some(&section))
