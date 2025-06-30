@@ -660,9 +660,7 @@ pub fn read_index_json(json_path: &Path) -> io::Result<Option<TablesIndex>> {
             Ok(Some(indexed_tables))
         }
         Err(e) => {
-            println!(
-                "Failed to parse index file, ignoring existing index. ({e})"
-            );
+            println!("Failed to parse index file, ignoring existing index. ({e})");
             Ok(None)
         }
     }

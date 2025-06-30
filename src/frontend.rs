@@ -773,9 +773,7 @@ fn launch(selected_path: &PathBuf, launch_template: &LaunchTemplate) {
                 ));
             }
             Some(code) => {
-                prompt(&format!(
-                    "{CRASH} Visual Pinball exited with code {code}"
-                ));
+                prompt(&format!("{CRASH} Visual Pinball exited with code {code}"));
             }
             None => {
                 prompt("Visual Pinball exited with unknown code");

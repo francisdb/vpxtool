@@ -1563,9 +1563,7 @@ pub fn run_diff(
         .output()
         .map(|o| o.stdout);
     result.map_err(|e| {
-        let msg = format!(
-            "Failed to run 'diff'. Is it installed on your system? {e}"
-        );
+        let msg = format!("Failed to run 'diff'. Is it installed on your system? {e}");
         io::Error::other(msg)
     })
 }
