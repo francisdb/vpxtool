@@ -52,7 +52,7 @@ rayon = "1.10.0"
 [dev-dependencies]
 testdir = "0.9.3"
 pretty_assertions = "1.4.1"
-rand = "0.9.1"
+rand = "0.9.2"
 
 
 [profile.test]
