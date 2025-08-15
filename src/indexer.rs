@@ -223,8 +223,8 @@ pub fn find_roms(rom_path: &Path) -> io::Result<HashMap<String, PathBuf>> {
     entries.try_for_each(|entry| {
         let dir_entry = entry?;
         let path = dir_entry.path();
-        if path.is_file() {
-            if let Some("zip") = path.extension().and_then(OsStr::to_str) {
+        if path.is_file()
+            && let Some("zip") = path.extension().and_then(OsStr::to_str) {
                 let rom_name = path
                     .file_stem()
                     .unwrap()
@@ -234,7 +234,6 @@ pub fn find_roms(rom_path: &Path) -> io::Result<HashMap<String, PathBuf>> {
                     .to_lowercase();
                 roms.insert(rom_name, path);
             }
-        }
         Ok::<(), io::Error>(())
     })?;
     Ok(roms)
@@ -247,15 +246,14 @@ pub fn find_vpx_files(recursive: bool, tables_path: &Path) -> io::Result<Vec<Pat
         entries.try_for_each(|entry| {
             let dir_entry = entry?;
             let path = dir_entry.path();
-            if path.is_file() {
-                if let Some("vpx") = path.extension().and_then(OsStr::to_str) {
+            if path.is_file()
+                && let Some("vpx") = path.extension().and_then(OsStr::to_str) {
                     let last_modified = last_modified(path)?;
                     vpx_files.push(PathWithMetadata {
                         path: path.to_path_buf(),
                         last_modified,
                     });
                 }
-            }
             Ok::<(), io::Error>(())
         })?;
         Ok(vpx_files)
@@ -266,15 +264,14 @@ pub fn find_vpx_files(recursive: bool, tables_path: &Path) -> io::Result<Vec<Pat
         dirs.try_for_each(|entry| {
             let dir_entry = entry?;
             let path = dir_entry.path();
-            if path.is_file() {
-                if let Some("vpx") = path.extension().and_then(OsStr::to_str) {
+            if path.is_file()
+                && let Some("vpx") = path.extension().and_then(OsStr::to_str) {
                     let last_modified = last_modified(&path)?;
                     vpx_files.push(PathWithMetadata {
                         path: path.to_path_buf(),
                         last_modified,
                     });
                 }
-            }
             Ok::<(), io::Error>(())
         })?;
         Ok(vpx_files)
