@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.2](https://github.com/francisdb/vpxtool/compare/v0.24.1...v0.24.2) - 2025-08-25
+
+### Other
+
+- *(deps)* bump dialoguer from 0.11.0 to 0.12.0 ([#588](https://github.com/francisdb/vpxtool/pull/588))
+- *(deps)* bump serde_json from 1.0.142 to 1.0.143 ([#587](https://github.com/francisdb/vpxtool/pull/587))
+- *(deps)* bump regex from 1.11.1 to 1.11.2 ([#586](https://github.com/francisdb/vpxtool/pull/586))
+- *(deps)* bump actions/checkout from 4 to 5 ([#584](https://github.com/francisdb/vpxtool/pull/584))
+- *(deps)* bump rayon from 1.10.0 to 1.11.0 ([#585](https://github.com/francisdb/vpxtool/pull/585))
+- *(deps)* bump toml from 0.9.4 to 0.9.5 ([#582](https://github.com/francisdb/vpxtool/pull/582))
+- *(deps)* bump clap from 4.5.42 to 4.5.43 ([#581](https://github.com/francisdb/vpxtool/pull/581))
+- new clippy rules ([#583](https://github.com/francisdb/vpxtool/pull/583))
+- *(deps)* bump serde_json from 1.0.141 to 1.0.142 ([#578](https://github.com/francisdb/vpxtool/pull/578))
+- *(deps)* bump clap from 4.5.41 to 4.5.42 ([#579](https://github.com/francisdb/vpxtool/pull/579))
+- *(deps)* bump toml from 0.9.2 to 0.9.4 ([#580](https://github.com/francisdb/vpxtool/pull/580))
+- *(deps)* bump rand from 0.9.1 to 0.9.2 ([#575](https://github.com/francisdb/vpxtool/pull/575))
+- *(deps)* bump serde_json from 1.0.140 to 1.0.141 ([#576](https://github.com/francisdb/vpxtool/pull/576))
+
 ## [0.24.1](https://github.com/francisdb/vpxtool/compare/v0.24.0...v0.24.1) - 2025-07-14
 
 ### Other
