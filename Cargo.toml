@@ -31,7 +31,7 @@ shellexpand = "3.1.1"
 wild = "2.2.1"
 
 is_executable = "1.0.4"
-regex = { version = "1.11.1", features = [] }
+regex = { version = "1.11.2", features = [] }
 vpin = { version = "0.18.0" }
 
 edit = "0.1.5"
