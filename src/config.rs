@@ -254,13 +254,12 @@ fn create_default_config() -> io::Result<(PathBuf, ResolvedConfig)> {
         .with_prompt("Choose a configuration location:")
         .default(0)
         .items(
-            &choices
+            choices
                 .iter()
                 .map(|(choice, description)| format!("{choice} \x1b[90m{description}\x1b[0m"))
                 .collect::<Vec<_>>(),
         )
-        .interact_opt()
-        .unwrap();
+        .interact_opt()?;
 
     let config_file = if let Some(index) = selection_opt {
         let (_selected_choice, path) = (&choices[index].0, &choices[index].1);

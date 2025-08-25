@@ -22,7 +22,7 @@ base64 = "0.22.1"
 clap = { version = "4.5.45", features = ["derive", "string"] }
 colored = "3.0.0"
 console = "0.16.0"
-dialoguer = { version = "0.11.0", features = ["fuzzy-select"] }
+dialoguer = { version = "0.12.0", features = ["fuzzy-select"] }
 git-version = "0.3.9"
 indicatif = "0.18.0"
 jojodiff = "0.1.2"
