@@ -30,7 +30,7 @@ serde_json = { version = "1.0.143", features = ["preserve_order"] }
 shellexpand = "3.1.1"
 wild = "2.2.1"
 
-is_executable = "1.0.4"
+is_executable = "1.0.5"
 regex = { version = "1.11.2", features = [] }
 vpin = { version = "0.18.0" }
 
