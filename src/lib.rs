@@ -12,6 +12,7 @@ pub mod config;
 pub mod indexer;
 
 pub mod cli;
+mod colorful_theme_patched;
 pub mod vpinball_config;
 
 pub fn strip_cr_lf(s: &str) -> String {

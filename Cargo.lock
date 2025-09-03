@@ -2192,6 +2192,7 @@ dependencies = [
  "dirs",
  "edit",
  "figment",
+ "fuzzy-matcher",
  "git-version",
  "image",
  "indicatif",
