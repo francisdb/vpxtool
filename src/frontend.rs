@@ -3,6 +3,7 @@ use crate::cli::{
     DiffColor, ProgressBarProgress, confirm, info_diff, info_edit, info_gather, open_editor,
     run_diff, script_diff,
 };
+use crate::colorful_theme_patched::ColorfulThemePatched;
 use crate::config::{LaunchTemplate, ResolvedConfig};
 use crate::indexer::{IndexError, IndexedTable, Progress};
 use crate::patcher::LineEndingsResult::{NoChanges, Unified};
@@ -171,7 +172,9 @@ pub fn frontend(config: &ResolvedConfig, mut vpx_files_with_tableinfo: Vec<Index
                 match selection {
                     SEARCH_INDEX => {
                         // show a fuzzy search
-                        let selected = FuzzySelect::with_theme(&ColorfulTheme::default())
+                        let selected = FuzzySelect::with_theme(&ColorfulThemePatched::default())
+                            // highlight breaks existing formatting https://github.com/console-rs/dialoguer/issues/312
+                            .highlight_matches(false)
                             .with_prompt("Search a table:")
                             .items(&tables)
                             .interact_opt()
