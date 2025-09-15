@@ -45,7 +45,7 @@ chrono = { version = "0.4.41", default-features = false, features = ["clock"] }
 rust-ini = "0.21.3"
 dirs = "6.0.0"
 toml = "0.9.5"
-serde = { version = "1.0.219", features = ["derive"] }
+serde = { version = "1.0.223", features = ["derive"] }
 log = "0.4.28"
 figment = { version = "0.10", features = ["toml", "env"] }
 walkdir = "2.5.0"
