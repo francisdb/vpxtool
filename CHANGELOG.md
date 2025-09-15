@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.3](https://github.com/francisdb/vpxtool/compare/v0.24.2...v0.24.3) - 2025-09-15
+
+### Other
+
+- *(deps)* bump serde_json from 1.0.143 to 1.0.145 ([#605](https://github.com/francisdb/vpxtool/pull/605))
+- *(deps)* bump log from 0.4.27 to 0.4.28 ([#597](https://github.com/francisdb/vpxtool/pull/597))
+- *(deps)* bump image from 0.25.7 to 0.25.8 ([#596](https://github.com/francisdb/vpxtool/pull/596))
+- *(deps)* bump clap from 4.5.46 to 4.5.47 ([#595](https://github.com/francisdb/vpxtool/pull/595))
+
 ## [0.24.2](https://github.com/francisdb/vpxtool/compare/v0.24.1...v0.24.2) - 2025-09-03
 
 ### Fixed
