@@ -41,7 +41,7 @@ pinmame-nvram = "0.4.1"
 image = "0.25.8"
 
 #see https://github.com/chronotope/chrono/issues/602#issuecomment-1242149249
-chrono = { version = "0.4.41", default-features = false, features = ["clock"] }
+chrono = { version = "0.4.42", default-features = false, features = ["clock"] }
 rust-ini = "0.21.3"
 dirs = "6.0.0"
 toml = "0.9.5"
