@@ -7,11 +7,12 @@ use crate::{
 };
 use base64::Engine;
 use clap::builder::Str;
-use clap::{Arg, ArgMatches, Command, arg};
+use clap::{Arg, ArgAction, ArgMatches, Command, arg};
 use colored::Colorize;
 use console::Emoji;
 use git_version::git_version;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
+use log::LevelFilter;
 use pinmame_nvram::dips::get_all_dip_switches;
 use std::error::Error;
 use std::ffi::OsStr;
@@ -21,6 +22,7 @@ use std::io;
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{ExitCode, exit};
+use std::time::SystemTime;
 use vpin::directb2s::read;
 use vpin::vpx;
 use vpin::vpx::jsonmodel::{game_data_to_json, info_to_json};
@@ -83,6 +85,7 @@ const CMD_DIPSWITCHES_SHOW: &str = "show";
 const CMD_ROMNAME: &str = "romname";
 
 const CMD_INDEX: &str = "index";
+const ARG_VERBOSE: &str = "VERBOSE";
 
 pub(crate) struct ProgressBarProgress {
     pb: ProgressBar,
@@ -114,7 +117,39 @@ impl Progress for ProgressBarProgress {
 pub fn run() -> io::Result<ExitCode> {
     let command = build_command();
     let matches = command.get_matches_from(wild::args());
+
+    let verbose = matches.get_flag(ARG_VERBOSE);
+    init_logging(verbose);
     handle_command(matches)
+}
+
+fn init_logging(verbose: bool) {
+    let start = SystemTime::now();
+    let mut builder = env_logger::Builder::from_default_env();
+    // only if the RUST_LOG env var is not set
+    if std::env::var("RUST_LOG").is_err() {
+        builder.format(move |buf, record| {
+            let elapsed = start.elapsed().unwrap();
+            let warn_style = buf.default_level_style(record.level());
+            writeln!(
+                buf,
+                "[{:>8}.{:03}] {warn_style}{:<5}{warn_style:#} {}",
+                elapsed.as_secs(),
+                elapsed.subsec_millis(),
+                record.level(),
+                record.args()
+            )
+        });
+        if verbose {
+            builder
+                .filter_level(LevelFilter::Warn)
+                .filter_module("vpin", LevelFilter::Info)
+                .filter_module("vpxtool", LevelFilter::Info);
+        } else {
+            builder.filter_level(LevelFilter::Warn);
+        }
+    };
+    builder.init();
 }
 
 fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
@@ -737,6 +772,14 @@ fn build_command() -> Command {
         .about("Extracts and assembles vpx files")
         .arg_required_else_help(true)
         .before_help(format!("Vpxtool {GIT_VERSION}"))
+        .arg(
+            Arg::new(ARG_VERBOSE)
+                .short('v')
+                .long("verbose")
+                .action(ArgAction::SetTrue)
+                .help("Enable verbose logging")
+                .global(true),
+        )
         .subcommand(
             Command::new(CMD_INFO)
                 .subcommand_required(true)
