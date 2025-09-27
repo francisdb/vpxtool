@@ -7,11 +7,13 @@ use crate::{
 };
 use base64::Engine;
 use clap::builder::Str;
-use clap::{Arg, ArgMatches, Command, arg};
+use clap::{Arg, ArgAction, ArgMatches, Command, arg};
 use colored::Colorize;
 use console::Emoji;
+use env_logger::Env;
 use git_version::git_version;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
+use log::LevelFilter;
 use pinmame_nvram::dips::get_all_dip_switches;
 use std::error::Error;
 use std::ffi::OsStr;
@@ -21,6 +23,7 @@ use std::io;
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{ExitCode, exit};
+use std::sync::atomic::{AtomicBool, Ordering};
 use vpin::directb2s::read;
 use vpin::vpx;
 use vpin::vpx::jsonmodel::{game_data_to_json, info_to_json};
@@ -83,6 +86,8 @@ const CMD_DIPSWITCHES_SHOW: &str = "show";
 const CMD_ROMNAME: &str = "romname";
 
 const CMD_INDEX: &str = "index";
+const ARG_VERBOSE: &str = "VERBOSE";
+static VERBOSE: AtomicBool = AtomicBool::new(false);
 
 pub(crate) struct ProgressBarProgress {
     pb: ProgressBar,
@@ -114,7 +119,26 @@ impl Progress for ProgressBarProgress {
 pub fn run() -> io::Result<ExitCode> {
     let command = build_command();
     let matches = command.get_matches_from(wild::args());
+
+    let verbose = matches.get_flag(ARG_VERBOSE);
+    VERBOSE.store(verbose, Ordering::Relaxed);
+    if verbose {
+        init_logging();
+    }
+
     handle_command(matches)
+}
+
+fn init_logging() {
+    static INIT: std::sync::Once = std::sync::Once::new();
+    INIT.call_once(|| {
+        let mut builder = env_logger::Builder::from_env(Env::default());
+        builder
+            .filter_level(LevelFilter::Warn)
+            .filter_module("vpin", LevelFilter::Info)
+            .filter_module("vpxtool", LevelFilter::Info)
+            .init();
+    });
 }
 
 fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
@@ -737,6 +761,14 @@ fn build_command() -> Command {
         .about("Extracts and assembles vpx files")
         .arg_required_else_help(true)
         .before_help(format!("Vpxtool {GIT_VERSION}"))
+        .arg(
+            Arg::new(ARG_VERBOSE)
+                .short('v')
+                .long("verbose")
+                .action(ArgAction::SetTrue)
+                .help("Enable verbose logging")
+                .global(true),
+        )
         .subcommand(
             Command::new(CMD_INFO)
                 .subcommand_required(true)
@@ -1460,7 +1492,7 @@ pub fn extract(vpx_file_path: &Path, yes: bool) -> io::Result<ExitCode> {
     root_dir.create(root_dir_path)?;
     let result = {
         let vpx = vpx::read(vpx_file_path)?;
-        expanded::write(&vpx, &root_dir_path)
+        expanded::write(&vpx, &root_dir_path, VERBOSE.load(Ordering::Relaxed))
     };
     match result {
         Ok(_) => {
