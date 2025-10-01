@@ -2413,7 +2413,7 @@ dependencies = [
 
 [[package]]
 name = "vpxtool"
-version = "0.24.2"
+version = "0.24.3"
 dependencies = [
  "base64",
  "chrono",

@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.3](https://github.com/francisdb/vpxtool/compare/v0.24.2...v0.24.3) - 2025-10-01
+
+### Added
+
+- standard env logs if RUST_LOG is set
+
+### Other
+
+- document logging
+- reverted custom vpin
+- verbosity flag added
+- *(deps)* bump toml from 0.9.5 to 0.9.7 ([#610](https://github.com/francisdb/vpxtool/pull/610))
+- *(deps)* bump regex from 1.11.2 to 1.11.3 ([#609](https://github.com/francisdb/vpxtool/pull/609))
+- *(deps)* bump serde from 1.0.223 to 1.0.228 ([#611](https://github.com/francisdb/vpxtool/pull/611))
+- *(deps)* bump clap from 4.5.47 to 4.5.48 ([#612](https://github.com/francisdb/vpxtool/pull/612))
+- *(deps)* bump Swatinem/rust-cache from 2.8.0 to 2.8.1 ([#606](https://github.com/francisdb/vpxtool/pull/606))
+- fix lock file
+- *(deps)* bump console from 0.16.0 to 0.16.1 ([#603](https://github.com/francisdb/vpxtool/pull/603))
+- *(deps)* bump chrono from 0.4.41 to 0.4.42 ([#604](https://github.com/francisdb/vpxtool/pull/604))
+- *(deps)* bump serde_json from 1.0.143 to 1.0.145 ([#605](https://github.com/francisdb/vpxtool/pull/605))
+- *(deps)* bump log from 0.4.27 to 0.4.28 ([#597](https://github.com/francisdb/vpxtool/pull/597))
+- *(deps)* bump image from 0.25.7 to 0.25.8 ([#596](https://github.com/francisdb/vpxtool/pull/596))
+- *(deps)* bump clap from 4.5.46 to 4.5.47 ([#595](https://github.com/francisdb/vpxtool/pull/595))
+
 ## [0.24.2](https://github.com/francisdb/vpxtool/compare/v0.24.1...v0.24.2) - 2025-09-03
 
 ### Fixed
