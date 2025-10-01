@@ -86,7 +86,21 @@ Options:
   -h, --help       Print help
 ```
 
-#### Text UI Frontend
+### Logging
+
+To get more information about what vpxtool is doing, you can set the `-v` flag to increase verbosity.
+
+```shell
+vpxtool -v extract test.vpx
+```
+
+You can also set the log level using the RUST_LOG environment variable. For example to get debug output:
+
+```shell
+RUST_LOG=debug vpxtool extract test.vpx
+```
+
+### Text UI Frontend
 
 Vpxtool can act as a frontend for launching vpx files. It will index a directory of vpx files and then present a menu to
 launch them.
@@ -184,9 +198,12 @@ The project uses the default [rust](https://www.rust-lang.org/) build tool `carg
 installation and first steps at https://doc.rust-lang.org/cargo/
 
 Some dependencies require extra dependencies. Make sure you install developer tools:
+
 * Fedora: `sudo dnf install @development-tools`
 * Ubuntu: `sudo apt install build-essential`
 
 ```
+
 cargo build --release
+
 ```
