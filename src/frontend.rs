@@ -17,7 +17,8 @@ use dialoguer::theme::ColorfulTheme;
 use dialoguer::{FuzzySelect, Input, MultiSelect, Select};
 use indicatif::{ProgressBar, ProgressStyle};
 use is_executable::IsExecutable;
-use pinmame_nvram::dips::{get_all_dip_switches, set_dip_switches};
+use pinmame_nvram::dips::{DipSwitchState, get_all_dip_switches, set_dip_switches};
+use pinmame_nvram::{DipSwitchInfo, Nvram};
 use std::fs::OpenOptions;
 use std::io::BufReader;
 use std::{
@@ -617,13 +618,12 @@ fn auto_position_dmd(config: &ResolvedConfig, info: &&IndexedTable) -> Result<St
 }
 
 fn edit_dip_switches(nvram: PathBuf) -> io::Result<()> {
+    let nvram_map = Nvram::open(Path::new(&nvram))?.unwrap();
+    let disp_info = nvram_map.dip_switches_info()?;
     let mut nvram_file = OpenOptions::new().read(true).write(true).open(nvram)?;
     let mut switches = get_all_dip_switches(&mut nvram_file)?;
 
-    let items = switches
-        .iter()
-        .map(|s| format!("DIP #{}", s.nr))
-        .collect::<Vec<String>>();
+    let items = describe_switches(&disp_info, &switches);
 
     let defaults = switches.iter().map(|s| s.on).collect::<Vec<bool>>();
 
@@ -635,8 +635,7 @@ fn edit_dip_switches(nvram: PathBuf) -> io::Result<()> {
         .with_prompt(prompt_string)
         .items(&items)
         .defaults(&defaults)
-        .interact_opt()
-        .unwrap();
+        .interact_opt()?;
 
     if let Some(selection) = selection {
         // update the switches
@@ -648,6 +647,22 @@ fn edit_dip_switches(nvram: PathBuf) -> io::Result<()> {
         prompt("DIP switches updated");
     }
     Ok(())
+}
+
+fn describe_switches(disp_info: &[DipSwitchInfo], switches: &[DipSwitchState]) -> Vec<String> {
+    switches
+        .iter()
+        .map(|s| {
+            let info = disp_info.iter().find(|i| i.nr == s.nr);
+            if let Some(info) = info
+                && let Some(name) = &info.name
+            {
+                format!("DIP #{} - {}", s.nr, name)
+            } else {
+                format!("DIP #{}", s.nr)
+            }
+        })
+        .collect::<Vec<String>>()
 }
 
 fn nvram_clear(info: &IndexedTable) {
