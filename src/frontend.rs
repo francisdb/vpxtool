@@ -623,7 +623,7 @@ fn edit_dip_switches(nvram: PathBuf) -> io::Result<()> {
     let mut nvram_file = OpenOptions::new().read(true).write(true).open(nvram)?;
     let mut switches = get_all_dip_switches(&mut nvram_file)?;
 
-    let items = describe_switches(disp_info, &mut switches);
+    let items = describe_switches(&disp_info, &switches);
 
     let defaults = switches.iter().map(|s| s.on).collect::<Vec<bool>>();
 
@@ -649,10 +649,7 @@ fn edit_dip_switches(nvram: PathBuf) -> io::Result<()> {
     Ok(())
 }
 
-fn describe_switches(
-    disp_info: Vec<DipSwitchInfo>,
-    switches: &mut Vec<DipSwitchState>,
-) -> Vec<String> {
+fn describe_switches(disp_info: &[DipSwitchInfo], switches: &[DipSwitchState]) -> Vec<String> {
     switches
         .iter()
         .map(|s| {
