@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.4](https://github.com/francisdb/vpxtool/compare/v0.24.3...v0.24.4) - 2025-10-10
+
+### Added
+
+- *(frontend)* show dip switch info if available ([#617](https://github.com/francisdb/vpxtool/pull/617))
+
+### Other
+
+- *(deps)* bump toml from 0.9.7 to 0.9.8 ([#615](https://github.com/francisdb/vpxtool/pull/615))
+- *(deps)* bump pinmame-nvram from 0.4.1 to 0.4.3 ([#614](https://github.com/francisdb/vpxtool/pull/614))
+
 ## [0.24.3](https://github.com/francisdb/vpxtool/compare/v0.24.2...v0.24.3) - 2025-10-01
 
 ### Added
