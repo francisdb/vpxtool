@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.5](https://github.com/francisdb/vpxtool/compare/v0.24.4...v0.24.5) - 2025-10-13
+
+### Other
+
+- *(deps)* bump regex from 1.11.3 to 1.12.1 ([#618](https://github.com/francisdb/vpxtool/pull/618))
+
 ## [0.24.4](https://github.com/francisdb/vpxtool/compare/v0.24.3...v0.24.4) - 2025-10-10
 
 ### Added
