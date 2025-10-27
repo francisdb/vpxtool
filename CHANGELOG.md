@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.5](https://github.com/francisdb/vpxtool/compare/v0.24.4...v0.24.5) - 2025-10-27
+
+### Other
+
+- non-expiring discord invite link
+- *(deps)* bump vpin from 0.18.1 to 0.18.3 ([#622](https://github.com/francisdb/vpxtool/pull/622))
+- *(deps)* bump indicatif from 0.18.0 to 0.18.1 ([#623](https://github.com/francisdb/vpxtool/pull/623))
+- *(deps)* bump clap from 4.5.49 to 4.5.50 ([#624](https://github.com/francisdb/vpxtool/pull/624))
+- *(deps)* bump actions/upload-artifact from 4 to 5 ([#625](https://github.com/francisdb/vpxtool/pull/625))
+- *(deps)* bump clap from 4.5.48 to 4.5.49 ([#620](https://github.com/francisdb/vpxtool/pull/620))
+- *(deps)* bump regex from 1.12.1 to 1.12.2 ([#621](https://github.com/francisdb/vpxtool/pull/621))
+- *(deps)* bump regex from 1.11.3 to 1.12.1 ([#618](https://github.com/francisdb/vpxtool/pull/618))
+
 ## [0.24.4](https://github.com/francisdb/vpxtool/compare/v0.24.3...v0.24.4) - 2025-10-10
 
 ### Added
