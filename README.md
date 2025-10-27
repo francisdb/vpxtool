@@ -2,7 +2,7 @@
 
 Cross-platform utility for the vpinball ecosystem
 
-Join [#vpxtool on "Virtual Pinball Chat" discord](https://discord.gg/eYsvyMu8) for support and questions.
+Join [#vpxtool on "Virtual Pinball Chat" discord](https://discord.gg/ugFR9tCf2p) for support and questions.
 
 ## Install
 
