@@ -12,7 +12,7 @@ use colored::Colorize;
 use console::Emoji;
 use git_version::git_version;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
-use log::LevelFilter;
+use log::{LevelFilter, info};
 use pinmame_nvram::dips::get_all_dip_switches;
 use std::error::Error;
 use std::ffi::OsStr;
@@ -1585,26 +1585,28 @@ pub fn run_diff(
     vbs_path: &Path,
     color: DiffColor,
 ) -> Result<Vec<u8>, io::Error> {
-    let parent = vbs_path
-        .parent()
-        //.and_then(|f| f.parent())
-        .unwrap_or(Path::new("."));
     let original_vbs_filename = original_vbs_path
         .file_name()
         .unwrap_or(original_vbs_path.as_os_str());
     let original_vbs_file_name_no_tmp = original_vbs_filename.to_string_lossy().replace(".tmp", "");
     let vbs_filename = vbs_path.file_name().unwrap_or(vbs_path.as_os_str());
-    let result = std::process::Command::new("diff")
-        .current_dir(parent)
+    let mut command = std::process::Command::new("diff");
+    match vbs_path.parent() {
+        Some(parent) if !parent.as_os_str().is_empty() => {
+            command.current_dir(parent);
+        }
+        _ => {}
+    }
+    command
         .arg("-u")
         .arg("-w")
         .arg(format!("--color={}", color.to_diff_arg()))
         .arg(format!("--label={original_vbs_file_name_no_tmp}"))
         .arg(original_vbs_filename)
         .arg(format!("--label={}", vbs_filename.to_string_lossy()))
-        .arg(vbs_filename)
-        .output()
-        .map(|o| o.stdout);
+        .arg(vbs_filename);
+    info!("Running command: {:?}", &command);
+    let result = command.output().map(|o| o.stdout);
     result.map_err(|e| {
         let msg = format!("Failed to run 'diff'. Is it installed on your system? {e}");
         io::Error::other(msg)
