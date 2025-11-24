@@ -38,7 +38,7 @@ vpin = { version = "0.18.6" }
 
 edit = "0.1.5"
 pinmame-nvram = "0.4.3"
-image = "0.25.8"
+image = "0.25.9"
 
 #see https://github.com/chronotope/chrono/issues/602#issuecomment-1242149249
 chrono = { version = "0.4.42", default-features = false, features = ["clock"] }
