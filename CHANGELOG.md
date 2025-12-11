@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.7](https://github.com/francisdb/vpxtool/compare/v0.24.6...v0.24.7) - 2025-12-11
+
+### Other
+
+- *(deps)* bump vpin from 0.18.6 to 0.18.7 ([#642](https://github.com/francisdb/vpxtool/pull/642))
+- *(deps)* bump log from 0.4.28 to 0.4.29 ([#640](https://github.com/francisdb/vpxtool/pull/640))
+- *(deps)* bump Swatinem/rust-cache from 2.8.1 to 2.8.2 ([#639](https://github.com/francisdb/vpxtool/pull/639))
+- *(deps)* bump image from 0.25.8 to 0.25.9 ([#636](https://github.com/francisdb/vpxtool/pull/636))
+- *(deps)* bump clap from 4.5.51 to 4.5.53 ([#635](https://github.com/francisdb/vpxtool/pull/635))
+- *(deps)* bump indicatif from 0.18.2 to 0.18.3 ([#634](https://github.com/francisdb/vpxtool/pull/634))
+- *(deps)* bump actions/checkout from 5 to 6 ([#637](https://github.com/francisdb/vpxtool/pull/637))
+
 ## [0.24.6](https://github.com/francisdb/vpxtool/compare/v0.24.5...v0.24.6) - 2025-11-07
 
 ### Other
