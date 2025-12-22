@@ -37,7 +37,7 @@ regex = { version = "1.12.2", features = [] }
 vpin = { version = "0.19.0" }
 
 edit = "0.1.5"
-pinmame-nvram = "0.4.3"
+pinmame-nvram = "0.4.4"
 image = "0.25.9"
 
 #see https://github.com/chronotope/chrono/issues/602#issuecomment-1242149249
