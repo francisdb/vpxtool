@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.9](https://github.com/francisdb/vpxtool/compare/v0.24.8...v0.24.9) - 2025-12-22
+
+### Other
+
+- *(deps)* bump pinmame-nvram from 0.4.3 to 0.4.4 ([#648](https://github.com/francisdb/vpxtool/pull/648))
+- *(deps)* bump actions/upload-artifact from 5 to 6 ([#645](https://github.com/francisdb/vpxtool/pull/645))
+- use rust-cache for clippy
+
 ## [0.24.8](https://github.com/francisdb/vpxtool/compare/v0.24.7...v0.24.8) - 2025-12-14
 
 ### Other
