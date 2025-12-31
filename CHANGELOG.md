@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.9](https://github.com/francisdb/vpxtool/compare/v0.24.8...v0.24.9) - 2025-12-31
+
+### Other
+
+- *(deps)* bump vpin from 0.19.1 to 0.20.0 ([#653](https://github.com/francisdb/vpxtool/pull/653))
+- *(deps)* bump serde_json from 1.0.145 to 1.0.148 ([#652](https://github.com/francisdb/vpxtool/pull/652))
+- *(deps)* bump console from 0.16.1 to 0.16.2 ([#651](https://github.com/francisdb/vpxtool/pull/651))
+- *(deps)* bump toml from 0.9.8 to 0.9.10+spec-1.1.0 ([#650](https://github.com/francisdb/vpxtool/pull/650))
+- *(deps)* bump vpin from 0.19.0 to 0.19.1 ([#649](https://github.com/francisdb/vpxtool/pull/649))
+- *(deps)* bump pinmame-nvram from 0.4.3 to 0.4.4 ([#648](https://github.com/francisdb/vpxtool/pull/648))
+- *(deps)* bump actions/upload-artifact from 5 to 6 ([#645](https://github.com/francisdb/vpxtool/pull/645))
+- use rust-cache for clippy
+
 ## [0.24.8](https://github.com/francisdb/vpxtool/compare/v0.24.7...v0.24.8) - 2025-12-14
 
 ### Other
