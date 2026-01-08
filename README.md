@@ -172,6 +172,7 @@ editor = "code"
 
 ## Projects using vpxtool
 
+* https://github.com/jsm174/vpx-editor
 * https://github.com/syd711/vpin-studio
 * https://github.com/jsm174/docker-vpxtool-resize
 * https://github.com/mpcarr/aztec-quest
