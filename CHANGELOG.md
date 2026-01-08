@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.11](https://github.com/francisdb/vpxtool/compare/v0.24.10...v0.24.11) - 2026-01-08
+
+### Other
+
+- link to vpx-editor
+- *(deps)* bump clap from 4.5.53 to 4.5.54 ([#656](https://github.com/francisdb/vpxtool/pull/656))
+
 ## [0.24.10](https://github.com/francisdb/vpxtool/compare/v0.24.9...v0.24.10) - 2026-01-02
 
 ### Other
