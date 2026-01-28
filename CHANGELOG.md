@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.12](https://github.com/francisdb/vpxtool/compare/v0.24.11...v0.24.12) - 2026-01-28
+
+### Other
+
+- *(deps)* bump vpin from 0.20.9 to 0.20.10 ([#668](https://github.com/francisdb/vpxtool/pull/668))
+- *(deps)* bump vpin from 0.20.3 to 0.20.9 ([#666](https://github.com/francisdb/vpxtool/pull/666))
+- *(deps)* bump clap from 4.5.54 to 4.5.55 ([#667](https://github.com/francisdb/vpxtool/pull/667))
+- *(deps)* bump colored from 3.0.0 to 3.1.1 ([#663](https://github.com/francisdb/vpxtool/pull/663))
+- *(deps)* bump chrono from 0.4.42 to 0.4.43 ([#662](https://github.com/francisdb/vpxtool/pull/662))
+
 ## [0.24.11](https://github.com/francisdb/vpxtool/compare/v0.24.10...v0.24.11) - 2026-01-14
 
 ### Other
