@@ -33,7 +33,7 @@ shellexpand = "3.1.1"
 wild = "2.2.1"
 
 is_executable = "1.0.5"
-regex = { version = "1.12.2", features = [] }
+regex = { version = "1.12.3", features = [] }
 vpin = { version = "0.20.14" }
 directb2s = "0.1.1"
 
