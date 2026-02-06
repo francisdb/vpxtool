@@ -34,7 +34,7 @@ wild = "2.2.1"
 
 is_executable = "1.0.5"
 regex = { version = "1.12.3", features = [] }
-vpin = { version = "0.20.14" }
+vpin = { version = "0.20.15" }
 directb2s = "0.1.1"
 
 edit = "0.1.5"
