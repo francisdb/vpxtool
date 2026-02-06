@@ -520,8 +520,8 @@ fn auto_position_dmd(config: &ResolvedConfig, info: &&IndexedTable) -> Result<St
                 BufReader::new(File::open(b2s_path).map_err(|e| {
                     format!("Unable to open B2S file {}: {}", b2s_path.display(), e)
                 })?);
-            let b2s = directb2s::read(reader)
-                .map_err(|e| format!("Unable to read B2S file: {e}"))?;
+            let b2s =
+                directb2s::read(reader).map_err(|e| format!("Unable to read B2S file: {e}"))?;
 
             if let Some(dmd_image) = b2s.images.dmd_image {
                 // load vpinball config
