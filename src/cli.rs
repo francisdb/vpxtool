@@ -10,6 +10,7 @@ use clap::builder::Str;
 use clap::{Arg, ArgAction, ArgMatches, Command, arg};
 use colored::Colorize;
 use console::Emoji;
+use directb2s::read;
 use git_version::git_version;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use log::{LevelFilter, info};
@@ -23,7 +24,6 @@ use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{ExitCode, exit};
 use std::time::SystemTime;
-use vpin::directb2s::read;
 use vpin::vpx;
 use vpin::vpx::jsonmodel::{game_data_to_json, info_to_json};
 use vpin::vpx::{ExtractResult, VerifyResult, expanded, extractvbs, importvbs, verify};
@@ -1177,7 +1177,7 @@ fn extract_directb2s(expanded_path: &PathBuf) -> io::Result<()> {
     Ok(())
 }
 
-fn wite_images(b2s: vpin::directb2s::DirectB2SData, root_dir_path: &Path) {
+fn wite_images(b2s: directb2s::DirectB2SData, root_dir_path: &Path) {
     if let Some(backglass_off_image) = b2s.images.backglass_off_image {
         write_base64_to_file(
             root_dir_path,
