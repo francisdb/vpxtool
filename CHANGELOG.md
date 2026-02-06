@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.13](https://github.com/francisdb/vpxtool/compare/v0.24.12...v0.24.13) - 2026-02-06
+
+### Other
+
+- *(deps)* bump clap from 4.5.56 to 4.5.57 ([#675](https://github.com/francisdb/vpxtool/pull/675))
+- *(deps)* directb2s was split off from vpin ([#676](https://github.com/francisdb/vpxtool/pull/676))
+- *(deps)* bump bytes from 1.11.0 to 1.11.1 ([#672](https://github.com/francisdb/vpxtool/pull/672))
+- *(deps)* bump clap from 4.5.55 to 4.5.56 ([#670](https://github.com/francisdb/vpxtool/pull/670))
+- *(deps)* bump vpin from 0.20.10 to 0.20.11 ([#669](https://github.com/francisdb/vpxtool/pull/669))
+
 ## [0.24.12](https://github.com/francisdb/vpxtool/compare/v0.24.11...v0.24.12) - 2026-01-28
 
 ### Other
