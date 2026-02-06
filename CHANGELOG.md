@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.15](https://github.com/francisdb/vpxtool/compare/v0.24.14...v0.24.15) - 2026-02-06
+
+### Other
+
+- *(deps)* bump vpin from 0.20.14 to 0.20.15 ([#678](https://github.com/francisdb/vpxtool/pull/678))
+
 ## [0.24.14](https://github.com/francisdb/vpxtool/compare/v0.24.13...v0.24.14) - 2026-02-06
 
 ### Other
