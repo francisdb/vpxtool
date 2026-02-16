@@ -104,7 +104,7 @@ impl VPinballConfig {
         let ini = ini::Ini::load_from_file(ini_path).map_err(|e| {
             io::Error::new(
                 io::ErrorKind::InvalidData,
-                format!("Failed to read ini file: {e:?}"),
+                format!("Failed to read ini file {}: {e:?}", ini_path.display()),
             )
         })?;
         Ok(VPinballConfig { ini })
