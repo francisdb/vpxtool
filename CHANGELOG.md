@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.16](https://github.com/francisdb/vpxtool/compare/v0.24.15...v0.24.16) - 2026-02-16
+
+### Other
+
+- improve error message for ini file loading
+- *(deps)* bump indicatif from 0.18.3 to 0.18.4 ([#684](https://github.com/francisdb/vpxtool/pull/684))
+- *(deps)* bump clap from 4.5.57 to 4.5.58 ([#683](https://github.com/francisdb/vpxtool/pull/683))
+
 ## [0.24.15](https://github.com/francisdb/vpxtool/compare/v0.24.14...v0.24.15) - 2026-02-06
 
 ### Other
