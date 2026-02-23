@@ -124,13 +124,13 @@ The config file is stored in the default config location for your operating syst
 * macOS: `$HOME/Library/Application Support/vpxtool/vpxtool.cfg`
 * Windows: `C:\Users\<user>\AppData\Roaming\vpxtool\vpxtool.cfg`
 
-To show the current config location, use the following command
+To show the current config location, use the following command:
 
 ```
 vpxtool config path
 ```
 
-To edit the config file using your system default editor, do the following
+To edit the config file using your system default editor, do the following:
 
 ```
 vpxtool config edit
