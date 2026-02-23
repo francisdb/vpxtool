@@ -74,6 +74,16 @@ pub fn config_path() -> Option<PathBuf> {
     if home_directory_configuration_path.exists() {
         return Some(home_directory_configuration_path);
     }
+    // migrate old config file if it exists
+    let old_config_path = old_home_config_path();
+    if old_config_path.exists() {
+        println!(
+            "Migrating config file from {old_config_path:?} to {home_directory_configuration_path:?}"
+        );
+        std::fs::create_dir_all(home_directory_configuration_path.parent().unwrap()).ok()?;
+        std::fs::rename(&old_config_path, &home_directory_configuration_path).ok()?;
+        return Some(home_directory_configuration_path);
+    }
     let local_configuration_path = local_config_path();
     if local_configuration_path.exists() {
         return Some(local_configuration_path);
@@ -208,8 +218,15 @@ fn local_config_path() -> PathBuf {
     Path::new(CONFIGURATION_FILE_NAME).to_path_buf()
 }
 
-fn home_config_path() -> PathBuf {
+fn old_home_config_path() -> PathBuf {
     dirs::config_dir().unwrap().join(CONFIGURATION_FILE_NAME)
+}
+
+fn home_config_path() -> PathBuf {
+    dirs::config_dir()
+        .unwrap()
+        .join("vpxtool")
+        .join(CONFIGURATION_FILE_NAME)
 }
 
 fn default_vpinball_ini_file(vpx_executable_path: &Path) -> PathBuf {
@@ -313,6 +330,10 @@ fn write_default_config(config_file: &Path, vpx_executable: &Path) -> io::Result
 
 fn write_config(config_file: &Path, config: &Config) -> io::Result<()> {
     let toml = toml::to_string(&config).unwrap();
+    // make sure the parent directory exists
+    if let Some(parent) = config_file.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
     let mut file = File::create(config_file)?;
     file.write_all(toml.as_bytes())
 }

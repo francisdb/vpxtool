@@ -118,6 +118,12 @@ using the [TOML](https://toml.io) format.
 
 When launching the frontend for the first time, it will help you to set up the required settings.
 
+The config file is stored in the default config location for your operating system:
+
+* Linux: `$XDG_CONFIG_HOME/vpxtool/vpxtool.cfg` or `$HOME/.config/vpxtool/vpxtool.cfg`
+* macOS: `$HOME/Library/Application Support/vpxtool/vpxtool.cfg`
+* Windows: `C:\Users\<user>\AppData\Roaming\vpxtool\vpxtool.cfg`
+
 To show the current config location, use the following command
 
 ```
