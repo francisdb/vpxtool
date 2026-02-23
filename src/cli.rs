@@ -25,6 +25,7 @@ use std::path::{Path, PathBuf};
 use std::process::{ExitCode, exit};
 use std::time::SystemTime;
 use vpin::vpx;
+use vpin::vpx::expanded::ExpandOptions;
 use vpin::vpx::jsonmodel::{game_data_to_json, info_to_json};
 use vpin::vpx::{ExtractResult, VerifyResult, expanded, extractvbs, importvbs, verify};
 
@@ -1503,7 +1504,8 @@ pub fn extract(vpx_file_path: &Path, yes: bool) -> io::Result<ExitCode> {
     root_dir.create(root_dir_path)?;
     let result = {
         let vpx = vpx::read(vpx_file_path)?;
-        expanded::write(&vpx, &root_dir_path)
+        let options = ExpandOptions::default();
+        expanded::write(&vpx, &root_dir_path, &options)
     };
     match result {
         Ok(_) => {
