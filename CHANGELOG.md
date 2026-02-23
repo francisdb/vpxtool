@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.25.0](https://github.com/francisdb/vpxtool/compare/v0.24.15...v0.25.0) - 2026-02-23
+
+### Added
+
+- [**breaking**] config file location changed
+- correct config location and document ([#691](https://github.com/francisdb/vpxtool/pull/691))
+
+### Other
+
+- vpin 0.21.1 ([#692](https://github.com/francisdb/vpxtool/pull/692))
+- *(deps)* bump toml from 0.9.11+spec-1.1.0 to 1.0.3+spec-1.1.0 ([#688](https://github.com/francisdb/vpxtool/pull/688))
+- *(deps)* bump env_logger from 0.11.8 to 0.11.9 ([#687](https://github.com/francisdb/vpxtool/pull/687))
+- *(deps)* bump clap from 4.5.58 to 4.5.60 ([#689](https://github.com/francisdb/vpxtool/pull/689))
+- improve error message for ini file loading
+- *(deps)* bump indicatif from 0.18.3 to 0.18.4 ([#684](https://github.com/francisdb/vpxtool/pull/684))
+- *(deps)* bump clap from 4.5.57 to 4.5.58 ([#683](https://github.com/francisdb/vpxtool/pull/683))
+
 ## [0.24.15](https://github.com/francisdb/vpxtool/compare/v0.24.14...v0.24.15) - 2026-02-06
 
 ### Other
