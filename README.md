@@ -138,10 +138,10 @@ vpxtool config edit
 
 ### Configuring vpinball paths
 
-```yaml
+```toml
 vpx_executable = "/home/myuser/vpinball/VPinballX_BGFX"
 
-  # Optional settings below, only needed if the defaults don't work
+# Optional settings below, only needed if the defaults don't work
 tables_folder = "/home/myuser/vpinball/tables"
 vpx_config = "/home/myuser/.vpinball/VPinballX.ini"
 ```
@@ -166,12 +166,22 @@ executable = "/home/myuser/vpinball/VPinballX_GL"
 SDL_VIDEODRIVER = "X11"
 ```
 
+### Configuring a custom diff
+
+When actions are invoked that run diff, the default diff configured for your system will be used. In case you
+want to override this with a specific diff, optionally specifying the path, you can add the following line to the config file:
+
+```toml
+# use mydiff as default diff
+diff = "/path/to/mydiff"
+```
+
 ### Configuring a custom editor
 
 When actions are invoked that open an editor, the default editor configured for your system will be used. In case you
-want to override this with a specific editor, you can add the following line to the config file:
+want to override this with a specific editor, optionally specifying the path, you can add the following line to the config file:
 
-```yaml
+```toml
 # use Visual Studio Code as default editor
 editor = "code"
 ```

@@ -282,7 +282,7 @@ fn table_menu(
                     prompt(&msg.truecolor(255, 125, 0).to_string());
                 }
             },
-            Some(TableOption::ShowVBSDiff) => match script_diff(selected_path) {
+            Some(TableOption::ShowVBSDiff) => match script_diff(selected_path, Some(config)) {
                 Ok(diff) => {
                     prompt(&diff);
                 }
@@ -362,7 +362,7 @@ fn table_menu(
                 let vbs_path = vbs_path_for(selected_path);
                 let patch_path = vbs_path.with_extension("vbs.patch");
 
-                match run_diff(&original_path, &vbs_path, DiffColor::Never) {
+                match run_diff(&original_path, &vbs_path, DiffColor::Never, Some(config)) {
                     Ok(diff) => {
                         let mut file = File::create(patch_path).unwrap();
                         file.write_all(&diff).unwrap();
@@ -391,7 +391,7 @@ fn table_menu(
                     prompt_error(&msg);
                 }
             },
-            Some(TableOption::InfoDiff) => match info_diff(selected_path) {
+            Some(TableOption::InfoDiff) => match info_diff(selected_path, Some(config)) {
                 Ok(diff) => {
                     prompt(&diff);
                 }
