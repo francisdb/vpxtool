@@ -193,8 +193,10 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
                 let path = path.unwrap_or("");
                 let expanded_path = expand_path_exists(path)?;
+                let loaded_config = config::load_config()?;
+                let config = loaded_config.as_ref().map(|c| &c.1);
                 crate::println!("diffing info for {}", expanded_path.display())?;
-                let diff = info_diff(&expanded_path)?;
+                let diff = info_diff(&expanded_path, config)?;
                 crate::println!("{}", diff)?;
                 Ok(ExitCode::SUCCESS)
             }
@@ -205,7 +207,9 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
             let path = path.unwrap_or("");
             let expanded_path = expand_path_exists(path)?;
-            match script_diff(&expanded_path) {
+            let loaded_config = config::load_config()?;
+            let config = loaded_config.as_ref().map(|c| &c.1);
+            match script_diff(&expanded_path, config) {
                 Ok(output) => {
                     crate::println!("{}", output)?;
                     Ok(ExitCode::SUCCESS)
@@ -325,7 +329,9 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     .unwrap_or_default();
 
                 let expanded_path = expand_path_exists(path)?;
-                let diff = script_diff(&expanded_path)?;
+                let loaded_config = config::load_config()?;
+                let config = loaded_config.as_ref().map(|c| &c.1);
+                let diff = script_diff(&expanded_path, config)?;
                 crate::println!("{}", diff)?;
                 Ok(ExitCode::SUCCESS)
             }
@@ -1516,7 +1522,7 @@ pub fn extract(vpx_file_path: &Path, yes: bool) -> io::Result<ExitCode> {
     }
 }
 
-pub fn info_diff(vpx_file_path: &Path) -> io::Result<String> {
+pub fn info_diff(vpx_file_path: &Path, config: Option<&ResolvedConfig>) -> io::Result<String> {
     let expanded_vpx_path = expand_path_exists(vpx_file_path.to_str().unwrap())?;
     let info_file_path = expanded_vpx_path.with_extension("info.json");
     if info_file_path.exists() {
@@ -1528,7 +1534,12 @@ pub fn info_diff(vpx_file_path: &Path) -> io::Result<String> {
         } else {
             DiffColor::Never
         };
-        let output = run_diff(original_info_path.path(), &info_file_path, diff_color)?;
+        let output = run_diff(
+            original_info_path.path(),
+            &info_file_path,
+            diff_color,
+            config,
+        )?;
         Ok(String::from_utf8_lossy(&output).to_string())
     } else {
         let msg = format!("No sidecar info file found: {}", info_file_path.display());
@@ -1536,7 +1547,7 @@ pub fn info_diff(vpx_file_path: &Path) -> io::Result<String> {
     }
 }
 
-pub fn script_diff(vpx_file_path: &Path) -> io::Result<String> {
+pub fn script_diff(vpx_file_path: &Path, config: Option<&ResolvedConfig>) -> io::Result<String> {
     // set extension for PathBuf
     let vbs_path = vpx_file_path.with_extension("vbs");
     if vbs_path.exists() {
@@ -1552,7 +1563,7 @@ pub fn script_diff(vpx_file_path: &Path) -> io::Result<String> {
                 } else {
                     DiffColor::Never
                 };
-                let output = run_diff(original_vbs_path.path(), &vbs_path, diff_color)?;
+                let output = run_diff(original_vbs_path.path(), &vbs_path, diff_color, config)?;
                 Ok(String::from_utf8_lossy(&output).to_string())
             }
             Err(e) => {
@@ -1586,13 +1597,17 @@ pub fn run_diff(
     original_vbs_path: &Path,
     vbs_path: &Path,
     color: DiffColor,
+    config: Option<&ResolvedConfig>,
 ) -> Result<Vec<u8>, io::Error> {
     let original_vbs_filename = original_vbs_path
         .file_name()
         .unwrap_or(original_vbs_path.as_os_str());
     let original_vbs_file_name_no_tmp = original_vbs_filename.to_string_lossy().replace(".tmp", "");
     let vbs_filename = vbs_path.file_name().unwrap_or(vbs_path.as_os_str());
-    let mut command = std::process::Command::new("diff");
+    let diff = config
+        .and_then(|resolved| resolved.diff.as_deref())
+        .unwrap_or("diff");
+    let mut command = std::process::Command::new(diff);
     match vbs_path.parent() {
         Some(parent) if !parent.as_os_str().is_empty() => {
             command.current_dir(parent);
@@ -1610,7 +1625,7 @@ pub fn run_diff(
     info!("Running command: {:?}", &command);
     let result = command.output().map(|o| o.stdout);
     result.map_err(|e| {
-        let msg = format!("Failed to run 'diff'. Is it installed on your system? {e}");
+        let msg = format!("Failed to run diff '{diff}'. Is it installed on your system? {e}");
         io::Error::other(msg)
     })
 }
