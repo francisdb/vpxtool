@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.0](https://github.com/francisdb/vpxtool/compare/v0.25.0...v0.26.0) - 2026-03-02
+
+### Added
+
+- add diff to config ([#698](https://github.com/francisdb/vpxtool/pull/698))
+
+### Other
+
+- *(deps)* bump shellexpand from 3.1.1 to 3.1.2 ([#695](https://github.com/francisdb/vpxtool/pull/695))
+- *(deps)* bump chrono from 0.4.43 to 0.4.44 ([#694](https://github.com/francisdb/vpxtool/pull/694))
+- *(deps)* bump actions/upload-artifact from 6 to 7 ([#693](https://github.com/francisdb/vpxtool/pull/693))
+- *(deps)* bump vpin from 0.21.1 to 0.23.2 ([#696](https://github.com/francisdb/vpxtool/pull/696))
+
 ## [0.25.0](https://github.com/francisdb/vpxtool/compare/v0.24.15...v0.25.0) - 2026-02-23
 
 ### Added
