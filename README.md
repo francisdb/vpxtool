@@ -18,6 +18,12 @@ After extracting the archive you will have to remove the quarantine flag through
 xattr -d com.apple.quarantine vpxtool
 ```
 
+### Homebrew
+
+@gitfool set up a homebrew tap for vpxtool. Installation instructions on his repo:
+
+https://github.com/gitfool/homebrew-vpinball
+
 ### Using cargo
 
 If you have [cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) installed you can install
