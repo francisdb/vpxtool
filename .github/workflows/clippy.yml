@@ -22,7 +22,7 @@ jobs:
         with:
           toolchain: stable
           components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2.8.2
+      - uses: Swatinem/rust-cache@v2.9.1
       - name: Run clippy
         run: cargo clippy --color always --all-targets --all-features
       - name: Run fmt check
