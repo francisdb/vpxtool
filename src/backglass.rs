@@ -344,7 +344,7 @@ mod tests {
     use super::*;
     use image::RgbaImage;
     use pretty_assertions::assert_eq;
-    use rand::Rng;
+    use rand::RngExt;
 
     #[test]
     fn test_find_hole_from() {

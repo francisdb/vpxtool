@@ -34,7 +34,7 @@ wild = "2.2.1"
 
 is_executable = "1.0.5"
 regex = { version = "1.12.3", features = [] }
-vpin = { version = "0.23.2" }
+vpin = { version = "0.23.3" }
 directb2s = "0.1.1"
 
 edit = "0.1.5"
@@ -56,7 +56,7 @@ rayon = "1.11.0"
 [dev-dependencies]
 testdir = "0.9.3"
 pretty_assertions = "1.4.1"
-rand = "0.9.2"
+rand = "0.10.0"
 
 
 [profile.test]
