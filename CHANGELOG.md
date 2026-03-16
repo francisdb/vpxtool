@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.3](https://github.com/francisdb/vpxtool/compare/v0.26.2...v0.26.3) - 2026-03-16
+
+### Other
+
+- *(deps)* update rand and vpin dependencies to latest versions ([#712](https://github.com/francisdb/vpxtool/pull/712))
+- *(deps)* bump console from 0.16.2 to 0.16.3 ([#708](https://github.com/francisdb/vpxtool/pull/708))
+- *(deps)* bump Swatinem/rust-cache from 2.8.2 to 2.9.1 ([#707](https://github.com/francisdb/vpxtool/pull/707))
+- *(deps)* bump image from 0.25.9 to 0.25.10 ([#709](https://github.com/francisdb/vpxtool/pull/709))
+- *(deps)* bump clap from 4.5.60 to 4.6.0 ([#710](https://github.com/francisdb/vpxtool/pull/710))
+
 ## [0.26.2](https://github.com/francisdb/vpxtool/compare/v0.26.1...v0.26.2) - 2026-03-11
 
 ### Added
