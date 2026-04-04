@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 use log::info;
 use rayon::prelude::*;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::fs::Metadata;
@@ -186,7 +187,7 @@ pub struct TablesIndexJson {
 impl From<TablesIndex> for TablesIndexJson {
     fn from(index: TablesIndex) -> Self {
         TablesIndexJson {
-            tables: index.tables(),
+            tables: sort_tables(index.tables()),
         }
     }
 }
@@ -194,9 +195,30 @@ impl From<TablesIndex> for TablesIndexJson {
 impl From<&TablesIndex> for TablesIndexJson {
     fn from(table: &TablesIndex) -> Self {
         TablesIndexJson {
-            tables: table.tables(),
+            tables: sort_tables(table.tables()),
         }
     }
+}
+
+fn sort_tables(mut tables: Vec<IndexedTable>) -> Vec<IndexedTable> {
+    tables.sort_by(|a, b| {
+        let name_order = match (
+            a.table_info.table_name.as_deref(),
+            b.table_info.table_name.as_deref(),
+        ) {
+            (Some(a_name), Some(b_name)) => a_name.to_lowercase().cmp(&b_name.to_lowercase()),
+            (Some(_), None) => Ordering::Less,
+            (None, Some(_)) => Ordering::Greater,
+            (None, None) => Ordering::Equal,
+        };
+
+        if name_order == Ordering::Equal {
+            a.path.file_name().cmp(&b.path.file_name())
+        } else {
+            name_order
+        }
+    });
+    tables
 }
 
 impl From<TablesIndexJson> for TablesIndex {
