@@ -21,6 +21,7 @@ pub struct LaunchTemplate {
     pub executable: PathBuf,
     pub arguments: Option<Vec<String>>,
     pub env: Option<HashMap<String, String>>,
+    pub vpinball_config: Option<PathBuf>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -186,18 +187,21 @@ fn generate_default_launch_templates(vpx_executable: &Path) -> Vec<LaunchTemplat
             executable: vpx_executable.to_owned(),
             arguments: None,
             env: Some(default_env.clone()),
+            vpinball_config: None,
         },
         LaunchTemplate {
             name: "Launch Fullscreen".to_string(),
             executable: vpx_executable.to_owned(),
             arguments: Some(vec!["-EnableTrueFullscreen".to_string()]),
             env: None,
+            vpinball_config: None,
         },
         LaunchTemplate {
             name: "Launch Windowed".to_string(),
             executable: vpx_executable.to_owned(),
             arguments: Some(vec!["-DisableTrueFullscreen".to_string()]),
             env: None,
+            vpinball_config: None,
         },
     ]
 }
@@ -423,18 +427,21 @@ mod tests {
                             ("SDL_VIDEODRIVER".to_string(), "".to_string()),
                             ("SDL_RENDER_DRIVER".to_string(), "".to_string()),
                         ])),
+                        vpinball_config: None,
                     },
                     LaunchTemplate {
                         name: "Launch Fullscreen".to_string(),
                         executable: PathBuf::from("/home/me/vpinball"),
                         arguments: Some(vec!["-EnableTrueFullscreen".to_string()]),
                         env: None,
+                        vpinball_config: None,
                     },
                     LaunchTemplate {
                         name: "Launch Windowed".to_string(),
                         executable: PathBuf::from("/home/me/vpinball"),
                         arguments: Some(vec!["-DisableTrueFullscreen".to_string()]),
                         env: None,
+                        vpinball_config: None,
                     },
                 ),
 
@@ -444,6 +451,49 @@ mod tests {
                 diff: None,
                 editor: None,
             }
+        );
+        Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn test_read_launch_template_with_vpinball_config() -> io::Result<()> {
+        let temp_dir = testdir!();
+        let config_file = temp_dir.join(CONFIGURATION_FILE_NAME);
+        let mut file = File::create(&config_file)?;
+        file.write_all(
+            b"vpx_executable = \"/tmp/test/vpinball\"\n\
+              \n\
+              [[launch_templates]]\n\
+              name = \"Launch BGFX\"\n\
+              executable = \"/tmp/test/VPinballX_BGFX\"\n\
+              vpinball_config = \"/tmp/test/VPinballX_BGFX.ini\"\n\
+              \n\
+              [[launch_templates]]\n\
+              name = \"Launch GL\"\n\
+              executable = \"/tmp/test/VPinballX_GL\"\n",
+        )?;
+
+        let config = read_config(&config_file)?;
+
+        assert_eq!(
+            config.launch_templates,
+            vec![
+                LaunchTemplate {
+                    name: "Launch BGFX".to_string(),
+                    executable: PathBuf::from("/tmp/test/VPinballX_BGFX"),
+                    arguments: None,
+                    env: None,
+                    vpinball_config: Some(PathBuf::from("/tmp/test/VPinballX_BGFX.ini")),
+                },
+                LaunchTemplate {
+                    name: "Launch GL".to_string(),
+                    executable: PathBuf::from("/tmp/test/VPinballX_GL"),
+                    arguments: None,
+                    env: None,
+                    vpinball_config: None,
+                },
+            ]
         );
         Ok(())
     }
@@ -472,18 +522,21 @@ mod tests {
                             ("SDL_VIDEODRIVER".to_string(), "".to_string()),
                             ("SDL_RENDER_DRIVER".to_string(), "".to_string()),
                         ])),
+                        vpinball_config: None,
                     },
                     LaunchTemplate {
                         name: "Launch Fullscreen".to_string(),
                         executable: PathBuf::from("/tmp/test/vpinball"),
                         arguments: Some(vec!["-EnableTrueFullscreen".to_string()]),
                         env: None,
+                        vpinball_config: None,
                     },
                     LaunchTemplate {
                         name: "Launch Windowed".to_string(),
                         executable: PathBuf::from("/tmp/test/vpinball"),
                         arguments: Some(vec!["-DisableTrueFullscreen".to_string()]),
                         env: None,
+                        vpinball_config: None,
                     },
                 ),
                 vpx_config: dirs::home_dir().unwrap().join(".vpinball/VPinballX.ini"),
@@ -520,18 +573,21 @@ mod tests {
                             ("SDL_VIDEODRIVER".to_string(), "".to_string()),
                             ("SDL_RENDER_DRIVER".to_string(), "".to_string()),
                         ])),
+                        vpinball_config: None,
                     },
                     LaunchTemplate {
                         name: "Launch Fullscreen".to_string(),
                         executable: PathBuf::from("/tmp/test/vpinball"),
                         arguments: Some(vec!["-EnableTrueFullscreen".to_string()]),
                         env: None,
+                        vpinball_config: None,
                     },
                     LaunchTemplate {
                         name: "Launch Windowed".to_string(),
                         executable: PathBuf::from("/tmp/test/vpinball"),
                         arguments: Some(vec!["-DisableTrueFullscreen".to_string()]),
                         env: None,
+                        vpinball_config: None,
                     }
                 ),
                 vpx_config: dirs::home_dir().unwrap().join(".vpinball/VPinballX.ini"),
@@ -572,18 +628,21 @@ mod tests {
                             ("SDL_VIDEODRIVER".to_string(), "".to_string()),
                             ("SDL_RENDER_DRIVER".to_string(), "".to_string()),
                         ])),
+                        vpinball_config: None,
                     },
                     LaunchTemplate {
                         name: "Launch Fullscreen".to_string(),
                         executable: PathBuf::from("C:\\test\\vpinball"),
                         arguments: Some(vec!["-EnableTrueFullscreen".to_string()]),
                         env: None,
+                        vpinball_config: None,
                     },
                     LaunchTemplate {
                         name: "Launch Windowed".to_string(),
                         executable: PathBuf::from("C:\\test\\vpinball"),
                         arguments: Some(vec!["-DisableTrueFullscreen".to_string()]),
                         env: None,
+                        vpinball_config: None,
                     }
                 )
             }
