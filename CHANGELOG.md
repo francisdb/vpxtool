@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.27.0](https://github.com/francisdb/vpxtool/compare/v0.26.3...v0.27.0) - 2026-04-05
+
+### Added
+
+- add vpinball_config to launch templates ([#720](https://github.com/francisdb/vpxtool/pull/720))
+- sort index ([#718](https://github.com/francisdb/vpxtool/pull/718))
+
+### Other
+
+- add tests for index sorting ([#719](https://github.com/francisdb/vpxtool/pull/719))
+- *(deps)* bump env_logger from 0.11.9 to 0.11.10 ([#716](https://github.com/francisdb/vpxtool/pull/716))
+- *(deps)* bump toml from 1.0.7+spec-1.1.0 to 1.1.0+spec-1.1.0 ([#717](https://github.com/francisdb/vpxtool/pull/717))
+- *(deps)* bump toml from 1.0.6+spec-1.1.0 to 1.0.7+spec-1.1.0 ([#713](https://github.com/francisdb/vpxtool/pull/713))
+- *(deps)* bump vpin from 0.23.3 to 0.23.5 ([#714](https://github.com/francisdb/vpxtool/pull/714))
+
 ## [0.26.3](https://github.com/francisdb/vpxtool/compare/v0.26.2...v0.26.3) - 2026-03-16
 
 ### Other
