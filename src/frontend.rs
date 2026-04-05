@@ -825,6 +825,10 @@ fn launch_table(
             cmd.env(key, value);
         }
     }
+    if let Some(vpinball_config) = &launch_template.vpinball_config {
+        cmd.arg("-Ini");
+        cmd.arg(vpinball_config);
+    }
     if let Some(args) = &launch_template.arguments {
         cmd.args(args);
     }
