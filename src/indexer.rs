@@ -853,6 +853,35 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn test_index_to_json_is_sorted() -> io::Result<()> {
+        let tables_dir = testdir!().join("tables");
+        fs::create_dir(&tables_dir)?;
+        let temp_dir = testdir!().join("temp");
+        fs::create_dir(&temp_dir)?;
+
+        // Create vpx files with names that would not be alphabetically sorted by filename
+        let vpx_z_path = tables_dir.join("z_table.vpx");
+        let vpx_a_path = tables_dir.join("a_table.vpx");
+        let vpx_m_path = tables_dir.join("m_table.vpx");
+
+        vpx::new_minimal_vpx(&vpx_z_path)?;
+        vpx::new_minimal_vpx(&vpx_a_path)?;
+        vpx::new_minimal_vpx(&vpx_m_path)?;
+
+        let vpx_files = find_vpx_files(true, &tables_dir)?;
+        let indexed = index_vpx_files(vpx_files, None, None, &VoidProgress)?;
+
+        let json: TablesIndexJson = indexed.into();
+        let filenames: Vec<_> = json
+            .tables
+            .iter()
+            .map(|t| t.path.file_name().unwrap().to_str().unwrap().to_string())
+            .collect();
+        assert_eq!(filenames, vec!["a_table.vpx", "m_table.vpx", "z_table.vpx"]);
+        Ok(())
+    }
+
     fn test_script(temp_dir: &Path, game_name: &str) -> io::Result<PathBuf> {
         // write simple script in tempdir
         let script = format!(
@@ -1165,5 +1194,73 @@ LoadVPM "01210000","sys80.vbs",3.10
         )
         .unwrap();
         assert_eq!(local_rom, None);
+    }
+
+    fn make_indexed_table(path: &str, table_name: Option<&str>) -> IndexedTable {
+        IndexedTable {
+            path: PathBuf::from(path),
+            table_info: IndexedTableInfo {
+                table_name: table_name.map(|s| s.to_string()),
+                author_name: None,
+                table_blurb: None,
+                table_rules: None,
+                author_email: None,
+                release_date: None,
+                table_save_rev: None,
+                table_version: None,
+                author_website: None,
+                table_save_date: None,
+                table_description: None,
+                properties: HashMap::new(),
+            },
+            game_name: None,
+            b2s_path: None,
+            rom_path: None,
+            local_rom_path: None,
+            wheel_path: None,
+            requires_pinmame: false,
+            last_modified: IsoSystemTime::from(SystemTime::UNIX_EPOCH),
+        }
+    }
+
+    #[test]
+    fn test_sort_tables_by_name_case_insensitive() {
+        let tables = vec![
+            make_indexed_table("c.vpx", Some("Zeta")),
+            make_indexed_table("b.vpx", Some("alpha")),
+            make_indexed_table("a.vpx", Some("Beta")),
+        ];
+        let sorted = sort_tables(tables);
+        let names: Vec<_> = sorted
+            .iter()
+            .map(|t| t.table_info.table_name.as_deref())
+            .collect();
+        assert_eq!(names, vec![Some("alpha"), Some("Beta"), Some("Zeta")]);
+    }
+
+    #[test]
+    fn test_sort_tables_none_names_sort_last() {
+        let tables = vec![
+            make_indexed_table("b.vpx", None),
+            make_indexed_table("a.vpx", Some("Alpha")),
+            make_indexed_table("c.vpx", None),
+        ];
+        let sorted = sort_tables(tables);
+        let names: Vec<_> = sorted
+            .iter()
+            .map(|t| t.table_info.table_name.as_deref())
+            .collect();
+        assert_eq!(names, vec![Some("Alpha"), None, None]);
+    }
+
+    #[test]
+    fn test_sort_tables_falls_back_to_filename() {
+        let tables = vec![
+            make_indexed_table("dir/zebra.vpx", Some("Same")),
+            make_indexed_table("dir/apple.vpx", Some("Same")),
+        ];
+        let sorted = sort_tables(tables);
+        let paths: Vec<_> = sorted.iter().map(|t| t.path.to_str().unwrap()).collect();
+        assert_eq!(paths, vec!["dir/apple.vpx", "dir/zebra.vpx"]);
     }
 }
