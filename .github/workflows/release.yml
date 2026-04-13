@@ -99,7 +99,7 @@ jobs:
           if-no-files-found: error
         if: startsWith( github.ref, 'refs/tags/v' ) == false
       - name: Publish GitHub release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: "vpxtool*"
         if: startsWith( github.ref, 'refs/tags/v' )
