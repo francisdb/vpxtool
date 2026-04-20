@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.27.1](https://github.com/francisdb/vpxtool/compare/v0.27.0...v0.27.1) - 2026-04-20
+
+### Other
+
+- cargo fmt
+- drop shellexpand, rely on shell tilde expansion
+- *(deps)* bump rand from 0.10.0 to 0.10.1 ([#724](https://github.com/francisdb/vpxtool/pull/724))
+- *(deps)* bump softprops/action-gh-release from 2 to 3 ([#723](https://github.com/francisdb/vpxtool/pull/723))
+- *(deps)* bump toml from 1.1.0+spec-1.1.0 to 1.1.2+spec-1.1.0 ([#721](https://github.com/francisdb/vpxtool/pull/721))
+
 ## [0.27.0](https://github.com/francisdb/vpxtool/compare/v0.26.3...v0.27.0) - 2026-04-05
 
 ### Added
