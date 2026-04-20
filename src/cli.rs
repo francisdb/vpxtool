@@ -285,9 +285,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     .map(|s| s.as_str())
                     .unwrap_or_default();
 
-                let vbs_path_opt = sub_matches
-                    .get_one::<String>("VBSPATH")
-                    .map(PathBuf::from);
+                let vbs_path_opt = sub_matches.get_one::<String>("VBSPATH").map(PathBuf::from);
 
                 let expanded_path = path_exists(path)?;
                 match importvbs(&expanded_path, vbs_path_opt) {
