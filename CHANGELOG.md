@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.27.2](https://github.com/francisdb/vpxtool/compare/v0.27.1...v0.27.2) - 2026-04-27
+
+### Other
+
+- *(deps)* bump pinmame-nvram from 0.4.6 to 0.4.7 ([#728](https://github.com/francisdb/vpxtool/pull/728))
+- *(deps)* bump rayon from 1.11.0 to 1.12.0 ([#727](https://github.com/francisdb/vpxtool/pull/727))
+- *(deps)* bump clap from 4.6.0 to 4.6.1 ([#726](https://github.com/francisdb/vpxtool/pull/726))
+
 ## [0.27.1](https://github.com/francisdb/vpxtool/compare/v0.27.0...v0.27.1) - 2026-04-20
 
 ### Other
