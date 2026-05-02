@@ -26,12 +26,10 @@ pub const DEFAULT_INDEX_FILE_NAME: &str = "vpxtool_index.json";
 
 // Compile regexes once to avoid per-table startup cost while indexing large collections.
 static LINE_WITH_CGAMENAME_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r#"(?i)(?:.*?)*cgamename\s*=\s*\"([^"\\]*(?:\\.[^"\\]*)*)\""#)
-        .unwrap()
+    regex::Regex::new(r#"(?i)(?:.*?)*cgamename\s*=\s*\"([^"\\]*(?:\\.[^"\\]*)*)\""#).unwrap()
 });
 static LINE_WITH_DOT_GAMENAME_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r#"(?i)(?:.*?)\.gamename\s*=\s*\"([^"\\]*(?:\\.[^"\\]*)*)\""#)
-        .unwrap()
+    regex::Regex::new(r#"(?i)(?:.*?)\.gamename\s*=\s*\"([^"\\]*(?:\\.[^"\\]*)*)\""#).unwrap()
 });
 static LOADVPM_SUB_REGEX: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r#"sub\s*loadvpm"#).unwrap());
@@ -246,8 +244,7 @@ impl From<TablesIndexJson> for TablesIndex {
 
 /// Convert a platform-specific path to a normalized string using forward slashes.
 fn to_normalized_path(path: &Path) -> String {
-    path.to_string_lossy()
-        .replace('\\', "/")
+    path.to_string_lossy().replace('\\', "/")
 }
 
 /// Convert a normalized path string using forward slashes back to a platform-specific PathBuf.
@@ -446,6 +443,7 @@ impl From<io::Error> for IndexError {
 /// * `configured_pinmame_path`: the path to the local pinmame folder configured in the vpinball config.
 /// * `progress`: lister for progress updates.
 /// * `force_reindex`: a list of vpx files to reindex, even if they are not modified.
+#[allow(clippy::too_many_arguments)]
 pub fn index_folder(
     recursive: bool,
     max_depth: Option<usize>,
@@ -763,24 +761,28 @@ fn consider_sidecar_vbs(path: &Path, game_data: GameData) -> io::Result<String> 
 fn normalize_index_for_json(index: &TablesIndex, tables_root: &Path) -> TablesIndex {
     let normalized_tables: HashMap<PathBuf, IndexedTable> = index
         .tables
-        .iter()
-        .map(|(_, table)| {
+        .values()
+        .map(|table| {
             let normalized_table = IndexedTable {
                 path: PathBuf::from(try_make_relative_normalized(&table.path, tables_root)),
                 table_info: table.table_info.clone(),
                 game_name: table.game_name.clone(),
-                b2s_path: table.b2s_path.as_ref().map(|p| {
-                    PathBuf::from(try_make_relative_normalized(p, tables_root))
-                }),
-                rom_path: table.rom_path.as_ref().map(|p| {
-                    PathBuf::from(try_make_relative_normalized(p, tables_root))
-                }),
-                local_rom_path: table.local_rom_path.as_ref().map(|p| {
-                    PathBuf::from(try_make_relative_normalized(p, tables_root))
-                }),
-                wheel_path: table.wheel_path.as_ref().map(|p| {
-                    PathBuf::from(try_make_relative_normalized(p, tables_root))
-                }),
+                b2s_path: table
+                    .b2s_path
+                    .as_ref()
+                    .map(|p| PathBuf::from(try_make_relative_normalized(p, tables_root))),
+                rom_path: table
+                    .rom_path
+                    .as_ref()
+                    .map(|p| PathBuf::from(try_make_relative_normalized(p, tables_root))),
+                local_rom_path: table
+                    .local_rom_path
+                    .as_ref()
+                    .map(|p| PathBuf::from(try_make_relative_normalized(p, tables_root))),
+                wheel_path: table
+                    .wheel_path
+                    .as_ref()
+                    .map(|p| PathBuf::from(try_make_relative_normalized(p, tables_root))),
                 requires_pinmame: table.requires_pinmame,
                 last_modified: table.last_modified,
             };
@@ -796,24 +798,28 @@ fn normalize_index_for_json(index: &TablesIndex, tables_root: &Path) -> TablesIn
 fn denormalize_index_from_json(index: &TablesIndex, tables_root: Option<&Path>) -> TablesIndex {
     let denormalized_tables: HashMap<PathBuf, IndexedTable> = index
         .tables
-        .iter()
-        .map(|(_, table)| {
+        .values()
+        .map(|table| {
             let denormalized_table = IndexedTable {
                 path: resolve_normalized_path(&table.path.to_string_lossy(), tables_root),
                 table_info: table.table_info.clone(),
                 game_name: table.game_name.clone(),
-                b2s_path: table.b2s_path.as_ref().map(|p| {
-                    resolve_normalized_path(&p.to_string_lossy(), tables_root)
-                }),
-                rom_path: table.rom_path.as_ref().map(|p| {
-                    resolve_normalized_path(&p.to_string_lossy(), tables_root)
-                }),
-                local_rom_path: table.local_rom_path.as_ref().map(|p| {
-                    resolve_normalized_path(&p.to_string_lossy(), tables_root)
-                }),
-                wheel_path: table.wheel_path.as_ref().map(|p| {
-                    resolve_normalized_path(&p.to_string_lossy(), tables_root)
-                }),
+                b2s_path: table
+                    .b2s_path
+                    .as_ref()
+                    .map(|p| resolve_normalized_path(&p.to_string_lossy(), tables_root)),
+                rom_path: table
+                    .rom_path
+                    .as_ref()
+                    .map(|p| resolve_normalized_path(&p.to_string_lossy(), tables_root)),
+                local_rom_path: table
+                    .local_rom_path
+                    .as_ref()
+                    .map(|p| resolve_normalized_path(&p.to_string_lossy(), tables_root)),
+                wheel_path: table
+                    .wheel_path
+                    .as_ref()
+                    .map(|p| resolve_normalized_path(&p.to_string_lossy(), tables_root)),
                 requires_pinmame: table.requires_pinmame,
                 last_modified: table.last_modified,
             };
