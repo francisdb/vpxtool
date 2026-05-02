@@ -118,6 +118,7 @@ impl TableOption {
 pub fn frontend_index(
     resolved_config: &ResolvedConfig,
     recursive: bool,
+    max_depth: Option<usize>,
     force_reindex: Vec<PathBuf>,
 ) -> Result<Vec<IndexedTable>, IndexError> {
     let pb = ProgressBar::hidden();
@@ -130,6 +131,7 @@ pub fn frontend_index(
     let progress = ProgressBarProgress::new(pb);
     let index = indexer::index_folder(
         recursive,
+        max_depth,
         &resolved_config.tables_folder,
         &resolved_config.tables_index_path,
         Some(&resolved_config.global_pinmame_folder()),
@@ -244,7 +246,12 @@ fn table_menu(
                 exit = true;
             }
             Some(TableOption::ForceReload) => {
-                match frontend_index(config, true, vec![selected_path.clone()]) {
+                match frontend_index(
+                    config,
+                    true,
+                    config.tables_scan_max_depth,
+                    vec![selected_path.clone()],
+                ) {
                     Ok(index) => {
                         vpx_files_with_tableinfo.clear();
                         vpx_files_with_tableinfo.extend(index);
