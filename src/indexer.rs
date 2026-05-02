@@ -7,6 +7,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::fs::Metadata;
 use std::io::Read;
+use std::sync::LazyLock;
 use std::time::SystemTime;
 use std::{
     ffi::OsStr,
@@ -22,6 +23,18 @@ use walkdir::{DirEntry, FilterEntry, IntoIter, WalkDir};
 use vpx::gamedata::GameData;
 
 pub const DEFAULT_INDEX_FILE_NAME: &str = "vpxtool_index.json";
+
+// Compile regexes once to avoid per-table startup cost while indexing large collections.
+static LINE_WITH_CGAMENAME_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r#"(?i)(?:.*?)*cgamename\s*=\s*\"([^"\\]*(?:\\.[^"\\]*)*)\""#)
+        .unwrap()
+});
+static LINE_WITH_DOT_GAMENAME_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r#"(?i)(?:.*?)\.gamename\s*=\s*\"([^"\\]*(?:\\.[^"\\]*)*)\""#)
+        .unwrap()
+});
+static LOADVPM_SUB_REGEX: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r#"sub\s*loadvpm"#).unwrap());
 
 /// Introduced because we want full control over serialization
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
@@ -455,13 +468,6 @@ pub fn index_vpx_files(
     configured_pinmame_path: Option<&Path>,
     progress: &impl Progress,
 ) -> io::Result<TablesIndex> {
-    let global_roms = global_pinmame_path
-        .map(|pinmame_path| {
-            let roms_path = pinmame_path.join("roms");
-            find_roms(&roms_path)
-        })
-        .unwrap_or_else(|| Ok(HashMap::new()))?;
-
     let pinmame_roms_path = configured_pinmame_path.map(|p| p.join("roms").to_path_buf());
 
     let (progress_tx, progress_rx) = std::sync::mpsc::channel();
@@ -471,8 +477,7 @@ pub fn index_vpx_files(
         vpx_files
             .par_iter()
             .flat_map(|vpx_file| {
-                let res = match index_vpx_file(vpx_file, pinmame_roms_path.as_deref(), &global_roms)
-                {
+                let res = match index_vpx_file(vpx_file, pinmame_roms_path.as_deref()) {
                     Ok(indexed_table) => Some(indexed_table),
                     Err(e) => {
                         // TODO we want to return any failures instead of printing here
@@ -497,9 +502,37 @@ pub fn index_vpx_files(
         progress.set_position(finished);
     }
 
-    let vpx_files_with_table_info = index_thread
+    let mut vpx_files_with_table_info: HashMap<PathBuf, IndexedTable> = index_thread
         .join()
         .map_err(|e| io::Error::other(format!("{e:?}")))?;
+
+    let needs_global_lookup = global_pinmame_path.is_some()
+        && vpx_files_with_table_info
+            .values()
+            .any(|table| table.game_name.is_some() && table.rom_path().is_none());
+
+    if needs_global_lookup {
+        let global_roms = global_pinmame_path
+            .map(|pinmame_path| {
+                let roms_path = pinmame_path.join("roms");
+                find_roms(&roms_path)
+            })
+            .unwrap_or_else(|| Ok(HashMap::new()))?;
+
+        let mut resolved_with_global = 0usize;
+        for table in vpx_files_with_table_info.values_mut() {
+            if table.rom_path().is_none()
+                && let Some(game_name) = table.game_name.as_ref()
+                && let Some(global_rom_path) = global_roms.get(&game_name.to_lowercase())
+            {
+                table.rom_path = Some(global_rom_path.clone());
+                resolved_with_global += 1;
+            }
+        }
+        info!("  Resolved {resolved_with_global} table roms from global pinmame roms");
+    } else {
+        info!("  Skipped global rom scan (no unresolved pinmame table roms)");
+    }
 
     Ok(TablesIndex {
         tables: vpx_files_with_table_info,
@@ -509,7 +542,6 @@ pub fn index_vpx_files(
 fn index_vpx_file(
     vpx_file_path: &PathWithMetadata,
     configured_roms_path: Option<&Path>,
-    global_roms: &HashMap<String, PathBuf>,
 ) -> io::Result<(PathBuf, IndexedTable)> {
     let path = &vpx_file_path.path;
     let mut vpx_file = vpx::open(path)?;
@@ -525,11 +557,7 @@ fn index_vpx_file(
     //  also this sidecar should be part of the cache key
     let game_name = extract_game_name(&code);
     let requires_pinmame = requires_pinmame(&code);
-    let rom_path = find_local_rom_path(path, &game_name, configured_roms_path)?.or_else(|| {
-        game_name
-            .as_ref()
-            .and_then(|game_name| global_roms.get(&game_name.to_lowercase()).cloned())
-    });
+    let rom_path = find_local_rom_path(path, &game_name, configured_roms_path)?;
     let b2s_path = find_b2s_path(path);
     let wheel_path = find_wheel_path(path);
     let last_modified = last_modified(path)?;
@@ -689,14 +717,6 @@ pub fn read_index_json(json_path: &Path) -> io::Result<Option<TablesIndex>> {
 }
 
 fn extract_game_name<S: AsRef<str>>(code: S) -> Option<String> {
-    // TODO can we find a first match through an option?
-    // needs to be all lowercase to match with (?i) case insensitive
-    const LINE_WITH_CGAMENAME_RE: &str =
-        r#"(?i)(?:.*?)*cgamename\s*=\s*\"([^"\\]*(?:\\.[^"\\]*)*)\""#;
-    const LINE_WITH_DOT_GAMENAME_RE: &str =
-        r#"(?i)(?:.*?)\.gamename\s*=\s*\"([^"\\]*(?:\\.[^"\\]*)*)\""#;
-    let cgamename_re = regex::Regex::new(LINE_WITH_CGAMENAME_RE).unwrap();
-    let dot_gamename_re = regex::Regex::new(LINE_WITH_DOT_GAMENAME_RE).unwrap();
     let unified = unify_line_endings(code.as_ref());
     unified
         .lines()
@@ -707,9 +727,9 @@ fn extract_game_name<S: AsRef<str>>(code: S) -> Option<String> {
             lower.contains("cgamename") || lower.contains(".gamename")
         })
         .flat_map(|line| {
-            let caps = cgamename_re
+            let caps = LINE_WITH_CGAMENAME_REGEX
                 .captures(line)
-                .or(dot_gamename_re.captures(line))?;
+                .or(LINE_WITH_DOT_GAMENAME_REGEX.captures(line))?;
             let first = caps.get(1)?;
             Some(first.as_str().to_string())
         })
@@ -719,12 +739,10 @@ fn extract_game_name<S: AsRef<str>>(code: S) -> Option<String> {
 fn requires_pinmame<S: AsRef<str>>(code: S) -> bool {
     let unified = unify_line_endings(code.as_ref());
     let lower = unified.to_lowercase();
-    const RE: &str = r#"sub\s*loadvpm"#;
-    let re = regex::Regex::new(RE).unwrap();
     lower
         .lines()
         .filter(|line| !line.trim().starts_with('\''))
-        .any(|line| line.contains("loadvpm") && !re.is_match(line))
+        .any(|line| line.contains("loadvpm") && !LOADVPM_SUB_REGEX.is_match(line))
 }
 
 /// Some scripts contain only CR as line separator. Eg "Monte Carlo (Premier 1987) (10.7) 1.6.vpx"
