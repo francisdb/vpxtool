@@ -86,6 +86,7 @@ const CMD_ROMNAME: &str = "romname";
 
 const CMD_INDEX: &str = "index";
 const ARG_VERBOSE: &str = "VERBOSE";
+const ARG_MAX_DEPTH: &str = "MAX_DEPTH";
 
 pub(crate) struct ProgressBarProgress {
     pb: ProgressBar,
@@ -220,12 +221,16 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 }
             }
         }
-        Some((CMD_FRONTEND, _sub_matches)) => {
+        Some((CMD_FRONTEND, sub_matches)) => {
             let (config_path, config) = config::load_or_setup_config()?;
+            let configured_pinmame_folder = config.configured_pinmame_folder();
+            let max_depth = sub_matches
+                .get_one::<usize>(ARG_MAX_DEPTH)
+                .copied()
+                .or(config.tables_scan_max_depth);
             crate::println!("Using vpxtool config file {}", config_path.display())?;
             crate::println!("Using vpinball config file {}", config.vpx_config.display())?;
             crate::println!(
-            let configured_pinmame_folder = config.configured_pinmame_folder();
                 "Using global pinmame folder {}",
                 config.global_pinmame_folder().display()
             )?;
@@ -239,6 +244,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             match frontend::frontend_index_with_configured_pinmame(
                 &config,
                 true,
+                max_depth,
                 vec![],
                 configured_pinmame_folder.as_deref(),
             ) {
@@ -702,6 +708,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
 
 fn handle_index(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
     let recursive = sub_matches.get_flag("RECURSIVE");
+    let max_depth_cli = sub_matches.get_one::<usize>(ARG_MAX_DEPTH).copied();
     let tables_folders_path_arg = sub_matches
         .get_one::<String>("VPXROOTPATH")
         .map(|s| s.as_str());
@@ -730,8 +737,12 @@ fn handle_index(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
     let configured_pinmame_folder = config
         .as_ref()
         .and_then(|(_, c)| c.configured_pinmame_folder());
+    let max_depth = max_depth_cli.or(config.as_ref().and_then(|(_, c)| c.tables_scan_max_depth));
 
     crate::println!("Using tables folder {}", tables_folder_path.display())?;
+    if let Some(max_depth) = max_depth {
+        crate::println!("Using tables scan max depth {}", max_depth)?;
+    }
     match &global_pinmame_folder {
         Some(folder) => {
             crate::println!("Using global pinmame folder {}", folder.display())?;
@@ -758,6 +769,7 @@ fn handle_index(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
     let progress = ProgressBarProgress::new(pb);
     let index = indexer::index_folder(
         recursive,
+        max_depth,
         &tables_folder_path,
         &tables_index_path,
         global_pinmame_folder.as_deref(),
@@ -850,6 +862,12 @@ fn build_command() -> Command {
                         .help("Recursively index subdirectories")
                         .default_value("true"),
                 )
+                .arg(
+                    Arg::new(ARG_MAX_DEPTH)
+                        .long("max-depth")
+                        .value_parser(clap::value_parser!(usize))
+                        .help("Maximum directory depth to scan when indexing tables"),
+                )
         )
         .subcommand(
             Command::new(CMD_INDEX)
@@ -861,6 +879,12 @@ fn build_command() -> Command {
                         .num_args(0)
                         .help("Recursively index subdirectories")
                         .default_value("true"),
+                )
+                .arg(
+                    Arg::new(ARG_MAX_DEPTH)
+                        .long("max-depth")
+                        .value_parser(clap::value_parser!(usize))
+                        .help("Maximum directory depth to scan when indexing tables"),
                 )
                 .arg(
                     arg!(<VPXROOTPATH> "The path to the root directory of vpx files. Defaults to what is set up in the vpxtool config file.")

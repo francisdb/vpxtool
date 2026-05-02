@@ -118,12 +118,14 @@ impl TableOption {
 pub fn frontend_index(
     resolved_config: &ResolvedConfig,
     recursive: bool,
+    max_depth: Option<usize>,
     force_reindex: Vec<PathBuf>,
 ) -> Result<Vec<IndexedTable>, IndexError> {
     let configured_pinmame_folder = resolved_config.configured_pinmame_folder();
     frontend_index_with_configured_pinmame(
         resolved_config,
         recursive,
+        max_depth,
         force_reindex,
         configured_pinmame_folder.as_deref(),
     )
@@ -132,6 +134,7 @@ pub fn frontend_index(
 pub fn frontend_index_with_configured_pinmame(
     resolved_config: &ResolvedConfig,
     recursive: bool,
+    max_depth: Option<usize>,
     force_reindex: Vec<PathBuf>,
     configured_pinmame_folder: Option<&Path>,
 ) -> Result<Vec<IndexedTable>, IndexError> {
@@ -145,6 +148,7 @@ pub fn frontend_index_with_configured_pinmame(
     let progress = ProgressBarProgress::new(pb);
     let index = indexer::index_folder(
         recursive,
+        max_depth,
         &resolved_config.tables_folder,
         &resolved_config.tables_index_path,
         Some(&resolved_config.global_pinmame_folder()),
@@ -259,7 +263,12 @@ fn table_menu(
                 exit = true;
             }
             Some(TableOption::ForceReload) => {
-                match frontend_index(config, true, vec![selected_path.clone()]) {
+                match frontend_index(
+                    config,
+                    true,
+                    config.tables_scan_max_depth,
+                    vec![selected_path.clone()],
+                ) {
                     Ok(index) => {
                         vpx_files_with_tableinfo.clear();
                         vpx_files_with_tableinfo.extend(index);

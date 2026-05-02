@@ -275,40 +275,49 @@ pub fn find_roms(rom_path: &Path) -> io::Result<HashMap<String, PathBuf>> {
     Ok(roms)
 }
 
-pub fn find_vpx_files(recursive: bool, tables_path: &Path) -> io::Result<Vec<PathWithMetadata>> {
+pub fn find_vpx_files(
+    recursive: bool,
+    max_depth: Option<usize>,
+    tables_path: &Path,
+) -> io::Result<Vec<PathWithMetadata>> {
     if recursive {
-        let mut vpx_files = Vec::new();
-        let mut entries = walk_dir_filtered(tables_path);
+        let mut vpx_paths = Vec::new();
+        let mut entries = walk_dir_filtered(tables_path, max_depth);
         entries.try_for_each(|entry| {
             let dir_entry = entry?;
-            let path = dir_entry.path();
-            if path.is_file()
-                && let Some("vpx") = path.extension().and_then(OsStr::to_str)
-            {
-                let last_modified = last_modified(path)?;
-                vpx_files.push(PathWithMetadata {
-                    path: path.to_path_buf(),
-                    last_modified,
-                });
+            if dir_entry.file_type().is_file() {
+                let path = dir_entry.path();
+                if let Some("vpx") = path.extension().and_then(OsStr::to_str) {
+                    vpx_paths.push(path.to_path_buf());
+                }
             }
             Ok::<(), io::Error>(())
         })?;
-        Ok(vpx_files)
+        vpx_paths
+            .par_iter()
+            .map(|path| {
+                let last_modified = last_modified(path)?;
+                Ok(PathWithMetadata {
+                    path: path.clone(),
+                    last_modified,
+                })
+            })
+            .collect()
     } else {
         let mut vpx_files = Vec::new();
         // TODO is there a cleaner version like try_filter_map?
         let mut dirs = fs::read_dir(tables_path)?;
         dirs.try_for_each(|entry| {
             let dir_entry = entry?;
-            let path = dir_entry.path();
-            if path.is_file()
-                && let Some("vpx") = path.extension().and_then(OsStr::to_str)
-            {
-                let last_modified = last_modified(&path)?;
-                vpx_files.push(PathWithMetadata {
-                    path: path.to_path_buf(),
-                    last_modified,
-                });
+            if dir_entry.file_type()?.is_file() {
+                let path = dir_entry.path();
+                if let Some("vpx") = path.extension().and_then(OsStr::to_str) {
+                    let last_modified = last_modified(&path)?;
+                    vpx_files.push(PathWithMetadata {
+                        path: path.to_path_buf(),
+                        last_modified,
+                    });
+                }
             }
             Ok::<(), io::Error>(())
         })?;
@@ -317,12 +326,19 @@ pub fn find_vpx_files(recursive: bool, tables_path: &Path) -> io::Result<Vec<Pat
 }
 
 /// Walks the directory and filters out .git and __MACOSX folders
-fn walk_dir_filtered(tables_path: &Path) -> FilterEntry<IntoIter, fn(&DirEntry) -> bool> {
-    WalkDir::new(tables_path).into_iter().filter_entry(|entry| {
-        let path = entry.path();
-        let git = std::path::Component::Normal(".git".as_ref());
-        let macosx = std::path::Component::Normal("__MACOSX".as_ref());
-        !path.components().any(|c| c == git) && !path.components().any(|c| c == macosx)
+fn walk_dir_filtered(
+    tables_path: &Path,
+    max_depth: Option<usize>,
+) -> FilterEntry<IntoIter, fn(&DirEntry) -> bool> {
+    let mut walkdir = WalkDir::new(tables_path);
+    if let Some(max_depth) = max_depth {
+        walkdir = walkdir.max_depth(max_depth);
+    }
+    walkdir.into_iter().filter_entry(|entry| {
+        if !entry.file_type().is_dir() {
+            return true;
+        }
+        !matches!(entry.file_name().to_str(), Some(".git" | "__MACOSX"))
     })
 }
 
@@ -380,6 +396,7 @@ impl From<io::Error> for IndexError {
 /// * `force_reindex`: a list of vpx files to reindex, even if they are not modified.
 pub fn index_folder(
     recursive: bool,
+    max_depth: Option<usize>,
     tables_folder: &Path,
     tables_index_path: &Path,
     global_pinmame_path: Option<&Path>,
@@ -403,7 +420,7 @@ pub fn index_folder(
     }
     let mut index = existing_index.unwrap_or(TablesIndex::empty());
 
-    let vpx_files = find_vpx_files(recursive, tables_folder)?;
+    let vpx_files = find_vpx_files(recursive, max_depth, tables_folder)?;
     info!("  Found {} tables", vpx_files.len());
     // remove files that are missing
     let removed_len = index.remove_missing(&vpx_files);
@@ -838,7 +855,7 @@ mod tests {
         // let output_str = String::from_utf8_lossy(&output.stdout);
         // println!("global_pinmame_dir:\n{}", output_str);
 
-        let vpx_files = find_vpx_files(true, &tables_dir)?;
+        let vpx_files = find_vpx_files(true, None, &tables_dir)?;
         assert_eq!(vpx_files.len(), 3);
         let global_roms = find_roms(&global_roms_dir)?;
         assert_eq!(global_roms.len(), 1);
@@ -887,7 +904,7 @@ mod tests {
         vpx::new_minimal_vpx(&vpx_a_path)?;
         vpx::new_minimal_vpx(&vpx_m_path)?;
 
-        let vpx_files = find_vpx_files(true, &tables_dir)?;
+        let vpx_files = find_vpx_files(true, None, &tables_dir)?;
         let indexed = index_vpx_files(vpx_files, None, None, &VoidProgress)?;
 
         let json: TablesIndexJson = indexed.into();

@@ -29,6 +29,7 @@ pub struct Config {
     pub vpx_executable: PathBuf,
     pub vpx_config: Option<PathBuf>,
     pub tables_folder: Option<PathBuf>,
+    pub tables_scan_max_depth: Option<usize>,
     pub diff: Option<String>,
     pub editor: Option<String>,
     pub launch_templates: Option<Vec<LaunchTemplate>>,
@@ -41,6 +42,7 @@ pub struct ResolvedConfig {
     pub vpx_config: PathBuf,
     pub tables_folder: PathBuf,
     pub tables_index_path: PathBuf,
+    pub tables_scan_max_depth: Option<usize>,
     pub diff: Option<String>,
     pub editor: Option<String>,
 }
@@ -169,6 +171,7 @@ fn read_config(config_path: &Path) -> io::Result<ResolvedConfig> {
         vpx_config,
         tables_folder: tables_folder.clone(),
         tables_index_path: tables_index_path(&tables_folder),
+        tables_scan_max_depth: config.tables_scan_max_depth,
         diff: config.diff,
         editor: config.editor,
     };
@@ -329,6 +332,7 @@ fn write_default_config(config_file: &Path, vpx_executable: &Path) -> io::Result
         launch_templates: Some(launch_templates),
         vpx_config: Some(vpx_config.clone()),
         tables_folder: Some(tables_folder.clone()),
+        tables_scan_max_depth: None,
         diff: None,
         editor: None,
     };
@@ -448,6 +452,7 @@ mod tests {
                 vpx_config: dirs::home_dir().unwrap().join(".vpinball/VPinballX.ini"),
                 tables_folder: PathBuf::from("/home/me/tables"),
                 tables_index_path: PathBuf::from("/home/me/tables/vpxtool_index.json"),
+                tables_scan_max_depth: None,
                 diff: None,
                 editor: None,
             }
@@ -498,6 +503,21 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn test_read_config_with_tables_scan_max_depth() -> io::Result<()> {
+        let temp_dir = testdir!();
+        let config_file = temp_dir.join(CONFIGURATION_FILE_NAME);
+        let mut file = File::create(&config_file)?;
+        file.write_all(
+            b"vpx_executable = \"/tmp/test/vpinball\"\n\
+              tables_scan_max_depth = 2\n",
+        )?;
+
+        let config = read_config(&config_file)?;
+        assert_eq!(config.tables_scan_max_depth, Some(2));
+        Ok(())
+    }
+
     // test that we can read an incomplete config file with missing tables_folder
     #[cfg(target_os = "linux")]
     #[test]
@@ -542,6 +562,7 @@ mod tests {
                 vpx_config: dirs::home_dir().unwrap().join(".vpinball/VPinballX.ini"),
                 tables_folder: PathBuf::from("/tmp/test/tables"),
                 tables_index_path: PathBuf::from("/tmp/test/tables/vpxtool_index.json"),
+                tables_scan_max_depth: None,
                 diff: None,
                 editor: None,
             }
@@ -593,6 +614,7 @@ mod tests {
                 vpx_config: dirs::home_dir().unwrap().join(".vpinball/VPinballX.ini"),
                 tables_folder: expected_tables_dir.clone(),
                 tables_index_path: expected_tables_dir.join("vpxtool_index.json"),
+                tables_scan_max_depth: None,
                 diff: None,
                 editor: None,
             }
@@ -617,6 +639,7 @@ mod tests {
                 vpx_config: PathBuf::from("C:\\test\\VPinballX.ini"),
                 tables_folder: PathBuf::from("C:\\test\\tables"),
                 tables_index_path: PathBuf::from("C:\\test\\tables\\vpxtool_index.json"),
+                tables_scan_max_depth: None,
                 diff: None,
                 editor: None,
                 launch_templates: vec!(
