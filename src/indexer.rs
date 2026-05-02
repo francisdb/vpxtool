@@ -26,10 +26,10 @@ pub const DEFAULT_INDEX_FILE_NAME: &str = "vpxtool_index.json";
 
 // Compile regexes once to avoid per-table startup cost while indexing large collections.
 static LINE_WITH_CGAMENAME_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r#"(?i)(?:.*?)*cgamename\s*=\s*\"([^"\\]*(?:\\.[^"\\]*)*)\""#).unwrap()
+    regex::Regex::new(r#"(?i)cgamename\s*=\s*\"([^"\\]*(?:\\.[^"\\]*)*)\""#).unwrap()
 });
 static LINE_WITH_DOT_GAMENAME_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r#"(?i)(?:.*?)\.gamename\s*=\s*\"([^"\\]*(?:\\.[^"\\]*)*)\""#).unwrap()
+    regex::Regex::new(r#"(?i)\.gamename\s*=\s*\"([^"\\]*(?:\\.[^"\\]*)*)\""#).unwrap()
 });
 static LOADVPM_SUB_REGEX: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r#"sub\s*loadvpm"#).unwrap());
@@ -1073,6 +1073,15 @@ Const UseSolenoids=2,UseLamps=0,UseSync=1,UseGI=0,SCoin="coin",cGameName="barbwi
         "#;
         let game_name = extract_game_name(code);
         assert_eq!(game_name, Some("grgar_l1".to_string()));
+    }
+
+    #[test]
+    fn test_extract_game_name_dot_gamename_inline() {
+        let code = r#"
+    With Controller : .GameName = "inline_l1" : End With
+"#;
+        let game_name = extract_game_name(code);
+        assert_eq!(game_name, Some("inline_l1".to_string()));
     }
 
     #[test]
