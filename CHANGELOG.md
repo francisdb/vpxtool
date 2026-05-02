@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.28.0](https://github.com/francisdb/vpxtool/compare/v0.27.2...v0.28.0) - 2026-05-02
+
+### Added
+
+- add configurable tables scan max depth ([#735](https://github.com/francisdb/vpxtool/pull/735))
+
+### Fixed
+
+- *(indexer)* write index_json atomically via temp + rename ([#739](https://github.com/francisdb/vpxtool/pull/739))
+- *(indexer)* flush BufWriter explicitly when writing index json ([#737](https://github.com/francisdb/vpxtool/pull/737))
+
+### Other
+
+- *(indexer)* cover tables_scan_max_depth in find_vpx_files ([#740](https://github.com/francisdb/vpxtool/pull/740))
+- *(indexer)* drop redundant leading wildcard in game-name regexes ([#732](https://github.com/francisdb/vpxtool/pull/732))
+- use regex caching for game name and pinmame detection ([#734](https://github.com/francisdb/vpxtool/pull/734))
+- use buffered i/o to avoid nas round-trips ([#736](https://github.com/francisdb/vpxtool/pull/736))
+
 ## [0.27.2](https://github.com/francisdb/vpxtool/compare/v0.27.1...v0.27.2) - 2026-04-27
 
 ### Other
