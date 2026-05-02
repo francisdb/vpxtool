@@ -2,7 +2,6 @@ use chrono::{DateTime, Utc};
 use log::info;
 use rayon::prelude::*;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::Debug;
 use std::fs::Metadata;
@@ -212,22 +211,9 @@ impl From<&TablesIndex> for TablesIndexJson {
 }
 
 fn sort_tables(mut tables: Vec<IndexedTable>) -> Vec<IndexedTable> {
-    tables.sort_by(|a, b| {
-        let name_order = match (
-            a.table_info.table_name.as_deref(),
-            b.table_info.table_name.as_deref(),
-        ) {
-            (Some(a_name), Some(b_name)) => a_name.to_lowercase().cmp(&b_name.to_lowercase()),
-            (Some(_), None) => Ordering::Less,
-            (None, Some(_)) => Ordering::Greater,
-            (None, None) => Ordering::Equal,
-        };
-
-        if name_order == Ordering::Equal {
-            a.path.file_name().cmp(&b.path.file_name())
-        } else {
-            name_order
-        }
+    tables.sort_by_cached_key(|table| {
+        let normalized_path = to_normalized_path(&table.path);
+        (normalized_path.to_lowercase(), normalized_path)
     });
     tables
 }
@@ -1399,33 +1385,27 @@ LoadVPM "01210000","sys80.vbs",3.10
     }
 
     #[test]
-    fn test_sort_tables_by_name_case_insensitive() {
+    fn test_sort_tables_by_normalized_path_case_insensitive() {
         let tables = vec![
-            make_indexed_table("c.vpx", Some("Zeta")),
-            make_indexed_table("b.vpx", Some("alpha")),
-            make_indexed_table("a.vpx", Some("Beta")),
+            make_indexed_table("C/third.vpx", Some("Zeta")),
+            make_indexed_table("b/second.vpx", Some("alpha")),
+            make_indexed_table("A/first.vpx", Some("Beta")),
         ];
         let sorted = sort_tables(tables);
-        let names: Vec<_> = sorted
-            .iter()
-            .map(|t| t.table_info.table_name.as_deref())
-            .collect();
-        assert_eq!(names, vec![Some("alpha"), Some("Beta"), Some("Zeta")]);
+        let paths: Vec<_> = sorted.iter().map(|t| t.path.to_str().unwrap()).collect();
+        assert_eq!(paths, vec!["A/first.vpx", "b/second.vpx", "C/third.vpx"]);
     }
 
     #[test]
-    fn test_sort_tables_none_names_sort_last() {
+    fn test_sort_tables_ignores_table_name() {
         let tables = vec![
-            make_indexed_table("b.vpx", None),
-            make_indexed_table("a.vpx", Some("Alpha")),
-            make_indexed_table("c.vpx", None),
+            make_indexed_table("z.vpx", Some("Alpha")),
+            make_indexed_table("a.vpx", None),
+            make_indexed_table("m.vpx", Some("Omega")),
         ];
         let sorted = sort_tables(tables);
-        let names: Vec<_> = sorted
-            .iter()
-            .map(|t| t.table_info.table_name.as_deref())
-            .collect();
-        assert_eq!(names, vec![Some("Alpha"), None, None]);
+        let paths: Vec<_> = sorted.iter().map(|t| t.path.to_str().unwrap()).collect();
+        assert_eq!(paths, vec!["a.vpx", "m.vpx", "z.vpx"]);
     }
 
     #[test]
