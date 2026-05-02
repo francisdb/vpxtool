@@ -6,7 +6,7 @@ use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::fs::Metadata;
-use std::io::Read;
+use std::io::{BufReader, BufWriter, Read};
 use std::time::SystemTime;
 use std::{
     ffi::OsStr,
@@ -563,8 +563,9 @@ pub fn get_romname_from_vpx(vpx_path: &Path) -> io::Result<Option<String>> {
 }
 
 fn read_table_info_json(info_file_path: &Path) -> io::Result<TableInfo> {
-    let mut info_file = File::open(info_file_path)?;
-    let json = serde_json::from_reader(&mut info_file).map_err(|e| {
+    let info_file = File::open(info_file_path)?;
+    let reader = BufReader::new(info_file);
+    let json = serde_json::from_reader(reader).map_err(|e| {
         io::Error::other(format!(
             "Failed to parse/read json {}: {}",
             info_file_path.display(),
@@ -650,9 +651,10 @@ fn find_wheel_path(vpx_file_path: &Path) -> Option<PathBuf> {
 fn consider_sidecar_vbs(path: &Path, game_data: GameData) -> io::Result<String> {
     let vbs_path = path.with_extension("vbs");
     let code = if vbs_path.exists() {
-        let mut vbs_file = File::open(vbs_path)?;
+        let vbs_file = File::open(vbs_path)?;
+        let mut reader = BufReader::new(vbs_file);
         let mut code = String::new();
-        vbs_file.read_to_string(&mut code)?;
+        reader.read_to_string(&mut code)?;
         code
     } else {
         game_data.code.string
@@ -667,8 +669,9 @@ fn last_modified(path: &Path) -> io::Result<SystemTime> {
 
 pub fn write_index_json(indexed_tables: &TablesIndex, json_path: &Path) -> io::Result<()> {
     let json_file = File::create(json_path)?;
+    let writer = BufWriter::new(json_file);
     let indexed_tables_json: TablesIndexJson = indexed_tables.into();
-    serde_json::to_writer_pretty(json_file, &indexed_tables_json).map_err(io::Error::other)
+    serde_json::to_writer_pretty(writer, &indexed_tables_json).map_err(io::Error::other)
 }
 
 pub fn read_index_json(json_path: &Path) -> io::Result<Option<TablesIndex>> {
@@ -676,7 +679,8 @@ pub fn read_index_json(json_path: &Path) -> io::Result<Option<TablesIndex>> {
         return Ok(None);
     }
     let json_file = File::open(json_path)?;
-    match serde_json::from_reader::<_, TablesIndexJson>(json_file) {
+    let reader = BufReader::new(json_file);
+    match serde_json::from_reader::<_, TablesIndexJson>(reader) {
         Ok(indexed_tables_json) => {
             let indexed_tables: TablesIndex = indexed_tables_json.into();
             Ok(Some(indexed_tables))
