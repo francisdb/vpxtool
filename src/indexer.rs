@@ -1082,7 +1082,7 @@ mod tests {
             "tables": []
         });
         serde_json::to_writer_pretty(json_file, &json_object)?;
-        let read = read_index_json(&index_path)?;
+        let read = read_index_json(&index_path, None)?;
         assert_eq!(read, Some(index));
         Ok(())
     }
@@ -1095,7 +1095,7 @@ mod tests {
         let json_file = File::create(&index_path)?;
         // write garbage to file
         serde_json::to_writer_pretty(json_file, &"garbage")?;
-        let read = read_index_json(&index_path)?;
+        let read = read_index_json(&index_path, None)?;
         assert_eq!(read, None);
         Ok(())
     }
@@ -1105,8 +1105,8 @@ mod tests {
         let index = TablesIndex::empty();
         let test_dir = testdir!();
         let index_path = test_dir.join("test.json");
-        write_index_json(&index, &index_path)?;
-        let read = read_index_json(&index_path)?;
+        write_index_json(&index, &index_path, None)?;
+        let read = read_index_json(&index_path, None)?;
         assert_eq!(read, Some(index));
         Ok(())
     }
@@ -1128,7 +1128,7 @@ mod tests {
                 author_website: None,
                 table_save_date: None,
                 table_description: None,
-                properties: HashMap::new(),
+                properties: BTreeMap::new(),
             },
             game_name: Some("testrom".to_string()),
             b2s_path: Some(PathBuf::from("test.b2s")),
@@ -1140,8 +1140,8 @@ mod tests {
         });
         let test_dir = testdir!();
         let index_path = test_dir.join("test.json");
-        write_index_json(&index, &index_path)?;
-        let read = read_index_json(&index_path)?;
+        write_index_json(&index, &index_path, None)?;
+        let read = read_index_json(&index_path, None)?;
         assert_eq!(read, Some(index));
         Ok(())
     }
@@ -1149,7 +1149,7 @@ mod tests {
     #[test]
     fn test_read_index_missing() -> io::Result<()> {
         let index_path = PathBuf::from("missing_index_file.json");
-        let read = read_index_json(&index_path)?;
+        let read = read_index_json(&index_path, None)?;
         assert_eq!(read, None);
         Ok(())
     }
@@ -1386,7 +1386,7 @@ LoadVPM "01210000","sys80.vbs",3.10
                 author_website: None,
                 table_save_date: None,
                 table_description: None,
-                properties: HashMap::new(),
+                properties: BTreeMap::new(),
             },
             game_name: None,
             b2s_path: None,
