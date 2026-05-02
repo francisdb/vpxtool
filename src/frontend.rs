@@ -120,6 +120,21 @@ pub fn frontend_index(
     recursive: bool,
     force_reindex: Vec<PathBuf>,
 ) -> Result<Vec<IndexedTable>, IndexError> {
+    let configured_pinmame_folder = resolved_config.configured_pinmame_folder();
+    frontend_index_with_configured_pinmame(
+        resolved_config,
+        recursive,
+        force_reindex,
+        configured_pinmame_folder.as_deref(),
+    )
+}
+
+pub fn frontend_index_with_configured_pinmame(
+    resolved_config: &ResolvedConfig,
+    recursive: bool,
+    force_reindex: Vec<PathBuf>,
+    configured_pinmame_folder: Option<&Path>,
+) -> Result<Vec<IndexedTable>, IndexError> {
     let pb = ProgressBar::hidden();
     pb.set_style(
         ProgressStyle::with_template(
@@ -133,7 +148,7 @@ pub fn frontend_index(
         &resolved_config.tables_folder,
         &resolved_config.tables_index_path,
         Some(&resolved_config.global_pinmame_folder()),
-        resolved_config.configured_pinmame_folder().as_deref(),
+        configured_pinmame_folder,
         &progress,
         force_reindex,
     );

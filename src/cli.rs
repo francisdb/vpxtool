@@ -225,17 +225,23 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             crate::println!("Using vpxtool config file {}", config_path.display())?;
             crate::println!("Using vpinball config file {}", config.vpx_config.display())?;
             crate::println!(
+            let configured_pinmame_folder = config.configured_pinmame_folder();
                 "Using global pinmame folder {}",
                 config.global_pinmame_folder().display()
             )?;
             crate::println!(
                 "Using configured pinmame folder {}",
-                config
-                    .configured_pinmame_folder()
+                configured_pinmame_folder
+                    .as_ref()
                     .map(|f| f.display().to_string())
                     .unwrap_or_else(|| "None".to_string())
             )?;
-            match frontend::frontend_index(&config, true, vec![]) {
+            match frontend::frontend_index_with_configured_pinmame(
+                &config,
+                true,
+                vec![],
+                configured_pinmame_folder.as_deref(),
+            ) {
                 Ok(tables) if tables.is_empty() => {
                     let warning =
                         format!("No tables found in {}", config.tables_folder.display()).red();
