@@ -908,6 +908,61 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn test_find_vpx_files_max_depth() -> io::Result<()> {
+        let tables_dir = testdir!().join("tables");
+        fs::create_dir(&tables_dir)?;
+        let sub1 = tables_dir.join("sub1");
+        fs::create_dir(&sub1)?;
+        let sub2 = sub1.join("sub2");
+        fs::create_dir(&sub2)?;
+
+        let top_vpx = tables_dir.join("top.vpx");
+        let mid_vpx = sub1.join("mid.vpx");
+        let deep_vpx = sub2.join("deep.vpx");
+        vpx::new_minimal_vpx(&top_vpx)?;
+        vpx::new_minimal_vpx(&mid_vpx)?;
+        vpx::new_minimal_vpx(&deep_vpx)?;
+
+        fn names(files: &[PathWithMetadata]) -> Vec<String> {
+            let mut v: Vec<_> = files
+                .iter()
+                .map(|f| f.path.file_name().unwrap().to_string_lossy().into_owned())
+                .collect();
+            v.sort();
+            v
+        }
+
+        // None means unlimited - all three files found.
+        assert_eq!(
+            names(&find_vpx_files(true, None, &tables_dir)?),
+            vec!["deep.vpx", "mid.vpx", "top.vpx"]
+        );
+
+        // Depth 1: only the top-level file.
+        assert_eq!(
+            names(&find_vpx_files(true, Some(1), &tables_dir)?),
+            vec!["top.vpx"]
+        );
+
+        // Depth 2: top-level + one subdir level.
+        assert_eq!(
+            names(&find_vpx_files(true, Some(2), &tables_dir)?),
+            vec!["mid.vpx", "top.vpx"]
+        );
+
+        // Depth 3: everything.
+        assert_eq!(
+            names(&find_vpx_files(true, Some(3), &tables_dir)?),
+            vec!["deep.vpx", "mid.vpx", "top.vpx"]
+        );
+
+        // Depth 0 yields only the root dir entry, which is not a .vpx file.
+        assert!(find_vpx_files(true, Some(0), &tables_dir)?.is_empty());
+
+        Ok(())
+    }
+
     fn test_script(temp_dir: &Path, game_name: &str) -> io::Result<PathBuf> {
         // write simple script in tempdir
         let script = format!(
