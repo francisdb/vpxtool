@@ -6,7 +6,7 @@ use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::fs::Metadata;
-use std::io::{BufReader, BufWriter, Read};
+use std::io::{BufReader, BufWriter, Read, Write};
 use std::sync::LazyLock;
 use std::time::SystemTime;
 use std::{
@@ -680,9 +680,12 @@ fn last_modified(path: &Path) -> io::Result<SystemTime> {
 
 pub fn write_index_json(indexed_tables: &TablesIndex, json_path: &Path) -> io::Result<()> {
     let json_file = File::create(json_path)?;
-    let writer = BufWriter::new(json_file);
+    let mut writer = BufWriter::new(json_file);
     let indexed_tables_json: TablesIndexJson = indexed_tables.into();
-    serde_json::to_writer_pretty(writer, &indexed_tables_json).map_err(io::Error::other)
+    serde_json::to_writer_pretty(&mut writer, &indexed_tables_json).map_err(io::Error::other)?;
+    // BufWriter flushes on drop but discards errors, so flush explicitly to surface
+    // late write failures (full disk, NAS drop) instead of silently truncating the index.
+    writer.flush()
 }
 
 pub fn read_index_json(json_path: &Path) -> io::Result<Option<TablesIndex>> {
