@@ -1,3 +1,4 @@
+use atomicwrites::{AllowOverwrite, AtomicFile};
 use chrono::{DateTime, Utc};
 use log::info;
 use rayon::prelude::*;
@@ -679,13 +680,18 @@ fn last_modified(path: &Path) -> io::Result<SystemTime> {
 }
 
 pub fn write_index_json(indexed_tables: &TablesIndex, json_path: &Path) -> io::Result<()> {
-    let json_file = File::create(json_path)?;
-    let mut writer = BufWriter::new(json_file);
+    // Write through a sibling temp file and atomically rename on success, so an
+    // interrupted run (Ctrl-C, crash, power loss) leaves the previous index intact
+    // instead of a half-written one. See issue #442.
     let indexed_tables_json: TablesIndexJson = indexed_tables.into();
-    serde_json::to_writer_pretty(&mut writer, &indexed_tables_json).map_err(io::Error::other)?;
-    // BufWriter flushes on drop but discards errors, so flush explicitly to surface
-    // late write failures (full disk, NAS drop) instead of silently truncating the index.
-    writer.flush()
+    AtomicFile::new(json_path, AllowOverwrite)
+        .write(|f| {
+            let mut writer = BufWriter::new(f);
+            serde_json::to_writer_pretty(&mut writer, &indexed_tables_json)
+                .map_err(io::Error::other)?;
+            writer.flush()
+        })
+        .map_err(io::Error::from)
 }
 
 pub fn read_index_json(json_path: &Path) -> io::Result<Option<TablesIndex>> {
