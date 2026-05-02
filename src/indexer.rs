@@ -133,7 +133,7 @@ impl IndexedTable {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct TablesIndex {
     tables: HashMap<PathBuf, IndexedTable>,
 }
@@ -241,6 +241,58 @@ impl From<TablesIndexJson> for TablesIndex {
             tables.insert(table.path.clone(), table);
         }
         TablesIndex { tables }
+    }
+}
+
+/// Convert a platform-specific path to a normalized string using forward slashes.
+fn to_normalized_path(path: &Path) -> String {
+    path.to_string_lossy()
+        .replace('\\', "/")
+}
+
+/// Convert a normalized path string using forward slashes back to a platform-specific PathBuf.
+fn from_normalized_path(normalized: &str) -> PathBuf {
+    #[cfg(windows)]
+    {
+        PathBuf::from(normalized.replace('/', "\\"))
+    }
+    #[cfg(not(windows))]
+    {
+        PathBuf::from(normalized)
+    }
+}
+
+/// Try to make a path relative to a base path. Returns a normalized string using forward slashes.
+/// If the path is not under base, returns the normalized absolute path.
+/// Canonicalizes both paths first to handle different representations (e.g., mapped drives vs UNC paths).
+fn try_make_relative_normalized(path: &Path, base: &Path) -> String {
+    // Try to canonicalize both paths to normalize different representations (mapped drive vs UNC)
+    let canonical_path = path.canonicalize().ok();
+    let canonical_base = base.canonicalize().ok();
+
+    // Use canonical versions if available for comparison, otherwise use originals
+    let path_to_check = canonical_path.as_deref().unwrap_or(path);
+    let base_to_check = canonical_base.as_deref().unwrap_or(base);
+
+    if let Ok(relative) = path_to_check.strip_prefix(base_to_check) {
+        to_normalized_path(relative)
+    } else {
+        // Use canonical path if available, otherwise use original
+        let display_path = canonical_path.as_deref().unwrap_or(path);
+        to_normalized_path(display_path)
+    }
+}
+
+/// Resolve a normalized path string to an absolute PathBuf.
+/// If the path is absolute, uses it directly. Otherwise, joins with base.
+fn resolve_normalized_path(normalized: &str, base: Option<&Path>) -> PathBuf {
+    let path = from_normalized_path(normalized);
+    if path.is_absolute() {
+        path
+    } else if let Some(base_path) = base {
+        base_path.join(path)
+    } else {
+        path
     }
 }
 
@@ -410,7 +462,7 @@ pub fn index_folder(
         return Err(IndexError::FolderDoesNotExist(tables_folder.to_path_buf()));
     }
 
-    let existing_index = read_index_json(tables_index_path)?;
+    let existing_index = read_index_json(tables_index_path, Some(tables_folder))?;
     if let Some(index) = &existing_index {
         info!(
             "  Found existing index with {} tables at {}",
@@ -464,7 +516,7 @@ pub fn index_folder(
     index.merge(vpx_files_with_table_info);
 
     // write the index to a file
-    write_index_json(&index, tables_index_path)?;
+    write_index_json(&index, tables_index_path, Some(tables_folder))?;
 
     Ok(index)
 }
@@ -707,19 +759,96 @@ fn consider_sidecar_vbs(path: &Path, game_data: GameData) -> io::Result<String> 
     Ok(code)
 }
 
+/// Normalize paths in an index to be relative to tables_root using forward slashes.
+fn normalize_index_for_json(index: &TablesIndex, tables_root: &Path) -> TablesIndex {
+    let normalized_tables: HashMap<PathBuf, IndexedTable> = index
+        .tables
+        .iter()
+        .map(|(_, table)| {
+            let normalized_table = IndexedTable {
+                path: PathBuf::from(try_make_relative_normalized(&table.path, tables_root)),
+                table_info: table.table_info.clone(),
+                game_name: table.game_name.clone(),
+                b2s_path: table.b2s_path.as_ref().map(|p| {
+                    PathBuf::from(try_make_relative_normalized(p, tables_root))
+                }),
+                rom_path: table.rom_path.as_ref().map(|p| {
+                    PathBuf::from(try_make_relative_normalized(p, tables_root))
+                }),
+                local_rom_path: table.local_rom_path.as_ref().map(|p| {
+                    PathBuf::from(try_make_relative_normalized(p, tables_root))
+                }),
+                wheel_path: table.wheel_path.as_ref().map(|p| {
+                    PathBuf::from(try_make_relative_normalized(p, tables_root))
+                }),
+                requires_pinmame: table.requires_pinmame,
+                last_modified: table.last_modified,
+            };
+            (normalized_table.path.clone(), normalized_table)
+        })
+        .collect();
+    TablesIndex {
+        tables: normalized_tables,
+    }
+}
+
+/// Denormalize paths in an index from using forward slashes to absolute platform-specific paths.
+fn denormalize_index_from_json(index: &TablesIndex, tables_root: Option<&Path>) -> TablesIndex {
+    let denormalized_tables: HashMap<PathBuf, IndexedTable> = index
+        .tables
+        .iter()
+        .map(|(_, table)| {
+            let denormalized_table = IndexedTable {
+                path: resolve_normalized_path(&table.path.to_string_lossy(), tables_root),
+                table_info: table.table_info.clone(),
+                game_name: table.game_name.clone(),
+                b2s_path: table.b2s_path.as_ref().map(|p| {
+                    resolve_normalized_path(&p.to_string_lossy(), tables_root)
+                }),
+                rom_path: table.rom_path.as_ref().map(|p| {
+                    resolve_normalized_path(&p.to_string_lossy(), tables_root)
+                }),
+                local_rom_path: table.local_rom_path.as_ref().map(|p| {
+                    resolve_normalized_path(&p.to_string_lossy(), tables_root)
+                }),
+                wheel_path: table.wheel_path.as_ref().map(|p| {
+                    resolve_normalized_path(&p.to_string_lossy(), tables_root)
+                }),
+                requires_pinmame: table.requires_pinmame,
+                last_modified: table.last_modified,
+            };
+            (denormalized_table.path.clone(), denormalized_table)
+        })
+        .collect();
+    TablesIndex {
+        tables: denormalized_tables,
+    }
+}
+
 fn last_modified(path: &Path) -> io::Result<SystemTime> {
     let metadata: Metadata = path.metadata()?;
     metadata.modified()
 }
 
-pub fn write_index_json(indexed_tables: &TablesIndex, json_path: &Path) -> io::Result<()> {
+pub fn write_index_json(
+    indexed_tables: &TablesIndex,
+    json_path: &Path,
+    tables_root: Option<&Path>,
+) -> io::Result<()> {
+    let normalized_index = match tables_root {
+        Some(root) => normalize_index_for_json(indexed_tables, root),
+        None => indexed_tables.clone(),
+    };
     let json_file = File::create(json_path)?;
     let writer = BufWriter::new(json_file);
-    let indexed_tables_json: TablesIndexJson = indexed_tables.into();
+    let indexed_tables_json: TablesIndexJson = (&normalized_index).into();
     serde_json::to_writer_pretty(writer, &indexed_tables_json).map_err(io::Error::other)
 }
 
-pub fn read_index_json(json_path: &Path) -> io::Result<Option<TablesIndex>> {
+pub fn read_index_json(
+    json_path: &Path,
+    tables_root: Option<&Path>,
+) -> io::Result<Option<TablesIndex>> {
     if !json_path.exists() {
         return Ok(None);
     }
@@ -728,7 +857,8 @@ pub fn read_index_json(json_path: &Path) -> io::Result<Option<TablesIndex>> {
     match serde_json::from_reader::<_, TablesIndexJson>(reader) {
         Ok(indexed_tables_json) => {
             let indexed_tables: TablesIndex = indexed_tables_json.into();
-            Ok(Some(indexed_tables))
+            let denormalized_index = denormalize_index_from_json(&indexed_tables, tables_root);
+            Ok(Some(denormalized_index))
         }
         Err(e) => {
             println!("Failed to parse index file, ignoring existing index. ({e})");
