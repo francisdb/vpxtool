@@ -3,7 +3,7 @@ use log::info;
 use rayon::prelude::*;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::cmp::Ordering;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::Debug;
 use std::fs::Metadata;
 use std::io::{BufReader, BufWriter, Read};
@@ -50,7 +50,7 @@ pub struct IndexedTableInfo {
     pub table_save_date: Option<String>,
     pub table_description: Option<String>,
     // the keys (and ordering) for these are defined in "GameStg/CustomInfoTags"
-    pub properties: HashMap<String, String>,
+    pub properties: BTreeMap<String, String>,
 }
 impl From<TableInfo> for IndexedTableInfo {
     fn from(table_info: TableInfo) -> Self {
@@ -67,7 +67,7 @@ impl From<TableInfo> for IndexedTableInfo {
             author_website: table_info.author_website,
             table_save_date: table_info.table_save_date,
             table_description: table_info.table_description,
-            properties: table_info.properties,
+            properties: table_info.properties.into_iter().collect(),
         }
     }
 }
