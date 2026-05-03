@@ -133,7 +133,7 @@ impl IndexedTable {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub struct TablesIndex {
     tables: HashMap<PathBuf, IndexedTable>,
 }
@@ -221,16 +221,6 @@ fn sort_tables(mut tables: Vec<IndexedTable>) -> Vec<IndexedTable> {
             .cmp(&b.path.to_string_lossy().to_lowercase())
     });
     tables
-}
-
-impl From<TablesIndexJson> for TablesIndex {
-    fn from(index: TablesIndexJson) -> Self {
-        let mut tables = HashMap::new();
-        for table in index.tables {
-            tables.insert(table.path.clone(), table);
-        }
-        TablesIndex { tables }
-    }
 }
 
 /// Convert a platform-specific path to a normalized string using forward slashes.
@@ -733,67 +723,46 @@ fn consider_sidecar_vbs(path: &Path, game_data: GameData) -> io::Result<String> 
     Ok(code)
 }
 
-/// Normalize all paths in an index to be relative to `tables_root`, using forward slashes.
-fn normalize_index_for_json(index: &TablesIndex, tables_root: &Path) -> TablesIndex {
-    // Canonicalize the root once so the per-path helper doesn't repeat the syscall.
-    let canonical_root = tables_root.canonicalize().ok();
-    let canonical_root = canonical_root.as_deref();
+/// Clone `table`, normalizing every path field to be relative to `tables_root`
+/// (forward slashes). `canonical_root` is the pre-canonicalized form of
+/// `tables_root`, computed once by the caller so we don't redo the syscall per
+/// path field.
+fn normalize_table_for_json(
+    table: &IndexedTable,
+    tables_root: &Path,
+    canonical_root: Option<&Path>,
+) -> IndexedTable {
     let norm =
         |p: &Path| PathBuf::from(try_make_relative_normalized(p, tables_root, canonical_root));
-    let tables = index
-        .tables
-        .values()
-        .map(|table| {
-            let normalized = IndexedTable {
-                path: norm(&table.path),
-                table_info: table.table_info.clone(),
-                game_name: table.game_name.clone(),
-                b2s_path: table.b2s_path.as_ref().map(|p| norm(p)),
-                rom_path: table.rom_path.as_ref().map(|p| norm(p)),
-                local_rom_path: table.local_rom_path.as_ref().map(|p| norm(p)),
-                wheel_path: table.wheel_path.as_ref().map(|p| norm(p)),
-                requires_pinmame: table.requires_pinmame,
-                last_modified: table.last_modified,
-            };
-            (normalized.path.clone(), normalized)
-        })
-        .collect();
-    TablesIndex { tables }
+    IndexedTable {
+        path: norm(&table.path),
+        table_info: table.table_info.clone(),
+        game_name: table.game_name.clone(),
+        b2s_path: table.b2s_path.as_ref().map(|p| norm(p)),
+        rom_path: table.rom_path.as_ref().map(|p| norm(p)),
+        local_rom_path: table.local_rom_path.as_ref().map(|p| norm(p)),
+        wheel_path: table.wheel_path.as_ref().map(|p| norm(p)),
+        requires_pinmame: table.requires_pinmame,
+        last_modified: table.last_modified,
+    }
 }
 
-/// Resolve all paths in an index from forward-slash strings back to absolute platform paths.
-fn denormalize_index_from_json(index: &TablesIndex, tables_root: Option<&Path>) -> TablesIndex {
-    let tables = index
-        .tables
-        .values()
-        .map(|table| {
-            let denormalized = IndexedTable {
-                path: resolve_normalized_path(&table.path.to_string_lossy(), tables_root),
-                table_info: table.table_info.clone(),
-                game_name: table.game_name.clone(),
-                b2s_path: table
-                    .b2s_path
-                    .as_ref()
-                    .map(|p| resolve_normalized_path(&p.to_string_lossy(), tables_root)),
-                rom_path: table
-                    .rom_path
-                    .as_ref()
-                    .map(|p| resolve_normalized_path(&p.to_string_lossy(), tables_root)),
-                local_rom_path: table
-                    .local_rom_path
-                    .as_ref()
-                    .map(|p| resolve_normalized_path(&p.to_string_lossy(), tables_root)),
-                wheel_path: table
-                    .wheel_path
-                    .as_ref()
-                    .map(|p| resolve_normalized_path(&p.to_string_lossy(), tables_root)),
-                requires_pinmame: table.requires_pinmame,
-                last_modified: table.last_modified,
-            };
-            (denormalized.path.clone(), denormalized)
-        })
-        .collect();
-    TablesIndex { tables }
+/// Resolve every path field in `table` from a forward-slash string back to an
+/// absolute platform path. Takes ownership so we don't clone strings we're
+/// about to throw away.
+fn denormalize_table_from_json(table: IndexedTable, tables_root: Option<&Path>) -> IndexedTable {
+    let resolve = |p: PathBuf| resolve_normalized_path(&p.to_string_lossy(), tables_root);
+    IndexedTable {
+        path: resolve(table.path),
+        table_info: table.table_info,
+        game_name: table.game_name,
+        b2s_path: table.b2s_path.map(resolve),
+        rom_path: table.rom_path.map(resolve),
+        local_rom_path: table.local_rom_path.map(resolve),
+        wheel_path: table.wheel_path.map(resolve),
+        requires_pinmame: table.requires_pinmame,
+        last_modified: table.last_modified,
+    }
 }
 
 fn last_modified(path: &Path) -> io::Result<SystemTime> {
@@ -806,11 +775,20 @@ pub fn write_index_json(
     json_path: &Path,
     tables_root: Option<&Path>,
 ) -> io::Result<()> {
-    let normalized = match tables_root {
-        Some(root) => normalize_index_for_json(indexed_tables, root),
-        None => indexed_tables.clone(),
+    // Canonicalize the root once so the per-path helper doesn't repeat the syscall.
+    let canonical_root = tables_root.and_then(|r| r.canonicalize().ok());
+    let canonical_root_ref = canonical_root.as_deref();
+    let tables: Vec<IndexedTable> = indexed_tables
+        .tables
+        .values()
+        .map(|t| match tables_root {
+            Some(root) => normalize_table_for_json(t, root, canonical_root_ref),
+            None => t.clone(),
+        })
+        .collect();
+    let indexed_tables_json = TablesIndexJson {
+        tables: sort_tables(tables),
     };
-    let indexed_tables_json: TablesIndexJson = (&normalized).into();
     atomic_write(json_path, |file| {
         let mut writer = BufWriter::new(file);
         serde_json::to_writer_pretty(&mut writer, &indexed_tables_json)
@@ -830,10 +808,16 @@ pub fn read_index_json(
     let json_file = File::open(json_path)?;
     let reader = BufReader::new(json_file);
     match serde_json::from_reader::<_, TablesIndexJson>(reader) {
-        Ok(indexed_tables_json) => {
-            let indexed_tables: TablesIndex = indexed_tables_json.into();
-            let denormalized = denormalize_index_from_json(&indexed_tables, tables_root);
-            Ok(Some(denormalized))
+        Ok(json) => {
+            let tables = json
+                .tables
+                .into_iter()
+                .map(|t| {
+                    let denormalized = denormalize_table_from_json(t, tables_root);
+                    (denormalized.path.clone(), denormalized)
+                })
+                .collect();
+            Ok(Some(TablesIndex { tables }))
         }
         Err(e) => {
             println!("Failed to parse index file, ignoring existing index. ({e})");
