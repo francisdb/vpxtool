@@ -1,4 +1,3 @@
-use atomicwrites::{AllowOverwrite, AtomicFile};
 use chrono::{DateTime, Utc};
 use log::info;
 use rayon::prelude::*;
@@ -7,7 +6,7 @@ use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::fs::Metadata;
-use std::io::{BufReader, BufWriter, Read, Write};
+use std::io::{BufReader, BufWriter, Read};
 use std::sync::LazyLock;
 use std::time::SystemTime;
 use std::{
@@ -22,6 +21,8 @@ use vpin::vpx::tableinfo::TableInfo;
 use walkdir::{DirEntry, FilterEntry, IntoIter, WalkDir};
 
 use vpx::gamedata::GameData;
+
+use crate::atomicwrite::atomic_write;
 
 pub const DEFAULT_INDEX_FILE_NAME: &str = "vpxtool_index.json";
 
@@ -698,18 +699,14 @@ fn last_modified(path: &Path) -> io::Result<SystemTime> {
 }
 
 pub fn write_index_json(indexed_tables: &TablesIndex, json_path: &Path) -> io::Result<()> {
-    // Write through a sibling temp file and atomically rename on success, so an
-    // interrupted run (Ctrl-C, crash, power loss) leaves the previous index intact
-    // instead of a half-written one. See issue #442.
     let indexed_tables_json: TablesIndexJson = indexed_tables.into();
-    AtomicFile::new(json_path, AllowOverwrite)
-        .write(|f| {
-            let mut writer = BufWriter::new(f);
-            serde_json::to_writer_pretty(&mut writer, &indexed_tables_json)
-                .map_err(io::Error::other)?;
-            writer.flush()
-        })
-        .map_err(io::Error::from)
+    atomic_write(json_path, |file| {
+        let mut writer = BufWriter::new(file);
+        serde_json::to_writer_pretty(&mut writer, &indexed_tables_json)
+            .map_err(io::Error::other)?;
+        writer.into_inner().map_err(|e| e.into_error())?;
+        Ok(())
+    })
 }
 
 pub fn read_index_json(json_path: &Path) -> io::Result<Option<TablesIndex>> {
