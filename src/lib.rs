@@ -2,6 +2,7 @@ use std::fs::metadata;
 use std::io;
 use std::path::{Path, PathBuf};
 
+mod atomicwrite;
 mod backglass;
 pub mod fixprint;
 mod frontend;
