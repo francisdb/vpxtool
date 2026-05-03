@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.28.1](https://github.com/francisdb/vpxtool/compare/v0.28.0...v0.28.1) - 2026-05-03
+
+### Fixed
+
+- *(indexer)* hand-roll atomic index write resilient to NAS fsync limits ([#744](https://github.com/francisdb/vpxtool/pull/744))
+
+### Other
+
+- *(frontend)* take configured_pinmame_folder as a parameter ([#746](https://github.com/francisdb/vpxtool/pull/746))
+- avoid duplicate vpinball ini reads ([#733](https://github.com/francisdb/vpxtool/pull/733))
+- sort index entries by path instead of table name ([#742](https://github.com/francisdb/vpxtool/pull/742))
+- use BTreeMap for deterministic properties serialization ([#741](https://github.com/francisdb/vpxtool/pull/741))
+
 ## [0.28.0](https://github.com/francisdb/vpxtool/compare/v0.27.2...v0.28.0) - 2026-05-02
 
 ### Added
