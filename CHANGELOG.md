@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.29.0](https://github.com/francisdb/vpxtool/compare/v0.28.1...v0.29.0) - 2026-05-03
+
+### Other
+
+- *(indexer)* single-pass index path normalization ([#749](https://github.com/francisdb/vpxtool/pull/749))
+- store index paths as relative and normalized ([#743](https://github.com/francisdb/vpxtool/pull/743))
+
 ## [0.28.1](https://github.com/francisdb/vpxtool/compare/v0.28.0...v0.28.1) - 2026-05-03
 
 ### Fixed
