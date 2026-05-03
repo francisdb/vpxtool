@@ -223,6 +223,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
         }
         Some((CMD_FRONTEND, sub_matches)) => {
             let (config_path, config) = config::load_or_setup_config()?;
+            let configured_pinmame_folder = config.configured_pinmame_folder();
             let max_depth = sub_matches
                 .get_one::<usize>(ARG_MAX_DEPTH)
                 .copied()
@@ -235,12 +236,18 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             )?;
             crate::println!(
                 "Using configured pinmame folder {}",
-                config
-                    .configured_pinmame_folder()
+                configured_pinmame_folder
+                    .as_ref()
                     .map(|f| f.display().to_string())
                     .unwrap_or_else(|| "None".to_string())
             )?;
-            match frontend::frontend_index(&config, true, max_depth, vec![]) {
+            match frontend::frontend_index(
+                &config,
+                true,
+                max_depth,
+                configured_pinmame_folder.as_deref(),
+                vec![],
+            ) {
                 Ok(tables) if tables.is_empty() => {
                     let warning =
                         format!("No tables found in {}", config.tables_folder.display()).red();

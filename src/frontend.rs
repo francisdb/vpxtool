@@ -119,6 +119,7 @@ pub fn frontend_index(
     resolved_config: &ResolvedConfig,
     recursive: bool,
     max_depth: Option<usize>,
+    configured_pinmame_folder: Option<&Path>,
     force_reindex: Vec<PathBuf>,
 ) -> Result<Vec<IndexedTable>, IndexError> {
     let pb = ProgressBar::hidden();
@@ -135,7 +136,7 @@ pub fn frontend_index(
         &resolved_config.tables_folder,
         &resolved_config.tables_index_path,
         Some(&resolved_config.global_pinmame_folder()),
-        resolved_config.configured_pinmame_folder().as_deref(),
+        configured_pinmame_folder,
         &progress,
         force_reindex,
     );
@@ -148,6 +149,7 @@ pub fn frontend_index(
 }
 
 pub fn frontend(config: &ResolvedConfig, mut vpx_files_with_tableinfo: Vec<IndexedTable>) {
+    let configured_pinmame_folder = config.configured_pinmame_folder();
     let mut main_selection_opt = None;
     loop {
         let tables: Vec<String> = vpx_files_with_tableinfo
@@ -189,7 +191,13 @@ pub fn frontend(config: &ResolvedConfig, mut vpx_files_with_tableinfo: Vec<Index
                                 .unwrap()
                                 .clone();
                             let info_str = display_table_line_full(&info);
-                            table_menu(config, &mut vpx_files_with_tableinfo, &info, &info_str);
+                            table_menu(
+                                config,
+                                configured_pinmame_folder.as_deref(),
+                                &mut vpx_files_with_tableinfo,
+                                &info,
+                                &info_str,
+                            );
                         }
                     }
                     RECENT_INDEX => {
@@ -212,7 +220,13 @@ pub fn frontend(config: &ResolvedConfig, mut vpx_files_with_tableinfo: Vec<Index
                         if let Some(selected_index) = selected {
                             let info = last_modified.get(selected_index).unwrap();
                             let info_str = display_table_line_full(info);
-                            table_menu(config, &mut vpx_files_with_tableinfo, info, &info_str);
+                            table_menu(
+                                config,
+                                configured_pinmame_folder.as_deref(),
+                                &mut vpx_files_with_tableinfo,
+                                info,
+                                &info_str,
+                            );
                         }
                     }
                     _ => {
@@ -220,7 +234,13 @@ pub fn frontend(config: &ResolvedConfig, mut vpx_files_with_tableinfo: Vec<Index
 
                         let info = vpx_files_with_tableinfo.get(index).unwrap().clone();
                         let info_str = display_table_line_full(&info);
-                        table_menu(config, &mut vpx_files_with_tableinfo, &info, &info_str);
+                        table_menu(
+                            config,
+                            configured_pinmame_folder.as_deref(),
+                            &mut vpx_files_with_tableinfo,
+                            &info,
+                            &info_str,
+                        );
                     }
                 }
             }
@@ -231,6 +251,7 @@ pub fn frontend(config: &ResolvedConfig, mut vpx_files_with_tableinfo: Vec<Index
 
 fn table_menu(
     config: &ResolvedConfig,
+    configured_pinmame_folder: Option<&Path>,
     vpx_files_with_tableinfo: &mut Vec<IndexedTable>,
     info: &IndexedTable,
     info_str: &str,
@@ -250,6 +271,7 @@ fn table_menu(
                     config,
                     true,
                     config.tables_scan_max_depth,
+                    configured_pinmame_folder,
                     vec![selected_path.clone()],
                 ) {
                     Ok(index) => {
