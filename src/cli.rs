@@ -255,7 +255,11 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     Ok(ExitCode::FAILURE)
                 }
                 Ok(vpx_files_with_tableinfo) => {
-                    frontend::frontend(&config, vpx_files_with_tableinfo);
+                    frontend::frontend(
+                        &config,
+                        configured_pinmame_folder.as_deref(),
+                        vpx_files_with_tableinfo,
+                    );
                     Ok(ExitCode::SUCCESS)
                 }
                 Err(IndexError::FolderDoesNotExist(path)) => {

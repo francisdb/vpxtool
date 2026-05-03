@@ -148,8 +148,11 @@ pub fn frontend_index(
     Ok(tables)
 }
 
-pub fn frontend(config: &ResolvedConfig, mut vpx_files_with_tableinfo: Vec<IndexedTable>) {
-    let configured_pinmame_folder = config.configured_pinmame_folder();
+pub fn frontend(
+    config: &ResolvedConfig,
+    configured_pinmame_folder: Option<&Path>,
+    mut vpx_files_with_tableinfo: Vec<IndexedTable>,
+) {
     let mut main_selection_opt = None;
     loop {
         let tables: Vec<String> = vpx_files_with_tableinfo
@@ -193,7 +196,7 @@ pub fn frontend(config: &ResolvedConfig, mut vpx_files_with_tableinfo: Vec<Index
                             let info_str = display_table_line_full(&info);
                             table_menu(
                                 config,
-                                configured_pinmame_folder.as_deref(),
+                                configured_pinmame_folder,
                                 &mut vpx_files_with_tableinfo,
                                 &info,
                                 &info_str,
@@ -222,7 +225,7 @@ pub fn frontend(config: &ResolvedConfig, mut vpx_files_with_tableinfo: Vec<Index
                             let info_str = display_table_line_full(info);
                             table_menu(
                                 config,
-                                configured_pinmame_folder.as_deref(),
+                                configured_pinmame_folder,
                                 &mut vpx_files_with_tableinfo,
                                 info,
                                 &info_str,
@@ -236,7 +239,7 @@ pub fn frontend(config: &ResolvedConfig, mut vpx_files_with_tableinfo: Vec<Index
                         let info_str = display_table_line_full(&info);
                         table_menu(
                             config,
-                            configured_pinmame_folder.as_deref(),
+                            configured_pinmame_folder,
                             &mut vpx_files_with_tableinfo,
                             &info,
                             &info_str,
