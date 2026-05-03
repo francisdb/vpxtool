@@ -3,7 +3,6 @@ use chrono::{DateTime, Utc};
 use log::info;
 use rayon::prelude::*;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::fs::Metadata;
@@ -214,21 +213,10 @@ impl From<&TablesIndex> for TablesIndexJson {
 
 fn sort_tables(mut tables: Vec<IndexedTable>) -> Vec<IndexedTable> {
     tables.sort_by(|a, b| {
-        let name_order = match (
-            a.table_info.table_name.as_deref(),
-            b.table_info.table_name.as_deref(),
-        ) {
-            (Some(a_name), Some(b_name)) => a_name.to_lowercase().cmp(&b_name.to_lowercase()),
-            (Some(_), None) => Ordering::Less,
-            (None, Some(_)) => Ordering::Greater,
-            (None, None) => Ordering::Equal,
-        };
-
-        if name_order == Ordering::Equal {
-            a.path.file_name().cmp(&b.path.file_name())
-        } else {
-            name_order
-        }
+        a.path
+            .to_string_lossy()
+            .to_lowercase()
+            .cmp(&b.path.to_string_lossy().to_lowercase())
     });
     tables
 }
@@ -892,7 +880,7 @@ mod tests {
         let temp_dir = testdir!().join("temp");
         fs::create_dir(&temp_dir)?;
 
-        // Create vpx files with names that would not be alphabetically sorted by filename
+        // Create vpx files whose paths are not in alphabetical order to verify sort
         let vpx_z_path = tables_dir.join("z_table.vpx");
         let vpx_a_path = tables_dir.join("a_table.vpx");
         let vpx_m_path = tables_dir.join("m_table.vpx");
@@ -1320,43 +1308,29 @@ LoadVPM "01210000","sys80.vbs",3.10
     }
 
     #[test]
-    fn test_sort_tables_by_name_case_insensitive() {
+    fn test_sort_tables_by_path_case_insensitive() {
         let tables = vec![
-            make_indexed_table("c.vpx", Some("Zeta")),
-            make_indexed_table("b.vpx", Some("alpha")),
-            make_indexed_table("a.vpx", Some("Beta")),
-        ];
-        let sorted = sort_tables(tables);
-        let names: Vec<_> = sorted
-            .iter()
-            .map(|t| t.table_info.table_name.as_deref())
-            .collect();
-        assert_eq!(names, vec![Some("alpha"), Some("Beta"), Some("Zeta")]);
-    }
-
-    #[test]
-    fn test_sort_tables_none_names_sort_last() {
-        let tables = vec![
-            make_indexed_table("b.vpx", None),
-            make_indexed_table("a.vpx", Some("Alpha")),
-            make_indexed_table("c.vpx", None),
-        ];
-        let sorted = sort_tables(tables);
-        let names: Vec<_> = sorted
-            .iter()
-            .map(|t| t.table_info.table_name.as_deref())
-            .collect();
-        assert_eq!(names, vec![Some("Alpha"), None, None]);
-    }
-
-    #[test]
-    fn test_sort_tables_falls_back_to_filename() {
-        let tables = vec![
-            make_indexed_table("dir/zebra.vpx", Some("Same")),
-            make_indexed_table("dir/apple.vpx", Some("Same")),
+            make_indexed_table("dir/Zebra.vpx", Some("Alpha")),
+            make_indexed_table("dir/apple.vpx", Some("Zeta")),
+            make_indexed_table("dir/Mango.vpx", Some("Beta")),
         ];
         let sorted = sort_tables(tables);
         let paths: Vec<_> = sorted.iter().map(|t| t.path.to_str().unwrap()).collect();
-        assert_eq!(paths, vec!["dir/apple.vpx", "dir/zebra.vpx"]);
+        assert_eq!(
+            paths,
+            vec!["dir/apple.vpx", "dir/Mango.vpx", "dir/Zebra.vpx"]
+        );
+    }
+
+    #[test]
+    fn test_sort_tables_by_full_path_not_just_filename() {
+        let tables = vec![
+            make_indexed_table("z_dir/apple.vpx", None),
+            make_indexed_table("a_dir/zebra.vpx", None),
+        ];
+        let sorted = sort_tables(tables);
+        let paths: Vec<_> = sorted.iter().map(|t| t.path.to_str().unwrap()).collect();
+        // a_dir sorts before z_dir even though apple < zebra doesn't matter
+        assert_eq!(paths, vec!["a_dir/zebra.vpx", "z_dir/apple.vpx"]);
     }
 }
