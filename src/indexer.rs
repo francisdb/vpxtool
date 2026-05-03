@@ -133,7 +133,7 @@ impl IndexedTable {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct TablesIndex {
     tables: HashMap<PathBuf, IndexedTable>,
 }
@@ -230,6 +230,57 @@ impl From<TablesIndexJson> for TablesIndex {
             tables.insert(table.path.clone(), table);
         }
         TablesIndex { tables }
+    }
+}
+
+/// Convert a platform-specific path to a normalized string using forward slashes.
+fn to_normalized_path(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
+}
+
+/// Convert a normalized forward-slash path string back to a platform-specific `PathBuf`.
+fn from_normalized_path(normalized: &str) -> PathBuf {
+    #[cfg(windows)]
+    {
+        PathBuf::from(normalized.replace('/', "\\"))
+    }
+    #[cfg(not(windows))]
+    {
+        PathBuf::from(normalized)
+    }
+}
+
+/// Try to make `path` relative to `base`, returning a forward-slash normalized string.
+/// If `path` is not under `base`, returns the normalized absolute path instead.
+/// `canonical_base` is the pre-canonicalized form of `base` (computed once by the caller).
+/// The cheap `strip_prefix` on the original paths is tried first; only if that fails is
+/// `path` itself canonicalized, to handle mapped-drive / UNC / symlink mismatches.
+fn try_make_relative_normalized(path: &Path, base: &Path, canonical_base: Option<&Path>) -> String {
+    // Fast path: no syscalls needed when the paths share a common prefix as-is.
+    if let Ok(relative) = path.strip_prefix(base) {
+        return to_normalized_path(relative);
+    }
+    // Slow path: canonicalize just this path and retry against the pre-canonicalized base.
+    let canonical_path = path.canonicalize().ok();
+    let path_to_check = canonical_path.as_deref().unwrap_or(path);
+    let base_to_check = canonical_base.unwrap_or(base);
+    if let Ok(relative) = path_to_check.strip_prefix(base_to_check) {
+        to_normalized_path(relative)
+    } else {
+        to_normalized_path(path_to_check)
+    }
+}
+
+/// Resolve a normalized path string back to an absolute `PathBuf`.
+/// Relative paths are joined with `base`; absolute paths are used as-is.
+fn resolve_normalized_path(normalized: &str, base: Option<&Path>) -> PathBuf {
+    let path = from_normalized_path(normalized);
+    if path.is_absolute() {
+        path
+    } else if let Some(base_path) = base {
+        base_path.join(path)
+    } else {
+        path
     }
 }
 
@@ -400,7 +451,7 @@ pub fn index_folder(
         return Err(IndexError::FolderDoesNotExist(tables_folder.to_path_buf()));
     }
 
-    let existing_index = read_index_json(tables_index_path)?;
+    let existing_index = read_index_json(tables_index_path, Some(tables_folder))?;
     if let Some(index) = &existing_index {
         info!(
             "  Found existing index with {} tables at {}",
@@ -454,7 +505,7 @@ pub fn index_folder(
     index.merge(vpx_files_with_table_info);
 
     // write the index to a file
-    write_index_json(&index, tables_index_path)?;
+    write_index_json(&index, tables_index_path, Some(tables_folder))?;
 
     Ok(index)
 }
@@ -682,13 +733,84 @@ fn consider_sidecar_vbs(path: &Path, game_data: GameData) -> io::Result<String> 
     Ok(code)
 }
 
+/// Normalize all paths in an index to be relative to `tables_root`, using forward slashes.
+fn normalize_index_for_json(index: &TablesIndex, tables_root: &Path) -> TablesIndex {
+    // Canonicalize the root once so the per-path helper doesn't repeat the syscall.
+    let canonical_root = tables_root.canonicalize().ok();
+    let canonical_root = canonical_root.as_deref();
+    let norm =
+        |p: &Path| PathBuf::from(try_make_relative_normalized(p, tables_root, canonical_root));
+    let tables = index
+        .tables
+        .values()
+        .map(|table| {
+            let normalized = IndexedTable {
+                path: norm(&table.path),
+                table_info: table.table_info.clone(),
+                game_name: table.game_name.clone(),
+                b2s_path: table.b2s_path.as_ref().map(|p| norm(p)),
+                rom_path: table.rom_path.as_ref().map(|p| norm(p)),
+                local_rom_path: table.local_rom_path.as_ref().map(|p| norm(p)),
+                wheel_path: table.wheel_path.as_ref().map(|p| norm(p)),
+                requires_pinmame: table.requires_pinmame,
+                last_modified: table.last_modified,
+            };
+            (normalized.path.clone(), normalized)
+        })
+        .collect();
+    TablesIndex { tables }
+}
+
+/// Resolve all paths in an index from forward-slash strings back to absolute platform paths.
+fn denormalize_index_from_json(index: &TablesIndex, tables_root: Option<&Path>) -> TablesIndex {
+    let tables = index
+        .tables
+        .values()
+        .map(|table| {
+            let denormalized = IndexedTable {
+                path: resolve_normalized_path(&table.path.to_string_lossy(), tables_root),
+                table_info: table.table_info.clone(),
+                game_name: table.game_name.clone(),
+                b2s_path: table
+                    .b2s_path
+                    .as_ref()
+                    .map(|p| resolve_normalized_path(&p.to_string_lossy(), tables_root)),
+                rom_path: table
+                    .rom_path
+                    .as_ref()
+                    .map(|p| resolve_normalized_path(&p.to_string_lossy(), tables_root)),
+                local_rom_path: table
+                    .local_rom_path
+                    .as_ref()
+                    .map(|p| resolve_normalized_path(&p.to_string_lossy(), tables_root)),
+                wheel_path: table
+                    .wheel_path
+                    .as_ref()
+                    .map(|p| resolve_normalized_path(&p.to_string_lossy(), tables_root)),
+                requires_pinmame: table.requires_pinmame,
+                last_modified: table.last_modified,
+            };
+            (denormalized.path.clone(), denormalized)
+        })
+        .collect();
+    TablesIndex { tables }
+}
+
 fn last_modified(path: &Path) -> io::Result<SystemTime> {
     let metadata: Metadata = path.metadata()?;
     metadata.modified()
 }
 
-pub fn write_index_json(indexed_tables: &TablesIndex, json_path: &Path) -> io::Result<()> {
-    let indexed_tables_json: TablesIndexJson = indexed_tables.into();
+pub fn write_index_json(
+    indexed_tables: &TablesIndex,
+    json_path: &Path,
+    tables_root: Option<&Path>,
+) -> io::Result<()> {
+    let normalized = match tables_root {
+        Some(root) => normalize_index_for_json(indexed_tables, root),
+        None => indexed_tables.clone(),
+    };
+    let indexed_tables_json: TablesIndexJson = (&normalized).into();
     atomic_write(json_path, |file| {
         let mut writer = BufWriter::new(file);
         serde_json::to_writer_pretty(&mut writer, &indexed_tables_json)
@@ -698,7 +820,10 @@ pub fn write_index_json(indexed_tables: &TablesIndex, json_path: &Path) -> io::R
     })
 }
 
-pub fn read_index_json(json_path: &Path) -> io::Result<Option<TablesIndex>> {
+pub fn read_index_json(
+    json_path: &Path,
+    tables_root: Option<&Path>,
+) -> io::Result<Option<TablesIndex>> {
     if !json_path.exists() {
         return Ok(None);
     }
@@ -707,7 +832,8 @@ pub fn read_index_json(json_path: &Path) -> io::Result<Option<TablesIndex>> {
     match serde_json::from_reader::<_, TablesIndexJson>(reader) {
         Ok(indexed_tables_json) => {
             let indexed_tables: TablesIndex = indexed_tables_json.into();
-            Ok(Some(indexed_tables))
+            let denormalized = denormalize_index_from_json(&indexed_tables, tables_root);
+            Ok(Some(denormalized))
         }
         Err(e) => {
             println!("Failed to parse index file, ignoring existing index. ({e})");
@@ -980,7 +1106,7 @@ mod tests {
             "tables": []
         });
         serde_json::to_writer_pretty(json_file, &json_object)?;
-        let read = read_index_json(&index_path)?;
+        let read = read_index_json(&index_path, None)?;
         assert_eq!(read, Some(index));
         Ok(())
     }
@@ -993,7 +1119,7 @@ mod tests {
         let json_file = File::create(&index_path)?;
         // write garbage to file
         serde_json::to_writer_pretty(json_file, &"garbage")?;
-        let read = read_index_json(&index_path)?;
+        let read = read_index_json(&index_path, None)?;
         assert_eq!(read, None);
         Ok(())
     }
@@ -1003,8 +1129,8 @@ mod tests {
         let index = TablesIndex::empty();
         let test_dir = testdir!();
         let index_path = test_dir.join("test.json");
-        write_index_json(&index, &index_path)?;
-        let read = read_index_json(&index_path)?;
+        write_index_json(&index, &index_path, None)?;
+        let read = read_index_json(&index_path, None)?;
         assert_eq!(read, Some(index));
         Ok(())
     }
@@ -1038,8 +1164,8 @@ mod tests {
         });
         let test_dir = testdir!();
         let index_path = test_dir.join("test.json");
-        write_index_json(&index, &index_path)?;
-        let read = read_index_json(&index_path)?;
+        write_index_json(&index, &index_path, None)?;
+        let read = read_index_json(&index_path, None)?;
         assert_eq!(read, Some(index));
         Ok(())
     }
@@ -1079,7 +1205,7 @@ mod tests {
         });
         let test_dir = testdir!();
         let index_path = test_dir.join("test.json");
-        write_index_json(&index, &index_path)?;
+        write_index_json(&index, &index_path, None)?;
 
         // Check raw JSON key order is alphabetical.
         let json_str = std::fs::read_to_string(&index_path)?;
@@ -1090,7 +1216,7 @@ mod tests {
         assert!(mango_pos < zebra_pos, "mango should come before zebra");
 
         // Round-trip preserves all entries.
-        let read = read_index_json(&index_path)?.expect("index missing after write");
+        let read = read_index_json(&index_path, None)?.expect("index missing after write");
         let keys: Vec<_> = read
             .tables()
             .into_iter()
@@ -1108,8 +1234,66 @@ mod tests {
     #[test]
     fn test_read_index_missing() -> io::Result<()> {
         let index_path = PathBuf::from("missing_index_file.json");
-        let read = read_index_json(&index_path)?;
+        let read = read_index_json(&index_path, None)?;
         assert_eq!(read, None);
+        Ok(())
+    }
+
+    #[test]
+    fn test_write_read_index_paths_are_relative_and_normalized() -> io::Result<()> {
+        use std::fs;
+        let test_dir = testdir!();
+        let tables_root = test_dir.join("tables");
+        fs::create_dir(&tables_root)?;
+        let vpx_path = tables_root.join("subdir").join("game.vpx");
+        fs::create_dir_all(vpx_path.parent().unwrap())?;
+        // Create the file so canonicalize works
+        fs::write(&vpx_path, [])?;
+
+        let mut index = TablesIndex::empty();
+        index.insert(IndexedTable {
+            path: vpx_path.clone(),
+            table_info: IndexedTableInfo {
+                table_name: None,
+                author_name: None,
+                table_blurb: None,
+                table_rules: None,
+                author_email: None,
+                release_date: None,
+                table_save_rev: None,
+                table_version: None,
+                author_website: None,
+                table_save_date: None,
+                table_description: None,
+                properties: BTreeMap::new(),
+            },
+            game_name: None,
+            b2s_path: None,
+            rom_path: None,
+            local_rom_path: None,
+            wheel_path: None,
+            requires_pinmame: false,
+            last_modified: IsoSystemTime(SystemTime::UNIX_EPOCH),
+        });
+
+        let index_path = test_dir.join("index.json");
+        write_index_json(&index, &index_path, Some(&tables_root))?;
+
+        // Verify the JSON contains a relative forward-slash path
+        let json_str = std::fs::read_to_string(&index_path)?;
+        assert!(
+            json_str.contains("subdir/game.vpx"),
+            "expected relative forward-slash path in JSON, got: {json_str}"
+        );
+        assert!(
+            !json_str.contains(&tables_root.to_string_lossy().to_string()),
+            "absolute path should not appear in JSON, got: {json_str}"
+        );
+
+        // Read back with tables_root — should restore absolute path
+        let restored = read_index_json(&index_path, Some(&tables_root))?.expect("index missing");
+        let restored_table = restored.tables().into_iter().next().unwrap();
+        assert_eq!(restored_table.path, vpx_path);
         Ok(())
     }
 
