@@ -3,7 +3,7 @@ use log::info;
 use rayon::prelude::*;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::cmp::Ordering;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::Debug;
 use std::fs::Metadata;
 use std::io::{BufReader, BufWriter, Read};
@@ -51,8 +51,9 @@ pub struct IndexedTableInfo {
     pub author_website: Option<String>,
     pub table_save_date: Option<String>,
     pub table_description: Option<String>,
-    // the keys (and ordering) for these are defined in "GameStg/CustomInfoTags"
-    pub properties: HashMap<String, String>,
+    // serialized in alphabetical key order for stable diffs; the VPX insertion order
+    // (defined in "GameStg/CustomInfoTags") is not preserved by the source HashMap
+    pub properties: BTreeMap<String, String>,
 }
 impl From<TableInfo> for IndexedTableInfo {
     fn from(table_info: TableInfo) -> Self {
@@ -69,7 +70,7 @@ impl From<TableInfo> for IndexedTableInfo {
             author_website: table_info.author_website,
             table_save_date: table_info.table_save_date,
             table_description: table_info.table_description,
-            properties: table_info.properties,
+            properties: table_info.properties.into_iter().collect(),
         }
     }
 }
@@ -1037,7 +1038,7 @@ mod tests {
                 author_website: None,
                 table_save_date: None,
                 table_description: None,
-                properties: HashMap::new(),
+                properties: BTreeMap::new(),
             },
             game_name: Some("testrom".to_string()),
             b2s_path: Some(PathBuf::from("test.b2s")),
@@ -1052,6 +1053,67 @@ mod tests {
         write_index_json(&index, &index_path)?;
         let read = read_index_json(&index_path)?;
         assert_eq!(read, Some(index));
+        Ok(())
+    }
+
+    #[test]
+    fn test_properties_serialized_in_alphabetical_order() -> io::Result<()> {
+        let mut properties = BTreeMap::new();
+        // Insert in reverse-alphabetical order to prove ordering is not insertion-driven.
+        properties.insert("zebra".to_string(), "z".to_string());
+        properties.insert("mango".to_string(), "m".to_string());
+        properties.insert("apple".to_string(), "a".to_string());
+
+        let mut index = TablesIndex::empty();
+        index.insert(IndexedTable {
+            path: PathBuf::from("test.vpx"),
+            table_info: IndexedTableInfo {
+                table_name: None,
+                author_name: None,
+                table_blurb: None,
+                table_rules: None,
+                author_email: None,
+                release_date: None,
+                table_save_rev: None,
+                table_version: None,
+                author_website: None,
+                table_save_date: None,
+                table_description: None,
+                properties,
+            },
+            game_name: None,
+            b2s_path: None,
+            rom_path: None,
+            local_rom_path: None,
+            wheel_path: None,
+            requires_pinmame: false,
+            last_modified: IsoSystemTime::from(SystemTime::UNIX_EPOCH),
+        });
+        let test_dir = testdir!();
+        let index_path = test_dir.join("test.json");
+        write_index_json(&index, &index_path)?;
+
+        // Check raw JSON key order is alphabetical.
+        let json_str = std::fs::read_to_string(&index_path)?;
+        let apple_pos = json_str.find("\"apple\"").expect("apple not found");
+        let mango_pos = json_str.find("\"mango\"").expect("mango not found");
+        let zebra_pos = json_str.find("\"zebra\"").expect("zebra not found");
+        assert!(apple_pos < mango_pos, "apple should come before mango");
+        assert!(mango_pos < zebra_pos, "mango should come before zebra");
+
+        // Round-trip preserves all entries.
+        let read = read_index_json(&index_path)?.expect("index missing after write");
+        let keys: Vec<_> = read
+            .tables()
+            .into_iter()
+            .next()
+            .unwrap()
+            .table_info
+            .properties
+            .keys()
+            .cloned()
+            .collect();
+        assert_eq!(keys, vec!["apple", "mango", "zebra"]);
         Ok(())
     }
 
@@ -1304,7 +1366,7 @@ LoadVPM "01210000","sys80.vbs",3.10
                 author_website: None,
                 table_save_date: None,
                 table_description: None,
-                properties: HashMap::new(),
+                properties: BTreeMap::new(),
             },
             game_name: None,
             b2s_path: None,
