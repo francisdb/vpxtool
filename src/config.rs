@@ -295,13 +295,13 @@ pub fn stale_vpx_config_suggestion(saved: &Path, vpx_executable: &Path) -> Optio
 }
 
 /// Rewrite the saved vpxtool config with `vpx_config` set to the given path.
-/// All other fields are preserved from the on-disk file. Comments and
-/// formatting are not preserved (toml round-trips through serde).
+/// All other fields are preserved from the on-disk file, along with comments,
+/// blank lines, and field ordering (uses `toml_edit` for in-place edits).
 pub fn rewrite_vpx_config(config_file: &Path, vpx_config: &Path) -> io::Result<()> {
     let toml_str = std::fs::read_to_string(config_file)?;
-    let mut config: Config = toml::from_str(&toml_str).map_err(io::Error::other)?;
-    config.vpx_config = Some(vpx_config.to_path_buf());
-    write_config(config_file, &config)
+    let mut doc: toml_edit::DocumentMut = toml_str.parse().map_err(io::Error::other)?;
+    doc["vpx_config"] = toml_edit::value(vpx_config.to_string_lossy().into_owned());
+    std::fs::write(config_file, doc.to_string())
 }
 
 fn legacy_vpinball_ini(vpx_executable_path: &Path) -> PathBuf {
@@ -704,5 +704,37 @@ mod tests {
     fn test_newest_versioned_vpinball_ini_returns_none_when_empty() {
         let base = testdir!().join("does-not-exist");
         assert_eq!(newest_versioned_vpinball_ini(&base), None);
+    }
+
+    #[test]
+    fn test_rewrite_vpx_config_preserves_comments_and_layout() -> io::Result<()> {
+        // A user-edited config file: comments, blank lines, and a non-default
+        // field ordering. After rewrite_vpx_config swaps the vpx_config value,
+        // everything else must come through byte-faithfully.
+        let temp_dir = testdir!();
+        let config_file = temp_dir.join(CONFIGURATION_FILE_NAME);
+        let original = "\
+# vpxtool config for the tournament rig
+
+vpx_executable = \"/home/me/vpinball\"
+
+# old default - vpxtool will offer to fix this
+vpx_config = \"/home/me/.vpinball/VPinballX.ini\"
+
+# don't recurse beyond two levels
+tables_scan_max_depth = 2
+";
+        std::fs::write(&config_file, original)?;
+
+        let new_path = PathBuf::from("/home/me/.local/share/VPinballX/10.8/VPinballX.ini");
+        rewrite_vpx_config(&config_file, &new_path)?;
+
+        let after = std::fs::read_to_string(&config_file)?;
+        let expected = original.replace(
+            "/home/me/.vpinball/VPinballX.ini",
+            "/home/me/.local/share/VPinballX/10.8/VPinballX.ini",
+        );
+        assert_eq!(after, expected);
+        Ok(())
     }
 }
