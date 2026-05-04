@@ -48,6 +48,15 @@ const CMD_IMPORT_VBS: &str = "importvbs";
 const CMD_PATCH: &str = "patch";
 const CMD_VERIFY: &str = "verify";
 const CMD_NEW: &str = "new";
+const CMD_LOCK: &str = "lock";
+const CMD_UNLOCK: &str = "unlock";
+const CMD_LOCK_STATUS: &str = "lock-status";
+
+enum LockAction {
+    Lock,
+    Unlock,
+    Status,
+}
 
 const CMD_LS: &str = "ls";
 
@@ -572,6 +581,10 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             }
             Ok(ExitCode::SUCCESS)
         }
+
+        Some((CMD_LOCK, sub_matches)) => run_lock(sub_matches, LockAction::Lock),
+        Some((CMD_UNLOCK, sub_matches)) => run_lock(sub_matches, LockAction::Unlock),
+        Some((CMD_LOCK_STATUS, sub_matches)) => run_lock(sub_matches, LockAction::Status),
         Some((CMD_NEW, sub_matches)) => {
             let path = {
                 let this = sub_matches.get_one::<String>("VPXPATH").map(|v| v.as_str());
@@ -1011,6 +1024,21 @@ fn build_command() -> Command {
                         .required(true)
                         .num_args(1..),
                 ),
+        )
+        .subcommand(
+            Command::new(CMD_LOCK)
+                .about("Lock a vpx file, preventing edits in vpinball")
+                .arg(arg!(<VPXPATH> "The path to the vpx file").required(true)),
+        )
+        .subcommand(
+            Command::new(CMD_UNLOCK)
+                .about("Unlock a vpx file")
+                .arg(arg!(<VPXPATH> "The path to the vpx file").required(true)),
+        )
+        .subcommand(
+            Command::new(CMD_LOCK_STATUS)
+                .about("Show the lock state of a vpx file")
+                .arg(arg!(<VPXPATH> "The path to the vpx file").required(true)),
         )
         .subcommand(
             Command::new(CMD_ASSEMBLE)
@@ -1690,4 +1718,44 @@ fn show_dip_switches(nvram: &PathBuf) -> io::Result<String> {
 
     let summary = lines.join("\n");
     Ok(summary)
+}
+
+fn run_lock(sub_matches: &ArgMatches, action: LockAction) -> io::Result<ExitCode> {
+    let path = sub_matches
+        .get_one::<String>("VPXPATH")
+        .expect("VPXPATH is required");
+    let expanded = path_exists(path)?;
+    apply_lock_action(&expanded, &action)?;
+    Ok(ExitCode::SUCCESS)
+}
+
+fn apply_lock_action(path: &Path, action: &LockAction) -> io::Result<()> {
+    match action {
+        LockAction::Status => {
+            let mut vpx = vpx::open(path)?;
+            let state = if vpx.is_locked()? {
+                "locked"
+            } else {
+                "unlocked"
+            };
+            crate::println!("{}: {}", path.display(), state)?;
+        }
+        LockAction::Lock => {
+            let mut vpx = vpx::open_rw(path)?;
+            if vpx.lock()? {
+                crate::println!("Locked {}", path.display())?;
+            } else {
+                crate::println!("Already locked: {}", path.display())?;
+            }
+        }
+        LockAction::Unlock => {
+            let mut vpx = vpx::open_rw(path)?;
+            if vpx.unlock()? {
+                crate::println!("Unlocked {}", path.display())?;
+            } else {
+                crate::println!("Already unlocked: {}", path.display())?;
+            }
+        }
+    }
+    Ok(())
 }
