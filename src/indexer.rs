@@ -310,80 +310,67 @@ pub fn find_vpx_files(
     max_depth: Option<usize>,
     tables_path: &Path,
 ) -> io::Result<Vec<PathWithMetadata>> {
-    if recursive {
+    let vpx_paths: Vec<PathBuf> = if recursive {
         // jwalk parallelises readdir calls across directories using rayon, so
         // all subdirectory reads (e.g. one per manufacturer folder) happen
-        // concurrently rather than serially. Metadata is captured inline from
-        // the same readdir response, eliminating a separate stat pass.
+        // concurrently rather than serially.
         let mut walk = WalkDir::new(tables_path).skip_hidden(false);
         if let Some(depth) = max_depth {
             walk = walk.max_depth(depth);
         }
-        let results: Result<Vec<_>, _> = walk
-            .process_read_dir(|_, _, _, entries| {
-                // Drop .git and __MACOSX subdirectory entries before they are
-                // enqueued for parallel reads, avoiding wasted network RPCs.
-                entries.retain(|entry| match entry {
-                    Ok(e) if e.file_type().is_dir() => {
-                        !matches!(e.file_name().to_str(), Some(".git" | "__MACOSX"))
-                    }
-                    _ => true,
-                });
-            })
-            .into_iter()
-            .filter_map(|entry| {
-                let entry = match entry {
-                    Ok(e) => e,
-                    Err(e) => return Some(Err(io::Error::from(e))),
-                };
-                if !entry.file_type().is_file() {
-                    return None;
+        walk.process_read_dir(|_, _, _, entries| {
+            // Drop .git and __MACOSX subdirectory entries before they are
+            // enqueued for parallel reads, avoiding wasted network RPCs.
+            entries.retain(|entry| match entry {
+                Ok(e) if e.file_type().is_dir() => {
+                    !matches!(e.file_name().to_str(), Some(".git" | "__MACOSX"))
                 }
-                if !matches!(
-                    entry.path().extension().and_then(OsStr::to_str),
-                    Some("vpx")
-                ) {
-                    return None;
-                }
-                // metadata() is cheap here: jwalk caches it from the readdir
-                // result (where the OS provides it) or fetches it in parallel.
-                let last_modified = match entry.metadata() {
-                    Ok(m) => match m.modified() {
-                        Ok(t) => t,
-                        Err(e) => return Some(Err(e)),
-                    },
-                    Err(e) => return Some(Err(io::Error::from(e))),
-                };
-                Some(Ok(PathWithMetadata {
-                    path: entry.path(),
-                    last_modified,
-                }))
-            })
-            .collect();
-        results
+                _ => true,
+            });
+        })
+        .into_iter()
+        .filter_map(|entry| {
+            let entry = match entry {
+                Ok(e) => e,
+                Err(e) => return Some(Err(io::Error::from(e))),
+            };
+            if !entry.file_type().is_file() {
+                return None;
+            }
+            if !matches!(
+                entry.path().extension().and_then(OsStr::to_str),
+                Some("vpx")
+            ) {
+                return None;
+            }
+            Some(Ok(entry.path()))
+        })
+        .collect::<io::Result<Vec<_>>>()?
     } else {
-        // Non-recursive: collect paths first, then fetch mtime in parallel.
-        let mut vpx_paths = Vec::new();
+        let mut paths = Vec::new();
         for entry in fs::read_dir(tables_path)? {
             let dir_entry = entry?;
             if dir_entry.file_type()?.is_file() {
                 let path = dir_entry.path();
                 if matches!(path.extension().and_then(OsStr::to_str), Some("vpx")) {
-                    vpx_paths.push(path);
+                    paths.push(path);
                 }
             }
         }
-        vpx_paths
-            .par_iter()
-            .map(|path| {
-                let last_modified = last_modified(path)?;
-                Ok(PathWithMetadata {
-                    path: path.clone(),
-                    last_modified,
-                })
+        paths
+    };
+    // Fetch mtimes in parallel. On a NAS each stat is a network RPC, so a
+    // serial pass over many tables dominates startup time.
+    vpx_paths
+        .par_iter()
+        .map(|path| {
+            let last_modified = last_modified(path)?;
+            Ok(PathWithMetadata {
+                path: path.clone(),
+                last_modified,
             })
-            .collect()
-    }
+        })
+        .collect()
 }
 
 pub trait Progress {
@@ -998,6 +985,50 @@ mod tests {
         assert_eq!(table1.rom_path, Some(rom1_path_local.clone()));
         assert_eq!(table2.rom_path, Some(rom2_path_global.clone()));
         assert_eq!(table3.rom_path, None);
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_index_folder_skips_write_when_unchanged() -> io::Result<()> {
+        // A second index_folder call with no filesystem changes must skip the
+        // index write. atomic_write replaces the file via rename on every real
+        // write, so a preserved inode proves the write was skipped.
+        use std::os::unix::fs::MetadataExt;
+
+        let tables_dir = testdir!().join("tables");
+        fs::create_dir(&tables_dir)?;
+        vpx::new_minimal_vpx(tables_dir.join("test.vpx"))?;
+        let index_path = testdir!().join("vpxtool_index.json");
+
+        index_folder(
+            true,
+            None,
+            &tables_dir,
+            &index_path,
+            None,
+            None,
+            &VoidProgress,
+            vec![],
+        )?;
+        let inode_before = fs::metadata(&index_path)?.ino();
+
+        index_folder(
+            true,
+            None,
+            &tables_dir,
+            &index_path,
+            None,
+            None,
+            &VoidProgress,
+            vec![],
+        )?;
+        let inode_after = fs::metadata(&index_path)?.ino();
+
+        assert_eq!(
+            inode_before, inode_after,
+            "index_folder rewrote the index when nothing had changed"
+        );
         Ok(())
     }
 
