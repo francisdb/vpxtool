@@ -9,7 +9,7 @@ use figment::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::Write;
 use std::{env, io};
 
@@ -230,17 +230,84 @@ fn home_config_path() -> PathBuf {
 }
 
 fn default_vpinball_ini_file(vpx_executable_path: &Path) -> PathBuf {
+    // Batocera ships an opinionated layout that pre-dates the SDL pref-path
+    // scheme; honour it when the marker exists.
+    let batocera_path = PathBuf::from("/userdata/system/configs/vpinball/VPinballX.ini");
+    if batocera_path.exists() {
+        return batocera_path;
+    }
+
+    // Modern vpinball stores its ini at
+    //   <SDL_GetPrefPath("VPinballX")>/<MAJOR>.<MINOR>/VPinballX.ini
+    // SDL_GetPrefPath maps to dirs::data_dir() on all three platforms (Linux
+    // ~/.local/share, macOS ~/Library/Application Support, Windows %AppData%).
+    // We can't hardcode a version, so probe for the highest <MAJOR>.<MINOR>
+    // subdirectory that has an ini and use it.
+    if let Some(data_dir) = dirs::data_dir()
+        && let Some(path) = newest_versioned_vpinball_ini(&data_dir.join("VPinballX"))
+    {
+        return path;
+    }
+
+    legacy_vpinball_ini(vpx_executable_path)
+}
+
+fn newest_versioned_vpinball_ini(base: &Path) -> Option<PathBuf> {
+    let mut versions: Vec<((u32, u32), PathBuf)> = fs::read_dir(base)
+        .ok()?
+        .flatten()
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
+        .filter_map(|e| {
+            let name = e.file_name();
+            let parsed = parse_major_minor(name.to_str()?)?;
+            Some((parsed, e.path()))
+        })
+        .collect();
+    // Highest version first; (10, 10) > (10, 9) by tuple ordering.
+    versions.sort_by_key(|(version, _)| std::cmp::Reverse(*version));
+
+    versions.into_iter().find_map(|(_, dir)| {
+        let ini = dir.join("VPinballX.ini");
+        ini.exists().then_some(ini)
+    })
+}
+
+fn parse_major_minor(s: &str) -> Option<(u32, u32)> {
+    let mut parts = s.splitn(2, '.');
+    let major = parts.next()?.parse().ok()?;
+    let minor = parts.next()?.parse().ok()?;
+    Some((major, minor))
+}
+
+/// If the saved `vpx_config` is the legacy auto-generated default and the
+/// resolver would now pick something different (typically because the user
+/// upgraded vpinball and it migrated to the SDL pref path), return the
+/// modern path so callers can prompt the user to update their config.
+///
+/// Returns None if the saved path is custom (not the legacy default), or if
+/// the resolver agrees with the saved path.
+pub fn stale_vpx_config_suggestion(saved: &Path, vpx_executable: &Path) -> Option<PathBuf> {
+    if saved != legacy_vpinball_ini(vpx_executable) {
+        return None;
+    }
+    let resolved = default_vpinball_ini_file(vpx_executable);
+    (resolved != saved).then_some(resolved)
+}
+
+/// Rewrite the saved vpxtool config with `vpx_config` set to the given path.
+/// All other fields are preserved from the on-disk file. Comments and
+/// formatting are not preserved (toml round-trips through serde).
+pub fn rewrite_vpx_config(config_file: &Path, vpx_config: &Path) -> io::Result<()> {
+    let toml_str = std::fs::read_to_string(config_file)?;
+    let mut config: Config = toml::from_str(&toml_str).map_err(io::Error::other)?;
+    config.vpx_config = Some(vpx_config.to_path_buf());
+    write_config(config_file, &config)
+}
+
+fn legacy_vpinball_ini(vpx_executable_path: &Path) -> PathBuf {
     if cfg!(target_os = "windows") {
-        // in the same directory as the vpx executable
         vpx_executable_path.parent().unwrap().join("VPinballX.ini")
     } else {
-        // batocera has a specific location for the ini file
-        let batocera_path = PathBuf::from("/userdata/system/configs/vpinball/VPinballX.ini");
-        if batocera_path.exists() {
-            return batocera_path;
-        }
-
-        // default vpinball ini file location is ~/.vpinball/VPinballX.ini
         dirs::home_dir()
             .unwrap()
             .join(".vpinball")
@@ -423,7 +490,7 @@ mod tests {
                     vpinball_config: None,
                 },),
 
-                vpx_config: dirs::home_dir().unwrap().join(".vpinball/VPinballX.ini"),
+                vpx_config: default_vpinball_ini_file(&PathBuf::from("/home/me/vpinball")),
                 tables_folder: PathBuf::from("/home/me/tables"),
                 tables_index_path: PathBuf::from("/home/me/tables/vpxtool_index.json"),
                 tables_scan_max_depth: None,
@@ -517,7 +584,7 @@ mod tests {
                     ])),
                     vpinball_config: None,
                 },),
-                vpx_config: dirs::home_dir().unwrap().join(".vpinball/VPinballX.ini"),
+                vpx_config: default_vpinball_ini_file(&PathBuf::from("/tmp/test/vpinball")),
                 tables_folder: PathBuf::from("/tmp/test/tables"),
                 tables_index_path: PathBuf::from("/tmp/test/tables/vpxtool_index.json"),
                 tables_scan_max_depth: None,
@@ -553,7 +620,7 @@ mod tests {
                     ])),
                     vpinball_config: None,
                 }),
-                vpx_config: dirs::home_dir().unwrap().join(".vpinball/VPinballX.ini"),
+                vpx_config: default_vpinball_ini_file(&PathBuf::from("/tmp/test/vpinball")),
                 tables_folder: expected_tables_dir.clone(),
                 tables_index_path: expected_tables_dir.join("vpxtool_index.json"),
                 tables_scan_max_depth: None,
@@ -578,7 +645,7 @@ mod tests {
             config,
             ResolvedConfig {
                 vpx_executable: PathBuf::from("C:\\test\\vpinball"),
-                vpx_config: PathBuf::from("C:\\test\\VPinballX.ini"),
+                vpx_config: default_vpinball_ini_file(&PathBuf::from("C:\\test\\vpinball")),
                 tables_folder: PathBuf::from("C:\\test\\tables"),
                 tables_index_path: PathBuf::from("C:\\test\\tables\\vpxtool_index.json"),
                 tables_scan_max_depth: None,
@@ -597,5 +664,45 @@ mod tests {
             }
         );
         Ok(())
+    }
+
+    #[test]
+    fn test_parse_major_minor() {
+        assert_eq!(parse_major_minor("10.8"), Some((10, 8)));
+        assert_eq!(parse_major_minor("10.10"), Some((10, 10)));
+        assert_eq!(parse_major_minor("11.0"), Some((11, 0)));
+        assert_eq!(parse_major_minor("10"), None);
+        assert_eq!(parse_major_minor("10.8.0"), None);
+        assert_eq!(parse_major_minor(""), None);
+        assert_eq!(parse_major_minor("foo"), None);
+    }
+
+    #[test]
+    fn test_newest_versioned_vpinball_ini_picks_highest() -> io::Result<()> {
+        // Layout under <base>:
+        //   10.8/VPinballX.ini      <- ini present
+        //   10.10/VPinballX.ini     <- ini present, highest version
+        //   11.0/                   <- newer dir but no ini, must be skipped
+        //   not-a-version/          <- ignored
+        let base = testdir!().join("VPinballX");
+        for (version, has_ini) in [("10.8", true), ("10.10", true), ("11.0", false)] {
+            let dir = base.join(version);
+            fs::create_dir_all(&dir)?;
+            if has_ini {
+                File::create(dir.join("VPinballX.ini"))?;
+            }
+        }
+        fs::create_dir_all(base.join("not-a-version"))?;
+
+        // 11.0 has no ini, so 10.10 wins (numeric, not lexicographic).
+        let picked = newest_versioned_vpinball_ini(&base).expect("expected an ini path");
+        assert_eq!(picked, base.join("10.10").join("VPinballX.ini"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_newest_versioned_vpinball_ini_returns_none_when_empty() {
+        let base = testdir!().join("does-not-exist");
+        assert_eq!(newest_versioned_vpinball_ini(&base), None);
     }
 }

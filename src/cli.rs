@@ -222,7 +222,23 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             }
         }
         Some((CMD_FRONTEND, sub_matches)) => {
-            let (config_path, config) = config::load_or_setup_config()?;
+            let (config_path, mut config) = config::load_or_setup_config()?;
+            if let Some(suggested) =
+                config::stale_vpx_config_suggestion(&config.vpx_config, &config.vpx_executable)
+                && frontend::warn_stale_vpx_config(&config_path, &config.vpx_config, &suggested)
+            {
+                if let Err(e) = config::rewrite_vpx_config(&config_path, &suggested) {
+                    crate::eprintln!(
+                        "{}",
+                        format!("Failed to rewrite {}: {e}", config_path.display()).red()
+                    )?;
+                } else {
+                    crate::println!("Updated vpx_config in {}", config_path.display())?;
+                }
+                // Use the modern path for this session regardless of the
+                // rewrite outcome, so the rest of the run reads the right ini.
+                config.vpx_config = suggested;
+            }
             let configured_pinmame_folder = config.configured_pinmame_folder();
             let max_depth = sub_matches
                 .get_one::<usize>(ARG_MAX_DEPTH)

@@ -14,7 +14,7 @@ use base64::Engine;
 use colored::Colorize;
 use console::{Emoji, Term};
 use dialoguer::theme::ColorfulTheme;
-use dialoguer::{FuzzySelect, Input, MultiSelect, Select};
+use dialoguer::{Confirm, FuzzySelect, Input, MultiSelect, Select};
 use indicatif::{ProgressBar, ProgressStyle};
 use is_executable::IsExecutable;
 use pinmame_nvram::dips::{DipSwitchState, get_all_dip_switches, set_dip_switches};
@@ -762,6 +762,23 @@ fn prompt(msg: &str) {
 
 fn prompt_error(msg: &str) {
     prompt(&msg.truecolor(255, 125, 0).to_string());
+}
+
+/// Show a stale-config warning and ask whether to rewrite the saved vpxtool
+/// config. Returns true iff the user opted in.
+pub fn warn_stale_vpx_config(config_path: &Path, current: &Path, suggested: &Path) -> bool {
+    let msg = format!(
+        "Warning: vpx_config in {} points at\n  {}\nbut vpinball now uses\n  {}",
+        config_path.display(),
+        current.display(),
+        suggested.display(),
+    );
+    eprintln!("{}", msg.truecolor(255, 125, 0));
+    Confirm::with_theme(&ColorfulTheme::default())
+        .with_prompt("Do you want me to correct the config for you?")
+        .default(true)
+        .interact()
+        .unwrap_or(false)
 }
 
 fn choose_table_option(
