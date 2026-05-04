@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.29.1](https://github.com/francisdb/vpxtool/compare/v0.29.0...v0.29.1) - 2026-05-04
+
+### Other
+
+- *(indexer)* parallelise mtime stats in recursive walk ([#754](https://github.com/francisdb/vpxtool/pull/754))
+- parallelize directory walk and reduce NAS round-trips ([#752](https://github.com/francisdb/vpxtool/pull/752))
+- *(deps)* bump pinmame-nvram from 0.4.7 to 0.4.8 ([#750](https://github.com/francisdb/vpxtool/pull/750))
+- *(deps)* bump vpin from 0.23.5 to 0.23.6 ([#751](https://github.com/francisdb/vpxtool/pull/751))
+
 ## [0.29.0](https://github.com/francisdb/vpxtool/compare/v0.28.1...v0.29.0) - 2026-05-03
 
 ### Other
