@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use jwalk::WalkDir;
 use log::info;
 use rayon::prelude::*;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -17,7 +18,6 @@ use std::{
 use vpin::vpx;
 use vpin::vpx::jsonmodel::json_to_info;
 use vpin::vpx::tableinfo::TableInfo;
-use walkdir::{DirEntry, FilterEntry, IntoIter, WalkDir};
 
 use vpx::gamedata::GameData;
 
@@ -311,18 +311,68 @@ pub fn find_vpx_files(
     tables_path: &Path,
 ) -> io::Result<Vec<PathWithMetadata>> {
     if recursive {
+        // jwalk parallelises readdir calls across directories using rayon, so
+        // all subdirectory reads (e.g. one per manufacturer folder) happen
+        // concurrently rather than serially. Metadata is captured inline from
+        // the same readdir response, eliminating a separate stat pass.
+        let mut walk = WalkDir::new(tables_path).skip_hidden(false);
+        if let Some(depth) = max_depth {
+            walk = walk.max_depth(depth);
+        }
+        let results: Result<Vec<_>, _> = walk
+            .process_read_dir(|_, _, _, entries| {
+                // Drop .git and __MACOSX subdirectory entries before they are
+                // enqueued for parallel reads, avoiding wasted network RPCs.
+                entries.retain(|entry| match entry {
+                    Ok(e) if e.file_type().is_dir() => {
+                        !matches!(e.file_name().to_str(), Some(".git" | "__MACOSX"))
+                    }
+                    _ => true,
+                });
+            })
+            .into_iter()
+            .filter_map(|entry| {
+                let entry = match entry {
+                    Ok(e) => e,
+                    Err(e) => return Some(Err(io::Error::from(e))),
+                };
+                if !entry.file_type().is_file() {
+                    return None;
+                }
+                if !matches!(
+                    entry.path().extension().and_then(OsStr::to_str),
+                    Some("vpx")
+                ) {
+                    return None;
+                }
+                // metadata() is cheap here: jwalk caches it from the readdir
+                // result (where the OS provides it) or fetches it in parallel.
+                let last_modified = match entry.metadata() {
+                    Ok(m) => match m.modified() {
+                        Ok(t) => t,
+                        Err(e) => return Some(Err(e)),
+                    },
+                    Err(e) => return Some(Err(io::Error::from(e))),
+                };
+                Some(Ok(PathWithMetadata {
+                    path: entry.path(),
+                    last_modified,
+                }))
+            })
+            .collect();
+        results
+    } else {
+        // Non-recursive: collect paths first, then fetch mtime in parallel.
         let mut vpx_paths = Vec::new();
-        let mut entries = walk_dir_filtered(tables_path, max_depth);
-        entries.try_for_each(|entry| {
+        for entry in fs::read_dir(tables_path)? {
             let dir_entry = entry?;
-            if dir_entry.file_type().is_file() {
+            if dir_entry.file_type()?.is_file() {
                 let path = dir_entry.path();
-                if let Some("vpx") = path.extension().and_then(OsStr::to_str) {
-                    vpx_paths.push(path.to_path_buf());
+                if matches!(path.extension().and_then(OsStr::to_str), Some("vpx")) {
+                    vpx_paths.push(path);
                 }
             }
-            Ok::<(), io::Error>(())
-        })?;
+        }
         vpx_paths
             .par_iter()
             .map(|path| {
@@ -333,43 +383,7 @@ pub fn find_vpx_files(
                 })
             })
             .collect()
-    } else {
-        let mut vpx_files = Vec::new();
-        // TODO is there a cleaner version like try_filter_map?
-        let mut dirs = fs::read_dir(tables_path)?;
-        dirs.try_for_each(|entry| {
-            let dir_entry = entry?;
-            if dir_entry.file_type()?.is_file() {
-                let path = dir_entry.path();
-                if let Some("vpx") = path.extension().and_then(OsStr::to_str) {
-                    let last_modified = last_modified(&path)?;
-                    vpx_files.push(PathWithMetadata {
-                        path: path.to_path_buf(),
-                        last_modified,
-                    });
-                }
-            }
-            Ok::<(), io::Error>(())
-        })?;
-        Ok(vpx_files)
     }
-}
-
-/// Walks the directory and filters out .git and __MACOSX folders
-fn walk_dir_filtered(
-    tables_path: &Path,
-    max_depth: Option<usize>,
-) -> FilterEntry<IntoIter, fn(&DirEntry) -> bool> {
-    let mut walkdir = WalkDir::new(tables_path);
-    if let Some(max_depth) = max_depth {
-        walkdir = walkdir.max_depth(max_depth);
-    }
-    walkdir.into_iter().filter_entry(|entry| {
-        if !entry.file_type().is_dir() {
-            return true;
-        }
-        !matches!(entry.file_name().to_str(), Some(".git" | "__MACOSX"))
-    })
 }
 
 pub trait Progress {
@@ -457,16 +471,16 @@ pub fn index_folder(
     let removed_len = index.remove_missing(&vpx_files);
     info!("  {removed_len} missing tables have been removed");
 
-    let tables_with_missing_rom = index
+    let tables_with_missing_rom: HashSet<PathBuf> = index
         .tables()
-        .iter()
+        .par_iter()
         .filter_map(|table| {
             table
                 .rom_path()
                 .filter(|rom_path| !rom_path.exists())
                 .map(|_| table.path.clone())
         })
-        .collect::<HashSet<PathBuf>>();
+        .collect();
     info!(
         "  {} tables will be re-indexed because their rom is missing",
         tables_with_missing_rom.len()
@@ -483,6 +497,10 @@ pub fn index_folder(
         }
     }
 
+    // The index is dirty if files were removed or any files need (re)indexing.
+    // When clean, we skip the write to avoid an unnecessary NAS round-trip.
+    let index_dirty = removed_len > 0 || !vpx_files_to_index.is_empty();
+
     info!("  {} tables need (re)indexing.", vpx_files_to_index.len());
     let vpx_files_with_table_info = index_vpx_files(
         vpx_files_to_index,
@@ -494,8 +512,10 @@ pub fn index_folder(
     // add new files to index
     index.merge(vpx_files_with_table_info);
 
-    // write the index to a file
-    write_index_json(&index, tables_index_path, Some(tables_folder))?;
+    if index_dirty {
+        // write the index to a file
+        write_index_json(&index, tables_index_path, Some(tables_folder))?;
+    }
 
     Ok(index)
 }
