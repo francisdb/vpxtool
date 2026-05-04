@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.29.2](https://github.com/francisdb/vpxtool/compare/v0.29.1...v0.29.2) - 2026-05-04
+
+### Added
+
+- *(cli)* add lock / unlock / lock-status commands ([#317](https://github.com/francisdb/vpxtool/pull/317)) ([#758](https://github.com/francisdb/vpxtool/pull/758))
+
+### Fixed
+
+- *(config)* preserve comments and layout in rewrite_vpx_config ([#759](https://github.com/francisdb/vpxtool/pull/759))
+- *(config)* resolve vpinball ini at the modern SDL pref path ([#757](https://github.com/francisdb/vpxtool/pull/757))
+- drop deprecated -*TrueFullscreen flags from defaults ([#730](https://github.com/francisdb/vpxtool/pull/730)) ([#755](https://github.com/francisdb/vpxtool/pull/755))
+
 ## [0.29.1](https://github.com/francisdb/vpxtool/compare/v0.29.0...v0.29.1) - 2026-05-04
 
 ### Other
