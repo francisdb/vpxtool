@@ -149,7 +149,7 @@ vpx_executable = "/home/myuser/vpinball/VPinballX_BGFX"
 
 # Optional settings below, only needed if the defaults don't work
 tables_folder = "/home/myuser/vpinball/tables"
-vpx_config = "/home/myuser/.vpinball/VPinballX.ini"
+vpx_config = "/home/myuser/.local/share/VPinballX/10.8/VPinballX.ini"
 ```
 
 Further settings will be picked up from the Visual Pinball config.
@@ -159,11 +159,16 @@ Further settings will be picked up from the Visual Pinball config.
 Sometimes you want to use a different executables, extra arguments or environment variables. This can be done
 by setting up launch templates. Each entry will show up on top of the frontend table menu.
 
+To force fullscreen or windowed mode, point a template at a separate vpinball ini file (passed to vpinball as
+`-Ini <path>`) with the relevant `FullScreen` / `PlayfieldFullScreen` keys overridden. The previous
+`-EnableTrueFullscreen` / `-DisableTrueFullscreen` CLI flags are deprecated upstream and not present in
+modern (BGFX) vpinball builds.
+
 ```toml
 [[launch_templates]]
 name = "Launch fullscreen"
 executable = "/home/myuser/vpinball/VPinballX_BGFX"
-arguments = ["-EnableTrueFullscreen"]
+vpinball_config = "/home/myuser/.local/share/VPinballX/10.8/VPinballX.fullscreen.ini"
 
 [[launch_templates]]
 name = "Launch GL"
