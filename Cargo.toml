@@ -37,7 +37,7 @@ vpin = { version = "0.23.6" }
 directb2s = "0.1.1"
 
 edit = "0.1.5"
-pinmame-nvram = "0.4.7"
+pinmame-nvram = "0.4.8"
 image = "0.25.10"
 
 #see https://github.com/chronotope/chrono/issues/602#issuecomment-1242149249
