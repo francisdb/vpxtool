@@ -989,6 +989,50 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
+    fn test_index_folder_skips_write_when_unchanged() -> io::Result<()> {
+        // A second index_folder call with no filesystem changes must skip the
+        // index write. atomic_write replaces the file via rename on every real
+        // write, so a preserved inode proves the write was skipped.
+        use std::os::unix::fs::MetadataExt;
+
+        let tables_dir = testdir!().join("tables");
+        fs::create_dir(&tables_dir)?;
+        vpx::new_minimal_vpx(tables_dir.join("test.vpx"))?;
+        let index_path = testdir!().join("vpxtool_index.json");
+
+        index_folder(
+            true,
+            None,
+            &tables_dir,
+            &index_path,
+            None,
+            None,
+            &VoidProgress,
+            vec![],
+        )?;
+        let inode_before = fs::metadata(&index_path)?.ino();
+
+        index_folder(
+            true,
+            None,
+            &tables_dir,
+            &index_path,
+            None,
+            None,
+            &VoidProgress,
+            vec![],
+        )?;
+        let inode_after = fs::metadata(&index_path)?.ino();
+
+        assert_eq!(
+            inode_before, inode_after,
+            "index_folder rewrote the index when nothing had changed"
+        );
+        Ok(())
+    }
+
+    #[test]
     fn test_index_to_json_is_sorted() -> io::Result<()> {
         let tables_dir = testdir!().join("tables");
         fs::create_dir(&tables_dir)?;
