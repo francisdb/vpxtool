@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.29.3](https://github.com/francisdb/vpxtool/compare/v0.29.2...v0.29.3) - 2026-05-05
+
+### Other
+
+- restore table position after launch and clear screen on normal exit ([#760](https://github.com/francisdb/vpxtool/pull/760))
+
 ## [0.29.2](https://github.com/francisdb/vpxtool/compare/v0.29.1...v0.29.2) - 2026-05-04
 
 ### Added
