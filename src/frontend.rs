@@ -189,6 +189,8 @@ pub fn frontend(
                             .unwrap();
 
                         if let Some(selected_index) = selected {
+                            // return to the main list with the table selected
+                            main_selection_opt = Some(selected_index + 2);
                             let info = vpx_files_with_tableinfo
                                 .get(selected_index)
                                 .unwrap()
@@ -204,7 +206,7 @@ pub fn frontend(
                         }
                     }
                     RECENT_INDEX => {
-                        // take the last 10 most recent tables
+                        // take the last 50 most recently modified tables
                         let mut recent: Vec<IndexedTable> = vpx_files_with_tableinfo.clone();
                         recent.sort_by_key(|indexed| indexed.last_modified);
                         let last_modified = recent.iter().rev().take(50).collect::<Vec<_>>();
@@ -213,23 +215,29 @@ pub fn frontend(
                             .map(|indexed| display_table_line_full(indexed))
                             .collect();
 
-                        let selected = Select::with_theme(&ColorfulTheme::default())
-                            .with_prompt("Select a table")
-                            .items(&last_modified_str)
-                            .default(0)
-                            .interact_opt()
-                            .unwrap();
+                        let mut recent_selection: Option<usize> = None;
+                        loop {
+                            let selected = Select::with_theme(&ColorfulTheme::default())
+                                .with_prompt("Select a table")
+                                .items(&last_modified_str)
+                                .default(recent_selection.unwrap_or(0))
+                                .interact_opt()
+                                .unwrap();
 
-                        if let Some(selected_index) = selected {
-                            let info = last_modified.get(selected_index).unwrap();
-                            let info_str = display_table_line_full(info);
-                            table_menu(
-                                config,
-                                configured_pinmame_folder,
-                                &mut vpx_files_with_tableinfo,
-                                info,
-                                &info_str,
-                            );
+                            if let Some(selected_index) = selected {
+                                recent_selection = Some(selected_index);
+                                let info = last_modified.get(selected_index).unwrap();
+                                let info_str = display_table_line_full(info);
+                                table_menu(
+                                    config,
+                                    configured_pinmame_folder,
+                                    &mut vpx_files_with_tableinfo,
+                                    info,
+                                    &info_str,
+                                );
+                            } else {
+                                break;
+                            }
                         }
                     }
                     _ => {
@@ -827,7 +835,7 @@ fn launch(selected_path: &PathBuf, launch_template: &LaunchTemplate) {
     match launch_table(selected_path, launch_template) {
         Ok(status) => match status.code() {
             Some(0) => {
-                //println!("Table exited normally");
+                Term::stderr().clear_screen().ok();
             }
             Some(11) => {
                 prompt(&format!(
