@@ -38,8 +38,8 @@ const RECENT: &str = "> Recent";
 const SEARCH_INDEX: usize = 0;
 const RECENT_INDEX: usize = 1;
 
-#[derive(PartialEq, Eq, Clone)]
-enum TableOption {
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub enum TableOption {
     Launch { template: LaunchTemplate },
     ForceReload,
     InfoShow,
@@ -60,7 +60,7 @@ enum TableOption {
 }
 
 impl TableOption {
-    fn all(config: &ResolvedConfig) -> Vec<TableOption> {
+    pub fn all(config: &ResolvedConfig) -> Vec<TableOption> {
         let mut options: Vec<TableOption> = config
             .launch_templates
             .iter()
@@ -90,7 +90,7 @@ impl TableOption {
         options
     }
 
-    fn display(&self) -> String {
+    pub fn display(&self) -> String {
         match self {
             TableOption::Launch {
                 template: LaunchTemplate { name, .. },
@@ -759,7 +759,7 @@ fn nvram_for_rom(info: &IndexedTable) -> Option<PathBuf> {
     })
 }
 
-fn prompt(msg: &str) {
+pub fn prompt(msg: &str) {
     Input::<String>::new()
         .with_prompt(format!("{msg} - Press enter to continue."))
         .default("".to_string())
@@ -820,7 +820,7 @@ fn choose_table_option(
     selection_opt.and_then(|index| all_options.get(index).cloned())
 }
 
-fn launch(selected_path: &PathBuf, launch_template: &LaunchTemplate) {
+pub fn launch(selected_path: &PathBuf, launch_template: &LaunchTemplate) {
     println!("{} {}", LAUNCH, selected_path.display());
 
     let vpinball_executable = &launch_template.executable;
@@ -943,6 +943,6 @@ fn display_table_line_full(table: &IndexedTable) -> String {
     format!("{base}{gamename_suffix}{b2s_suffix}")
 }
 
-fn capitalize_first_letter(s: &str) -> String {
+pub fn capitalize_first_letter(s: &str) -> String {
     s[0..1].to_uppercase() + &s[1..]
 }

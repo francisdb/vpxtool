@@ -3,6 +3,7 @@ use crate::indexer::{DEFAULT_INDEX_FILE_NAME, IndexError, Progress};
 use crate::patcher::patch_vbs_file;
 use crate::{
     RemoveOnDrop, config, frontend, indexer, os_independent_file_name, path_exists, strip_cr_lf,
+    tui,
 };
 use base64::Engine;
 use clap::builder::Str;
@@ -40,6 +41,7 @@ const OK: Emoji = Emoji("✅", "[launch]");
 const NOK: Emoji = Emoji("❌", "[crash]");
 
 const CMD_FRONTEND: &str = "frontend";
+const CMD_TUI_FRONTEND: &str = "tui-frontend";
 const CMD_DIFF: &str = "diff";
 const CMD_EXTRACT: &str = "extract";
 const CMD_ASSEMBLE: &str = "assemble";
@@ -230,79 +232,8 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 }
             }
         }
-        Some((CMD_FRONTEND, sub_matches)) => {
-            let (config_path, mut config) = config::load_or_setup_config()?;
-            if let Some(suggested) =
-                config::stale_vpx_config_suggestion(&config.vpx_config, &config.vpx_executable)
-                && frontend::warn_stale_vpx_config(&config_path, &config.vpx_config, &suggested)
-            {
-                if let Err(e) = config::rewrite_vpx_config(&config_path, &suggested) {
-                    crate::eprintln!(
-                        "{}",
-                        format!("Failed to rewrite {}: {e}", config_path.display()).red()
-                    )?;
-                } else {
-                    crate::println!("Updated vpx_config in {}", config_path.display())?;
-                }
-                // Use the modern path for this session regardless of the
-                // rewrite outcome, so the rest of the run reads the right ini.
-                config.vpx_config = suggested;
-            }
-            let configured_pinmame_folder = config.configured_pinmame_folder();
-            let max_depth = sub_matches
-                .get_one::<usize>(ARG_MAX_DEPTH)
-                .copied()
-                .or(config.tables_scan_max_depth);
-            crate::println!("Using vpxtool config file {}", config_path.display())?;
-            crate::println!("Using vpinball config file {}", config.vpx_config.display())?;
-            crate::println!(
-                "Using global pinmame folder {}",
-                config.global_pinmame_folder().display()
-            )?;
-            crate::println!(
-                "Using configured pinmame folder {}",
-                configured_pinmame_folder
-                    .as_ref()
-                    .map(|f| f.display().to_string())
-                    .unwrap_or_else(|| "None".to_string())
-            )?;
-            match frontend::frontend_index(
-                &config,
-                true,
-                max_depth,
-                configured_pinmame_folder.as_deref(),
-                vec![],
-            ) {
-                Ok(tables) if tables.is_empty() => {
-                    let warning =
-                        format!("No tables found in {}", config.tables_folder.display()).red();
-                    crate::eprintln!("{}", warning)?;
-                    Ok(ExitCode::FAILURE)
-                }
-                Ok(vpx_files_with_tableinfo) => {
-                    frontend::frontend(
-                        &config,
-                        configured_pinmame_folder.as_deref(),
-                        vpx_files_with_tableinfo,
-                    );
-                    Ok(ExitCode::SUCCESS)
-                }
-                Err(IndexError::FolderDoesNotExist(path)) => {
-                    let warning = format!(
-                        "Configured tables folder does not exist: {}",
-                        path.display()
-                    )
-                    .red();
-                    crate::eprintln!("{}", warning)?;
-                    Ok(ExitCode::FAILURE)
-                }
-                Err(IndexError::IoError(e)) => {
-                    let warning = format!("Error running frontend: {e}").red();
-                    crate::eprintln!("{}", warning)?;
-                    Ok(ExitCode::FAILURE)
-                }
-            }
-        }
+        Some((CMD_FRONTEND, sub_matches)) => run_frontend(sub_matches, FrontendKind::Simple),
+        Some((CMD_TUI_FRONTEND, sub_matches)) => run_frontend(sub_matches, FrontendKind::Ratatui),
         Some((CMD_INDEX, sub_matches)) => handle_index(sub_matches),
         Some((CMD_SCRIPT, sub_matches)) => match sub_matches.subcommand() {
             Some((CMD_SCRIPT_SHOW, sub_matches)) => {
@@ -739,6 +670,98 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
     }
 }
 
+enum FrontendKind {
+    Simple,
+    Ratatui,
+}
+
+fn run_frontend(sub_matches: &ArgMatches, kind: FrontendKind) -> io::Result<ExitCode> {
+    let (config_path, mut config) = config::load_or_setup_config()?;
+    if let Some(suggested) =
+        config::stale_vpx_config_suggestion(&config.vpx_config, &config.vpx_executable)
+        && frontend::warn_stale_vpx_config(&config_path, &config.vpx_config, &suggested)
+    {
+        if let Err(e) = config::rewrite_vpx_config(&config_path, &suggested) {
+            crate::eprintln!(
+                "{}",
+                format!("Failed to rewrite {}: {e}", config_path.display()).red()
+            )?;
+        } else {
+            crate::println!("Updated vpx_config in {}", config_path.display())?;
+        }
+        config.vpx_config = suggested;
+    }
+    let configured_pinmame_folder = config.configured_pinmame_folder();
+    let max_depth = sub_matches
+        .get_one::<usize>(ARG_MAX_DEPTH)
+        .copied()
+        .or(config.tables_scan_max_depth);
+    crate::println!("Using vpxtool config file {}", config_path.display())?;
+    crate::println!("Using vpinball config file {}", config.vpx_config.display())?;
+    crate::println!(
+        "Using global pinmame folder {}",
+        config.global_pinmame_folder().display()
+    )?;
+    crate::println!(
+        "Using configured pinmame folder {}",
+        configured_pinmame_folder
+            .as_ref()
+            .map(|f| f.display().to_string())
+            .unwrap_or_else(|| "None".to_string())
+    )?;
+    match frontend::frontend_index(
+        &config,
+        true,
+        max_depth,
+        configured_pinmame_folder.as_deref(),
+        vec![],
+    ) {
+        Ok(tables) if tables.is_empty() => {
+            let warning = format!("No tables found in {}", config.tables_folder.display()).red();
+            crate::eprintln!("{}", warning)?;
+            Ok(ExitCode::FAILURE)
+        }
+        Ok(vpx_files_with_tableinfo) => match kind {
+            FrontendKind::Simple => {
+                frontend::frontend(
+                    &config,
+                    configured_pinmame_folder.as_deref(),
+                    vpx_files_with_tableinfo,
+                );
+                Ok(ExitCode::SUCCESS)
+            }
+            FrontendKind::Ratatui => {
+                let global_roms_path = config.global_pinmame_folder().join("roms");
+                let roms: std::collections::HashSet<String> = indexer::find_roms(&global_roms_path)
+                    .map(|m| m.into_keys().collect())
+                    .unwrap_or_default();
+                match tui::main(config, vpx_files_with_tableinfo, roms) {
+                    Ok(()) => Ok(ExitCode::SUCCESS),
+                    Err(e) => {
+                        let warning = format!("Error running frontend: {e}").red();
+                        crate::eprintln!("{}", warning)?;
+                        Ok(ExitCode::FAILURE)
+                    }
+                }
+            }
+        },
+        Err(IndexError::FolderDoesNotExist(path)) => {
+            let warning = format!(
+                "Configured tables folder does not exist: {}",
+                path.display()
+            )
+            .red();
+            crate::eprintln!("{}", warning)?;
+            Ok(ExitCode::FAILURE)
+        }
+        Err(IndexError::IoError(e)) => {
+            let warning = format!("Error running frontend: {e}").red();
+            crate::eprintln!("{}", warning)?;
+            Ok(ExitCode::FAILURE)
+        }
+    }
+}
+
 fn handle_index(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
     let recursive = sub_matches.get_flag("RECURSIVE");
     let max_depth_cli = sub_matches.get_one::<usize>(ARG_MAX_DEPTH).copied();
@@ -887,6 +910,24 @@ fn build_command() -> Command {
         .subcommand(
             Command::new(CMD_FRONTEND)
                 .about("Text based frontend for launching vpx files")
+                .arg(
+                    Arg::new("RECURSIVE")
+                        .short('r')
+                        .long("recursive")
+                        .num_args(0)
+                        .help("Recursively index subdirectories")
+                        .default_value("true"),
+                )
+                .arg(
+                    Arg::new(ARG_MAX_DEPTH)
+                        .long("max-depth")
+                        .value_parser(clap::value_parser!(usize))
+                        .help("Maximum directory depth to scan when indexing tables"),
+                )
+        )
+        .subcommand(
+            Command::new(CMD_TUI_FRONTEND)
+                .about("Experimental ratatui-based TUI frontend for launching vpx files")
                 .arg(
                     Arg::new("RECURSIVE")
                         .short('r')
