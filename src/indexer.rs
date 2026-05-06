@@ -22,6 +22,7 @@ use vpin::vpx::tableinfo::TableInfo;
 use vpx::gamedata::GameData;
 
 use crate::atomicwrite::atomic_write;
+use crate::frontend::capitalize_first_letter;
 
 pub const DEFAULT_INDEX_FILE_NAME: &str = "vpxtool_index.json";
 
@@ -118,10 +119,10 @@ pub struct IndexedTable {
     pub game_name: Option<String>,
     pub b2s_path: Option<PathBuf>,
     /// The rom path, in the table folder or in the global pinmame roms folder
-    rom_path: Option<PathBuf>,
+    pub(crate) rom_path: Option<PathBuf>,
     /// deprecated: only used for reading the old index format
     #[serde(skip_serializing_if = "Option::is_none")]
-    local_rom_path: Option<PathBuf>,
+    pub(crate) local_rom_path: Option<PathBuf>,
     pub wheel_path: Option<PathBuf>,
     pub requires_pinmame: bool,
     pub last_modified: IsoSystemTime,
@@ -130,6 +131,29 @@ pub struct IndexedTable {
 impl IndexedTable {
     pub fn rom_path(&self) -> Option<&PathBuf> {
         self.rom_path.as_ref().or(self.local_rom_path.as_ref())
+    }
+
+    pub fn displayed_name(&self) -> String {
+        let file_stem = self.path.file_stem().unwrap().to_str().unwrap().to_string();
+        self.table_info
+            .table_name
+            .as_ref()
+            .filter(|s| !s.is_empty())
+            .map(|s| capitalize_first_letter(s))
+            .unwrap_or(file_stem)
+    }
+
+    pub fn warnings(&self, roms: &HashSet<String>) -> Vec<String> {
+        let mut warnings = Vec::new();
+        if self.requires_pinmame
+            && let Some(game_name) = &self.game_name
+        {
+            let rom_found = self.rom_path().is_some() || roms.contains(&game_name.to_lowercase());
+            if !rom_found {
+                warnings.push("ROM file is missing".to_string());
+            }
+        }
+        warnings
     }
 }
 
