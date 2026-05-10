@@ -1173,9 +1173,9 @@ dependencies = [
 
 [[package]]
 name = "itoa"
-version = "1.0.15"
+version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a5f13b858c8d314ee3e8f639011f7ccefe71f97f96e50151fb991f267928e2c"
+checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
 name = "jiff"
@@ -2348,9 +2348,9 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "vpin"
-version = "0.24.0"
+version = "0.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6113bf2f3a8aa6bcd400759ae66c18c1073e96726402f4356dfcaf66e20ff10"
+checksum = "2d850d6617110e392e62f224473da0ab06ecd6f51eac1f52218f96822799eb83"
 dependencies = [
  "byteorder",
  "bytes",
@@ -2369,6 +2369,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tracing",
+ "wavefront-obj-io",
  "weezl",
 ]
 
@@ -2539,6 +2540,15 @@ dependencies = [
  "hashbrown 0.15.2",
  "indexmap",
  "semver",
+]
+
+[[package]]
+name = "wavefront-obj-io"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ac7f033c82919052c8caa9af2e36708768dc32f692e96c9d5dfd317c58a643a"
+dependencies = [
+ "itoa",
 ]
 
 [[package]]
