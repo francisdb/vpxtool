@@ -69,6 +69,7 @@ Commands:
   images          Vpx image related commands
   gamedata        Vpx gamedata related commands
   romname         Prints the PinMAME ROM name from a vpx file
+  export          Export a vpx table to a 3D model format (obj or gltf/glb)
   help            Print this message or the help of the given subcommand(s)
 
 Options:

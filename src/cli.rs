@@ -23,8 +23,11 @@ use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{ExitCode, exit};
 use std::time::SystemTime;
+use vpin::filesystem::RealFileSystem;
 use vpin::vpx;
 use vpin::vpx::expanded::ExpandOptions;
+use vpin::vpx::export::gltf_export::{GltfExportOptions, GltfFormat, export_gltf};
+use vpin::vpx::export::obj_export::{ExportUnits, ObjExportOptions, export_obj};
 use vpin::vpx::jsonmodel::{game_data_to_json, info_to_json};
 use vpin::vpx::{ExtractResult, VerifyResult, expanded, extractvbs, importvbs, verify};
 
@@ -92,6 +95,10 @@ const CMD_DIPSWITCHES: &str = "dipswitches";
 const CMD_DIPSWITCHES_SHOW: &str = "show";
 
 const CMD_ROMNAME: &str = "romname";
+
+const CMD_EXPORT: &str = "export";
+const CMD_EXPORT_OBJ: &str = "obj";
+const CMD_EXPORT_GLTF: &str = "gltf";
 
 const CMD_INDEX: &str = "index";
 const ARG_VERBOSE: &str = "VERBOSE";
@@ -735,6 +742,11 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             }
             Ok(ExitCode::SUCCESS)
         }
+        Some((CMD_EXPORT, sub_matches)) => match sub_matches.subcommand() {
+            Some((CMD_EXPORT_OBJ, sub_matches)) => handle_export_obj(sub_matches),
+            Some((CMD_EXPORT_GLTF, sub_matches)) => handle_export_gltf(sub_matches),
+            _ => unreachable!(),
+        },
         _ => unreachable!(), // If all subcommands are defined above, anything else is unreachable!()
     }
 }
@@ -1135,6 +1147,211 @@ fn build_command() -> Command {
                 .long_about("Extracts the PinMAME ROM name from a vpx file by searching for specific patterns in the table script. If the table is not PinMAME based, no output is produced.")
                 .arg(arg!(<VPXPATH> "The path to the vpx file").required(true)),
         )
+        .subcommand(
+            Command::new(CMD_EXPORT)
+                .subcommand_required(true)
+                .about("Export a vpx table to a 3D model format")
+                .subcommand(
+                    Command::new(CMD_EXPORT_OBJ)
+                        .about("Export the table as a Wavefront OBJ + MTL (with images/)")
+                        .arg(arg!(<VPXPATH> "The path to the vpx file").required(true))
+                        .arg(
+                            Arg::new("OUTPUT_DIR")
+                                .short('o')
+                                .long("output-dir")
+                                .num_args(1)
+                                .help("Output directory. Defaults to <stem>_obj/ next to the vpx file."),
+                        )
+                        .arg(
+                            Arg::new("UNITS")
+                                .long("units")
+                                .num_args(1)
+                                .value_parser(["vpu", "mm", "cm", "m"])
+                                .default_value("m")
+                                .help("Output units for vertex positions"),
+                        )
+                        .arg(
+                            Arg::new("VPINBALL_STRICT")
+                                .long("vpinball-strict")
+                                .num_args(0)
+                                .help("Match vpinball's own OBJ exporter (no textures, raw VPU, duplicate newmtl blocks). Overrides --units."),
+                        ),
+                )
+                .subcommand(
+                    Command::new(CMD_EXPORT_GLTF)
+                        .about("Export the table as a glTF or GLB file")
+                        .arg(arg!(<VPXPATH> "The path to the vpx file").required(true))
+                        .arg(
+                            Arg::new("OUTPUT_DIR")
+                                .short('o')
+                                .long("output-dir")
+                                .num_args(1)
+                                .help("Output directory. Defaults to <stem>_gltf/ next to the vpx file."),
+                        )
+                        .arg(
+                            Arg::new("FORMAT")
+                                .long("format")
+                                .num_args(1)
+                                .value_parser(["glb", "gltf"])
+                                .default_value("glb")
+                                .help("Output format: glb (single binary) or gltf (json + .bin sidecar)"),
+                        )
+                        .arg(
+                            Arg::new("UNITS")
+                                .long("units")
+                                .num_args(1)
+                                .value_parser(["vpu", "mm", "cm", "m"])
+                                .default_value("m")
+                                .help("Output units for vertex positions"),
+                        )
+                        .arg(
+                            Arg::new("INVISIBLE")
+                                .long("invisible")
+                                .num_args(0)
+                                .help("Include invisible items using the KHR_node_visibility extension"),
+                        ),
+                ),
+        )
+}
+
+fn parse_units(s: &str) -> ExportUnits {
+    match s {
+        "vpu" => ExportUnits::Vpu,
+        "mm" => ExportUnits::Mm,
+        "cm" => ExportUnits::Cm,
+        "m" => ExportUnits::M,
+        _ => unreachable!("clap value_parser restricts this"),
+    }
+}
+
+fn handle_export_obj(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
+    let path = sub_matches
+        .get_one::<String>("VPXPATH")
+        .map(|s| s.as_str())
+        .unwrap_or_default();
+    let expanded_path = path_exists(path)?;
+    let units = parse_units(sub_matches.get_one::<String>("UNITS").unwrap());
+    let strict = sub_matches.get_flag("VPINBALL_STRICT");
+    let output_dir = sub_matches
+        .get_one::<String>("OUTPUT_DIR")
+        .map(PathBuf::from);
+
+    let stem = expanded_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "vpx path has no usable file stem",
+            )
+        })?
+        .to_string();
+    let parent = expanded_path
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| PathBuf::from("."));
+    let out_dir = output_dir.unwrap_or_else(|| parent.join(format!("{stem}_obj")));
+    if out_dir.exists() && !out_dir.is_dir() {
+        return fail(format!(
+            "Output path exists and is not a directory: {}",
+            out_dir.display()
+        ));
+    }
+    std::fs::create_dir_all(&out_dir)?;
+    let obj_path = out_dir.join(format!("{stem}.obj"));
+
+    let mut options = if strict {
+        ObjExportOptions::vpinball_strict()
+    } else {
+        ObjExportOptions::default()
+    };
+    if !strict {
+        options.units = units;
+    }
+
+    crate::println!("Reading {}", expanded_path.display())?;
+    let vpx = vpx::read(&expanded_path)?;
+    crate::println!(
+        "Exporting OBJ to {} (units: {:?}, mode: {})",
+        obj_path.display(),
+        options.units,
+        if strict { "vpinball-strict" } else { "default" },
+    )?;
+    export_obj(&vpx, &obj_path, &RealFileSystem, &options)?;
+    crate::println!("Done.")?;
+    Ok(ExitCode::SUCCESS)
+}
+
+fn handle_export_gltf(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
+    let path = sub_matches
+        .get_one::<String>("VPXPATH")
+        .map(|s| s.as_str())
+        .unwrap_or_default();
+    let expanded_path = path_exists(path)?;
+    let format = match sub_matches.get_one::<String>("FORMAT").unwrap().as_str() {
+        "glb" => GltfFormat::Glb,
+        "gltf" => GltfFormat::Gltf,
+        _ => unreachable!("clap value_parser restricts this"),
+    };
+    let units = parse_units(sub_matches.get_one::<String>("UNITS").unwrap());
+    let export_invisible = sub_matches.get_flag("INVISIBLE");
+    let output_dir = sub_matches
+        .get_one::<String>("OUTPUT_DIR")
+        .map(PathBuf::from);
+
+    let stem = expanded_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "vpx path has no usable file stem",
+            )
+        })?
+        .to_string();
+    let parent = expanded_path
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| PathBuf::from("."));
+    let out_dir = output_dir.unwrap_or_else(|| parent.join(format!("{stem}_gltf")));
+    if out_dir.exists() && !out_dir.is_dir() {
+        return fail(format!(
+            "Output path exists and is not a directory: {}",
+            out_dir.display()
+        ));
+    }
+    std::fs::create_dir_all(&out_dir)?;
+    let ext = match format {
+        GltfFormat::Glb => "glb",
+        GltfFormat::Gltf => "gltf",
+    };
+    let output_path = out_dir.join(format!("{stem}.{ext}"));
+
+    let options = GltfExportOptions {
+        format,
+        export_invisible_items: export_invisible,
+        units,
+    };
+
+    crate::println!("Reading {}", expanded_path.display())?;
+    let vpx = vpx::read(&expanded_path)?;
+    crate::println!(
+        "Exporting {} to {} (units: {:?}{})",
+        match format {
+            GltfFormat::Glb => "GLB",
+            GltfFormat::Gltf => "glTF",
+        },
+        output_path.display(),
+        options.units,
+        if export_invisible {
+            ", including invisible items"
+        } else {
+            ""
+        },
+    )?;
+    export_gltf(&vpx, &output_path, &RealFileSystem, &options)?;
+    crate::println!("Done.")?;
+    Ok(ExitCode::SUCCESS)
 }
 
 fn extract_script_command(name: impl Into<Str>) -> Command {
