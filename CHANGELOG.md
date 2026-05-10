@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.30.0](https://github.com/francisdb/vpxtool/compare/v0.29.3...v0.30.0) - 2026-05-10
+
+### Added
+
+- *(cli)* add export obj/gltf subcommands ([#763](https://github.com/francisdb/vpxtool/pull/763))
+
+### Other
+
+- *(deps)* [**breaking**] bump vpin to 0.26.0 ([#762](https://github.com/francisdb/vpxtool/pull/762))
+
 ## [0.29.3](https://github.com/francisdb/vpxtool/compare/v0.29.2...v0.29.3) - 2026-05-05
 
 ### Other
