@@ -15,6 +15,7 @@ pub mod indexer;
 pub mod cli;
 mod colorful_theme_patched;
 pub mod vpinball_config;
+pub mod vpxz;
 
 pub fn strip_cr_lf(s: &str) -> String {
     s.chars().filter(|c| !c.is_ascii_whitespace()).collect()

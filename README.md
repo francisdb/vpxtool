@@ -69,7 +69,7 @@ Commands:
   images          Vpx image related commands
   gamedata        Vpx gamedata related commands
   romname         Prints the PinMAME ROM name from a vpx file
-  export          Export a vpx table to a 3D model format (obj or gltf/glb)
+  export          Export a vpx table to obj/gltf/glb or to a vpxz mobile archive
   help            Print this message or the help of the given subcommand(s)
 
 Options:
@@ -197,6 +197,35 @@ want to override this with a specific editor, optionally specifying the path, yo
 # use Visual Studio Code as default editor
 editor = "code"
 ```
+
+### Excluding files from `export vpxz`
+
+`vpxtool export vpxz` bundles the chosen vpx and its parent-folder contents into a `.vpxz` archive for the Visual Pinball mobile app. A few classes of files are dropped automatically:
+
+* other `.vpx` files in the tree (the mobile importer rejects archives with more than one vpx) and their stem-keyed sidecars,
+* `.directb2s` files whose stem doesn't match the chosen vpx,
+* previously generated `.vpxz` archives.
+
+Anything else is included by default. To skip additional patterns, set `vpxz_excludes` in the config file. Patterns are gitignore-ish globs matched against paths relative to the vpx's parent folder; a trailing `/` matches the directory both at the top level and nested anywhere:
+
+```toml
+vpxz_excludes = [
+    "Downloads/",          # the table author's original archive / install docs
+    "downloads/",
+    "cache/",              # VPX runtime cache, regenerated on the device
+    "**/Thumbs.db",        # Windows folder thumbnails
+    "**/.DS_Store",        # macOS folder metadata
+    "**/*.bak",            # editor / VPX backups
+    "**/*~",               # Emacs-style backups
+
+    # Add your own. Examples:
+    # "user/",             # also drop desktop save state (high scores, options)
+    # "**/*.pov",          # camera POV files (desktop only)
+    # "**/*.res",          # legacy B2S Server resolution files (desktop only)
+]
+```
+
+The list above is the built-in default; if you don't set `vpxz_excludes`, that's what gets applied. Setting it replaces the default in full, so copy the entries you still want.
 
 ## Projects using vpxtool
 
