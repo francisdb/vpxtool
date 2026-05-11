@@ -99,6 +99,7 @@ const CMD_ROMNAME: &str = "romname";
 const CMD_EXPORT: &str = "export";
 const CMD_EXPORT_OBJ: &str = "obj";
 const CMD_EXPORT_GLTF: &str = "gltf";
+const CMD_EXPORT_VPXZ: &str = "vpxz";
 
 const CMD_INDEX: &str = "index";
 const ARG_VERBOSE: &str = "VERBOSE";
@@ -745,6 +746,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
         Some((CMD_EXPORT, sub_matches)) => match sub_matches.subcommand() {
             Some((CMD_EXPORT_OBJ, sub_matches)) => handle_export_obj(sub_matches),
             Some((CMD_EXPORT_GLTF, sub_matches)) => handle_export_gltf(sub_matches),
+            Some((CMD_EXPORT_VPXZ, sub_matches)) => handle_export_vpxz(sub_matches),
             _ => unreachable!(),
         },
         _ => unreachable!(), // If all subcommands are defined above, anything else is unreachable!()
@@ -1178,6 +1180,32 @@ fn build_command() -> Command {
                         ),
                 )
                 .subcommand(
+                    Command::new(CMD_EXPORT_VPXZ)
+                        .about("Export the table as a .vpxz archive for the Visual Pinball mobile app")
+                        .long_about("Bundles the vpx and its sidecar files (.vbs, .ini, .directb2s, .png/.jpg) into a single .vpxz archive (a renamed zip). When the table is PinMAME-based, also bundles the matching rom zip from the configured pinmame folder unless --no-rom is set.")
+                        .arg(arg!(<VPXPATH> "The path to the vpx file").required(true))
+                        .arg(
+                            Arg::new("OUTPUT")
+                                .short('o')
+                                .long("output")
+                                .num_args(1)
+                                .help("Output .vpxz path. Defaults to <stem>.vpxz one folder up from the vpx, so re-runs don't recursively pick up the previous output."),
+                        )
+                        .arg(
+                            Arg::new("NO_ROM")
+                                .long("no-rom")
+                                .num_args(0)
+                                .help("Do not bundle the matching PinMAME rom zip"),
+                        )
+                        .arg(
+                            Arg::new("FORCE")
+                                .short('f')
+                                .long("force")
+                                .num_args(0)
+                                .help("Overwrite the output file if it already exists"),
+                        ),
+                )
+                .subcommand(
                     Command::new(CMD_EXPORT_GLTF)
                         .about("Export the table as a glTF or GLB file")
                         .arg(arg!(<VPXPATH> "The path to the vpx file").required(true))
@@ -1351,6 +1379,107 @@ fn handle_export_gltf(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
     )?;
     export_gltf(&vpx, &output_path, &RealFileSystem, &options)?;
     crate::println!("Done.")?;
+    Ok(ExitCode::SUCCESS)
+}
+
+fn handle_export_vpxz(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
+    let path = sub_matches
+        .get_one::<String>("VPXPATH")
+        .map(|s| s.as_str())
+        .unwrap_or_default();
+    let expanded_path = path_exists(path)?;
+    let bundle_rom = !sub_matches.get_flag("NO_ROM");
+    let force = sub_matches.get_flag("FORCE");
+    let output = sub_matches.get_one::<String>("OUTPUT").map(PathBuf::from);
+
+    let output_path = match output {
+        Some(p) => p,
+        None => crate::vpxz::default_output_path(&expanded_path)?,
+    };
+
+    if output_path.exists() {
+        if output_path.is_dir() {
+            return fail(format!(
+                "Output path exists and is a directory: {}",
+                output_path.display()
+            ));
+        }
+        if !force {
+            let confirmed = confirm(
+                format!("\"{}\" already exists.", output_path.display()),
+                "Do you want to overwrite it?".to_string(),
+            )?;
+            if !confirmed {
+                crate::println!("Aborted")?;
+                return Ok(ExitCode::SUCCESS);
+            }
+        }
+    }
+
+    let loaded_config = config::load_config()?;
+    let config = loaded_config.as_ref().map(|c| &c.1);
+
+    let rom_name = indexer::get_romname_from_vpx(&expanded_path)?;
+    let rom_zip = if bundle_rom {
+        let configured = config.and_then(|c| c.configured_pinmame_folder());
+        let global = config.map(|c| c.global_pinmame_folder());
+        crate::vpxz::find_rom_zip(&expanded_path, configured.as_deref(), global.as_deref())?
+    } else {
+        None
+    };
+
+    let exclude_globs: Vec<String> = config
+        .map(|c| c.vpxz_excludes.clone())
+        .unwrap_or_else(config::default_vpxz_excludes);
+
+    let parent = expanded_path
+        .parent()
+        .map(|p| p.display().to_string())
+        .unwrap_or_default();
+    crate::println!("Scanning {parent} ...")?;
+
+    let pb = ProgressBar::hidden();
+    pb.set_style(
+        ProgressStyle::with_template("{spinner:.green} [{bar:.cyan/blue}] {pos}/{human_len} {msg}")
+            .unwrap(),
+    );
+    pb.set_message("bundling");
+    let progress = ProgressBarProgress::new(pb);
+
+    let report = crate::vpxz::export_vpxz(
+        &expanded_path,
+        &output_path,
+        &crate::vpxz::VpxzExportOptions {
+            exclude_globs: &exclude_globs,
+            rom_zip: rom_zip.as_deref(),
+            progress: Some(&progress),
+        },
+    )?;
+
+    if !report.excluded.is_empty() {
+        crate::println!("Excluded {} files:", report.excluded.len())?;
+        for (path, reason) in &report.excluded {
+            crate::println!("  {path} [{reason}]")?;
+        }
+    }
+    if let Some(rom_path) = &report.injected_rom {
+        crate::println!("Injected rom from {}", rom_path.display())?;
+    }
+    if bundle_rom
+        && let Some(rom_name) = rom_name.as_deref()
+        && !report.rom_bundled(rom_name)
+    {
+        crate::println!(
+            "{}",
+            format!("Note: rom '{rom_name}' not found; not bundled.").truecolor(255, 125, 0)
+        )?;
+    }
+    crate::println!(
+        "Wrote {} ({} included, {} excluded)",
+        report.output.display(),
+        report.included.len(),
+        report.excluded.len()
+    )?;
     Ok(ExitCode::SUCCESS)
 }
 

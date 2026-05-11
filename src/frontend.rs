@@ -57,6 +57,7 @@ enum TableOption {
     B2SAutoPositionDMD,
     EditTableINI,
     EditMainIni,
+    ExportVpxz,
 }
 
 impl TableOption {
@@ -86,6 +87,7 @@ impl TableOption {
             TableOption::B2SAutoPositionDMD,
             TableOption::EditTableINI,
             TableOption::EditMainIni,
+            TableOption::ExportVpxz,
         ]);
         options
     }
@@ -111,6 +113,7 @@ impl TableOption {
             TableOption::B2SAutoPositionDMD => "Backglass > Auto-position DMD".to_string(),
             TableOption::EditTableINI => "INI > Edit table ini".to_string(),
             TableOption::EditMainIni => "INI > Edit main ini".to_string(),
+            TableOption::ExportVpxz => "Export > vpxz (mobile)".to_string(),
         }
     }
 }
@@ -487,6 +490,10 @@ fn table_menu(
                 };
                 report_launch_result(path, result);
             }
+            Some(TableOption::ExportVpxz) => match export_vpxz(config, selected_path, info) {
+                Ok(msg) => prompt(&msg),
+                Err(err) => prompt_error(&format!("Unable to export vpxz: {err}")),
+            },
             None => exit = true,
         }
     }
@@ -745,6 +752,67 @@ fn nvram_clear(info: &IndexedTable) {
     } else {
         prompt("This table is not using used PinMAME");
     }
+}
+
+fn export_vpxz(
+    config: &ResolvedConfig,
+    selected_path: &Path,
+    info: &IndexedTable,
+) -> io::Result<String> {
+    let output_path = crate::vpxz::default_output_path(selected_path)?;
+
+    if output_path.exists()
+        && !Confirm::with_theme(&ColorfulTheme::default())
+            .with_prompt(format!(
+                "\"{}\" already exists. Overwrite?",
+                output_path.display()
+            ))
+            .default(false)
+            .interact()
+            .unwrap_or(false)
+    {
+        return Ok("Aborted".to_string());
+    }
+
+    let rom_zip = info.rom_path().filter(|p| p.is_file()).cloned();
+    let rom_name = indexer::get_romname_from_vpx(selected_path).ok().flatten();
+
+    let pb = ProgressBar::hidden();
+    pb.set_style(
+        ProgressStyle::with_template("{spinner:.green} [{bar:.cyan/blue}] {pos}/{human_len} {msg}")
+            .unwrap(),
+    );
+    pb.set_message("bundling");
+    let progress = ProgressBarProgress::new(pb);
+
+    let report = crate::vpxz::export_vpxz(
+        selected_path,
+        &output_path,
+        &crate::vpxz::VpxzExportOptions {
+            exclude_globs: &config.vpxz_excludes,
+            rom_zip: rom_zip.as_deref(),
+            progress: Some(&progress),
+        },
+    )?;
+
+    let mut msg = format!("Included {} files", report.included.len());
+    if !report.excluded.is_empty() {
+        msg.push_str(&format!(", excluded {}", report.excluded.len()));
+    }
+    if let Some(rom_path) = &report.injected_rom {
+        msg.push_str(&format!("\nInjected rom from {}", rom_path.display()));
+    }
+    let rom_bundled = rom_name
+        .as_deref()
+        .map(|n| report.rom_bundled(n))
+        .unwrap_or(false);
+    if info.requires_pinmame && !rom_bundled {
+        msg.push_str(
+            "\nNote: this table requires PinMAME but no rom file was located; not bundled.",
+        );
+    }
+    msg.push_str(&format!("\nWrote {}", report.output.display()));
+    Ok(msg)
 }
 
 /// Find the NVRAM file for a ROM, not checking if it exists

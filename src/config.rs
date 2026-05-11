@@ -33,6 +33,7 @@ pub struct Config {
     pub diff: Option<String>,
     pub editor: Option<String>,
     pub launch_templates: Option<Vec<LaunchTemplate>>,
+    pub vpxz_excludes: Option<Vec<String>>,
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -45,6 +46,19 @@ pub struct ResolvedConfig {
     pub tables_scan_max_depth: Option<usize>,
     pub diff: Option<String>,
     pub editor: Option<String>,
+    pub vpxz_excludes: Vec<String>,
+}
+
+pub fn default_vpxz_excludes() -> Vec<String> {
+    vec![
+        "Downloads/".to_string(),
+        "downloads/".to_string(),
+        "cache/".to_string(),
+        "**/Thumbs.db".to_string(),
+        "**/.DS_Store".to_string(),
+        "**/*.bak".to_string(),
+        "**/*~".to_string(),
+    ]
 }
 
 impl ResolvedConfig {
@@ -174,6 +188,7 @@ fn read_config(config_path: &Path) -> io::Result<ResolvedConfig> {
         tables_scan_max_depth: config.tables_scan_max_depth,
         diff: config.diff,
         editor: config.editor,
+        vpxz_excludes: config.vpxz_excludes.unwrap_or_else(default_vpxz_excludes),
     };
     Ok(resolved_config)
 }
@@ -392,6 +407,7 @@ fn write_default_config(config_file: &Path, vpx_executable: &Path) -> io::Result
         tables_scan_max_depth: None,
         diff: None,
         editor: None,
+        vpxz_excludes: None,
     };
     write_config(config_file, &config)?;
     Ok(())
@@ -496,6 +512,7 @@ mod tests {
                 tables_scan_max_depth: None,
                 diff: None,
                 editor: None,
+                vpxz_excludes: default_vpxz_excludes(),
             }
         );
         Ok(())
@@ -590,6 +607,7 @@ mod tests {
                 tables_scan_max_depth: None,
                 diff: None,
                 editor: None,
+                vpxz_excludes: default_vpxz_excludes(),
             }
         );
         Ok(())
@@ -626,6 +644,7 @@ mod tests {
                 tables_scan_max_depth: None,
                 diff: None,
                 editor: None,
+                vpxz_excludes: default_vpxz_excludes(),
             }
         );
         Ok(())
@@ -651,6 +670,7 @@ mod tests {
                 tables_scan_max_depth: None,
                 diff: None,
                 editor: None,
+                vpxz_excludes: default_vpxz_excludes(),
                 launch_templates: vec!(LaunchTemplate {
                     name: "Launch".to_string(),
                     executable: PathBuf::from("C:\\test\\vpinball"),
