@@ -98,6 +98,9 @@ const CMD_COLLECTIONS_LIST: &str = "list";
 const CMD_MATERIALS: &str = "materials";
 const CMD_MATERIALS_LIST: &str = "list";
 
+const CMD_GAMEITEMS: &str = "gameitems";
+const CMD_GAMEITEMS_LIST: &str = "list";
+
 const CMD_GAMEDATA: &str = "gamedata";
 const CMD_GAMEDATA_SHOW: &str = "show";
 
@@ -729,6 +732,10 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             Some((CMD_MATERIALS_LIST, sub_matches)) => handle_materials_list(sub_matches),
             _ => unreachable!(),
         },
+        Some((CMD_GAMEITEMS, sub_matches)) => match sub_matches.subcommand() {
+            Some((CMD_GAMEITEMS_LIST, sub_matches)) => handle_gameitems_list(sub_matches),
+            _ => unreachable!(),
+        },
         Some((CMD_GAMEDATA, sub_matches)) => match sub_matches.subcommand() {
             Some((CMD_GAMEDATA_SHOW, sub_matches)) => {
                 let path = sub_matches
@@ -1207,6 +1214,30 @@ fn build_command() -> Command {
                              OPACITY (0..1), EDGE (0..1). Supports both the 10.8+ MATR \
                              format and the pre-10.8 MATE format; columns are the fields \
                              that exist in both.",
+                        )
+                        .arg(arg!(<VPXPATH> "The path to the vpx file").required(true)),
+                ),
+        )
+        .subcommand(
+            Command::new(CMD_GAMEITEMS)
+                .subcommand_required(true)
+                .about("Vpx gameitem (table element) related commands")
+                .subcommand(
+                    Command::new(CMD_GAMEITEMS_LIST)
+                        .about("List the gameitems stored in a vpx file")
+                        .long_about(
+                            "List the gameitems (vpinball calls them \"elements\" in the \
+                             editor GUI) stored in a vpx file as aligned columns: NAME, \
+                             TYPE, VISIBLE (Y/N/- where '-' means the variant has no \
+                             visibility concept), LOCKED (Y/N/-), LAYER (editor layer name \
+                             if set, otherwise the numeric layer), PART_GROUP, \
+                             PHYSICS_MATERIAL, IMAGES, MATERIALS. IMAGES and MATERIALS are \
+                             '--'-joined to match the format vpinball's editor uses; this \
+                             makes `grep -F -- '--MyTexture'` a reliable way to find every \
+                             item that references a given texture. Empty cells mean either \
+                             the field is not set or the variant has no such field. For \
+                             type counts: `vpxtool gameitems list table.vpx | awk 'NR>1 \
+                             {print $2}' | sort | uniq -c`.",
                         )
                         .arg(arg!(<VPXPATH> "The path to the vpx file").required(true)),
                 ),
@@ -1966,6 +1997,77 @@ fn handle_materials_list(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
         ColAlign::Right,
         ColAlign::Right,
         ColAlign::Right,
+    ];
+    print_aligned_table(&headers, &aligns, &rows)?;
+    Ok(ExitCode::SUCCESS)
+}
+
+fn handle_gameitems_list(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
+    let path = sub_matches
+        .get_one::<String>("VPXPATH")
+        .map(|s| s.as_str())
+        .unwrap_or_default();
+    let expanded_path = path_exists(path)?;
+    let mut vpx_file = vpx::open(&expanded_path)?;
+    let gameitems = vpx_file.read_gameitems()?;
+
+    let rows: Vec<Vec<String>> = gameitems
+        .iter()
+        .map(|item| {
+            let visible = match item.is_visible() {
+                Some(true) => "Y",
+                Some(false) => "N",
+                None => "-",
+            };
+            let locked = match item.is_locked() {
+                Some(true) => "Y",
+                Some(false) => "N",
+                None => "-",
+            };
+            // Prefer the editor layer name; fall back to the numeric layer if
+            // unnamed, empty if neither is set.
+            let layer = match item.editor_layer_name() {
+                Some(name) if !name.is_empty() => name.clone(),
+                _ => item
+                    .editor_layer()
+                    .map(|n| n.to_string())
+                    .unwrap_or_default(),
+            };
+            vec![
+                item.name().to_string(),
+                item.type_name(),
+                visible.to_string(),
+                locked.to_string(),
+                layer,
+                item.part_group_name().unwrap_or("").to_string(),
+                item.physics_material().unwrap_or("").to_string(),
+                item.images().join("--"),
+                item.materials().join("--"),
+            ]
+        })
+        .collect();
+
+    let headers = [
+        "NAME",
+        "TYPE",
+        "VISIBLE",
+        "LOCKED",
+        "LAYER",
+        "PART_GROUP",
+        "PHYSICS_MATERIAL",
+        "IMAGES",
+        "MATERIALS",
+    ];
+    let aligns = [
+        ColAlign::Left,
+        ColAlign::Left,
+        ColAlign::Left,
+        ColAlign::Left,
+        ColAlign::Left,
+        ColAlign::Left,
+        ColAlign::Left,
+        ColAlign::Left,
+        ColAlign::Left,
     ];
     print_aligned_table(&headers, &aligns, &rows)?;
     Ok(ExitCode::SUCCESS)
