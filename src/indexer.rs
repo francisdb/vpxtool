@@ -644,6 +644,56 @@ fn read_table_info_json(info_file_path: &Path) -> io::Result<TableInfo> {
     Ok(table_info)
 }
 
+/// Locate the `.nv` file for a vpx by reading the script for the rom name and
+/// then probing the same set of pinmame folders the indexer uses for roms:
+///   1. configured PinMAMEPath (resolved relative to the vpx if relative)
+///   2. `<vpx_parent>/pinmame` (vpinball's local fallback)
+///   3. global pinmame folder (`~/.pinmame` or `VPinMAME` on Windows)
+///
+/// Returns `Ok(None)` for non-PinMAME tables or when no `.nv` file is found.
+pub fn find_nvram_for_vpx(
+    vpx_path: &Path,
+    configured_pinmame_folder: Option<&Path>,
+    global_pinmame_folder: Option<&Path>,
+) -> io::Result<Option<PathBuf>> {
+    let Some(rom_name) = get_romname_from_vpx(vpx_path)? else {
+        return Ok(None);
+    };
+    Ok(find_nvram_for_rom(
+        &rom_name,
+        vpx_path,
+        configured_pinmame_folder,
+        global_pinmame_folder,
+    ))
+}
+
+/// Find a `<rom>.nv` file by probing, in order: the configured PinMAMEPath, the
+/// `<vpx_parent>/pinmame` local fallback, and the global pinmame folder.
+fn find_nvram_for_rom(
+    rom_name: &str,
+    vpx_path: &Path,
+    configured_pinmame_folder: Option<&Path>,
+    global_pinmame_folder: Option<&Path>,
+) -> Option<PathBuf> {
+    let nv_file = format!("{}.nv", rom_name.to_lowercase());
+    let vpx_parent = vpx_path.parent().unwrap_or(Path::new("."));
+
+    let mut candidates: Vec<PathBuf> = Vec::new();
+    if let Some(p) = configured_pinmame_folder {
+        let base = if p.is_relative() {
+            vpx_parent.join(p)
+        } else {
+            p.to_path_buf()
+        };
+        candidates.push(base.join("nvram").join(&nv_file));
+    }
+    candidates.push(vpx_parent.join("pinmame").join("nvram").join(&nv_file));
+    if let Some(p) = global_pinmame_folder {
+        candidates.push(p.join("nvram").join(&nv_file));
+    }
+    candidates.into_iter().find(|p| p.is_file())
+}
+
 /// Visual pinball always falls back to the [vpx_folder]/pinmame/roms folder,
 /// even if the PinMAMEPath folder is configured in the vpinball config.
 fn find_local_rom_path(
@@ -1537,6 +1587,90 @@ LoadVPM "01210000","sys80.vbs",3.10
         )
         .unwrap();
         assert_eq!(local_rom, Some(expected_rom_path));
+    }
+
+    #[test]
+    fn test_find_nvram_prefers_configured_pinmame_folder() {
+        let dir = testdir!();
+        let vpx_path = dir.join("test.vpx");
+        let configured = dir.join("configured");
+        let global = dir.join("global");
+        let local_fallback = dir.join("pinmame");
+        for base in [&configured, &global, &local_fallback] {
+            fs::create_dir_all(base.join("nvram")).unwrap();
+        }
+        let configured_nv = configured.join("nvram").join("rom1.nv");
+        File::create(&configured_nv).unwrap();
+        File::create(local_fallback.join("nvram").join("rom1.nv")).unwrap();
+        File::create(global.join("nvram").join("rom1.nv")).unwrap();
+
+        let found = find_nvram_for_rom("rom1", &vpx_path, Some(&configured), Some(&global));
+        assert_eq!(found, Some(configured_nv));
+    }
+
+    #[test]
+    fn test_find_nvram_falls_back_to_local_pinmame_folder() {
+        let dir = testdir!();
+        let vpx_path = dir.join("test.vpx");
+        let configured = dir.join("configured");
+        let global = dir.join("global");
+        fs::create_dir_all(dir.join("pinmame").join("nvram")).unwrap();
+        let expected = dir.join("pinmame").join("nvram").join("rom1.nv");
+        File::create(&expected).unwrap();
+
+        let found = find_nvram_for_rom("rom1", &vpx_path, Some(&configured), Some(&global));
+        assert_eq!(found, Some(expected));
+    }
+
+    #[test]
+    fn test_find_nvram_falls_back_to_global_pinmame_folder() {
+        let dir = testdir!();
+        let vpx_path = dir.join("test.vpx");
+        let global = dir.join("global");
+        fs::create_dir_all(global.join("nvram")).unwrap();
+        let expected = global.join("nvram").join("rom1.nv");
+        File::create(&expected).unwrap();
+
+        let found = find_nvram_for_rom("rom1", &vpx_path, None, Some(&global));
+        assert_eq!(found, Some(expected));
+    }
+
+    #[test]
+    fn test_find_nvram_lowercases_rom_name() {
+        let dir = testdir!();
+        let vpx_path = dir.join("test.vpx");
+        let global = dir.join("global");
+        fs::create_dir_all(global.join("nvram")).unwrap();
+        let expected = global.join("nvram").join("rom1.nv");
+        File::create(&expected).unwrap();
+
+        let found = find_nvram_for_rom("ROM1", &vpx_path, None, Some(&global));
+        assert_eq!(found, Some(expected));
+    }
+
+    #[test]
+    fn test_find_nvram_returns_none_when_missing() {
+        let dir = testdir!();
+        let vpx_path = dir.join("test.vpx");
+        let found = find_nvram_for_rom("rom1", &vpx_path, None, None);
+        assert_eq!(found, None);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn test_find_nvram_resolves_relative_configured_folder() {
+        // Mirrors test_find_local_rom_path_relative_linux: on Batocera the
+        // PinMAMEPath can be configured as ./, so it must resolve relative to
+        // the vpx parent.
+        let dir = testdir!();
+        let vpx_path = dir.join("test.vpx");
+        let expected = dir.join("nvram").join("rom1.nv");
+        fs::create_dir_all(expected.parent().unwrap()).unwrap();
+        File::create(&expected).unwrap();
+
+        let found =
+            find_nvram_for_rom("rom1", &vpx_path, Some(&PathBuf::from("./")), None);
+        assert_eq!(found, Some(expected));
     }
 
     #[cfg(target_os = "linux")]

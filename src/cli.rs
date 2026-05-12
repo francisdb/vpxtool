@@ -94,6 +94,9 @@ const CMD_GAMEDATA_SHOW: &str = "show";
 const CMD_DIPSWITCHES: &str = "dipswitches";
 const CMD_DIPSWITCHES_SHOW: &str = "show";
 
+const CMD_NVRAM: &str = "nvram";
+const CMD_NVRAM_SHOW: &str = "show";
+
 const CMD_ROMNAME: &str = "romname";
 
 const CMD_EXPORT: &str = "export";
@@ -743,6 +746,10 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             }
             Ok(ExitCode::SUCCESS)
         }
+        Some((CMD_NVRAM, sub_matches)) => match sub_matches.subcommand() {
+            Some((CMD_NVRAM_SHOW, sub_matches)) => handle_nvram_show(sub_matches),
+            _ => unreachable!(),
+        },
         Some((CMD_EXPORT, sub_matches)) => match sub_matches.subcommand() {
             Some((CMD_EXPORT_OBJ, sub_matches)) => handle_export_obj(sub_matches),
             Some((CMD_EXPORT_GLTF, sub_matches)) => handle_export_gltf(sub_matches),
@@ -1144,6 +1151,22 @@ fn build_command() -> Command {
                 ),
         )
         .subcommand(
+            Command::new(CMD_NVRAM)
+                .subcommand_required(true)
+                .about("PinMAME NVRAM related commands")
+                .subcommand(
+                    Command::new(CMD_NVRAM_SHOW)
+                        .about("Resolve a PinMAME NVRAM file to JSON")
+                        .long_about(
+                            "Resolve a PinMAME NVRAM file to JSON using the pinmame-nvram maps. \
+                             PATH may be a .vpx (the .nv is located via the configured/global \
+                             pinmame folders), a .nv (resolved directly), or a rom .zip (the \
+                             sibling ../nvram/<stem>.nv is used).",
+                        )
+                        .arg(arg!(<PATH> "Path to a .vpx, .nv, or rom .zip file").required(true)),
+                ),
+        )
+        .subcommand(
             Command::new(CMD_ROMNAME)
                 .about("Prints the PinMAME ROM name from a vpx file")
                 .long_about("Extracts the PinMAME ROM name from a vpx file by searching for specific patterns in the table script. If the table is not PinMAME based, no output is produced.")
@@ -1481,6 +1504,90 @@ fn handle_export_vpxz(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
         report.excluded.len()
     )?;
     Ok(ExitCode::SUCCESS)
+}
+
+fn handle_nvram_show(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
+    let path = sub_matches
+        .get_one::<String>("PATH")
+        .map(|s| s.as_str())
+        .unwrap_or_default();
+    let expanded_path = path_exists(path)?;
+
+    let nvram_path = match expanded_path
+        .extension()
+        .and_then(OsStr::to_str)
+        .map(str::to_ascii_lowercase)
+        .as_deref()
+    {
+        Some("nv") => expanded_path.clone(),
+        Some("zip") => {
+            // Treat as a rom zip: nvram lives at ../nvram/<stem>.nv.
+            let stem = expanded_path
+                .file_stem()
+                .and_then(OsStr::to_str)
+                .ok_or_else(|| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        format!("rom zip has no usable file stem: {}", expanded_path.display()),
+                    )
+                })?;
+            let candidate = expanded_path
+                .parent()
+                .and_then(Path::parent)
+                .map(|p| p.join("nvram").join(format!("{stem}.nv")));
+            match candidate.filter(|p| p.is_file()) {
+                Some(p) => p,
+                None => return fail(format!(
+                    "No nvram file found next to rom zip {}",
+                    expanded_path.display()
+                )),
+            }
+        }
+        Some("vpx") => {
+            if indexer::get_romname_from_vpx(&expanded_path)?.is_none() {
+                return fail(format!(
+                    "Table {} is not PinMAME-based",
+                    expanded_path.display()
+                ));
+            }
+            let loaded_config = config::load_config()?;
+            let config = loaded_config.as_ref().map(|c| &c.1);
+            let configured = config.and_then(|c| c.configured_pinmame_folder());
+            let global = config.map(|c| c.global_pinmame_folder());
+            match indexer::find_nvram_for_vpx(
+                &expanded_path,
+                configured.as_deref(),
+                global.as_deref(),
+            )? {
+                Some(p) => p,
+                None => return fail(format!(
+                    "No nvram file found for {} - try launching the table once",
+                    expanded_path.display()
+                )),
+            }
+        }
+        _ => return fail(format!(
+            "Unsupported file type: {} (expected .vpx, .nv, or rom .zip)",
+            expanded_path.display()
+        )),
+    };
+
+    match pinmame_nvram::resolve::resolve(&nvram_path) {
+        Ok(Some(resolved)) => {
+            let json = serde_json::to_string_pretty(&resolved)
+                .map_err(|e| io::Error::other(format!("Failed to serialize nvram json: {e}")))?;
+            crate::println!("{json}")?;
+            Ok(ExitCode::SUCCESS)
+        }
+        Ok(None) => fail(format!(
+            "No pinmame-nvram map for {}",
+            nvram_path.display()
+        )),
+        Err(e) => fail(format!(
+            "Failed to resolve nvram {}: {e}",
+            nvram_path.display()
+        )),
+    }
 }
 
 fn extract_script_command(name: impl Into<Str>) -> Command {
