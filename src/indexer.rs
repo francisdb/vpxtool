@@ -1668,8 +1668,7 @@ LoadVPM "01210000","sys80.vbs",3.10
         fs::create_dir_all(expected.parent().unwrap()).unwrap();
         File::create(&expected).unwrap();
 
-        let found =
-            find_nvram_for_rom("rom1", &vpx_path, Some(&PathBuf::from("./")), None);
+        let found = find_nvram_for_rom("rom1", &vpx_path, Some(&PathBuf::from("./")), None);
         assert_eq!(found, Some(expected));
     }
 

@@ -1528,7 +1528,10 @@ fn handle_nvram_show(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
                 .ok_or_else(|| {
                     io::Error::new(
                         io::ErrorKind::InvalidInput,
-                        format!("rom zip has no usable file stem: {}", expanded_path.display()),
+                        format!(
+                            "rom zip has no usable file stem: {}",
+                            expanded_path.display()
+                        ),
                     )
                 })?;
             let candidate = expanded_path
@@ -1537,10 +1540,12 @@ fn handle_nvram_show(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
                 .map(|p| p.join("nvram").join(format!("{stem}.nv")));
             match candidate.filter(|p| p.is_file()) {
                 Some(p) => p,
-                None => return fail(format!(
-                    "No nvram file found next to rom zip {}",
-                    expanded_path.display()
-                )),
+                None => {
+                    return fail(format!(
+                        "No nvram file found next to rom zip {}",
+                        expanded_path.display()
+                    ));
+                }
             }
         }
         Some("vpx") => {
@@ -1560,16 +1565,20 @@ fn handle_nvram_show(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
                 global.as_deref(),
             )? {
                 Some(p) => p,
-                None => return fail(format!(
-                    "No nvram file found for {} - try launching the table once",
-                    expanded_path.display()
-                )),
+                None => {
+                    return fail(format!(
+                        "No nvram file found for {} - try launching the table once",
+                        expanded_path.display()
+                    ));
+                }
             }
         }
-        _ => return fail(format!(
-            "Unsupported file type: {} (expected .vpx, .nv, or rom .zip)",
-            expanded_path.display()
-        )),
+        _ => {
+            return fail(format!(
+                "Unsupported file type: {} (expected .vpx, .nv, or rom .zip)",
+                expanded_path.display()
+            ));
+        }
     };
 
     match pinmame_nvram::resolve::resolve(&nvram_path) {
@@ -1579,10 +1588,7 @@ fn handle_nvram_show(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
             crate::println!("{json}")?;
             Ok(ExitCode::SUCCESS)
         }
-        Ok(None) => fail(format!(
-            "No pinmame-nvram map for {}",
-            nvram_path.display()
-        )),
+        Ok(None) => fail(format!("No pinmame-nvram map for {}", nvram_path.display())),
         Err(e) => fail(format!(
             "Failed to resolve nvram {}: {e}",
             nvram_path.display()
