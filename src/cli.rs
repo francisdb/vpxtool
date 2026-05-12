@@ -89,6 +89,9 @@ const CMD_IMAGES: &str = "images";
 const CMD_IMAGES_WEBP: &str = "webp";
 const CMD_IMAGES_LIST: &str = "list";
 
+const CMD_SOUNDS: &str = "sounds";
+const CMD_SOUNDS_LIST: &str = "list";
+
 const CMD_GAMEDATA: &str = "gamedata";
 const CMD_GAMEDATA_SHOW: &str = "show";
 
@@ -708,6 +711,10 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             Some((CMD_IMAGES_LIST, sub_matches)) => handle_images_list(sub_matches),
             _ => unreachable!(),
         },
+        Some((CMD_SOUNDS, sub_matches)) => match sub_matches.subcommand() {
+            Some((CMD_SOUNDS_LIST, sub_matches)) => handle_sounds_list(sub_matches),
+            _ => unreachable!(),
+        },
         Some((CMD_GAMEDATA, sub_matches)) => match sub_matches.subcommand() {
             Some((CMD_GAMEDATA_SHOW, sub_matches)) => {
                 let path = sub_matches
@@ -1134,6 +1141,26 @@ fn build_command() -> Command {
                              screenshot-style image links), PATH (original import path). \
                              PATH is last so awk-style column extraction works on the \
                              other fields even when paths contain spaces.",
+                        )
+                        .arg(arg!(<VPXPATH> "The path to the vpx file").required(true)),
+                ),
+        )
+        .subcommand(
+            Command::new(CMD_SOUNDS)
+                .subcommand_required(true)
+                .about("Vpx sound related commands")
+                .subcommand(
+                    Command::new(CMD_SOUNDS_LIST)
+                        .about("List the sounds stored in a vpx file")
+                        .long_about(
+                            "List the sounds stored in a vpx file as aligned columns: \
+                             NAME, FORMAT, OUTPUT (table/backglass), PAN, FADE, VOL \
+                             (raw integers from the vpx file, not the signed-percent values \
+                             vpinball shows in its GUI), FREQ (sample rate, Hz), CHAN \
+                             (channel count), LENGTH (seconds, WAV only, blank otherwise), \
+                             SIZE (bytes), PATH (original import path). PATH is last so \
+                             awk-style column extraction works on the other fields even \
+                             when paths contain spaces.",
                         )
                         .arg(arg!(<VPXPATH> "The path to the vpx file").required(true)),
                 ),
@@ -1610,6 +1637,57 @@ fn handle_nvram_show(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
     }
 }
 
+/// Right- vs left-aligned column. The last column is printed without trailing
+/// padding regardless, so paths with spaces don't break awk-style splitting
+/// on the preceding fields.
+#[derive(Clone, Copy)]
+enum ColAlign {
+    Left,
+    Right,
+}
+
+fn print_aligned_table(
+    headers: &[&str],
+    aligns: &[ColAlign],
+    rows: &[Vec<String>],
+) -> io::Result<()> {
+    assert_eq!(headers.len(), aligns.len());
+    let mut widths: Vec<usize> = headers.iter().map(|h| h.len()).collect();
+    for row in rows {
+        assert_eq!(row.len(), headers.len());
+        for (i, cell) in row.iter().enumerate() {
+            if cell.len() > widths[i] {
+                widths[i] = cell.len();
+            }
+        }
+    }
+    let mut buf = String::new();
+    let mut emit = |cells: &[&str]| -> io::Result<()> {
+        buf.clear();
+        let last = cells.len() - 1;
+        for (i, cell) in cells.iter().enumerate() {
+            if i > 0 {
+                buf.push_str("  ");
+            }
+            if i == last {
+                buf.push_str(cell);
+            } else {
+                match aligns[i] {
+                    ColAlign::Left => buf.push_str(&format!("{:<w$}", cell, w = widths[i])),
+                    ColAlign::Right => buf.push_str(&format!("{:>w$}", cell, w = widths[i])),
+                }
+            }
+        }
+        crate::println!("{}", buf)
+    };
+    emit(headers)?;
+    for row in rows {
+        let refs: Vec<&str> = row.iter().map(String::as_str).collect();
+        emit(&refs)?;
+    }
+    Ok(())
+}
+
 fn handle_images_list(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
     let path = sub_matches
         .get_one::<String>("VPXPATH")
@@ -1619,20 +1697,19 @@ fn handle_images_list(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
     let mut vpx_file = vpx::open(&expanded_path)?;
     let images = vpx_file.read_images()?;
 
-    // Pre-compute rows so column widths can be sized to fit the actual data.
-    let rows: Vec<[String; 7]> = images
+    let rows: Vec<Vec<String>> = images
         .iter()
         .map(|image| {
-            let (format, size_bytes) = if let Some(jpeg) = &image.jpeg {
-                (image.ext(), jpeg.data.len())
+            let size_bytes = if let Some(jpeg) = &image.jpeg {
+                jpeg.data.len()
             } else if let Some(bits) = &image.bits {
-                (image.ext(), bits.lzw_compressed_data.len())
+                bits.lzw_compressed_data.len()
             } else {
-                (image.ext(), 0)
+                0
             };
-            [
+            vec![
                 image.name.clone(),
-                format,
+                image.ext(),
                 image.width.to_string(),
                 image.height.to_string(),
                 size_bytes.to_string(),
@@ -1645,48 +1722,92 @@ fn handle_images_list(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
     let headers = [
         "NAME", "FORMAT", "WIDTH", "HEIGHT", "SIZE", "LINKED", "PATH",
     ];
-    let mut widths = headers.map(str::len);
-    for row in &rows {
-        for (i, cell) in row.iter().enumerate() {
-            if cell.len() > widths[i] {
-                widths[i] = cell.len();
-            }
-        }
-    }
+    let aligns = [
+        ColAlign::Left,
+        ColAlign::Left,
+        ColAlign::Right,
+        ColAlign::Right,
+        ColAlign::Right,
+        ColAlign::Left,
+        ColAlign::Left,
+    ];
+    print_aligned_table(&headers, &aligns, &rows)?;
+    Ok(ExitCode::SUCCESS)
+}
 
-    let print_row = |cells: [&str; 7]| -> io::Result<()> {
-        // PATH is the last column; print it without trailing padding so paths
-        // with spaces don't break awk-style splitting on the preceding fields.
-        crate::println!(
-            "{:<n0$}  {:<n1$}  {:>n2$}  {:>n3$}  {:>n4$}  {:<n5$}  {}",
-            cells[0],
-            cells[1],
-            cells[2],
-            cells[3],
-            cells[4],
-            cells[5],
-            cells[6],
-            n0 = widths[0],
-            n1 = widths[1],
-            n2 = widths[2],
-            n3 = widths[3],
-            n4 = widths[4],
-            n5 = widths[5],
-        )
-    };
+fn handle_sounds_list(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
+    let path = sub_matches
+        .get_one::<String>("VPXPATH")
+        .map(|s| s.as_str())
+        .unwrap_or_default();
+    let expanded_path = path_exists(path)?;
+    let mut vpx_file = vpx::open(&expanded_path)?;
+    let sounds = vpx_file.read_sounds()?;
 
-    print_row(headers)?;
-    for row in &rows {
-        print_row([
-            row[0].as_str(),
-            row[1].as_str(),
-            row[2].as_str(),
-            row[3].as_str(),
-            row[4].as_str(),
-            row[5].as_str(),
-            row[6].as_str(),
-        ])?;
-    }
+    let rows: Vec<Vec<String>> = sounds
+        .iter()
+        .map(|sound| {
+            let ext = sound
+                .path
+                .rsplit('.')
+                .next()
+                .filter(|e| !e.contains(['/', '\\']))
+                .unwrap_or("")
+                .to_ascii_lowercase();
+            let is_wav = ext.is_empty() || ext == "wav";
+            let format = if ext.is_empty() {
+                "wav".to_string()
+            } else {
+                ext
+            };
+            let output = match sound.output_target {
+                vpin::vpx::sound::OutputTarget::Table => "table",
+                vpin::vpx::sound::OutputTarget::Backglass => "backglass",
+            };
+            // For WAV (PCM) we can derive the playback duration from the raw
+            // sample bytes; for non-WAV containers the data is compressed and
+            // we'd have to parse the container, so leave it blank.
+            let length = if is_wav && sound.wave_form.avg_bytes_per_sec > 0 {
+                format!(
+                    "{:.2}",
+                    sound.data.len() as f64 / sound.wave_form.avg_bytes_per_sec as f64
+                )
+            } else {
+                String::new()
+            };
+            vec![
+                sound.name.clone(),
+                format,
+                output.to_string(),
+                sound.balance.to_string(),
+                sound.fade.to_string(),
+                sound.volume.to_string(),
+                sound.wave_form.samples_per_sec.to_string(),
+                sound.wave_form.channels.to_string(),
+                length,
+                sound.data.len().to_string(),
+                sound.path.clone(),
+            ]
+        })
+        .collect();
+
+    let headers = [
+        "NAME", "FORMAT", "OUTPUT", "PAN", "FADE", "VOL", "FREQ", "CHAN", "LENGTH", "SIZE", "PATH",
+    ];
+    let aligns = [
+        ColAlign::Left,  // NAME
+        ColAlign::Left,  // FORMAT
+        ColAlign::Left,  // OUTPUT
+        ColAlign::Right, // PAN
+        ColAlign::Right, // FADE
+        ColAlign::Right, // VOL
+        ColAlign::Right, // FREQ
+        ColAlign::Right, // CHAN
+        ColAlign::Right, // LENGTH
+        ColAlign::Right, // SIZE
+        ColAlign::Left,  // PATH
+    ];
+    print_aligned_table(&headers, &aligns, &rows)?;
     Ok(ExitCode::SUCCESS)
 }
 
