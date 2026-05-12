@@ -87,6 +87,7 @@ const CMD_INFO_DIFF: &str = "diff";
 
 const CMD_IMAGES: &str = "images";
 const CMD_IMAGES_WEBP: &str = "webp";
+const CMD_IMAGES_LIST: &str = "list";
 
 const CMD_GAMEDATA: &str = "gamedata";
 const CMD_GAMEDATA_SHOW: &str = "show";
@@ -704,6 +705,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 }
                 Ok(ExitCode::SUCCESS)
             }
+            Some((CMD_IMAGES_LIST, sub_matches)) => handle_images_list(sub_matches),
             _ => unreachable!(),
         },
         Some((CMD_GAMEDATA, sub_matches)) => match sub_matches.subcommand() {
@@ -1122,6 +1124,18 @@ fn build_command() -> Command {
                             arg!(<VPXPATH> "The path to the vpx file")
                                 .required(true),
                         ),
+                )
+                .subcommand(
+                    Command::new(CMD_IMAGES_LIST)
+                        .about("List the images stored in a vpx file")
+                        .long_about(
+                            "List the images stored in a vpx file as aligned columns: \
+                             NAME, FORMAT, WIDTH, HEIGHT, SIZE (bytes), LINKED (Y/N for \
+                             screenshot-style image links), PATH (original import path). \
+                             PATH is last so awk-style column extraction works on the \
+                             other fields even when paths contain spaces.",
+                        )
+                        .arg(arg!(<VPXPATH> "The path to the vpx file").required(true)),
                 ),
         )
         .subcommand(
@@ -1594,6 +1608,86 @@ fn handle_nvram_show(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
             nvram_path.display()
         )),
     }
+}
+
+fn handle_images_list(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
+    let path = sub_matches
+        .get_one::<String>("VPXPATH")
+        .map(|s| s.as_str())
+        .unwrap_or_default();
+    let expanded_path = path_exists(path)?;
+    let mut vpx_file = vpx::open(&expanded_path)?;
+    let images = vpx_file.read_images()?;
+
+    // Pre-compute rows so column widths can be sized to fit the actual data.
+    let rows: Vec<[String; 7]> = images
+        .iter()
+        .map(|image| {
+            let (format, size_bytes) = if let Some(jpeg) = &image.jpeg {
+                (image.ext(), jpeg.data.len())
+            } else if let Some(bits) = &image.bits {
+                (image.ext(), bits.lzw_compressed_data.len())
+            } else {
+                (image.ext(), 0)
+            };
+            [
+                image.name.clone(),
+                format,
+                image.width.to_string(),
+                image.height.to_string(),
+                size_bytes.to_string(),
+                if image.is_link() { "Y" } else { "N" }.to_string(),
+                image.path.clone(),
+            ]
+        })
+        .collect();
+
+    let headers = [
+        "NAME", "FORMAT", "WIDTH", "HEIGHT", "SIZE", "LINKED", "PATH",
+    ];
+    let mut widths = headers.map(str::len);
+    for row in &rows {
+        for (i, cell) in row.iter().enumerate() {
+            if cell.len() > widths[i] {
+                widths[i] = cell.len();
+            }
+        }
+    }
+
+    let print_row = |cells: [&str; 7]| -> io::Result<()> {
+        // PATH is the last column; print it without trailing padding so paths
+        // with spaces don't break awk-style splitting on the preceding fields.
+        crate::println!(
+            "{:<n0$}  {:<n1$}  {:>n2$}  {:>n3$}  {:>n4$}  {:<n5$}  {}",
+            cells[0],
+            cells[1],
+            cells[2],
+            cells[3],
+            cells[4],
+            cells[5],
+            cells[6],
+            n0 = widths[0],
+            n1 = widths[1],
+            n2 = widths[2],
+            n3 = widths[3],
+            n4 = widths[4],
+            n5 = widths[5],
+        )
+    };
+
+    print_row(headers)?;
+    for row in &rows {
+        print_row([
+            row[0].as_str(),
+            row[1].as_str(),
+            row[2].as_str(),
+            row[3].as_str(),
+            row[4].as_str(),
+            row[5].as_str(),
+            row[6].as_str(),
+        ])?;
+    }
+    Ok(ExitCode::SUCCESS)
 }
 
 fn extract_script_command(name: impl Into<Str>) -> Command {
