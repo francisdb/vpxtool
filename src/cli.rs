@@ -95,6 +95,9 @@ const CMD_SOUNDS_LIST: &str = "list";
 const CMD_COLLECTIONS: &str = "collections";
 const CMD_COLLECTIONS_LIST: &str = "list";
 
+const CMD_MATERIALS: &str = "materials";
+const CMD_MATERIALS_LIST: &str = "list";
+
 const CMD_GAMEDATA: &str = "gamedata";
 const CMD_GAMEDATA_SHOW: &str = "show";
 
@@ -722,6 +725,10 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             Some((CMD_COLLECTIONS_LIST, sub_matches)) => handle_collections_list(sub_matches),
             _ => unreachable!(),
         },
+        Some((CMD_MATERIALS, sub_matches)) => match sub_matches.subcommand() {
+            Some((CMD_MATERIALS_LIST, sub_matches)) => handle_materials_list(sub_matches),
+            _ => unreachable!(),
+        },
         Some((CMD_GAMEDATA, sub_matches)) => match sub_matches.subcommand() {
             Some((CMD_GAMEDATA_SHOW, sub_matches)) => {
                 let path = sub_matches
@@ -1183,6 +1190,23 @@ fn build_command() -> Command {
                             "List the collections stored in a vpx file as aligned columns: \
                              NAME, ITEMS (number of element names in the collection), \
                              FIRE_EVENTS, STOP_SINGLES, GROUP_ELEMENTS (all Y/N flags).",
+                        )
+                        .arg(arg!(<VPXPATH> "The path to the vpx file").required(true)),
+                ),
+        )
+        .subcommand(
+            Command::new(CMD_MATERIALS)
+                .subcommand_required(true)
+                .about("Vpx material related commands")
+                .subcommand(
+                    Command::new(CMD_MATERIALS_LIST)
+                        .about("List the materials stored in a vpx file")
+                        .long_about(
+                            "List the materials stored in a vpx file as aligned columns: \
+                             NAME, BASE_COLOR (RGB hex), METAL (Y/N), ROUGHNESS (0..1), \
+                             OPACITY (0..1), EDGE (0..1). Supports both the 10.8+ MATR \
+                             format and the pre-10.8 MATE format; columns are the fields \
+                             that exist in both.",
                         )
                         .arg(arg!(<VPXPATH> "The path to the vpx file").required(true)),
                 ),
@@ -1868,6 +1892,80 @@ fn handle_collections_list(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
         ColAlign::Left,
         ColAlign::Left,
         ColAlign::Left,
+    ];
+    print_aligned_table(&headers, &aligns, &rows)?;
+    Ok(ExitCode::SUCCESS)
+}
+
+fn handle_materials_list(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
+    let path = sub_matches
+        .get_one::<String>("VPXPATH")
+        .map(|s| s.as_str())
+        .unwrap_or_default();
+    let expanded_path = path_exists(path)?;
+    let mut vpx_file = vpx::open(&expanded_path)?;
+    let gamedata = vpx_file.read_gamedata()?;
+
+    // Build a uniform Vec<Vec<String>> from whichever material format is
+    // present. 10.8+ uses the MATR storage (`gamedata.materials`); older
+    // files use the legacy MATE storage (`gamedata.materials_old`).
+    let rows: Vec<Vec<String>> = if let Some(materials) = gamedata.materials.as_ref() {
+        materials
+            .iter()
+            .map(|m| {
+                vec![
+                    m.name.clone(),
+                    format!(
+                        "#{:02X}{:02X}{:02X}",
+                        m.base_color.r, m.base_color.g, m.base_color.b
+                    ),
+                    if m.type_ == vpin::vpx::material::MaterialType::Metal {
+                        "Y"
+                    } else {
+                        "N"
+                    }
+                    .to_string(),
+                    format!("{:.3}", m.roughness),
+                    format!("{:.3}", m.opacity),
+                    format!("{:.3}", m.edge),
+                ]
+            })
+            .collect()
+    } else {
+        gamedata
+            .materials_old
+            .iter()
+            .map(|m| {
+                vec![
+                    m.name.clone(),
+                    format!(
+                        "#{:02X}{:02X}{:02X}",
+                        m.base_color.r, m.base_color.g, m.base_color.b
+                    ),
+                    if m.is_metal { "Y" } else { "N" }.to_string(),
+                    format!("{:.3}", m.roughness),
+                    format!("{:.3}", m.opacity),
+                    format!("{:.3}", m.edge),
+                ]
+            })
+            .collect()
+    };
+
+    let headers = [
+        "NAME",
+        "BASE_COLOR",
+        "METAL",
+        "ROUGHNESS",
+        "OPACITY",
+        "EDGE",
+    ];
+    let aligns = [
+        ColAlign::Left,
+        ColAlign::Left,
+        ColAlign::Left,
+        ColAlign::Right,
+        ColAlign::Right,
+        ColAlign::Right,
     ];
     print_aligned_table(&headers, &aligns, &rows)?;
     Ok(ExitCode::SUCCESS)
