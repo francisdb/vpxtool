@@ -92,6 +92,9 @@ const CMD_IMAGES_LIST: &str = "list";
 const CMD_SOUNDS: &str = "sounds";
 const CMD_SOUNDS_LIST: &str = "list";
 
+const CMD_COLLECTIONS: &str = "collections";
+const CMD_COLLECTIONS_LIST: &str = "list";
+
 const CMD_GAMEDATA: &str = "gamedata";
 const CMD_GAMEDATA_SHOW: &str = "show";
 
@@ -715,6 +718,10 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             Some((CMD_SOUNDS_LIST, sub_matches)) => handle_sounds_list(sub_matches),
             _ => unreachable!(),
         },
+        Some((CMD_COLLECTIONS, sub_matches)) => match sub_matches.subcommand() {
+            Some((CMD_COLLECTIONS_LIST, sub_matches)) => handle_collections_list(sub_matches),
+            _ => unreachable!(),
+        },
         Some((CMD_GAMEDATA, sub_matches)) => match sub_matches.subcommand() {
             Some((CMD_GAMEDATA_SHOW, sub_matches)) => {
                 let path = sub_matches
@@ -1161,6 +1168,21 @@ fn build_command() -> Command {
                              SIZE (bytes), PATH (original import path). PATH is last so \
                              awk-style column extraction works on the other fields even \
                              when paths contain spaces.",
+                        )
+                        .arg(arg!(<VPXPATH> "The path to the vpx file").required(true)),
+                ),
+        )
+        .subcommand(
+            Command::new(CMD_COLLECTIONS)
+                .subcommand_required(true)
+                .about("Vpx collection related commands")
+                .subcommand(
+                    Command::new(CMD_COLLECTIONS_LIST)
+                        .about("List the collections stored in a vpx file")
+                        .long_about(
+                            "List the collections stored in a vpx file as aligned columns: \
+                             NAME, ITEMS (number of element names in the collection), \
+                             FIRE_EVENTS, STOP_SINGLES, GROUP_ELEMENTS (all Y/N flags).",
                         )
                         .arg(arg!(<VPXPATH> "The path to the vpx file").required(true)),
                 ),
@@ -1806,6 +1828,46 @@ fn handle_sounds_list(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
         ColAlign::Right, // LENGTH
         ColAlign::Right, // SIZE
         ColAlign::Left,  // PATH
+    ];
+    print_aligned_table(&headers, &aligns, &rows)?;
+    Ok(ExitCode::SUCCESS)
+}
+
+fn handle_collections_list(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
+    let path = sub_matches
+        .get_one::<String>("VPXPATH")
+        .map(|s| s.as_str())
+        .unwrap_or_default();
+    let expanded_path = path_exists(path)?;
+    let mut vpx_file = vpx::open(&expanded_path)?;
+    let collections = vpx_file.read_collections()?;
+
+    let rows: Vec<Vec<String>> = collections
+        .iter()
+        .map(|c| {
+            vec![
+                c.name.clone(),
+                c.items.len().to_string(),
+                if c.fire_events { "Y" } else { "N" }.to_string(),
+                if c.stop_single_events { "Y" } else { "N" }.to_string(),
+                if c.group_elements { "Y" } else { "N" }.to_string(),
+            ]
+        })
+        .collect();
+
+    let headers = [
+        "NAME",
+        "ITEMS",
+        "FIRE_EVENTS",
+        "STOP_SINGLES",
+        "GROUP_ELEMENTS",
+    ];
+    let aligns = [
+        ColAlign::Left,
+        ColAlign::Right,
+        ColAlign::Left,
+        ColAlign::Left,
+        ColAlign::Left,
     ];
     print_aligned_table(&headers, &aligns, &rows)?;
     Ok(ExitCode::SUCCESS)
