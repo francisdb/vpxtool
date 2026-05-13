@@ -792,6 +792,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
 
 fn handle_index(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
     let recursive = sub_matches.get_flag("RECURSIVE");
+    let force = sub_matches.get_flag("FORCE");
     let max_depth_cli = sub_matches.get_one::<usize>(ARG_MAX_DEPTH).copied();
     let tables_folders_path_arg = sub_matches
         .get_one::<String>("VPXROOTPATH")
@@ -860,6 +861,7 @@ fn handle_index(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
         configured_pinmame_folder.as_deref(),
         &progress,
         vec![],
+        force,
     )?;
     progress.finish_and_clear();
     crate::println!("Indexed {} vpx files", index.len(),)?;
@@ -969,6 +971,13 @@ fn build_command() -> Command {
                         .long("max-depth")
                         .value_parser(clap::value_parser!(usize))
                         .help("Maximum directory depth to scan when indexing tables"),
+                )
+                .arg(
+                    Arg::new("FORCE")
+                        .short('f')
+                        .long("force")
+                        .num_args(0)
+                        .help("Force re-indexing of every table, ignoring cached entries. Use after upgrading vpxtool to pick up newly detected fields (e.g. altsound, altcolor, pup pack)."),
                 )
                 .arg(
                     arg!(<VPXROOTPATH> "The path to the root directory of vpx files. Defaults to what is set up in the vpxtool config file.")

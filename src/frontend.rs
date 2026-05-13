@@ -142,6 +142,7 @@ pub fn frontend_index(
         configured_pinmame_folder,
         &progress,
         force_reindex,
+        false,
     );
     progress.finish_and_clear();
     let index = index?;
@@ -1004,11 +1005,29 @@ fn display_table_line_full(table: &IndexedTable) -> String {
         }
         None => "".to_string(),
     };
-    let b2s_suffix = match &table.b2s_path {
-        Some(_) => " ▀".dimmed(),
-        None => "".into(),
+    // Compact per-table-asset badges. Each letter only appears when the
+    // corresponding asset was detected next to the vpx (or under pinmame/) at
+    // index time: B = directb2s backglass, S = altsound, C = altcolor
+    // (Serum/VNI/legacy), P = PinUP Player pup pack.
+    let mut badges = String::new();
+    if table.b2s_path.is_some() {
+        badges.push('B');
+    }
+    if table.altsound_path.is_some() {
+        badges.push('S');
+    }
+    if table.altcolor_path.is_some() {
+        badges.push('C');
+    }
+    if table.pup_pack_path.is_some() {
+        badges.push('P');
+    }
+    let asset_suffix = if badges.is_empty() {
+        "".to_string()
+    } else {
+        format!(" [{badges}]").dimmed().to_string()
     };
-    format!("{base}{gamename_suffix}{b2s_suffix}")
+    format!("{base}{gamename_suffix}{asset_suffix}")
 }
 
 fn capitalize_first_letter(s: &str) -> String {
