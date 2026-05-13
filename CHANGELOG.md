@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.31.0](https://github.com/francisdb/vpxtool/compare/v0.30.0...v0.31.0) - 2026-05-13
+
+### Added
+
+- *(indexer)* detect altsound, altcolor and pup packs per table ([#774](https://github.com/francisdb/vpxtool/pull/774))
+- *(cli)* add gameitems list subcommand ([#771](https://github.com/francisdb/vpxtool/pull/771))
+- *(cli)* add materials list subcommand ([#772](https://github.com/francisdb/vpxtool/pull/772))
+- *(cli)* add collections list subcommand ([#773](https://github.com/francisdb/vpxtool/pull/773))
+- *(cli)* add sounds list subcommand ([#770](https://github.com/francisdb/vpxtool/pull/770))
+- *(cli)* add images list subcommand ([#769](https://github.com/francisdb/vpxtool/pull/769))
+- *(cli)* add nvram show subcommand ([#768](https://github.com/francisdb/vpxtool/pull/768))
+- *(cli)* add export vpxz subcommand for mobile transfer ([#766](https://github.com/francisdb/vpxtool/pull/766))
+
+### Other
+
+- *(indexer)* cache vpx_parent read_dir for asset detection ([#775](https://github.com/francisdb/vpxtool/pull/775))
+- *(deps)* bump toml_edit ([#765](https://github.com/francisdb/vpxtool/pull/765))
+
 ## [0.30.0](https://github.com/francisdb/vpxtool/compare/v0.29.3...v0.30.0) - 2026-05-10
 
 ### Added
