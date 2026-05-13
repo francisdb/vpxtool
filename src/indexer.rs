@@ -123,6 +123,16 @@ pub struct IndexedTable {
     #[serde(skip_serializing_if = "Option::is_none")]
     local_rom_path: Option<PathBuf>,
     pub wheel_path: Option<PathBuf>,
+    /// AltSound directory (audio replacement pack) found next to the vpx file.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub altsound_path: Option<PathBuf>,
+    /// DMD colorization directory (Serum / VNI / legacy altcolor) found next to
+    /// the vpx file.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub altcolor_path: Option<PathBuf>,
+    /// PinUP Player video pack directory found next to the vpx file.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pup_pack_path: Option<PathBuf>,
     pub requires_pinmame: bool,
     pub last_modified: IsoSystemTime,
 }
@@ -435,6 +445,7 @@ pub fn index_folder(
     configured_pinmame_path: Option<&Path>,
     progress: &impl Progress,
     force_reindex: Vec<PathBuf>,
+    force_all: bool,
 ) -> Result<TablesIndex, IndexError> {
     info!("Indexing {}", tables_folder.display());
 
@@ -442,7 +453,15 @@ pub fn index_folder(
         return Err(IndexError::FolderDoesNotExist(tables_folder.to_path_buf()));
     }
 
-    let existing_index = read_index_json(tables_index_path, Some(tables_folder))?;
+    // When --force is set we discard the cached index so every table is re-
+    // indexed from scratch; this is the upgrade path for new fields like the
+    // altsound / altcolor / pup-pack flags added in newer vpxtool versions.
+    let existing_index = if force_all {
+        info!("  Forcing full re-index; ignoring any cached entries");
+        None
+    } else {
+        read_index_json(tables_index_path, Some(tables_folder))?
+    };
     if let Some(index) = &existing_index {
         info!(
             "  Found existing index with {} tables at {}",
@@ -600,6 +619,9 @@ fn index_vpx_file(
     });
     let b2s_path = find_b2s_path(path);
     let wheel_path = find_wheel_path(path);
+    let altsound_path = find_altsound_path(path, &game_name);
+    let altcolor_path = find_altcolor_path(path, &game_name);
+    let pup_pack_path = find_pup_pack_path(path, &game_name);
     let last_modified = last_modified(path)?;
     let indexed_table_info = IndexedTableInfo::from(table_info);
 
@@ -611,6 +633,9 @@ fn index_vpx_file(
         rom_path,
         local_rom_path: None,
         wheel_path,
+        altsound_path,
+        altcolor_path,
+        pup_pack_path,
         requires_pinmame,
         last_modified: IsoSystemTime(last_modified),
     };
@@ -742,6 +767,160 @@ fn find_b2s_path(vpx_file_path: &Path) -> Option<PathBuf> {
     }
 }
 
+/// Locate the altsound directory for this table.
+///
+/// Matches the priority order of vpinball-standalone's altsound plugin:
+///   1. `<vpx_parent>/altsound/<rom>/`
+///   2. `<vpx_parent>/pinmame/altsound/<rom>/`
+///
+/// Global altsound paths (configured in vpinball settings) are not probed yet.
+fn find_altsound_path(vpx_file_path: &Path, game_name: &Option<String>) -> Option<PathBuf> {
+    find_table_asset_dir(
+        vpx_file_path,
+        game_name,
+        &[&["altsound"], &["pinmame", "altsound"]],
+    )
+}
+
+/// Locate the DMD colorization directory for this table.
+///
+/// DMD colorization comes in two formats with different file conventions, so
+/// directory-presence alone isn't a reliable signal (empty directories happen).
+/// We probe the per-table locations used by the serum and vni plugins in
+/// vpinball-standalone, in their priority order, and require an actual
+/// colorization file to exist before reporting a hit:
+///
+/// Serum (`<rom>.cromc` or `<rom>.crz`):
+///   1. `<vpx_parent>/serum/<rom>/`
+///   2. `<vpx_parent>/pinmame/altcolor/<rom>/`
+///
+/// VNI (`<rom>.pal` + `<rom>.vni`, or `pin2dmd.pal` + `pin2dmd.vni`):
+///   1. `<vpx_parent>/vni/<rom>/`
+///   2. `<vpx_parent>/pinmame/altcolor/<rom>/`
+///
+/// Returns the directory of the first hit. Global colorization paths
+/// (configured in vpinball settings) are not probed yet.
+fn find_altcolor_path(vpx_file_path: &Path, game_name: &Option<String>) -> Option<PathBuf> {
+    let rom = game_name.as_deref()?;
+    let vpx_parent = vpx_file_path.parent()?;
+
+    let candidates: &[&[&str]] = &[&["serum"], &["vni"], &["pinmame", "altcolor"]];
+    'candidate: for segments in candidates {
+        let mut dir = vpx_parent.to_path_buf();
+        for seg in *segments {
+            match find_case_insensitive_child(&dir, seg) {
+                Some(matched) => dir = matched,
+                None => continue 'candidate,
+            }
+        }
+        let Some(rom_dir) = find_case_insensitive_child(&dir, rom) else {
+            continue;
+        };
+        if dir_contains_colorization(&rom_dir, rom) {
+            return Some(rom_dir);
+        }
+    }
+    None
+}
+
+/// Does `dir` contain a colorization file for `rom`? Matches the file-pattern
+/// checks vpinball-standalone's serum and vni plugins do (any of `.cromc`,
+/// `.crz`, `.pal` named after the rom; or `pin2dmd.pal` for the shared-name
+/// VNI fallback). Case-insensitive: real tables ship colorization with
+/// mixed-case extensions like `.cROMc` and `.cRZ`.
+fn dir_contains_colorization(dir: &Path, rom: &str) -> bool {
+    if !dir.is_dir() {
+        return false;
+    }
+    let targets = [
+        format!("{rom}.cromc"),
+        format!("{rom}.crz"),
+        format!("{rom}.pal"),
+        "pin2dmd.pal".to_string(),
+    ];
+    let Ok(entries) = fs::read_dir(dir) else {
+        return false;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else { continue };
+        if targets
+            .iter()
+            .any(|target| name.eq_ignore_ascii_case(target))
+            && entry.path().is_file()
+        {
+            return true;
+        }
+    }
+    false
+}
+
+/// Locate the PinUP Player video pack for this table.
+///
+/// Matches the lookup in vpinball-standalone's PUPManager:
+///   1. `<vpx_parent>/pupvideos/<rom>/`
+///
+/// The global PUP path (configured in PinUP Player) is not probed yet.
+fn find_pup_pack_path(vpx_file_path: &Path, game_name: &Option<String>) -> Option<PathBuf> {
+    find_table_asset_dir(vpx_file_path, game_name, &[&["pupvideos"]])
+}
+
+/// Probe a list of `<vpx_parent>/<segments...>/<rom>/` directories and return
+/// the first one that exists. Returns `None` when there is no rom name or no
+/// candidate exists.
+///
+/// Path component matching is case-insensitive (ASCII): real-world cab
+/// installs ship folders with inconsistent casing (`AltSound/`, `AltColor/`)
+/// and rom-named subfolders that don't match the vpx script's casing.
+/// vpinball-standalone handles this with `find_case_insensitive_directory_path`
+/// in every plugin; we mirror that behavior here.
+fn find_table_asset_dir(
+    vpx_file_path: &Path,
+    game_name: &Option<String>,
+    candidates: &[&[&str]],
+) -> Option<PathBuf> {
+    let rom = game_name.as_deref()?;
+    let vpx_parent = vpx_file_path.parent()?;
+    'candidate: for segments in candidates {
+        let mut path = vpx_parent.to_path_buf();
+        for seg in *segments {
+            match find_case_insensitive_child(&path, seg) {
+                Some(matched) => path = matched,
+                None => continue 'candidate,
+            }
+        }
+        if let Some(rom_dir) = find_case_insensitive_child(&path, rom)
+            && rom_dir.is_dir()
+        {
+            return Some(rom_dir);
+        }
+    }
+    None
+}
+
+/// Return the path of an entry directly under `parent` whose file name matches
+/// `name` case-insensitively. Returns `None` if `parent` is not readable or
+/// no entry matches.
+///
+/// We always scan the directory (no exact-case fast path) because on case-
+/// insensitive filesystems (macOS, Windows) `parent.join(name).exists()`
+/// returns true for any case variant, which would silently return the
+/// requested casing rather than the actual on-disk name. That asymmetry
+/// breaks both downstream display and any prefix-stripping the index does.
+fn find_case_insensitive_child(parent: &Path, name: &str) -> Option<PathBuf> {
+    let entries = fs::read_dir(parent).ok()?;
+    for entry in entries.flatten() {
+        if entry
+            .file_name()
+            .to_str()
+            .is_some_and(|n| n.eq_ignore_ascii_case(name))
+        {
+            return Some(entry.path());
+        }
+    }
+    None
+}
+
 /// Tries to find a wheel image for the given vpx file.
 /// 2 locations are tried:
 /// * ../wheels/<vpx_file_name>.png
@@ -799,6 +978,9 @@ fn normalize_table_for_json(
         rom_path: table.rom_path.as_ref().map(|p| norm(p)),
         local_rom_path: table.local_rom_path.as_ref().map(|p| norm(p)),
         wheel_path: table.wheel_path.as_ref().map(|p| norm(p)),
+        altsound_path: table.altsound_path.as_ref().map(|p| norm(p)),
+        altcolor_path: table.altcolor_path.as_ref().map(|p| norm(p)),
+        pup_pack_path: table.pup_pack_path.as_ref().map(|p| norm(p)),
         requires_pinmame: table.requires_pinmame,
         last_modified: table.last_modified,
     }
@@ -817,6 +999,9 @@ fn denormalize_table_from_json(table: IndexedTable, tables_root: Option<&Path>) 
         rom_path: table.rom_path.map(resolve),
         local_rom_path: table.local_rom_path.map(resolve),
         wheel_path: table.wheel_path.map(resolve),
+        altsound_path: table.altsound_path.map(resolve),
+        altcolor_path: table.altcolor_path.map(resolve),
+        pup_pack_path: table.pup_pack_path.map(resolve),
         requires_pinmame: table.requires_pinmame,
         last_modified: table.last_modified,
     }
@@ -1060,6 +1245,7 @@ mod tests {
             None,
             &VoidProgress,
             vec![],
+            false,
         )?;
         let inode_before = fs::metadata(&index_path)?.ino();
 
@@ -1072,6 +1258,7 @@ mod tests {
             None,
             &VoidProgress,
             vec![],
+            false,
         )?;
         let inode_after = fs::metadata(&index_path)?.ino();
 
@@ -1244,6 +1431,9 @@ mod tests {
             rom_path: Some(PathBuf::from("testrom.zip")),
             local_rom_path: None,
             wheel_path: Some(PathBuf::from("test.png")),
+            altsound_path: None,
+            altcolor_path: None,
+            pup_pack_path: None,
             requires_pinmame: true,
             last_modified: IsoSystemTime(SystemTime::UNIX_EPOCH),
         });
@@ -1285,6 +1475,9 @@ mod tests {
             rom_path: None,
             local_rom_path: None,
             wheel_path: None,
+            altsound_path: None,
+            altcolor_path: None,
+            pup_pack_path: None,
             requires_pinmame: false,
             last_modified: IsoSystemTime::from(SystemTime::UNIX_EPOCH),
         });
@@ -1357,6 +1550,9 @@ mod tests {
             rom_path: None,
             local_rom_path: None,
             wheel_path: None,
+            altsound_path: None,
+            altcolor_path: None,
+            pup_pack_path: None,
             requires_pinmame: false,
             last_modified: IsoSystemTime(SystemTime::UNIX_EPOCH),
         });
@@ -1691,6 +1887,121 @@ LoadVPM "01210000","sys80.vbs",3.10
         assert_eq!(local_rom, None);
     }
 
+    #[test]
+    fn test_find_altsound_path_per_table_priority() {
+        let dir = testdir!();
+        let vpx_path = dir.join("test.vpx");
+        // Both per-table layouts present. Priority 1 (altsound/) wins.
+        let expected = dir.join("altsound").join("rom1");
+        fs::create_dir_all(&expected).unwrap();
+        fs::create_dir_all(dir.join("pinmame").join("altsound").join("rom1")).unwrap();
+
+        let found = find_altsound_path(&vpx_path, &Some("rom1".to_string()));
+        assert_eq!(found, Some(expected));
+    }
+
+    #[test]
+    fn test_find_altsound_path_falls_back_to_pinmame_subfolder() {
+        let dir = testdir!();
+        let vpx_path = dir.join("test.vpx");
+        let expected = dir.join("pinmame").join("altsound").join("rom1");
+        fs::create_dir_all(&expected).unwrap();
+
+        let found = find_altsound_path(&vpx_path, &Some("rom1".to_string()));
+        assert_eq!(found, Some(expected));
+    }
+
+    #[test]
+    fn test_find_altsound_path_none_when_dir_missing() {
+        let dir = testdir!();
+        let vpx_path = dir.join("test.vpx");
+        let found = find_altsound_path(&vpx_path, &Some("rom1".to_string()));
+        assert_eq!(found, None);
+    }
+
+    #[test]
+    fn test_find_pup_pack_path() {
+        let dir = testdir!();
+        let vpx_path = dir.join("test.vpx");
+        let expected = dir.join("pupvideos").join("rom1");
+        fs::create_dir_all(&expected).unwrap();
+
+        let found = find_pup_pack_path(&vpx_path, &Some("rom1".to_string()));
+        assert_eq!(found, Some(expected));
+    }
+
+    #[test]
+    fn test_find_altcolor_path_requires_serum_file() {
+        // Empty serum/<rom>/ should not be reported as colorization.
+        let dir = testdir!();
+        let vpx_path = dir.join("test.vpx");
+        let serum_dir = dir.join("serum").join("rom1");
+        fs::create_dir_all(&serum_dir).unwrap();
+
+        let found = find_altcolor_path(&vpx_path, &Some("rom1".to_string()));
+        assert_eq!(
+            found, None,
+            "empty serum dir should not count as colorization present"
+        );
+
+        // Once we drop a .crz file in, the directory is reported.
+        File::create(serum_dir.join("rom1.crz")).unwrap();
+        let found = find_altcolor_path(&vpx_path, &Some("rom1".to_string()));
+        assert_eq!(found, Some(serum_dir));
+    }
+
+    #[test]
+    fn test_find_altcolor_path_vni_pin2dmd_fallback() {
+        // pin2dmd.pal is the shared-name VNI fallback per vpinball-standalone.
+        let dir = testdir!();
+        let vpx_path = dir.join("test.vpx");
+        let vni_dir = dir.join("vni").join("rom1");
+        fs::create_dir_all(&vni_dir).unwrap();
+        File::create(vni_dir.join("pin2dmd.pal")).unwrap();
+
+        let found = find_altcolor_path(&vpx_path, &Some("rom1".to_string()));
+        assert_eq!(found, Some(vni_dir));
+    }
+
+    #[test]
+    fn test_find_altcolor_path_legacy_altcolor_subfolder() {
+        let dir = testdir!();
+        let vpx_path = dir.join("test.vpx");
+        let altcolor_dir = dir.join("pinmame").join("altcolor").join("rom1");
+        fs::create_dir_all(&altcolor_dir).unwrap();
+        File::create(altcolor_dir.join("rom1.pal")).unwrap();
+
+        let found = find_altcolor_path(&vpx_path, &Some("rom1".to_string()));
+        assert_eq!(found, Some(altcolor_dir));
+    }
+
+    #[test]
+    fn test_find_altcolor_path_case_insensitive_folder_and_extension() {
+        // Real-world cab tables: `pinmame/AltColor/<rom>/<rom>.cROMc`.
+        // Both the directory name and the file extension can be in any case;
+        // we must match like vpinball-standalone's find_case_insensitive_*.
+        let dir = testdir!();
+        let vpx_path = dir.join("test.vpx");
+        let altcolor_dir = dir.join("pinmame").join("AltColor").join("rom1");
+        fs::create_dir_all(&altcolor_dir).unwrap();
+        File::create(altcolor_dir.join("rom1.cROMc")).unwrap();
+
+        let found = find_altcolor_path(&vpx_path, &Some("rom1".to_string()));
+        assert_eq!(found, Some(altcolor_dir));
+    }
+
+    #[test]
+    fn test_find_altsound_path_case_insensitive() {
+        // AltSound/<ROM>/ on disk; script gives lower-case rom name.
+        let dir = testdir!();
+        let vpx_path = dir.join("test.vpx");
+        let altsound_dir = dir.join("AltSound").join("ROM1");
+        fs::create_dir_all(&altsound_dir).unwrap();
+
+        let found = find_altsound_path(&vpx_path, &Some("rom1".to_string()));
+        assert_eq!(found, Some(altsound_dir));
+    }
+
     fn make_indexed_table(path: &str, table_name: Option<&str>) -> IndexedTable {
         IndexedTable {
             path: PathBuf::from(path),
@@ -1713,6 +2024,9 @@ LoadVPM "01210000","sys80.vbs",3.10
             rom_path: None,
             local_rom_path: None,
             wheel_path: None,
+            altsound_path: None,
+            altcolor_path: None,
+            pup_pack_path: None,
             requires_pinmame: false,
             last_modified: IsoSystemTime::from(SystemTime::UNIX_EPOCH),
         }
