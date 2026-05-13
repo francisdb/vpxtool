@@ -7,6 +7,7 @@ mod backglass;
 pub mod fixprint;
 mod frontend;
 pub mod patcher;
+mod tui;
 
 pub mod config;
 
