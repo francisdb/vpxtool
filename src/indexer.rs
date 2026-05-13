@@ -619,9 +619,17 @@ fn index_vpx_file(
     });
     let b2s_path = find_b2s_path(path);
     let wheel_path = find_wheel_path(path);
-    let altsound_path = find_altsound_path(path, &game_name);
-    let altcolor_path = find_altcolor_path(path, &game_name);
-    let pup_pack_path = find_pup_pack_path(path, &game_name);
+    // Read the vpx_parent directory once and share it across all asset
+    // detectors. Critical on NAS where each read_dir is a network round-trip.
+    let parent_index = path
+        .parent()
+        .map(CaseInsensitiveDir::read)
+        .unwrap_or_else(|| CaseInsensitiveDir {
+            entries: HashMap::new(),
+        });
+    let altsound_path = find_altsound_path(&parent_index, &game_name);
+    let altcolor_path = find_altcolor_path(&parent_index, &game_name);
+    let pup_pack_path = find_pup_pack_path(&parent_index, &game_name);
     let last_modified = last_modified(path)?;
     let indexed_table_info = IndexedTableInfo::from(table_info);
 
@@ -774,9 +782,12 @@ fn find_b2s_path(vpx_file_path: &Path) -> Option<PathBuf> {
 ///   2. `<vpx_parent>/pinmame/altsound/<rom>/`
 ///
 /// Global altsound paths (configured in vpinball settings) are not probed yet.
-fn find_altsound_path(vpx_file_path: &Path, game_name: &Option<String>) -> Option<PathBuf> {
+fn find_altsound_path(
+    parent_index: &CaseInsensitiveDir,
+    game_name: &Option<String>,
+) -> Option<PathBuf> {
     find_table_asset_dir(
-        vpx_file_path,
+        parent_index,
         game_name,
         &[&["altsound"], &["pinmame", "altsound"]],
     )
@@ -800,14 +811,20 @@ fn find_altsound_path(vpx_file_path: &Path, game_name: &Option<String>) -> Optio
 ///
 /// Returns the directory of the first hit. Global colorization paths
 /// (configured in vpinball settings) are not probed yet.
-fn find_altcolor_path(vpx_file_path: &Path, game_name: &Option<String>) -> Option<PathBuf> {
+fn find_altcolor_path(
+    parent_index: &CaseInsensitiveDir,
+    game_name: &Option<String>,
+) -> Option<PathBuf> {
     let rom = game_name.as_deref()?;
-    let vpx_parent = vpx_file_path.parent()?;
 
     let candidates: &[&[&str]] = &[&["serum"], &["vni"], &["pinmame", "altcolor"]];
     'candidate: for segments in candidates {
-        let mut dir = vpx_parent.to_path_buf();
-        for seg in *segments {
+        let first = segments.first()?;
+        let mut dir = match parent_index.get(first) {
+            Some(p) => p.to_path_buf(),
+            None => continue 'candidate,
+        };
+        for seg in &segments[1..] {
             match find_case_insensitive_child(&dir, seg) {
                 Some(matched) => dir = matched,
                 None => continue 'candidate,
@@ -861,13 +878,22 @@ fn dir_contains_colorization(dir: &Path, rom: &str) -> bool {
 ///   1. `<vpx_parent>/pupvideos/<rom>/`
 ///
 /// The global PUP path (configured in PinUP Player) is not probed yet.
-fn find_pup_pack_path(vpx_file_path: &Path, game_name: &Option<String>) -> Option<PathBuf> {
-    find_table_asset_dir(vpx_file_path, game_name, &[&["pupvideos"]])
+fn find_pup_pack_path(
+    parent_index: &CaseInsensitiveDir,
+    game_name: &Option<String>,
+) -> Option<PathBuf> {
+    find_table_asset_dir(parent_index, game_name, &[&["pupvideos"]])
 }
 
 /// Probe a list of `<vpx_parent>/<segments...>/<rom>/` directories and return
 /// the first one that exists. Returns `None` when there is no rom name or no
 /// candidate exists.
+///
+/// The first segment is resolved against the cached `parent_index` so we
+/// avoid re-reading vpx_parent for each candidate. Deeper segments still need
+/// a directory scan, but those only happen when an asset folder is actually
+/// present (the minority case in real cab installs), so the total syscall
+/// count is dominated by the single cached read.
 ///
 /// Path component matching is case-insensitive (ASCII): real-world cab
 /// installs ship folders with inconsistent casing (`AltSound/`, `AltColor/`)
@@ -875,15 +901,18 @@ fn find_pup_pack_path(vpx_file_path: &Path, game_name: &Option<String>) -> Optio
 /// vpinball-standalone handles this with `find_case_insensitive_directory_path`
 /// in every plugin; we mirror that behavior here.
 fn find_table_asset_dir(
-    vpx_file_path: &Path,
+    parent_index: &CaseInsensitiveDir,
     game_name: &Option<String>,
     candidates: &[&[&str]],
 ) -> Option<PathBuf> {
     let rom = game_name.as_deref()?;
-    let vpx_parent = vpx_file_path.parent()?;
     'candidate: for segments in candidates {
-        let mut path = vpx_parent.to_path_buf();
-        for seg in *segments {
+        let first = segments.first()?;
+        let mut path = match parent_index.get(first) {
+            Some(p) => p.to_path_buf(),
+            None => continue 'candidate,
+        };
+        for seg in &segments[1..] {
             match find_case_insensitive_child(&path, seg) {
                 Some(matched) => path = matched,
                 None => continue 'candidate,
@@ -898,15 +927,59 @@ fn find_table_asset_dir(
     None
 }
 
+/// Case-insensitive view of a directory's entries.
+///
+/// Materializing this once per table costs a single `read_dir` syscall and
+/// converts the subsequent per-asset lookups into in-memory `HashMap`
+/// queries. Critical on NAS where each syscall is a network round-trip:
+/// without this cache the asset finders re-read `vpx_parent` once per
+/// candidate top-level segment (~6 times per table for the altsound /
+/// altcolor / pup combo).
+struct CaseInsensitiveDir {
+    /// Map of ASCII-lowercased file name to the actual on-disk path.
+    entries: HashMap<String, PathBuf>,
+}
+
+impl CaseInsensitiveDir {
+    /// Scan `dir` and build the case-insensitive index. Returns an empty
+    /// index when the directory cannot be read (missing, permission denied,
+    /// etc.) so callers can treat it uniformly without a None branch.
+    fn read(dir: &Path) -> Self {
+        let entries = fs::read_dir(dir)
+            .ok()
+            .map(|iter| {
+                iter.flatten()
+                    .filter_map(|entry| {
+                        entry
+                            .file_name()
+                            .to_str()
+                            .map(|n| (n.to_ascii_lowercase(), entry.path()))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        Self { entries }
+    }
+
+    /// Look up an entry by its file name, case-insensitively (ASCII).
+    fn get(&self, name: &str) -> Option<&Path> {
+        self.entries
+            .get(&name.to_ascii_lowercase())
+            .map(|p| p.as_path())
+    }
+}
+
 /// Return the path of an entry directly under `parent` whose file name matches
 /// `name` case-insensitively. Returns `None` if `parent` is not readable or
 /// no entry matches.
 ///
-/// We always scan the directory (no exact-case fast path) because on case-
-/// insensitive filesystems (macOS, Windows) `parent.join(name).exists()`
-/// returns true for any case variant, which would silently return the
-/// requested casing rather than the actual on-disk name. That asymmetry
-/// breaks both downstream display and any prefix-stripping the index does.
+/// Used for traversals deeper than the top-level vpx_parent scan (which goes
+/// through [`CaseInsensitiveDir`] for caching). We always scan the directory
+/// (no exact-case fast path) because on case-insensitive filesystems
+/// (macOS, Windows) `parent.join(name).exists()` returns true for any case
+/// variant, which would silently return the requested casing rather than the
+/// actual on-disk name. That asymmetry breaks both downstream display and any
+/// prefix-stripping the index does.
 fn find_case_insensitive_child(parent: &Path, name: &str) -> Option<PathBuf> {
     let entries = fs::read_dir(parent).ok()?;
     for entry in entries.flatten() {
@@ -1890,43 +1963,43 @@ LoadVPM "01210000","sys80.vbs",3.10
     #[test]
     fn test_find_altsound_path_per_table_priority() {
         let dir = testdir!();
-        let vpx_path = dir.join("test.vpx");
         // Both per-table layouts present. Priority 1 (altsound/) wins.
         let expected = dir.join("altsound").join("rom1");
         fs::create_dir_all(&expected).unwrap();
         fs::create_dir_all(dir.join("pinmame").join("altsound").join("rom1")).unwrap();
 
-        let found = find_altsound_path(&vpx_path, &Some("rom1".to_string()));
+        let parent_index = CaseInsensitiveDir::read(&dir);
+        let found = find_altsound_path(&parent_index, &Some("rom1".to_string()));
         assert_eq!(found, Some(expected));
     }
 
     #[test]
     fn test_find_altsound_path_falls_back_to_pinmame_subfolder() {
         let dir = testdir!();
-        let vpx_path = dir.join("test.vpx");
         let expected = dir.join("pinmame").join("altsound").join("rom1");
         fs::create_dir_all(&expected).unwrap();
 
-        let found = find_altsound_path(&vpx_path, &Some("rom1".to_string()));
+        let parent_index = CaseInsensitiveDir::read(&dir);
+        let found = find_altsound_path(&parent_index, &Some("rom1".to_string()));
         assert_eq!(found, Some(expected));
     }
 
     #[test]
     fn test_find_altsound_path_none_when_dir_missing() {
         let dir = testdir!();
-        let vpx_path = dir.join("test.vpx");
-        let found = find_altsound_path(&vpx_path, &Some("rom1".to_string()));
+        let parent_index = CaseInsensitiveDir::read(&dir);
+        let found = find_altsound_path(&parent_index, &Some("rom1".to_string()));
         assert_eq!(found, None);
     }
 
     #[test]
     fn test_find_pup_pack_path() {
         let dir = testdir!();
-        let vpx_path = dir.join("test.vpx");
         let expected = dir.join("pupvideos").join("rom1");
         fs::create_dir_all(&expected).unwrap();
 
-        let found = find_pup_pack_path(&vpx_path, &Some("rom1".to_string()));
+        let parent_index = CaseInsensitiveDir::read(&dir);
+        let found = find_pup_pack_path(&parent_index, &Some("rom1".to_string()));
         assert_eq!(found, Some(expected));
     }
 
@@ -1934,11 +2007,11 @@ LoadVPM "01210000","sys80.vbs",3.10
     fn test_find_altcolor_path_requires_serum_file() {
         // Empty serum/<rom>/ should not be reported as colorization.
         let dir = testdir!();
-        let vpx_path = dir.join("test.vpx");
         let serum_dir = dir.join("serum").join("rom1");
         fs::create_dir_all(&serum_dir).unwrap();
 
-        let found = find_altcolor_path(&vpx_path, &Some("rom1".to_string()));
+        let parent_index = CaseInsensitiveDir::read(&dir);
+        let found = find_altcolor_path(&parent_index, &Some("rom1".to_string()));
         assert_eq!(
             found, None,
             "empty serum dir should not count as colorization present"
@@ -1946,7 +2019,7 @@ LoadVPM "01210000","sys80.vbs",3.10
 
         // Once we drop a .crz file in, the directory is reported.
         File::create(serum_dir.join("rom1.crz")).unwrap();
-        let found = find_altcolor_path(&vpx_path, &Some("rom1".to_string()));
+        let found = find_altcolor_path(&parent_index, &Some("rom1".to_string()));
         assert_eq!(found, Some(serum_dir));
     }
 
@@ -1954,24 +2027,24 @@ LoadVPM "01210000","sys80.vbs",3.10
     fn test_find_altcolor_path_vni_pin2dmd_fallback() {
         // pin2dmd.pal is the shared-name VNI fallback per vpinball-standalone.
         let dir = testdir!();
-        let vpx_path = dir.join("test.vpx");
         let vni_dir = dir.join("vni").join("rom1");
         fs::create_dir_all(&vni_dir).unwrap();
         File::create(vni_dir.join("pin2dmd.pal")).unwrap();
 
-        let found = find_altcolor_path(&vpx_path, &Some("rom1".to_string()));
+        let parent_index = CaseInsensitiveDir::read(&dir);
+        let found = find_altcolor_path(&parent_index, &Some("rom1".to_string()));
         assert_eq!(found, Some(vni_dir));
     }
 
     #[test]
     fn test_find_altcolor_path_legacy_altcolor_subfolder() {
         let dir = testdir!();
-        let vpx_path = dir.join("test.vpx");
         let altcolor_dir = dir.join("pinmame").join("altcolor").join("rom1");
         fs::create_dir_all(&altcolor_dir).unwrap();
         File::create(altcolor_dir.join("rom1.pal")).unwrap();
 
-        let found = find_altcolor_path(&vpx_path, &Some("rom1".to_string()));
+        let parent_index = CaseInsensitiveDir::read(&dir);
+        let found = find_altcolor_path(&parent_index, &Some("rom1".to_string()));
         assert_eq!(found, Some(altcolor_dir));
     }
 
@@ -1981,12 +2054,12 @@ LoadVPM "01210000","sys80.vbs",3.10
         // Both the directory name and the file extension can be in any case;
         // we must match like vpinball-standalone's find_case_insensitive_*.
         let dir = testdir!();
-        let vpx_path = dir.join("test.vpx");
         let altcolor_dir = dir.join("pinmame").join("AltColor").join("rom1");
         fs::create_dir_all(&altcolor_dir).unwrap();
         File::create(altcolor_dir.join("rom1.cROMc")).unwrap();
 
-        let found = find_altcolor_path(&vpx_path, &Some("rom1".to_string()));
+        let parent_index = CaseInsensitiveDir::read(&dir);
+        let found = find_altcolor_path(&parent_index, &Some("rom1".to_string()));
         assert_eq!(found, Some(altcolor_dir));
     }
 
@@ -1994,11 +2067,11 @@ LoadVPM "01210000","sys80.vbs",3.10
     fn test_find_altsound_path_case_insensitive() {
         // AltSound/<ROM>/ on disk; script gives lower-case rom name.
         let dir = testdir!();
-        let vpx_path = dir.join("test.vpx");
         let altsound_dir = dir.join("AltSound").join("ROM1");
         fs::create_dir_all(&altsound_dir).unwrap();
 
-        let found = find_altsound_path(&vpx_path, &Some("rom1".to_string()));
+        let parent_index = CaseInsensitiveDir::read(&dir);
+        let found = find_altsound_path(&parent_index, &Some("rom1".to_string()));
         assert_eq!(found, Some(altsound_dir));
     }
 
