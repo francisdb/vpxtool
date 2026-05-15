@@ -7,6 +7,7 @@ use figment::{
     Figment,
     providers::{Format, Toml},
 };
+use log::warn;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::{self, File};
@@ -74,15 +75,34 @@ impl ResolvedConfig {
     /// In case it is relative, it will need to be resolved relative to the table vpx file.
     pub fn configured_pinmame_folder(&self) -> Option<PathBuf> {
         // first we try to read the ini file
-        if self.vpx_config.exists() {
-            let vpinball_config = VPinballConfig::read(&self.vpx_config).unwrap();
-            if let Some(value) = vpinball_config.get_pinmame_path() {
-                if value.trim().is_empty() {
-                    return None;
-                }
-                let path = PathBuf::from(value);
-                return Some(path);
+        if !self.vpx_config.exists() {
+            return None;
+        }
+        // Tolerate a broken VPinballX.ini: the file is owned by vpinball
+        // (vpxtool only reads it for `PinMAMEPath`) and vpinball has been
+        // known to emit malformed lines, e.g. an empty key in the [Version]
+        // section that strict INI parsers reject (vpinball#776). If we can't
+        // parse it, fall back to None - the caller treats that as "no
+        // configured PinMAMEPath" and still searches the global and
+        // per-table pinmame folders.
+        let vpinball_config = match VPinballConfig::read(&self.vpx_config) {
+            Ok(config) => config,
+            Err(e) => {
+                warn!(
+                    "Unable to parse vpinball ini {}: {}. Continuing without the configured PinMAMEPath; \
+                     rom/altsound/altcolor lookups fall back to the global and per-table pinmame folders.",
+                    self.vpx_config.display(),
+                    e,
+                );
+                return None;
             }
+        };
+        if let Some(value) = vpinball_config.get_pinmame_path() {
+            if value.trim().is_empty() {
+                return None;
+            }
+            let path = PathBuf::from(value);
+            return Some(path);
         }
         None
     }
@@ -755,6 +775,41 @@ tables_scan_max_depth = 2
             "/home/me/.local/share/VPinballX/10.8/VPinballX.ini",
         );
         assert_eq!(after, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn test_configured_pinmame_folder_tolerates_broken_ini() -> io::Result<()> {
+        // Real-world reproducer for vpinball#776: vpinball writes an empty-key
+        // line in the [Version] section, which strict INI parsers reject.
+        // configured_pinmame_folder must not panic; it returns None so
+        // downstream lookups fall back to the global / per-table folders.
+        let temp_dir = testdir!();
+        let ini_path = temp_dir.join("VPinballX.ini");
+        std::fs::write(
+            &ini_path,
+            "[Version]\n\
+             VPinball = 10819999\n\
+             SomeTable = 1.0\n\
+              = \n\
+             \n\
+             [Standalone]\n\
+             PinMAMEPath = /tmp/should-not-be-read\n",
+        )?;
+        let config = ResolvedConfig {
+            vpx_executable: PathBuf::from("/tmp/vpinball"),
+            vpx_config: ini_path,
+            tables_folder: PathBuf::from("/tmp/tables"),
+            tables_index_path: PathBuf::from("/tmp/tables/vpxtool_index.json"),
+            tables_scan_max_depth: None,
+            launch_templates: vec![],
+            diff: None,
+            editor: None,
+            vpxz_excludes: default_vpxz_excludes(),
+        };
+
+        // Must not panic; the broken ini is treated as unparseable.
+        assert_eq!(config.configured_pinmame_folder(), None);
         Ok(())
     }
 }
