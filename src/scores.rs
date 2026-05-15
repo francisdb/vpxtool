@@ -13,8 +13,6 @@
 
 use serde_json::Value;
 
-const SCORE_ARRAYS: &[&str] = &["high_scores", "mode_champions", "more_mode_champions"];
-
 /// Numeric value keys we accept on a score entry, in priority order. Maps for
 /// regular high-scores use `score`; mode-champion maps use `counter` and
 /// occasionally `nth time`.
@@ -30,26 +28,182 @@ pub const COL_UNITS: usize = 3;
 /// aligned table emits the first three.
 pub const HEADERS: [&str; 4] = ["LABEL", "INITIALS", "SCORE", "UNITS"];
 
-/// Extract score rows.
+/// Extract score rows as a flat list.
 ///
 /// Each row has four columns: `LABEL`, `INITIALS`, `SCORE` (raw, no thousands
 /// grouping, no unit-based formatting), and `UNITS` (empty string when the
 /// map has no `units` annotation). Entries whose numeric value is zero
 /// (cleared slots, e.g. Medieval Madness's empty King-of-the-Realm
 /// positions) are dropped to match PINemHi's "no entry recorded" behavior.
+///
+/// This is the flat view; [`extract_sections`] produces the same data
+/// grouped into PINemHi-style sections.
 pub fn extract_rows(resolved: &Value) -> Vec<Vec<String>> {
-    let mut rows = Vec::new();
-    for key in SCORE_ARRAYS {
-        let Some(entries) = resolved.get(*key).and_then(|v| v.as_array()) else {
+    extract_sections(resolved)
+        .into_iter()
+        .flat_map(|s| s.rows)
+        .collect()
+}
+
+/// A logical group of score rows that share a section header (e.g. a single
+/// "HIGH SCORES" block, or one mode-champion's mini-block).
+#[derive(Debug, PartialEq, Eq)]
+pub struct Section {
+    /// Uppercased header text to print above the rows (e.g. "GRAND CHAMPION",
+    /// "HIGH SCORES", or the label of a single mode champion).
+    pub header: String,
+    /// Rows in this section, in the same 4-column shape as [`extract_rows`].
+    pub rows: Vec<Vec<String>>,
+    /// True when the section is a ranked list (multiple entries that should
+    /// be rendered with `1.`, `2.`, ... prefixes). False for single-entry
+    /// sections (champion records, top scorer pulled out of a list).
+    pub ranked: bool,
+}
+
+/// Extract score rows grouped into PINemHi-style sections.
+///
+/// Sections are produced in this order:
+///   1. If `high_scores` is present:
+///      * single entry: one section, header = entry label uppercase
+///      * multiple entries, first label distinct from rest: split into
+///        a one-entry top section (e.g. `GRAND CHAMPION`) plus a ranked
+///        `HIGH SCORES` section for the rest
+///      * multiple entries, all rank-like: one ranked `HIGH SCORES` section
+///   2. Each `mode_champions` / `more_mode_champions` row becomes its own
+///      one-entry section.
+pub fn extract_sections(resolved: &Value) -> Vec<Section> {
+    let mut sections = Vec::new();
+
+    if let Some(entries) = resolved.get("high_scores").and_then(|v| v.as_array()) {
+        let rows: Vec<Vec<String>> = entries.iter().filter_map(score_row_from_entry).collect();
+        sections.extend(split_high_scores(rows));
+    }
+
+    for key in ["mode_champions", "more_mode_champions"] {
+        let Some(entries) = resolved.get(key).and_then(|v| v.as_array()) else {
             continue;
         };
         for entry in entries {
             if let Some(row) = score_row_from_entry(entry) {
-                rows.push(row);
+                sections.push(Section {
+                    header: row[COL_LABEL].to_uppercase(),
+                    rows: vec![row],
+                    ranked: false,
+                });
             }
         }
     }
-    rows
+
+    sections
+}
+
+/// Split the rows of a `high_scores` array into one or two sections per the
+/// rules documented on [`extract_sections`].
+fn split_high_scores(rows: Vec<Vec<String>>) -> Vec<Section> {
+    match rows.len() {
+        0 => Vec::new(),
+        1 => vec![Section {
+            header: rows[0][COL_LABEL].to_uppercase(),
+            rows,
+            ranked: false,
+        }],
+        _ => {
+            let first_label = &rows[0][COL_LABEL];
+            // If the first label is already rank-shaped (e.g. "First Place",
+            // "#1", "High Score #1") we don't pull it out; the whole array
+            // belongs under one ranked HIGH SCORES section. Otherwise the
+            // first entry is a distinct top label like "Grand Champion" /
+            // "World Record" and we lift it into its own one-entry section.
+            if is_ranked_label(first_label) {
+                vec![Section {
+                    header: "HIGH SCORES".to_string(),
+                    rows,
+                    ranked: true,
+                }]
+            } else {
+                let mut iter = rows.into_iter();
+                let top = iter.next().unwrap();
+                let rest: Vec<_> = iter.collect();
+                let top_header = top[COL_LABEL].to_uppercase();
+                let mut sections = vec![Section {
+                    header: top_header,
+                    rows: vec![top],
+                    ranked: false,
+                }];
+                if !rest.is_empty() {
+                    sections.push(Section {
+                        header: "HIGH SCORES".to_string(),
+                        rows: rest,
+                        ranked: true,
+                    });
+                }
+                sections
+            }
+        }
+    }
+}
+
+/// Does this label look like a positional ranking ("First Place", "1st",
+/// "#1", "High Score #2") rather than a distinct top label ("Grand
+/// Champion", "World Record", ...)? Used to decide whether to lift the
+/// first high-score entry into its own section.
+fn is_ranked_label(label: &str) -> bool {
+    let l = label.trim().to_ascii_lowercase();
+    if l.starts_with('#') {
+        return true;
+    }
+    const RANKED_PREFIXES: &[&str] = &[
+        "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth",
+        "tenth", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th",
+    ];
+    if RANKED_PREFIXES.iter().any(|p| l.starts_with(p)) {
+        return true;
+    }
+    // Labels like "High Score #1", "Standings #1" - has a # somewhere.
+    l.contains('#')
+}
+
+/// Render sections in PINemHi-style: each section's uppercase header on its
+/// own line, then rows below (ranked sections prefix each row with `N.`,
+/// unranked single-entry sections drop the rank). Empty initials collapse to
+/// score-only. Section bodies use the [`pretty_score_column`] formatting
+/// (thousands grouping, seconds-to-time).
+pub fn render_pinemhi(sections: &[Section]) -> String {
+    let mut out = String::new();
+    for (idx, section) in sections.iter().enumerate() {
+        if idx > 0 {
+            out.push('\n');
+        }
+        out.push_str(&section.header);
+        out.push('\n');
+        // Apply table-style score formatting (commas / mm:ss) without
+        // touching the raw row data.
+        let mut formatted = section.rows.clone();
+        pretty_score_column(&mut formatted);
+        for (i, row) in formatted.iter().enumerate() {
+            let initials = row.get(COL_INITIALS).map(String::as_str).unwrap_or("");
+            let score = row.get(COL_SCORE).map(String::as_str).unwrap_or("");
+            let line = if section.ranked {
+                let rank = i + 1;
+                match (initials, score) {
+                    ("", "") => format!("{rank}."),
+                    ("", s) => format!("{rank}. {s}"),
+                    (i_str, "") => format!("{rank}. {i_str}"),
+                    (i_str, s) => format!("{rank}. {i_str}  {s}"),
+                }
+            } else {
+                match (initials, score) {
+                    ("", "") => String::new(),
+                    ("", s) => s.to_string(),
+                    (i_str, "") => i_str.to_string(),
+                    (i_str, s) => format!("{i_str}  {s}"),
+                }
+            };
+            out.push_str(&line);
+            out.push('\n');
+        }
+    }
+    out
 }
 
 /// Convert one entry of a score array into a `[label, initials, score, units]`
@@ -353,5 +507,134 @@ mod tests {
         assert_eq!(group_thousands_u64(7), "7");
         assert_eq!(group_thousands_u64(999), "999");
         assert_eq!(group_thousands_u64(1000), "1,000");
+    }
+
+    #[test]
+    fn extract_sections_splits_grand_champion_from_ranked_rest() {
+        let resolved = json!({
+            "high_scores": [
+                {"label": "Grand Champion", "initials": {"value": "SLL"}, "score": {"value": 52000000}},
+                {"label": "First Place",    "initials": {"value": "BRE"}, "score": {"value": 44000000}},
+                {"label": "Second Place",   "initials": {"value": "LFS"}, "score": {"value": 40000000}},
+            ]
+        });
+        let sections = extract_sections(&resolved);
+        assert_eq!(sections.len(), 2);
+        assert_eq!(sections[0].header, "GRAND CHAMPION");
+        assert_eq!(sections[0].ranked, false);
+        assert_eq!(sections[0].rows.len(), 1);
+        assert_eq!(sections[1].header, "HIGH SCORES");
+        assert_eq!(sections[1].ranked, true);
+        assert_eq!(sections[1].rows.len(), 2);
+    }
+
+    #[test]
+    fn extract_sections_keeps_ranked_list_together_when_no_distinct_top() {
+        // bttf_a27-style "WORLD RECORD" pulled out is one case; here we
+        // simulate a table whose entries are all rank-labeled with no
+        // separate top score.
+        let resolved = json!({
+            "high_scores": [
+                {"label": "First Place",  "initials": {"value": "AAA"}, "score": {"value": 1000}},
+                {"label": "Second Place", "initials": {"value": "BBB"}, "score": {"value": 900}},
+                {"label": "Third Place",  "initials": {"value": "CCC"}, "score": {"value": 800}},
+            ]
+        });
+        let sections = extract_sections(&resolved);
+        assert_eq!(sections.len(), 1);
+        assert_eq!(sections[0].header, "HIGH SCORES");
+        assert_eq!(sections[0].ranked, true);
+        assert_eq!(sections[0].rows.len(), 3);
+    }
+
+    #[test]
+    fn extract_sections_keeps_ranked_list_for_hash_labels() {
+        // LotR-style "#1", "#2", ... labels are rank-shaped; treat them
+        // like any other ranked list (no Grand Champion split).
+        let resolved = json!({
+            "high_scores": [
+                {"label": "#1", "initials": {"value": "AAA"}, "score": {"value": 1000}},
+                {"label": "#2", "initials": {"value": "BBB"}, "score": {"value": 900}},
+            ]
+        });
+        let sections = extract_sections(&resolved);
+        assert_eq!(sections.len(), 1);
+        assert_eq!(sections[0].header, "HIGH SCORES");
+        assert_eq!(sections[0].ranked, true);
+    }
+
+    #[test]
+    fn extract_sections_single_high_score_uses_its_label_as_header() {
+        // vector-style "High Score" single-entry table.
+        let resolved = json!({
+            "high_scores": [
+                {"label": "High Score", "initials": {"value": ""}, "score": {"value": 1989660}},
+            ]
+        });
+        let sections = extract_sections(&resolved);
+        assert_eq!(sections.len(), 1);
+        assert_eq!(sections[0].header, "HIGH SCORE");
+        assert_eq!(sections[0].ranked, false);
+    }
+
+    #[test]
+    fn extract_sections_emits_one_section_per_mode_champion() {
+        let resolved = json!({
+            "high_scores": [
+                {"label": "Grand Champion", "initials": {"value": "SLL"}, "score": {"value": 1000}},
+            ],
+            "mode_champions": [
+                {"label": "Castle Champion", "initials": {"value": "JCY"}, "score": {"value": 6}},
+                {"label": "Joust Champion",  "initials": {"value": "DWF"}, "score": {"value": 5}},
+            ]
+        });
+        let sections = extract_sections(&resolved);
+        assert_eq!(sections.len(), 3);
+        assert_eq!(sections[0].header, "GRAND CHAMPION");
+        assert_eq!(sections[1].header, "CASTLE CHAMPION");
+        assert_eq!(sections[2].header, "JOUST CHAMPION");
+        assert!(sections.iter().all(|s| !s.ranked));
+    }
+
+    #[test]
+    fn render_pinemhi_emits_section_headers_and_ranked_bodies() {
+        let resolved = json!({
+            "high_scores": [
+                {"label": "Grand Champion", "initials": {"value": "SLL"}, "score": {"value": 52000000}},
+                {"label": "First Place",    "initials": {"value": "BRE"}, "score": {"value": 44000000}},
+            ]
+        });
+        let sections = extract_sections(&resolved);
+        let rendered = render_pinemhi(&sections);
+        assert_eq!(
+            rendered,
+            "GRAND CHAMPION\nSLL  52,000,000\n\nHIGH SCORES\n1. BRE  44,000,000\n"
+        );
+    }
+
+    #[test]
+    fn render_pinemhi_drops_trailing_whitespace_when_score_is_empty() {
+        // wd_12's THE ROOF CHAMPION case - initials present, no numeric score.
+        let resolved = json!({
+            "mode_champions": [
+                {"label": "The Roof Champion", "initials": {"value": "XAQ"}}
+            ]
+        });
+        let sections = extract_sections(&resolved);
+        let rendered = render_pinemhi(&sections);
+        assert_eq!(rendered, "THE ROOF CHAMPION\nXAQ\n");
+    }
+
+    #[test]
+    fn render_pinemhi_omits_initials_line_when_no_initials() {
+        // EM/early-SS-style table with just a score, no initials.
+        let resolved = json!({
+            "high_scores": [
+                {"label": "High Score", "initials": {"value": ""}, "score": {"value": 1989660}},
+            ]
+        });
+        let sections = extract_sections(&resolved);
+        let rendered = render_pinemhi(&sections);
+        assert_eq!(rendered, "HIGH SCORE\n1,989,660\n");
     }
 }
