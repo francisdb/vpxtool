@@ -14,6 +14,7 @@ pub mod indexer;
 
 pub mod cli;
 mod colorful_theme_patched;
+pub mod scores;
 pub mod vpinball_config;
 pub mod vpxz;
 
