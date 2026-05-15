@@ -110,6 +110,9 @@ const CMD_DIPSWITCHES_SHOW: &str = "show";
 const CMD_NVRAM: &str = "nvram";
 const CMD_NVRAM_SHOW: &str = "show";
 
+const CMD_SCORES: &str = "scores";
+const CMD_SCORES_SHOW: &str = "show";
+
 const CMD_ROMNAME: &str = "romname";
 
 const CMD_EXPORT: &str = "export";
@@ -780,6 +783,10 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             Some((CMD_NVRAM_SHOW, sub_matches)) => handle_nvram_show(sub_matches),
             _ => unreachable!(),
         },
+        Some((CMD_SCORES, sub_matches)) => match sub_matches.subcommand() {
+            Some((CMD_SCORES_SHOW, sub_matches)) => handle_scores_show(sub_matches),
+            _ => unreachable!(),
+        },
         Some((CMD_EXPORT, sub_matches)) => match sub_matches.subcommand() {
             Some((CMD_EXPORT_OBJ, sub_matches)) => handle_export_obj(sub_matches),
             Some((CMD_EXPORT_GLTF, sub_matches)) => handle_export_gltf(sub_matches),
@@ -1294,6 +1301,37 @@ fn build_command() -> Command {
                 ),
         )
         .subcommand(
+            Command::new(CMD_SCORES)
+                .subcommand_required(true)
+                .about("Table high-score related commands")
+                .subcommand(
+                    Command::new(CMD_SCORES_SHOW)
+                        .about("Show high scores for a table")
+                        .long_about(
+                            "Show the high-score entries stored for a PinMAME-based table. \
+                             Walks the high_scores, mode_champions and more_mode_champions \
+                             arrays produced by the pinmame-nvram maps. PATH accepts a .vpx, \
+                             a .nv, or a rom .zip exactly like `nvram show`. PinMAME only \
+                             for now; rom-less tables that store scores in VPReg.ini are a \
+                             follow-up.\n\
+                             \n\
+                             Default format is an aligned LABEL / INITIALS / SCORE table \
+                             with comma-grouped scores. `--format tsv` emits tab-separated \
+                             rows with raw integer scores for scripting (label and initials \
+                             can contain spaces, so a tab-delimited format is the reliable \
+                             way to split columns).",
+                        )
+                        .arg(arg!(<PATH> "Path to a .vpx, .nv, or rom .zip file").required(true))
+                        .arg(
+                            Arg::new("FORMAT")
+                                .long("format")
+                                .value_parser(["table", "tsv"])
+                                .default_value("table")
+                                .help("Output format: 'table' (aligned, default) or 'tsv' (tab-separated, raw scores)"),
+                        ),
+                ),
+        )
+        .subcommand(
             Command::new(CMD_ROMNAME)
                 .about("Prints the PinMAME ROM name from a vpx file")
                 .long_about("Extracts the PinMAME ROM name from a vpx file by searching for specific patterns in the table script. If the table is not PinMAME based, no output is produced.")
@@ -1633,34 +1671,61 @@ fn handle_export_vpxz(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
     Ok(ExitCode::SUCCESS)
 }
 
-fn handle_nvram_show(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
-    let path = sub_matches
-        .get_one::<String>("PATH")
-        .map(|s| s.as_str())
-        .unwrap_or_default();
-    let expanded_path = path_exists(path)?;
+/// Resolve `path` to an nvram file. Accepts:
+/// * a `.nv` file directly,
+/// * a rom `.zip` (looks for `../nvram/<stem>.nv` next to it), or
+/// * a `.vpx` (reads the rom name from the script and searches the configured
+///   / global pinmame folders).
+///
+/// Returns a CLI-friendly error path on the failure cases so callers can just
+/// `?` into the rest of their handler.
+enum NvramResolveError {
+    NotPinmame(PathBuf),
+    NoNvramFor(PathBuf),
+    NoNvramNextToZip(PathBuf),
+    InvalidZipStem(PathBuf),
+    UnsupportedExtension(PathBuf),
+}
 
+impl NvramResolveError {
+    fn fail(self) -> io::Result<ExitCode> {
+        match self {
+            NvramResolveError::NotPinmame(p) => {
+                fail(format!("Table {} is not PinMAME-based", p.display()))
+            }
+            NvramResolveError::NoNvramFor(p) => fail(format!(
+                "No nvram file found for {} - try launching the table once",
+                p.display()
+            )),
+            NvramResolveError::NoNvramNextToZip(p) => fail(format!(
+                "No nvram file found next to rom zip {}",
+                p.display()
+            )),
+            NvramResolveError::InvalidZipStem(p) => {
+                fail(format!("rom zip has no usable file stem: {}", p.display()))
+            }
+            NvramResolveError::UnsupportedExtension(p) => fail(format!(
+                "Unsupported file type: {} (expected .vpx, .nv, or rom .zip)",
+                p.display()
+            )),
+        }
+    }
+}
+
+fn resolve_nvram_path(expanded_path: &Path) -> io::Result<Result<PathBuf, NvramResolveError>> {
     let nvram_path = match expanded_path
         .extension()
         .and_then(OsStr::to_str)
         .map(str::to_ascii_lowercase)
         .as_deref()
     {
-        Some("nv") => expanded_path.clone(),
+        Some("nv") => expanded_path.to_path_buf(),
         Some("zip") => {
-            // Treat as a rom zip: nvram lives at ../nvram/<stem>.nv.
-            let stem = expanded_path
-                .file_stem()
-                .and_then(OsStr::to_str)
-                .ok_or_else(|| {
-                    io::Error::new(
-                        io::ErrorKind::InvalidInput,
-                        format!(
-                            "rom zip has no usable file stem: {}",
-                            expanded_path.display()
-                        ),
-                    )
-                })?;
+            let Some(stem) = expanded_path.file_stem().and_then(OsStr::to_str) else {
+                return Ok(Err(NvramResolveError::InvalidZipStem(
+                    expanded_path.to_path_buf(),
+                )));
+            };
             let candidate = expanded_path
                 .parent()
                 .and_then(Path::parent)
@@ -1668,44 +1733,54 @@ fn handle_nvram_show(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
             match candidate.filter(|p| p.is_file()) {
                 Some(p) => p,
                 None => {
-                    return fail(format!(
-                        "No nvram file found next to rom zip {}",
-                        expanded_path.display()
-                    ));
+                    return Ok(Err(NvramResolveError::NoNvramNextToZip(
+                        expanded_path.to_path_buf(),
+                    )));
                 }
             }
         }
         Some("vpx") => {
-            if indexer::get_romname_from_vpx(&expanded_path)?.is_none() {
-                return fail(format!(
-                    "Table {} is not PinMAME-based",
-                    expanded_path.display()
-                ));
+            if indexer::get_romname_from_vpx(expanded_path)?.is_none() {
+                return Ok(Err(NvramResolveError::NotPinmame(
+                    expanded_path.to_path_buf(),
+                )));
             }
             let loaded_config = config::load_config()?;
             let config = loaded_config.as_ref().map(|c| &c.1);
             let configured = config.and_then(|c| c.configured_pinmame_folder());
             let global = config.map(|c| c.global_pinmame_folder());
             match indexer::find_nvram_for_vpx(
-                &expanded_path,
+                expanded_path,
                 configured.as_deref(),
                 global.as_deref(),
             )? {
                 Some(p) => p,
                 None => {
-                    return fail(format!(
-                        "No nvram file found for {} - try launching the table once",
-                        expanded_path.display()
-                    ));
+                    return Ok(Err(NvramResolveError::NoNvramFor(
+                        expanded_path.to_path_buf(),
+                    )));
                 }
             }
         }
         _ => {
-            return fail(format!(
-                "Unsupported file type: {} (expected .vpx, .nv, or rom .zip)",
-                expanded_path.display()
-            ));
+            return Ok(Err(NvramResolveError::UnsupportedExtension(
+                expanded_path.to_path_buf(),
+            )));
         }
+    };
+    Ok(Ok(nvram_path))
+}
+
+fn handle_nvram_show(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
+    let path = sub_matches
+        .get_one::<String>("PATH")
+        .map(|s| s.as_str())
+        .unwrap_or_default();
+    let expanded_path = path_exists(path)?;
+
+    let nvram_path = match resolve_nvram_path(&expanded_path)? {
+        Ok(p) => p,
+        Err(e) => return e.fail(),
     };
 
     match pinmame_nvram::resolve::resolve(&nvram_path) {
@@ -1721,6 +1796,66 @@ fn handle_nvram_show(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
             nvram_path.display()
         )),
     }
+}
+
+fn handle_scores_show(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
+    let path = sub_matches
+        .get_one::<String>("PATH")
+        .map(|s| s.as_str())
+        .unwrap_or_default();
+    let format = sub_matches
+        .get_one::<String>("FORMAT")
+        .map(|s| s.as_str())
+        .unwrap_or("table");
+    let expanded_path = path_exists(path)?;
+
+    let nvram_path = match resolve_nvram_path(&expanded_path)? {
+        Ok(p) => p,
+        Err(e) => return e.fail(),
+    };
+
+    let resolved = match pinmame_nvram::resolve::resolve(&nvram_path) {
+        Ok(Some(r)) => r,
+        Ok(None) => {
+            return fail(format!("No pinmame-nvram map for {}", nvram_path.display()));
+        }
+        Err(e) => {
+            return fail(format!(
+                "Failed to resolve nvram {}: {e}",
+                nvram_path.display()
+            ));
+        }
+    };
+
+    let mut rows = crate::scores::extract_rows(&resolved);
+    match format {
+        "tsv" => {
+            // Header + raw rows, tab-separated. Scores stay as raw integers
+            // so scripts can `awk -F$'\t' '$3>=1000000'` directly; the
+            // trailing UNITS column lets scripts that care format time-like
+            // scores themselves.
+            crate::println!("{}", crate::scores::HEADERS.join("\t"))?;
+            for row in &rows {
+                crate::println!("{}", row.join("\t"))?;
+            }
+        }
+        _ => {
+            // Human view: drop the trailing UNITS column after using it to
+            // format the SCORE column (e.g. seconds -> mm:ss).
+            crate::scores::pretty_score_column(&mut rows);
+            let visible_headers = ["LABEL", "INITIALS", "SCORE"];
+            let aligns = [ColAlign::Left, ColAlign::Left, ColAlign::Right];
+            let visible_rows: Vec<Vec<String>> = rows
+                .into_iter()
+                .map(|mut r| {
+                    r.truncate(3);
+                    r
+                })
+                .collect();
+            print_aligned_table(&visible_headers, &aligns, &visible_rows)?;
+        }
+    }
+    Ok(ExitCode::SUCCESS)
 }
 
 /// Right- vs left-aligned column. The last column is printed without trailing
