@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.31.1](https://github.com/francisdb/vpxtool/compare/v0.31.0...v0.31.1) - 2026-05-15
+
+### Fixed
+
+- *(config)* tolerate a broken vpinball ini instead of panicking ([#777](https://github.com/francisdb/vpxtool/pull/777))
+
 ## [0.31.0](https://github.com/francisdb/vpxtool/compare/v0.30.0...v0.31.0) - 2026-05-13
 
 ### Added
