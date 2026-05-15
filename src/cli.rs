@@ -1325,9 +1325,9 @@ fn build_command() -> Command {
                         .arg(
                             Arg::new("FORMAT")
                                 .long("format")
-                                .value_parser(["table", "tsv"])
+                                .value_parser(["table", "tsv", "pinemhi"])
                                 .default_value("table")
-                                .help("Output format: 'table' (aligned, default) or 'tsv' (tab-separated, raw scores)"),
+                                .help("Output format: 'table' (aligned columns, default), 'tsv' (tab-separated, raw scores), or 'pinemhi' (section layout similar to PINemHi's output)"),
                         ),
                 ),
         )
@@ -1827,21 +1827,30 @@ fn handle_scores_show(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
         }
     };
 
-    let mut rows = crate::scores::extract_rows(&resolved);
     match format {
         "tsv" => {
             // Header + raw rows, tab-separated. Scores stay as raw integers
             // so scripts can `awk -F$'\t' '$3>=1000000'` directly; the
             // trailing UNITS column lets scripts that care format time-like
             // scores themselves.
+            let rows = crate::scores::extract_rows(&resolved);
             crate::println!("{}", crate::scores::HEADERS.join("\t"))?;
             for row in &rows {
                 crate::println!("{}", row.join("\t"))?;
             }
         }
+        "pinemhi" => {
+            // Section-based layout matching PINemHi's output shape: separate
+            // GRAND CHAMPION block when present, one HIGH SCORES block for
+            // ranked entries, one section per mode champion.
+            let sections = crate::scores::extract_sections(&resolved);
+            let rendered = crate::scores::render_pinemhi(&sections);
+            crate::print!("{}", rendered)?;
+        }
         _ => {
-            // Human view: drop the trailing UNITS column after using it to
-            // format the SCORE column (e.g. seconds -> mm:ss).
+            // Human table view: drop the trailing UNITS column after using
+            // it to format the SCORE column (e.g. seconds -> mm:ss).
+            let mut rows = crate::scores::extract_rows(&resolved);
             crate::scores::pretty_score_column(&mut rows);
             let visible_headers = ["LABEL", "INITIALS", "SCORE"];
             let aligns = [ColAlign::Left, ColAlign::Left, ColAlign::Right];
