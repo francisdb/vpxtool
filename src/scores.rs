@@ -11,6 +11,7 @@
 //! Use [`pretty_score_column`] to apply comma grouping and unit-based
 //! formatting for the aligned-table human view.
 
+use num_format::{Format, ToFormattedString};
 use serde_json::Value;
 
 /// Numeric value keys we accept on a score entry, in priority order. Maps for
@@ -167,8 +168,20 @@ fn is_ranked_label(label: &str) -> bool {
 /// own line, then rows below (ranked sections prefix each row with `N.`,
 /// unranked single-entry sections drop the rank). Empty initials collapse to
 /// score-only. Section bodies use the [`pretty_score_column`] formatting
-/// (thousands grouping, seconds-to-time).
-pub fn render_pinemhi(sections: &[Section]) -> String {
+/// (thousands grouping per `locale`, seconds-to-time).
+///
+/// Columns are padded per-section so the rank, initials, and score columns
+/// line up: rank is left-padded to the largest rank's width, initials are
+/// left-padded to the widest initials in the section, scores are
+/// right-padded so digits align. Widths use char count (not byte count) so
+/// locales whose thousands separator is multi-byte (e.g. fr_FR's U+202F)
+/// still align.
+///
+/// `locale` is generic over `num_format::Format` rather than `&dyn Format`
+/// because the underlying `ToFormattedString::to_formatted_string` requires
+/// `Sized`. Callers that want runtime locale selection should branch on the
+/// chosen locale type and dispatch into a monomorphized copy per arm.
+pub fn render_pinemhi<F: Format>(sections: &[Section], locale: &F) -> String {
     let mut out = String::new();
     for (idx, section) in sections.iter().enumerate() {
         if idx > 0 {
@@ -176,30 +189,49 @@ pub fn render_pinemhi(sections: &[Section]) -> String {
         }
         out.push_str(&section.header);
         out.push('\n');
-        // Apply table-style score formatting (commas / mm:ss) without
-        // touching the raw row data.
+        // Apply table-style score formatting (locale-aware grouping / mm:ss)
+        // without touching the raw row data.
         let mut formatted = section.rows.clone();
-        pretty_score_column(&mut formatted);
+        pretty_score_column(&mut formatted, locale);
+
+        let initials_w = formatted
+            .iter()
+            .map(|r| r.get(COL_INITIALS).map_or(0, |s| s.chars().count()))
+            .max()
+            .unwrap_or(0);
+        let score_w = formatted
+            .iter()
+            .map(|r| r.get(COL_SCORE).map_or(0, |s| s.chars().count()))
+            .max()
+            .unwrap_or(0);
+        // Width of the largest rank label ("10." -> 3) so two-digit ranks
+        // don't push the initials column out of alignment.
+        let rank_w = if section.ranked {
+            format!("{}.", formatted.len()).chars().count()
+        } else {
+            0
+        };
+
         for (i, row) in formatted.iter().enumerate() {
             let initials = row.get(COL_INITIALS).map(String::as_str).unwrap_or("");
             let score = row.get(COL_SCORE).map(String::as_str).unwrap_or("");
-            let line = if section.ranked {
-                let rank = i + 1;
-                match (initials, score) {
-                    ("", "") => format!("{rank}."),
-                    ("", s) => format!("{rank}. {s}"),
-                    (i_str, "") => format!("{rank}. {i_str}"),
-                    (i_str, s) => format!("{rank}. {i_str}  {s}"),
+            let mut line = String::new();
+            if section.ranked {
+                let rank = format!("{}.", i + 1);
+                line.push_str(&format!("{rank:<rank_w$} "));
+            }
+            if initials_w > 0 {
+                line.push_str(&format!("{initials:<initials_w$}"));
+                if score_w > 0 {
+                    line.push_str("  ");
                 }
-            } else {
-                match (initials, score) {
-                    ("", "") => String::new(),
-                    ("", s) => s.to_string(),
-                    (i_str, "") => i_str.to_string(),
-                    (i_str, s) => format!("{i_str}  {s}"),
-                }
-            };
-            out.push_str(&line);
+            }
+            if score_w > 0 {
+                line.push_str(&format!("{score:>score_w$}"));
+            }
+            // Drop trailing padding so rows missing a score/initials don't
+            // emit stray whitespace at end-of-line.
+            out.push_str(line.trim_end());
             out.push('\n');
         }
     }
@@ -264,9 +296,13 @@ fn score_row_from_entry(entry: &Value) -> Option<Vec<String>> {
 /// view, using the UNITS column (`COL_UNITS`) as a formatting hint:
 ///
 /// * `units: "seconds"` -> `mm:ss` (or `h:mm:ss` past an hour)
-/// * everything else -> thousands grouping for integers, pass-through for
-///   non-integer strings (already-formatted times, etc.)
-pub fn pretty_score_column(rows: &mut [Vec<String>]) {
+/// * everything else -> thousands grouping for integers (per `locale`),
+///   pass-through for non-integer strings (already-formatted times, etc.)
+///
+/// `locale` controls the thousands separator: pass a `num_format::Locale`
+/// (e.g. `Locale::en` for `1,234,567`) or a `SystemLocale` to follow the
+/// user's `LC_ALL`/`LANG`/`LC_NUMERIC` env at runtime.
+pub fn pretty_score_column<F: Format>(rows: &mut [Vec<String>], locale: &F) {
     for row in rows {
         if row.len() <= COL_SCORE {
             continue;
@@ -281,10 +317,9 @@ pub fn pretty_score_column(rows: &mut [Vec<String>]) {
             }
             _ => {
                 if let Ok(n) = score.parse::<u64>() {
-                    *score = group_thousands_u64(n);
+                    *score = n.to_formatted_string(locale);
                 } else if let Ok(n) = score.parse::<i64>() {
-                    let abs = group_thousands_u64(n.unsigned_abs());
-                    *score = if n < 0 { format!("-{abs}") } else { abs };
+                    *score = n.to_formatted_string(locale);
                 }
                 // Non-integer string (pre-formatted time etc.) - leave alone.
             }
@@ -319,29 +354,17 @@ fn number_is_zero(n: &serde_json::Number) -> bool {
     false
 }
 
-fn group_thousands_u64(mut n: u64) -> String {
-    if n == 0 {
-        return "0".to_string();
-    }
-    let mut out = String::new();
-    let mut group_digits = 0;
-    while n > 0 {
-        if group_digits == 3 {
-            out.push(',');
-            group_digits = 0;
-        }
-        out.push(char::from_digit((n % 10) as u32, 10).unwrap());
-        n /= 10;
-        group_digits += 1;
-    }
-    out.chars().rev().collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use num_format::Locale;
     use pretty_assertions::assert_eq;
     use serde_json::json;
+
+    /// Pinned locale for tests so output is reproducible regardless of the
+    /// developer's `LC_ALL` / `LC_NUMERIC` setting. Production callers
+    /// use `SystemLocale::default()` to honor the user's env.
+    const TEST_LOCALE: &Locale = &Locale::en;
 
     #[test]
     fn extracts_high_scores_in_array_order_with_raw_numeric_scores() {
@@ -396,7 +419,7 @@ mod tests {
             vec!["A".into(), "AAA".into(), "180000000".into(), "".into()],
             vec!["B".into(), "BBB".into(), "7".into(), "".into()],
         ];
-        pretty_score_column(&mut rows);
+        pretty_score_column(&mut rows, TEST_LOCALE);
         assert_eq!(rows[0][COL_SCORE], "180,000,000");
         assert_eq!(rows[1][COL_SCORE], "7");
     }
@@ -410,7 +433,7 @@ mod tests {
             "600".into(),
             "seconds".into(),
         ]];
-        pretty_score_column(&mut rows);
+        pretty_score_column(&mut rows, TEST_LOCALE);
         assert_eq!(rows[0][COL_SCORE], "10:00");
     }
 
@@ -423,7 +446,7 @@ mod tests {
             "13507".into(),
             "seconds".into(),
         ]];
-        pretty_score_column(&mut rows);
+        pretty_score_column(&mut rows, TEST_LOCALE);
         assert_eq!(rows[0][COL_SCORE], "3:45:07");
     }
 
@@ -432,7 +455,7 @@ mod tests {
         // Pre-formatted scores (timer strings written into the map as a
         // string value, etc.) must pass through unchanged.
         let mut rows = vec![vec!["A".into(), "AAA".into(), "10:00.00".into(), "".into()]];
-        pretty_score_column(&mut rows);
+        pretty_score_column(&mut rows, TEST_LOCALE);
         assert_eq!(rows[0][COL_SCORE], "10:00.00");
     }
 
@@ -502,11 +525,17 @@ mod tests {
     }
 
     #[test]
-    fn group_thousands_handles_zero_and_small() {
-        assert_eq!(group_thousands_u64(0), "0");
-        assert_eq!(group_thousands_u64(7), "7");
-        assert_eq!(group_thousands_u64(999), "999");
-        assert_eq!(group_thousands_u64(1000), "1,000");
+    fn pretty_score_column_uses_passed_locale_for_grouping_separator() {
+        // PINemHi honors LC_ALL/LANG for the thousands separator. We want
+        // the same behavior, threaded through the locale parameter rather
+        // than implicit global state.
+        let mut rows_en = vec![vec!["A".into(), "AAA".into(), "1234567".into(), "".into()]];
+        pretty_score_column(&mut rows_en, &Locale::en);
+        assert_eq!(rows_en[0][COL_SCORE], "1,234,567");
+
+        let mut rows_de = vec![vec!["A".into(), "AAA".into(), "1234567".into(), "".into()]];
+        pretty_score_column(&mut rows_de, &Locale::de);
+        assert_eq!(rows_de[0][COL_SCORE], "1.234.567");
     }
 
     #[test]
@@ -605,11 +634,56 @@ mod tests {
             ]
         });
         let sections = extract_sections(&resolved);
-        let rendered = render_pinemhi(&sections);
+        let rendered = render_pinemhi(&sections, TEST_LOCALE);
         assert_eq!(
             rendered,
             "GRAND CHAMPION\nSLL  52,000,000\n\nHIGH SCORES\n1. BRE  44,000,000\n"
         );
+    }
+
+    #[test]
+    fn render_pinemhi_aligns_score_column_when_initials_widths_differ() {
+        // Baywatch-style: most entries have 3-char initials but one is
+        // shorter. Score column must stay aligned vertically.
+        let resolved = json!({
+            "high_scores": [
+                {"label": "#1", "initials": {"value": "JEK"}, "score": {"value": 2_400_000_000_u64}},
+                {"label": "#2", "initials": {"value": "LON"}, "score": {"value": 2_100_000_000_u64}},
+                {"label": "#3", "initials": {"value": "NF"},  "score": {"value": 1_950_000_000_u64}},
+            ]
+        });
+        let sections = extract_sections(&resolved);
+        let rendered = render_pinemhi(&sections, TEST_LOCALE);
+        assert_eq!(
+            rendered,
+            "HIGH SCORES\n\
+             1. JEK  2,400,000,000\n\
+             2. LON  2,100,000,000\n\
+             3. NF   1,950,000,000\n"
+        );
+    }
+
+    #[test]
+    fn render_pinemhi_pads_rank_for_two_digit_ranks() {
+        // Sections with >=10 rows must pad single-digit ranks so the
+        // initials column doesn't jog left on rows 1-9.
+        let rows: Vec<_> = (1..=10)
+            .map(|i| {
+                serde_json::json!({
+                    "label": format!("#{i}"),
+                    "initials": {"value": "AAA"},
+                    "score": {"value": 1000 - i * 10},
+                })
+            })
+            .collect();
+        let resolved = serde_json::json!({ "high_scores": rows });
+        let sections = extract_sections(&resolved);
+        let rendered = render_pinemhi(&sections, TEST_LOCALE);
+        // Lines 1-9 prefix is "1.  ".."9.  " (rank padded to width 3);
+        // line 10 is "10. ".
+        assert!(rendered.contains("\n1.  AAA  990\n"));
+        assert!(rendered.contains("\n9.  AAA  910\n"));
+        assert!(rendered.contains("\n10. AAA  900\n"));
     }
 
     #[test]
@@ -621,7 +695,7 @@ mod tests {
             ]
         });
         let sections = extract_sections(&resolved);
-        let rendered = render_pinemhi(&sections);
+        let rendered = render_pinemhi(&sections, TEST_LOCALE);
         assert_eq!(rendered, "THE ROOF CHAMPION\nXAQ\n");
     }
 
@@ -634,7 +708,7 @@ mod tests {
             ]
         });
         let sections = extract_sections(&resolved);
-        let rendered = render_pinemhi(&sections);
+        let rendered = render_pinemhi(&sections, TEST_LOCALE);
         assert_eq!(rendered, "HIGH SCORE\n1,989,660\n");
     }
 }
