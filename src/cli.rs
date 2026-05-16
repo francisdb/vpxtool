@@ -1308,12 +1308,12 @@ fn build_command() -> Command {
                     Command::new(CMD_SCORES_SHOW)
                         .about("Show high scores for a table")
                         .long_about(
-                            "Show the high-score entries stored for a PinMAME-based table. \
-                             Walks the high_scores, mode_champions and more_mode_champions \
-                             arrays produced by the pinmame-nvram maps. PATH accepts a .vpx, \
-                             a .nv, or a rom .zip exactly like `nvram show`. PinMAME only \
-                             for now; rom-less tables that store scores in VPReg.ini are a \
-                             follow-up.\n\
+                            "Show the high-score entries stored for a table. PATH accepts a \
+                             .vpx, a .nv, or a rom .zip exactly like `nvram show`. PinMAME \
+                             tables (.nv/.zip or .vpx with a ROM) are resolved through the \
+                             pinmame-nvram maps. For rom-less .vpx tables, VPReg.ini next to \
+                             the table (in `user/` first, then sibling) is probed using the \
+                             script's cGameName as the section key.\n\
                              \n\
                              Default format is an aligned LABEL / INITIALS / SCORE table \
                              with comma-grouped scores. `--format tsv` emits tab-separated \
@@ -1809,58 +1809,120 @@ fn handle_scores_show(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
         .unwrap_or("table");
     let expanded_path = path_exists(path)?;
 
-    let nvram_path = match resolve_nvram_path(&expanded_path)? {
-        Ok(p) => p,
-        Err(e) => return e.fail(),
+    // Resolve the input into a flat list of sections, trying PinMAME first
+    // and falling back to VPReg.ini for .vpx tables that are not PinMAME.
+    let sections: Vec<crate::scores::Section> = match resolve_nvram_path(&expanded_path)? {
+        Ok(nvram_path) => match pinmame_nvram::resolve::resolve(&nvram_path) {
+            Ok(Some(r)) => crate::scores::extract_sections(&r),
+            Ok(None) => {
+                return fail(format!("No pinmame-nvram map for {}", nvram_path.display()));
+            }
+            Err(e) => {
+                return fail(format!(
+                    "Failed to resolve nvram {}: {e}",
+                    nvram_path.display()
+                ));
+            }
+        },
+        Err(prior) => match try_vpreg_fallback(&expanded_path, &prior)? {
+            Some(sections) => sections,
+            None => return prior.fail(),
+        },
     };
 
-    let resolved = match pinmame_nvram::resolve::resolve(&nvram_path) {
-        Ok(Some(r)) => r,
-        Ok(None) => {
-            return fail(format!("No pinmame-nvram map for {}", nvram_path.display()));
-        }
-        Err(e) => {
-            return fail(format!(
-                "Failed to resolve nvram {}: {e}",
-                nvram_path.display()
-            ));
-        }
-    };
+    render_sections(&sections, format)
+}
 
+/// If `expanded_path` is a `.vpx` that PinMAME resolution couldn't handle,
+/// probe for a VPReg.ini next to it (in `user/` first, then sibling) and
+/// look up the `[<cGameName>]` section. Returns `Some(sections)` on success.
+/// Returns `Ok(None)` when the fallback isn't applicable (non-vpx input,
+/// non-fallthrough error, no `cGameName` in the script, or no matching
+/// VPReg.ini section anywhere) so the caller falls back to the original
+/// PinMAME error message.
+fn try_vpreg_fallback(
+    expanded_path: &Path,
+    prior_err: &NvramResolveError,
+) -> io::Result<Option<Vec<crate::scores::Section>>> {
+    let is_vpx = expanded_path
+        .extension()
+        .and_then(OsStr::to_str)
+        .is_some_and(|e| e.eq_ignore_ascii_case("vpx"));
+    let should_try = is_vpx
+        && matches!(
+            prior_err,
+            NvramResolveError::NotPinmame(_) | NvramResolveError::NoNvramFor(_)
+        );
+    if !should_try {
+        return Ok(None);
+    }
+    let Some(game_name) = indexer::get_gamename_from_vpx(expanded_path)? else {
+        return Ok(None);
+    };
+    let vpx_parent = expanded_path.parent().unwrap_or(Path::new("."));
+    // `user/` first because standalone vpinball writes there by default;
+    // sibling as a fallback for older layouts.
+    let candidates = [
+        vpx_parent.join("user").join("VPReg.ini"),
+        vpx_parent.join("VPReg.ini"),
+    ];
+    for candidate in &candidates {
+        if !candidate.is_file() {
+            continue;
+        }
+        match crate::scores::vpreg::read_sections(candidate, &game_name) {
+            Ok(sections) => return Ok(Some(sections)),
+            Err(crate::scores::vpreg::LookupError::SectionNotFound)
+            | Err(crate::scores::vpreg::LookupError::SectionHasNoScores) => continue,
+            Err(crate::scores::vpreg::LookupError::ParseFailed(msg)) => {
+                return Err(io::Error::other(format!(
+                    "Failed to parse {}: {msg}",
+                    candidate.display()
+                )));
+            }
+        }
+    }
+    Ok(None)
+}
+
+/// Render a resolved `Vec<Section>` in the requested format. Common rendering
+/// path shared by every backend (PinMAME nvram, VPReg.ini, future GLF/Black's).
+fn render_sections(sections: &[crate::scores::Section], format: &str) -> io::Result<ExitCode> {
     match format {
         "tsv" => {
             // Header + raw rows, tab-separated. Scores stay as raw integers
             // so scripts can `awk -F$'\t' '$3>=1000000'` directly; the
             // trailing UNITS column lets scripts that care format time-like
             // scores themselves. Locale-independent by design.
-            let rows = crate::scores::extract_rows(&resolved);
             crate::println!("{}", crate::scores::HEADERS.join("\t"))?;
-            for row in &rows {
-                crate::println!("{}", row.join("\t"))?;
+            for section in sections {
+                for row in &section.rows {
+                    crate::println!("{}", row.join("\t"))?;
+                }
             }
         }
         "pinemhi" => {
             // Section-based layout matching PINemHi's output shape: separate
             // GRAND CHAMPION block when present, one HIGH SCORES block for
             // ranked entries, one section per mode champion.
-            let sections = crate::scores::extract_sections(&resolved);
             // Branch on the locale type rather than using a `&dyn Format` -
             // num-format's ToFormattedString requires Sized. Windows lacks
             // SystemLocale (see Cargo.toml note) so it always uses Locale::en.
             #[cfg(not(windows))]
             let rendered = if let Some(sys) = readable_system_locale() {
-                crate::scores::render_pinemhi(&sections, &sys)
+                crate::scores::render_pinemhi(sections, &sys)
             } else {
-                crate::scores::render_pinemhi(&sections, &num_format::Locale::en)
+                crate::scores::render_pinemhi(sections, &num_format::Locale::en)
             };
             #[cfg(windows)]
-            let rendered = crate::scores::render_pinemhi(&sections, &num_format::Locale::en);
+            let rendered = crate::scores::render_pinemhi(sections, &num_format::Locale::en);
             crate::print!("{}", rendered)?;
         }
         _ => {
             // Human table view: drop the trailing UNITS column after using
             // it to format the SCORE column (e.g. seconds -> mm:ss).
-            let mut rows = crate::scores::extract_rows(&resolved);
+            let mut rows: Vec<Vec<String>> =
+                sections.iter().flat_map(|s| s.rows.iter().cloned()).collect();
             #[cfg(not(windows))]
             if let Some(sys) = readable_system_locale() {
                 crate::scores::pretty_score_column(&mut rows, &sys);
