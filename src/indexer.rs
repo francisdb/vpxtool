@@ -663,6 +663,17 @@ pub fn get_romname_from_vpx(vpx_path: &Path) -> io::Result<Option<String>> {
     }
 }
 
+/// Read the script's `cGameName` (or FlexDMD `.GameName`) constant regardless
+/// of whether the table is PinMAME-based. Companion to [`get_romname_from_vpx`]
+/// for callers that need the in-script identifier as a section/file key (e.g.
+/// `[<cGameName>]` in VPReg.ini, `<cGameName>_glf.ini` for GLF tables).
+pub fn get_gamename_from_vpx(vpx_path: &Path) -> io::Result<Option<String>> {
+    let mut vpx_file = vpx::open(vpx_path)?;
+    let game_data = vpx_file.read_gamedata()?;
+    let code = consider_sidecar_vbs(vpx_path, game_data)?;
+    Ok(extract_game_name(&code))
+}
+
 fn read_table_info_json(info_file_path: &Path) -> io::Result<TableInfo> {
     let info_file = File::open(info_file_path)?;
     let reader = BufReader::new(info_file);

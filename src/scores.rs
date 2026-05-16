@@ -14,6 +14,8 @@
 use num_format::{Format, ToFormattedString};
 use serde_json::Value;
 
+pub mod vpreg;
+
 /// Numeric value keys we accept on a score entry, in priority order. Maps for
 /// regular high-scores use `score`; mode-champion maps use `counter` and
 /// occasionally `nth time`.
