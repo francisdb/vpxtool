@@ -39,6 +39,7 @@ directb2s = "0.1.1"
 edit = "0.1.5"
 pinmame-nvram = "0.4.10"
 image = "0.25.10"
+num-format = "0.4.4"
 
 #see https://github.com/chronotope/chrono/issues/602#issuecomment-1242149249
 chrono = { version = "0.4.44", default-features = false, features = ["clock"] }
@@ -54,6 +55,15 @@ jwalk = "0.8.1"
 rayon = "1.12.0"
 zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
 globset = "0.4.18"
+
+# num-format's `with-system-locale` feature pulls a winapi path
+# (`winapi::um::errhandlingapi`) without declaring the required winapi
+# feature flag, breaking the Windows build. Upstream:
+# https://github.com/bcmyers/num-format/issues/43 (open since 2023).
+# Enable the feature only off-Windows; Windows falls back to a fixed
+# Locale::en in the call sites.
+[target.'cfg(not(windows))'.dependencies]
+num-format = { version = "0.4.4", features = ["with-system-locale"] }
 
 [dev-dependencies]
 testdir = "0.9.3"

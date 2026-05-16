@@ -1832,7 +1832,7 @@ fn handle_scores_show(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
             // Header + raw rows, tab-separated. Scores stay as raw integers
             // so scripts can `awk -F$'\t' '$3>=1000000'` directly; the
             // trailing UNITS column lets scripts that care format time-like
-            // scores themselves.
+            // scores themselves. Locale-independent by design.
             let rows = crate::scores::extract_rows(&resolved);
             crate::println!("{}", crate::scores::HEADERS.join("\t"))?;
             for row in &rows {
@@ -1844,14 +1844,31 @@ fn handle_scores_show(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
             // GRAND CHAMPION block when present, one HIGH SCORES block for
             // ranked entries, one section per mode champion.
             let sections = crate::scores::extract_sections(&resolved);
-            let rendered = crate::scores::render_pinemhi(&sections);
+            // Branch on the locale type rather than using a `&dyn Format` -
+            // num-format's ToFormattedString requires Sized. Windows lacks
+            // SystemLocale (see Cargo.toml note) so it always uses Locale::en.
+            #[cfg(not(windows))]
+            let rendered = if let Some(sys) = readable_system_locale() {
+                crate::scores::render_pinemhi(&sections, &sys)
+            } else {
+                crate::scores::render_pinemhi(&sections, &num_format::Locale::en)
+            };
+            #[cfg(windows)]
+            let rendered = crate::scores::render_pinemhi(&sections, &num_format::Locale::en);
             crate::print!("{}", rendered)?;
         }
         _ => {
             // Human table view: drop the trailing UNITS column after using
             // it to format the SCORE column (e.g. seconds -> mm:ss).
             let mut rows = crate::scores::extract_rows(&resolved);
-            crate::scores::pretty_score_column(&mut rows);
+            #[cfg(not(windows))]
+            if let Some(sys) = readable_system_locale() {
+                crate::scores::pretty_score_column(&mut rows, &sys);
+            } else {
+                crate::scores::pretty_score_column(&mut rows, &num_format::Locale::en);
+            }
+            #[cfg(windows)]
+            crate::scores::pretty_score_column(&mut rows, &num_format::Locale::en);
             let visible_headers = ["LABEL", "INITIALS", "SCORE"];
             let aligns = [ColAlign::Left, ColAlign::Left, ColAlign::Right];
             let visible_rows: Vec<Vec<String>> = rows
@@ -1865,6 +1882,25 @@ fn handle_scores_show(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
         }
     }
     Ok(ExitCode::SUCCESS)
+}
+
+/// Read the user's `LC_ALL` / `LANG` / `LC_NUMERIC` to pick a thousands
+/// separator, but **fall back to `Locale::en` (comma) when the system locale
+/// has no separator at all** - the POSIX `C` / `POSIX` locales specify
+/// `thousands_sep=""`, which would render `52000000` instead of `52,000,000`.
+/// PINemHi makes the same readability-over-strict-POSIX call, so we match.
+///
+/// Windows-only note: `num-format`'s `with-system-locale` Windows backend
+/// fails to build (https://github.com/bcmyers/num-format/issues/43), so
+/// this function is not compiled there; the call sites fall back to
+/// `Locale::en` directly.
+#[cfg(not(windows))]
+fn readable_system_locale() -> Option<num_format::SystemLocale> {
+    let sys = num_format::SystemLocale::default().ok()?;
+    if sys.separator().is_empty() {
+        return None;
+    }
+    Some(sys)
 }
 
 /// Right- vs left-aligned column. The last column is printed without trailing
