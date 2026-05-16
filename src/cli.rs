@@ -1311,9 +1311,10 @@ fn build_command() -> Command {
                             "Show the high-score entries stored for a table. PATH accepts a \
                              .vpx, a .nv, or a rom .zip exactly like `nvram show`. PinMAME \
                              tables (.nv/.zip or .vpx with a ROM) are resolved through the \
-                             pinmame-nvram maps. For rom-less .vpx tables, VPReg.ini next to \
-                             the table (in `user/` first, then sibling) is probed using the \
-                             script's cGameName as the section key.\n\
+                             pinmame-nvram maps. For rom-less .vpx tables, two non-PinMAME \
+                             backends are probed in order: `VPReg.ini` (in `user/` first, \
+                             then sibling) keyed by the script's cGameName, then a \
+                             `<cGameName>_glf.ini` sibling (GLF framework).\n\
                              \n\
                              Default format is an aligned LABEL / INITIALS / SCORE table \
                              with comma-grouped scores. `--format tsv` emits tab-separated \
@@ -1824,7 +1825,7 @@ fn handle_scores_show(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
                 ));
             }
         },
-        Err(prior) => match try_vpreg_fallback(&expanded_path, &prior)? {
+        Err(prior) => match try_non_pinmame_fallback(&expanded_path, &prior)? {
             Some(sections) => sections,
             None => return prior.fail(),
         },
@@ -1834,13 +1835,17 @@ fn handle_scores_show(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
 }
 
 /// If `expanded_path` is a `.vpx` that PinMAME resolution couldn't handle,
-/// probe for a VPReg.ini next to it (in `user/` first, then sibling) and
-/// look up the `[<cGameName>]` section. Returns `Some(sections)` on success.
-/// Returns `Ok(None)` when the fallback isn't applicable (non-vpx input,
-/// non-fallthrough error, no `cGameName` in the script, or no matching
-/// VPReg.ini section anywhere) so the caller falls back to the original
-/// PinMAME error message.
-fn try_vpreg_fallback(
+/// probe the non-PinMAME score storage backends in order: VPReg first
+/// (by far the most common rom-less storage; one shared `user/VPReg.ini`
+/// keyed by `[<cGameName>]`), then GLF (a `<cGameName>_glf.ini` sibling
+/// from the vpx-glf framework, far less common in the wild).
+///
+/// Returns `Ok(None)` when no backend matched (non-vpx input, non-fallthrough
+/// error, no `cGameName` in the script, or no scores anywhere) so the caller
+/// falls back to the original PinMAME error message. Returns `Err` only when
+/// a backend file *exists* but is malformed - that's a real failure, not a
+/// "this backend doesn't apply" signal.
+fn try_non_pinmame_fallback(
     expanded_path: &Path,
     prior_err: &NvramResolveError,
 ) -> io::Result<Option<Vec<crate::scores::Section>>> {
@@ -1860,13 +1865,14 @@ fn try_vpreg_fallback(
         return Ok(None);
     };
     let vpx_parent = expanded_path.parent().unwrap_or(Path::new("."));
-    // `user/` first because standalone vpinball writes there by default;
-    // sibling as a fallback for older layouts.
-    let candidates = [
+
+    // VPReg: `user/VPReg.ini` first because standalone vpinball writes there
+    // by default; sibling as a fallback for older layouts.
+    let vpreg_candidates = [
         vpx_parent.join("user").join("VPReg.ini"),
         vpx_parent.join("VPReg.ini"),
     ];
-    for candidate in &candidates {
+    for candidate in &vpreg_candidates {
         if !candidate.is_file() {
             continue;
         }
@@ -1882,11 +1888,29 @@ fn try_vpreg_fallback(
             }
         }
     }
+
+    // GLF: `<cGameName>_glf.ini` sibling of the .vpx.
+    let glf_path = vpx_parent.join(format!("{game_name}_glf.ini"));
+    if glf_path.is_file() {
+        match crate::scores::glf::read_sections(&glf_path) {
+            Ok(sections) => return Ok(Some(sections)),
+            // GLF file present but no usable scores - return None so the
+            // caller surfaces the original PinMAME error.
+            Err(crate::scores::glf::LookupError::NoHighScoresSection)
+            | Err(crate::scores::glf::LookupError::EmptyHighScores) => {}
+            Err(crate::scores::glf::LookupError::ParseFailed(msg)) => {
+                return Err(io::Error::other(format!(
+                    "Failed to parse {}: {msg}",
+                    glf_path.display()
+                )));
+            }
+        }
+    }
     Ok(None)
 }
 
 /// Render a resolved `Vec<Section>` in the requested format. Common rendering
-/// path shared by every backend (PinMAME nvram, VPReg.ini, future GLF/Black's).
+/// path shared by every backend (PinMAME nvram, GLF, VPReg.ini).
 fn render_sections(sections: &[crate::scores::Section], format: &str) -> io::Result<ExitCode> {
     match format {
         "tsv" => {
