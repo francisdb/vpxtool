@@ -14,6 +14,7 @@
 use num_format::{Format, ToFormattedString};
 use serde_json::Value;
 
+pub mod glf;
 pub mod vpreg;
 
 /// Numeric value keys we accept on a score entry, in priority order. Maps for
@@ -100,9 +101,11 @@ pub fn extract_sections(resolved: &Value) -> Vec<Section> {
     sections
 }
 
-/// Split the rows of a `high_scores` array into one or two sections per the
-/// rules documented on [`extract_sections`].
-fn split_high_scores(rows: Vec<Vec<String>>) -> Vec<Section> {
+/// Split a flat list of rank-ordered score rows into one or two sections per
+/// the rules documented on [`extract_sections`]. Reused by the GLF backend
+/// since GLF's `[HighScores]` entries follow the same logical shape (an
+/// optional distinct top label followed by ranked entries).
+pub(crate) fn split_high_scores(rows: Vec<Vec<String>>) -> Vec<Section> {
     match rows.len() {
         0 => Vec::new(),
         1 => vec![Section {
