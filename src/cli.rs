@@ -1921,8 +1921,10 @@ fn render_sections(sections: &[crate::scores::Section], format: &str) -> io::Res
         _ => {
             // Human table view: drop the trailing UNITS column after using
             // it to format the SCORE column (e.g. seconds -> mm:ss).
-            let mut rows: Vec<Vec<String>> =
-                sections.iter().flat_map(|s| s.rows.iter().cloned()).collect();
+            let mut rows: Vec<Vec<String>> = sections
+                .iter()
+                .flat_map(|s| s.rows.iter().cloned())
+                .collect();
             #[cfg(not(windows))]
             if let Some(sys) = readable_system_locale() {
                 crate::scores::pretty_score_column(&mut rows, &sys);
