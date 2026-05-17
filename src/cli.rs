@@ -1313,10 +1313,13 @@ fn build_command() -> Command {
                              tables (.nv/.zip or .vpx with a ROM) are resolved through the \
                              pinmame-nvram maps. For rom-less .vpx tables, three non-PinMAME \
                              backends are probed in order: `VPReg.ini` (in `user/` first, \
-                             then sibling) keyed by the script's cGameName; a \
-                             `<cGameName>_glf.ini` sibling (GLF framework); and any \
-                             `user/*.txt` / `*.txt` files containing a 5-scores-then-5- \
-                             initials block (EM tables using Black's Highscore routines).\n\
+                             then sibling) keyed by every distinct section name the script \
+                             references in `(Load|Save)Value(<arg>, \"HighScore...\")` calls \
+                             (so cGameName, TableName, MyTable, hardcoded literals, ... all \
+                             resolve); a `<cGameName>_glf.ini` sibling (GLF framework); and \
+                             any `user/*.txt` / `*.txt` files containing a 5-scores-then-5- \
+                             initials block or a single-hisc all-integer file (EM tables \
+                             using Black's Highscore routines).\n\
                              \n\
                              Default format is an aligned LABEL / INITIALS / SCORE table \
                              with comma-grouped scores. `--format tsv` emits tab-separated \
@@ -1877,22 +1880,23 @@ fn try_non_pinmame_fallback(
     }
     let vpx_parent = expanded_path.parent().unwrap_or(Path::new("."));
 
-    // VPReg and GLF key off the script's cGameName; skip them when the
-    // script doesn't declare one (some early-EM tables don't). The EMHS
-    // glob still runs since it doesn't need a name.
-    let game_name = indexer::get_gamename_from_vpx(expanded_path)?;
-    if let Some(ref game_name) = game_name {
-        // VPReg: `user/VPReg.ini` first because standalone vpinball writes
-        // there by default; sibling as a fallback for older layouts.
-        let vpreg_candidates = [
-            vpx_parent.join("user").join("VPReg.ini"),
-            vpx_parent.join("VPReg.ini"),
-        ];
-        for candidate in &vpreg_candidates {
-            if !candidate.is_file() {
-                continue;
-            }
-            match crate::scores::vpreg::read_sections(candidate, game_name) {
+    // VPReg: extract every distinct section key the script writes under
+    // (the modern pattern uses `cGameName`, but `TableName`, `MyTable`,
+    // `cGameSaveName`, and hardcoded literals are all common in the wild).
+    // Probe each VPReg.ini candidate against every key the script names
+    // and return the first hit. `user/VPReg.ini` is checked before the
+    // sibling because standalone vpinball writes there by default.
+    let vpreg_keys = indexer::get_vpreg_section_keys_from_vpx(expanded_path)?;
+    let vpreg_candidates = [
+        vpx_parent.join("user").join("VPReg.ini"),
+        vpx_parent.join("VPReg.ini"),
+    ];
+    for candidate in &vpreg_candidates {
+        if !candidate.is_file() {
+            continue;
+        }
+        for key in &vpreg_keys {
+            match crate::scores::vpreg::read_sections(candidate, key) {
                 Ok(sections) => return Ok(Some(sections)),
                 Err(crate::scores::vpreg::LookupError::SectionNotFound)
                 | Err(crate::scores::vpreg::LookupError::SectionHasNoScores) => continue,
@@ -1904,8 +1908,12 @@ fn try_non_pinmame_fallback(
                 }
             }
         }
+    }
 
-        // GLF: `<cGameName>_glf.ini` sibling of the .vpx.
+    // GLF still keys off cGameName specifically because the vpx-glf
+    // framework hardcodes `<CGameName>_glf.ini` as the filename.
+    let game_name = indexer::get_gamename_from_vpx(expanded_path)?;
+    if let Some(ref game_name) = game_name {
         let glf_path = vpx_parent.join(format!("{game_name}_glf.ini"));
         if glf_path.is_file() {
             match crate::scores::glf::read_sections(&glf_path) {
