@@ -14,6 +14,7 @@
 use num_format::{Format, ToFormattedString};
 use serde_json::Value;
 
+pub mod emhs;
 pub mod glf;
 pub mod vpreg;
 

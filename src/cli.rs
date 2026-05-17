@@ -1311,10 +1311,12 @@ fn build_command() -> Command {
                             "Show the high-score entries stored for a table. PATH accepts a \
                              .vpx, a .nv, or a rom .zip exactly like `nvram show`. PinMAME \
                              tables (.nv/.zip or .vpx with a ROM) are resolved through the \
-                             pinmame-nvram maps. For rom-less .vpx tables, two non-PinMAME \
+                             pinmame-nvram maps. For rom-less .vpx tables, three non-PinMAME \
                              backends are probed in order: `VPReg.ini` (in `user/` first, \
-                             then sibling) keyed by the script's cGameName, then a \
-                             `<cGameName>_glf.ini` sibling (GLF framework).\n\
+                             then sibling) keyed by the script's cGameName; a \
+                             `<cGameName>_glf.ini` sibling (GLF framework); and any \
+                             `user/*.txt` / `*.txt` files containing a 5-scores-then-5- \
+                             initials block (EM tables using Black's Highscore routines).\n\
                              \n\
                              Default format is an aligned LABEL / INITIALS / SCORE table \
                              with comma-grouped scores. `--format tsv` emits tab-separated \
@@ -1827,7 +1829,19 @@ fn handle_scores_show(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
         },
         Err(prior) => match try_non_pinmame_fallback(&expanded_path, &prior)? {
             Some(sections) => sections,
-            None => return prior.fail(),
+            None => match &prior {
+                // For a rom-less .vpx we probed VPReg, GLF, and EM .txt
+                // before giving up - the original "not PinMAME-based" wording
+                // would suggest we never tried. Surface a holistic message.
+                NvramResolveError::NotPinmame(p) => {
+                    return fail(format!(
+                        "Could not find any high scores for {}: tried PinMAME \
+                         nvram, VPReg.ini, GLF, and EM-style .txt files",
+                        p.display()
+                    ));
+                }
+                _ => return prior.fail(),
+            },
         },
     };
 
@@ -1903,6 +1917,53 @@ fn try_non_pinmame_fallback(
                     "Failed to parse {}: {msg}",
                     glf_path.display()
                 )));
+            }
+        }
+    }
+
+    // EM-style `.txt` (Black's Highscore routines): per-table file with
+    // non-canonical name and a variable header. Glob `user/*.txt` (the
+    // standard standalone-vpinball location) and then `*.txt` in the table
+    // folder, sniffing each for the 5-scores-then-5-initials block. First
+    // parse-success wins.
+    if let Some(sections) = try_emhs_glob(vpx_parent)? {
+        return Ok(Some(sections));
+    }
+
+    Ok(None)
+}
+
+/// Probe candidate EM-style score `.txt` files in `user/` then the table
+/// folder root. Returns the first file whose content yields a valid score
+/// block; `Ok(None)` when none match (or directories don't exist).
+fn try_emhs_glob(vpx_parent: &Path) -> io::Result<Option<Vec<crate::scores::Section>>> {
+    for dir in [vpx_parent.join("user"), vpx_parent.to_path_buf()] {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        // Sort so the probe order is reproducible across runs (read_dir's
+        // iteration order is OS- and inode-dependent otherwise).
+        let mut txts: Vec<PathBuf> = entries
+            .filter_map(Result::ok)
+            .map(|e| e.path())
+            .filter(|p| {
+                p.is_file()
+                    && p.extension()
+                        .and_then(OsStr::to_str)
+                        .is_some_and(|e| e.eq_ignore_ascii_case("txt"))
+            })
+            .collect();
+        txts.sort();
+        for candidate in txts {
+            match crate::scores::emhs::read_sections(&candidate) {
+                Ok(sections) => return Ok(Some(sections)),
+                Err(crate::scores::emhs::LookupError::PatternNotFound) => continue,
+                Err(crate::scores::emhs::LookupError::ReadFailed(msg)) => {
+                    return Err(io::Error::other(format!(
+                        "Failed to read {}: {msg}",
+                        candidate.display()
+                    )));
+                }
             }
         }
     }
