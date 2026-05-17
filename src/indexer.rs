@@ -35,6 +35,22 @@ static LINE_WITH_DOT_GAMENAME_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
 static LOADVPM_SUB_REGEX: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r#"sub\s*loadvpm"#).unwrap());
 
+// Pulls a `Const <id> = "..."` declaration. `(?m)` so `^` matches the start
+// of each line (constants always appear at top-level in VBS).
+static CONST_DECL_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r#"(?im)^\s*Const\s+([A-Za-z_]\w*)\s*=\s*"([^"]*)""#).unwrap()
+});
+
+// Matches `(Load|Save)Value(<arg>, "HighScore<N>")` or `...Name"`. Captures
+// the section-key argument (an identifier or a quoted literal) so the
+// dispatcher can try every distinct section name a script writes under.
+static VPREG_HIGHSCORE_CALL_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
+        r#"(?i)(?:Load|Save)Value\s*\(?\s*([A-Za-z_]\w*|"[^"\r\n]+")\s*,\s*"HighScore\d+(?:Name)?""#,
+    )
+    .unwrap()
+});
+
 /// Introduced because we want full control over serialization
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct IndexedTableInfo {
@@ -674,6 +690,73 @@ pub fn get_gamename_from_vpx(vpx_path: &Path) -> io::Result<Option<String>> {
     Ok(extract_game_name(&code))
 }
 
+/// Pull every distinct VPReg.ini section key a script writes under, in
+/// first-seen order. A real table can use a mix of section names per
+/// `LoadValue(<arg>, "HighScoreN")` call: a constant (`cGameName`,
+/// `TableName`, `MyTable`, `cGameSaveName`, ...) or a hardcoded literal.
+/// The dispatcher iterates this list when probing VPReg, so it doesn't
+/// matter which convention the script chose - whichever section happens
+/// to be present in the on-disk VPReg.ini will resolve.
+pub fn get_vpreg_section_keys_from_vpx(vpx_path: &Path) -> io::Result<Vec<String>> {
+    let mut vpx_file = vpx::open(vpx_path)?;
+    let game_data = vpx_file.read_gamedata()?;
+    let code = consider_sidecar_vbs(vpx_path, game_data)?;
+    Ok(extract_vpreg_section_keys(&code))
+}
+
+/// Two-pass scan over a VBS script:
+///   1. Collect every `Const <id> = "..."` declaration into a lookup map.
+///      Identifier comparison is case-insensitive (VBS itself treats
+///      identifiers case-insensitively).
+///   2. Walk `(Load|Save)Value(<arg>, "HighScore...")` call sites; for each
+///      `<arg>` that's a quoted literal use it directly, otherwise resolve
+///      it against the Const map. Unknown identifiers are skipped silently.
+///
+/// Returns the distinct list of section keys preserving the order of first
+/// occurrence in the script. Comments (lines starting with `'`) are stripped
+/// before either pass so a commented-out example doesn't pollute the result.
+fn extract_vpreg_section_keys<S: AsRef<str>>(code: S) -> Vec<String> {
+    let unified = unify_line_endings(code.as_ref());
+    let stripped: String = unified
+        .lines()
+        .map(|line| {
+            // Naive comment strip: cuts at the first single-quote. VBS
+            // comments can appear mid-line after expressions, and string
+            // literals inside double-quotes shouldn't contain unescaped `'`
+            // for the cases we care about (LoadValue with HighScoreN keys).
+            line.split_once('\'').map(|(c, _)| c).unwrap_or(line)
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let mut consts: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    for caps in CONST_DECL_REGEX.captures_iter(&stripped) {
+        let id = caps.get(1).unwrap().as_str().to_ascii_lowercase();
+        let value = caps.get(2).unwrap().as_str().to_string();
+        // First declaration wins: VBS would treat a redeclaration as a
+        // compile error, but tolerate it just in case.
+        consts.entry(id).or_insert(value);
+    }
+
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut out: Vec<String> = Vec::new();
+    for caps in VPREG_HIGHSCORE_CALL_REGEX.captures_iter(&stripped) {
+        let arg = caps.get(1).unwrap().as_str();
+        let resolved = if arg.starts_with('"') && arg.ends_with('"') && arg.len() >= 2 {
+            // Quoted literal - strip the surrounding quotes.
+            Some(arg[1..arg.len() - 1].to_string())
+        } else {
+            consts.get(&arg.to_ascii_lowercase()).cloned()
+        };
+        if let Some(key) = resolved
+            && seen.insert(key.clone())
+        {
+            out.push(key);
+        }
+    }
+    out
+}
+
 fn read_table_info_json(info_file_path: &Path) -> io::Result<TableInfo> {
     let info_file = File::open(info_file_path)?;
     let reader = BufReader::new(info_file);
@@ -1195,6 +1278,114 @@ mod tests {
     use std::io::Write;
     use testdir::testdir;
     use vpin::vpx;
+
+    #[test]
+    fn extract_vpreg_keys_picks_up_cgamename_const() {
+        // Most common shape: one const referenced from LoadValue calls.
+        let code = r#"
+Const cGameName = "TheMatrix"
+x = LoadValue(cGameName, "HighScore1")
+y = LoadValue(cGameName, "HighScore1Name")
+"#;
+        assert_eq!(extract_vpreg_section_keys(code), vec!["TheMatrix"]);
+    }
+
+    #[test]
+    fn extract_vpreg_keys_picks_up_tablename_const() {
+        // Aerosmith-style: the load target is a separate `TableName` const,
+        // distinct from `cGameName`.
+        let code = r#"
+Const cGameName = "aerosmith"
+Const TableName = "aerosmith_VPX"
+x = LoadValue(TableName, "HighScore1")
+"#;
+        assert_eq!(extract_vpreg_section_keys(code), vec!["aerosmith_VPX"]);
+    }
+
+    #[test]
+    fn extract_vpreg_keys_picks_up_quoted_literal_section() {
+        // Some scripts hardcode the section name inline.
+        let code = r#"
+SaveValue "MyHardcodedKey", "HighScore1", 1000
+"#;
+        assert_eq!(extract_vpreg_section_keys(code), vec!["MyHardcodedKey"]);
+    }
+
+    #[test]
+    fn extract_vpreg_keys_returns_distinct_first_seen_order() {
+        // Iron Maiden-style: the script writes under two different consts.
+        // Caller probes them in order so the first-seen one wins when both
+        // sections exist (unusual but real).
+        let code = r#"
+Const cGameName = "ironmaiden"
+Const TableName = "ironmaiden_vr"
+x = LoadValue(cGameName, "HighScore1")
+y = LoadValue(TableName, "HighScore2")
+z = LoadValue(cGameName, "HighScore3")
+"#;
+        assert_eq!(
+            extract_vpreg_section_keys(code),
+            vec!["ironmaiden", "ironmaiden_vr"]
+        );
+    }
+
+    #[test]
+    fn extract_vpreg_keys_resolves_arbitrary_const_names() {
+        // We don't hardcode `cGameName` / `TableName`; any const that's
+        // declared and referenced from a LoadValue call resolves.
+        let code = r#"
+Const MyTable = "DragonBallZ"
+x = LoadValue(MyTable, "HighScore1")
+"#;
+        assert_eq!(extract_vpreg_section_keys(code), vec!["DragonBallZ"]);
+    }
+
+    #[test]
+    fn extract_vpreg_keys_ignores_unresolved_identifiers() {
+        // If the section-key identifier isn't backed by a `Const X = "..."`
+        // declaration, we can't resolve it - skip silently rather than
+        // pollute the probe list with garbage.
+        let code = r#"
+x = LoadValue(SomeUndefinedVar, "HighScore1")
+"#;
+        assert!(extract_vpreg_section_keys(code).is_empty());
+    }
+
+    #[test]
+    fn extract_vpreg_keys_ignores_non_highscore_loadvalue_calls() {
+        // VPReg also stores LUT image / volume / etc. Those use different
+        // value keys; we only care about HighScoreN/HighScoreNName so the
+        // section list stays focused on scoring code paths.
+        let code = r#"
+Const cGameName = "foo"
+x = LoadValue(cGameName, "LUTImage")
+y = LoadValue(cGameName, "BgVolume")
+"#;
+        assert!(extract_vpreg_section_keys(code).is_empty());
+    }
+
+    #[test]
+    fn extract_vpreg_keys_ignores_commented_out_examples() {
+        // A commented-out example LoadValue call must not contribute.
+        let code = r#"
+Const cGameName = "Real"
+' Const TableName = "OldExample"
+' x = LoadValue(TableName, "HighScore1")
+y = LoadValue(cGameName, "HighScore1")
+"#;
+        assert_eq!(extract_vpreg_section_keys(code), vec!["Real"]);
+    }
+
+    #[test]
+    fn extract_vpreg_keys_treats_identifier_case_insensitively() {
+        // VBS identifiers are case-insensitive. A declaration with
+        // `Const TableName` should resolve `tablename`-cased references.
+        let code = r#"
+Const TableName = "MixedCaseHit"
+x = LoadValue(tablename, "HighScore1")
+"#;
+        assert_eq!(extract_vpreg_section_keys(code), vec!["MixedCaseHit"]);
+    }
 
     #[test]
     fn test_index_vpx_files() -> io::Result<()> {
