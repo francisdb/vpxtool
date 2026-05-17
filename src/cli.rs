@@ -1875,48 +1875,51 @@ fn try_non_pinmame_fallback(
     if !should_try {
         return Ok(None);
     }
-    let Some(game_name) = indexer::get_gamename_from_vpx(expanded_path)? else {
-        return Ok(None);
-    };
     let vpx_parent = expanded_path.parent().unwrap_or(Path::new("."));
 
-    // VPReg: `user/VPReg.ini` first because standalone vpinball writes there
-    // by default; sibling as a fallback for older layouts.
-    let vpreg_candidates = [
-        vpx_parent.join("user").join("VPReg.ini"),
-        vpx_parent.join("VPReg.ini"),
-    ];
-    for candidate in &vpreg_candidates {
-        if !candidate.is_file() {
-            continue;
-        }
-        match crate::scores::vpreg::read_sections(candidate, &game_name) {
-            Ok(sections) => return Ok(Some(sections)),
-            Err(crate::scores::vpreg::LookupError::SectionNotFound)
-            | Err(crate::scores::vpreg::LookupError::SectionHasNoScores) => continue,
-            Err(crate::scores::vpreg::LookupError::ParseFailed(msg)) => {
-                return Err(io::Error::other(format!(
-                    "Failed to parse {}: {msg}",
-                    candidate.display()
-                )));
+    // VPReg and GLF key off the script's cGameName; skip them when the
+    // script doesn't declare one (some early-EM tables don't). The EMHS
+    // glob still runs since it doesn't need a name.
+    let game_name = indexer::get_gamename_from_vpx(expanded_path)?;
+    if let Some(ref game_name) = game_name {
+        // VPReg: `user/VPReg.ini` first because standalone vpinball writes
+        // there by default; sibling as a fallback for older layouts.
+        let vpreg_candidates = [
+            vpx_parent.join("user").join("VPReg.ini"),
+            vpx_parent.join("VPReg.ini"),
+        ];
+        for candidate in &vpreg_candidates {
+            if !candidate.is_file() {
+                continue;
+            }
+            match crate::scores::vpreg::read_sections(candidate, game_name) {
+                Ok(sections) => return Ok(Some(sections)),
+                Err(crate::scores::vpreg::LookupError::SectionNotFound)
+                | Err(crate::scores::vpreg::LookupError::SectionHasNoScores) => continue,
+                Err(crate::scores::vpreg::LookupError::ParseFailed(msg)) => {
+                    return Err(io::Error::other(format!(
+                        "Failed to parse {}: {msg}",
+                        candidate.display()
+                    )));
+                }
             }
         }
-    }
 
-    // GLF: `<cGameName>_glf.ini` sibling of the .vpx.
-    let glf_path = vpx_parent.join(format!("{game_name}_glf.ini"));
-    if glf_path.is_file() {
-        match crate::scores::glf::read_sections(&glf_path) {
-            Ok(sections) => return Ok(Some(sections)),
-            // GLF file present but no usable scores - return None so the
-            // caller surfaces the original PinMAME error.
-            Err(crate::scores::glf::LookupError::NoHighScoresSection)
-            | Err(crate::scores::glf::LookupError::EmptyHighScores) => {}
-            Err(crate::scores::glf::LookupError::ParseFailed(msg)) => {
-                return Err(io::Error::other(format!(
-                    "Failed to parse {}: {msg}",
-                    glf_path.display()
-                )));
+        // GLF: `<cGameName>_glf.ini` sibling of the .vpx.
+        let glf_path = vpx_parent.join(format!("{game_name}_glf.ini"));
+        if glf_path.is_file() {
+            match crate::scores::glf::read_sections(&glf_path) {
+                Ok(sections) => return Ok(Some(sections)),
+                // GLF file present but no usable scores - return None so the
+                // caller surfaces the original PinMAME error.
+                Err(crate::scores::glf::LookupError::NoHighScoresSection)
+                | Err(crate::scores::glf::LookupError::EmptyHighScores) => {}
+                Err(crate::scores::glf::LookupError::ParseFailed(msg)) => {
+                    return Err(io::Error::other(format!(
+                        "Failed to parse {}: {msg}",
+                        glf_path.display()
+                    )));
+                }
             }
         }
     }

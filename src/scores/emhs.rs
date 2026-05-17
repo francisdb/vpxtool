@@ -33,15 +33,21 @@
 //!                                   BBB      -'
 //! ```
 //!
+//! Older EM tables (typically pre-1970, e.g. "2 in 1 (Bally 1964)",
+//! "4 Queens (Bally 1970)") have a simpler variant: a single high score
+//! and **no initials** at all. The on-disk file is a sequence of plain
+//! integers with no string lines anywhere. We handle this as a second
+//! strategy: when the 5+5 scan fails, fall back to an "all-integer file
+//! whose max value is the high score" rule. The all-integer anchor cleanly
+//! separates these from the 5+5 format (which always has 5 string lines).
+//!
 //! Filename is also non-canonical: some tables use `<cGameName>.txt`, some
 //! use `<TableName>.txt` (a separate constant), some hard-code an unrelated
 //! literal in the VBS. That makes auto-detection a glob + parse rather than
 //! a name lookup - the dispatcher tries each `*.txt` in the candidate
 //! folders and keeps the first one that yields a valid score block.
 //!
-//! The parser is deliberately strict on the *block shape* (5+5 contiguous,
-//! integers then non-integer strings) but lenient on surrounding noise.
-//! Tables that diverge from the 5+5 convention are reported as
+//! Tables that fit neither shape are reported as
 //! [`LookupError::PatternNotFound`] so the caller can keep probing.
 
 use std::path::Path;
@@ -53,9 +59,9 @@ const MAX_INITIALS_LEN: usize = 4;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum LookupError {
-    /// No `<5 ints, 5 short non-int strings>` window found anywhere in the
-    /// file. Either it's not a Black's-style score file or it follows a
-    /// variant we don't recognize.
+    /// Neither the 5-ints-then-5-initials Black's block nor the
+    /// all-integer single-hisc shape was found. Either it's not an EM
+    /// score file or it follows a variant we don't recognize.
     PatternNotFound,
     /// I/O failure reading the file.
     ReadFailed(String),
@@ -78,6 +84,10 @@ pub fn read_sections(path: &Path) -> Result<Vec<Section>, LookupError> {
     extract_sections_from_text(&raw)
 }
 
+/// Minimum line count for the all-integer single-hisc fallback. Filters out
+/// 1- or 2-integer config-y files that happen to be all numbers.
+const MIN_SINGLE_HISC_LINES: usize = 4;
+
 /// In-memory variant for tests. Split out so we can drive the parser from
 /// string fixtures without writing temp files.
 fn extract_sections_from_text(text: &str) -> Result<Vec<Section>, LookupError> {
@@ -86,8 +96,19 @@ fn extract_sections_from_text(text: &str) -> Result<Vec<Section>, LookupError> {
         .map(str::trim)
         .filter(|l| !l.is_empty())
         .collect();
-    let (scores, names) = find_score_block(&lines).ok_or(LookupError::PatternNotFound)?;
+    if let Some(sections) = try_score_block(&lines) {
+        return Ok(sections);
+    }
+    if let Some(sections) = try_single_hisc(&lines) {
+        return Ok(sections);
+    }
+    Err(LookupError::PatternNotFound)
+}
 
+/// First strategy: locate the canonical 5-scores-then-5-initials Black's
+/// block. Returns `None` when no such block exists in the file.
+fn try_score_block(lines: &[&str]) -> Option<Vec<Section>> {
+    let (scores, names) = find_score_block(lines)?;
     let rows: Vec<Vec<String>> = scores
         .iter()
         .zip(names.iter())
@@ -104,15 +125,55 @@ fn extract_sections_from_text(text: &str) -> Result<Vec<Section>, LookupError> {
             ]
         })
         .collect();
-
     if rows.is_empty() {
-        return Err(LookupError::PatternNotFound);
+        return None;
     }
     let ranked = rows.len() > 1;
-    Ok(vec![Section {
+    Some(vec![Section {
         header: "HIGH SCORES".to_string(),
         rows,
         ranked,
+    }])
+}
+
+/// Second strategy: single-hisc EM tables. Older EM tables (typically
+/// pre-1970) store one high score with no initials. The on-disk file is
+/// a small sequence of integers (credits, current-game scores, the single
+/// high score, dip settings, ...) with no labels and no initials.
+///
+/// Anchor: the file is **all integer lines**, no string lines anywhere
+/// (Black's 5+5 files always have 5 string lines, so this filter cleanly
+/// separates the two formats). We additionally require [`MIN_SINGLE_HISC_LINES`]
+/// or more lines so a 1-2 line config file can't trigger the fallback.
+///
+/// The high score itself is the **maximum integer** in the file. For these
+/// tables, `hisc` dwarfs every other field (credits, current-game scores
+/// during a play that hasn't finished, dip indices) - we surveyed real
+/// played files (2 in 1: max=1000, 4 Queens: max=50000) and the heuristic
+/// holds. Returns `None` when the file doesn't fit the all-integer shape.
+fn try_single_hisc(lines: &[&str]) -> Option<Vec<Section>> {
+    if lines.len() < MIN_SINGLE_HISC_LINES {
+        return None;
+    }
+    let ints: Vec<u64> = lines
+        .iter()
+        .map(|l| l.parse::<u64>().ok())
+        .collect::<Option<Vec<_>>>()?;
+    let max = *ints.iter().max()?;
+    if max == 0 {
+        // All zeros - unplayed slots; treat as "no high score yet" so the
+        // dispatcher keeps probing other backends/files.
+        return None;
+    }
+    Some(vec![Section {
+        header: "HIGH SCORE".to_string(),
+        rows: vec![vec![
+            "HIGH SCORE".to_string(),
+            String::new(),
+            max.to_string(),
+            String::new(),
+        ]],
+        ranked: false,
     }])
 }
 
@@ -272,10 +333,63 @@ mod tests {
     }
 
     #[test]
+    fn parses_single_hisc_2_in_1_shape() {
+        // Real 2 in 1 (Bally 1964) user/2in1.txt after one game:
+        // credit / score(0) / score(1) / hisc / wv / mv / qs / extra.
+        let text = "11\n0\n321\n1000\n8\n7\n1\n0\n";
+        let sections = extract_sections_from_text(text).expect("section");
+        assert_eq!(sections.len(), 1);
+        assert_eq!(sections[0].header, "HIGH SCORE");
+        assert!(!sections[0].ranked);
+        assert_eq!(sections[0].rows.len(), 1);
+        assert_eq!(sections[0].rows[0], vec!["HIGH SCORE", "", "1000", ""]);
+    }
+
+    #[test]
+    fn parses_single_hisc_4_queens_shape() {
+        // Real 4 Queens (Bally 1970) user/4Queens70.txt: 6 integer lines
+        // with the high score being 50000 (well above credits/dips).
+        let text = "0\n0\n0\n50000\n12\n0\n";
+        let sections = extract_sections_from_text(text).expect("section");
+        assert_eq!(sections[0].rows[0][2], "50000");
+    }
+
+    #[test]
+    fn single_hisc_rejects_short_files() {
+        // 3-line all-integer files (typically dip-only config remnants)
+        // don't qualify; we require at least MIN_SINGLE_HISC_LINES.
+        let text = "12\n0\n1\n";
+        let err = extract_sections_from_text(text).expect_err("too short");
+        assert_eq!(err, LookupError::PatternNotFound);
+    }
+
+    #[test]
+    fn single_hisc_rejects_all_zero_files() {
+        // A freshly-initialized score file with every slot at 0 must NOT
+        // claim a high score - return PatternNotFound so the user sees
+        // "no high scores yet" rather than a bogus "HIGH SCORE 0".
+        let text = "0\n0\n0\n0\n0\n";
+        let err = extract_sections_from_text(text).expect_err("all zero");
+        assert_eq!(err, LookupError::PatternNotFound);
+    }
+
+    #[test]
+    fn single_hisc_rejects_files_with_any_string_line() {
+        // Anything that isn't a plain integer (or empty line) disqualifies
+        // the file. Catches README-style content cleanly without needing
+        // a separate length check.
+        let text = "12\n0\nSomeReadme\n1000\n";
+        let err = extract_sections_from_text(text).expect_err("has prose");
+        assert_eq!(err, LookupError::PatternNotFound);
+    }
+
+    #[test]
     fn rejects_window_where_names_are_all_digits() {
-        // Names that are all-digit get rejected so a sequence like
-        // `5 ints + 5 ints` doesn't accidentally match.
-        let text = "100\n90\n80\n70\n60\n1\n2\n3\n4\n5\n";
+        // The Black's 5+5 scanner must reject a "5 ints + 5 ints" run
+        // (initials-half all-digit) so we don't lift counters as names.
+        // A trailing non-integer line keeps the single-hisc fallback out
+        // of the picture too, so this stays a PatternNotFound end-to-end.
+        let text = "100\n90\n80\n70\n60\n1\n2\n3\n4\n5\nGARBAGE\n";
         let err = extract_sections_from_text(text).expect_err("should not match");
         assert_eq!(err, LookupError::PatternNotFound);
     }
