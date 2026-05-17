@@ -64,8 +64,17 @@ pub enum LookupError {
 /// Read a Black's-style score file and return a single ranked HIGH SCORES
 /// section. Entries with a score of `0` (default-zero, never-played slots)
 /// are dropped to mirror PinMAME / VPReg behavior.
+///
+/// Non-UTF-8 bytes (commonly CP1252 smart-quotes / en-dashes in
+/// human-authored README files that happen to share the same folder) are
+/// replaced with U+FFFD via [`String::from_utf8_lossy`]. The replacement
+/// chars never match the integer-or-short-initials test in the block
+/// scanner, so non-score files fall through as [`LookupError::PatternNotFound`]
+/// instead of bombing with a fatal read error. Real score files are pure
+/// ASCII (digits + 3-char initials) so this is a no-op for them.
 pub fn read_sections(path: &Path) -> Result<Vec<Section>, LookupError> {
-    let raw = std::fs::read_to_string(path).map_err(|e| LookupError::ReadFailed(e.to_string()))?;
+    let bytes = std::fs::read(path).map_err(|e| LookupError::ReadFailed(e.to_string()))?;
+    let raw = String::from_utf8_lossy(&bytes);
     extract_sections_from_text(&raw)
 }
 
@@ -199,6 +208,26 @@ mod tests {
         assert_eq!(sections[0].rows.len(), 3);
         let names: Vec<&str> = sections[0].rows.iter().map(|r| r[1].as_str()).collect();
         assert_eq!(names, vec!["AAA", "BBB", "CCC"]);
+    }
+
+    #[test]
+    fn read_sections_treats_non_utf8_readme_as_pattern_not_found() {
+        // Real-world: README files in the same folder as the .vpx get
+        // picked up by the glob; many are Windows CP1252 (smart-quote
+        // 0x92, en-dash 0x96). The lossy decoder converts those to
+        // U+FFFD, which fails the integer/short-initials test, so the
+        // file falls through with PatternNotFound rather than aborting
+        // the whole scores show invocation.
+        let dir = std::env::temp_dir().join(format!("vpxtool-emhs-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("mkdir tmp");
+        let path = dir.join("readme_cp1252.txt");
+        // 0x92 = curly apostrophe in CP1252; invalid as standalone UTF-8.
+        let bytes: &[u8] = b"Welcome to the world\x92s most famous table.\nInstructions follow.\n";
+        std::fs::write(&path, bytes).expect("write fixture");
+        let err = read_sections(&path).expect_err("non-utf8 readme should not parse");
+        assert_eq!(err, LookupError::PatternNotFound);
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_dir(&dir);
     }
 
     #[test]
