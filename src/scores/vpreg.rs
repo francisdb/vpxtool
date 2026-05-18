@@ -22,9 +22,11 @@
 //! Non-score keys in the same section (`Credits`, `TotalGamesPlayed`,
 //! `MasterVol`, `SETDIPS`, ...) are ignored.
 //!
-//! An older legacy pattern (`hiscore=N` plus `hsa1`/`hsa2`/`hsa3` for
-//! encoded-character initials, used by some EM tables) is intentionally out
-//! of scope here; only the `HighScoreN` / `HighScoreNName` pattern is parsed.
+//! Older EM tables (e.g. Abra Ca Dabra, 4 Roses) use a different shape:
+//! a single `hiscore=N` integer with optional `hsa1`/`hsa2`/`hsa3` indices
+//! into a fixed alphabet (`"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_<"`,
+//! 1-based via VBS `Mid()`) - `hsa1=4 hsa2=15 hsa3=7` decodes to "DOG".
+//! Falls back to this when the modern HighScoreN keys are absent.
 //!
 //! The section name must be passed in explicitly - it is the script's
 //! `cGameName` constant and the .ini key does not encode it any other way.
@@ -60,6 +62,12 @@ pub fn read_sections(vpreg_path: &Path, game_name: &str) -> Result<Vec<Section>,
     extract_sections(&ini, game_name)
 }
 
+/// 1-indexed alphabet used by the legacy EM `hsa<N>` initials encoding.
+/// `Mid()` in VBS is 1-based, so a value of 1 maps to `A`, 4 to `D`, etc.
+/// This exact string was found in 100+ extracted scripts (4 Aces, Apollo,
+/// Ace High, ... - it's a near-universal convention).
+const LEGACY_EM_ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_<";
+
 /// Same as [`read_sections`] but operates on an already-parsed `Ini`. Split
 /// out so tests can drive the parser from inline string fixtures without
 /// writing temp files.
@@ -86,6 +94,12 @@ fn extract_sections(ini: &Ini, game_name: &str) -> Result<Vec<Section>, LookupEr
     }
 
     if scores.is_empty() {
+        // Fall back to the legacy EM pattern (`hiscore=N` + optional
+        // `hsa1`/`hsa2`/`hsa3` for index-encoded initials) before giving
+        // up. Tables like Abra Ca Dabra and 4 Roses use this older shape.
+        if let Some(legacy) = try_legacy_em(section, game_name) {
+            return Ok(vec![legacy]);
+        }
         return Err(LookupError::SectionHasNoScores);
     }
 
@@ -118,6 +132,45 @@ fn extract_sections(ini: &Ini, game_name: &str) -> Result<Vec<Section>, LookupEr
         rows,
         ranked,
     }])
+}
+
+/// Read the legacy EM `hiscore` / `hsa<N>` shape from an already-located
+/// section. Returns `None` when there's no `hiscore` key (the strict signal
+/// that this is the older form), or when the value isn't a positive integer.
+/// Initials decode from `hsa1`/`hsa2`/`hsa3` as 1-indexed positions into
+/// [`LEGACY_EM_ALPHABET`]; missing or out-of-range indices yield an empty
+/// initial slot for that position.
+fn try_legacy_em(section: &ini::Properties, game_name: &str) -> Option<Section> {
+    let hiscore: u64 = section.get("hiscore")?.trim().parse().ok()?;
+    if hiscore == 0 {
+        return None;
+    }
+    let initials: String = ["hsa1", "hsa2", "hsa3"]
+        .iter()
+        .filter_map(|k| section.get(k))
+        .filter_map(|v| v.trim().parse::<usize>().ok())
+        .filter_map(decode_legacy_em_initial)
+        .collect();
+    Some(Section {
+        header: game_name.to_uppercase(),
+        rows: vec![vec![
+            "HIGH SCORE".to_string(),
+            initials,
+            hiscore.to_string(),
+            String::new(),
+        ]],
+        ranked: false,
+    })
+}
+
+/// Map a 1-indexed `hsa<N>` value to its alphabet character. Returns `None`
+/// for index 0 (treated as "unfilled slot" by the EM scripts) and for
+/// out-of-range indices.
+fn decode_legacy_em_initial(idx_1based: usize) -> Option<char> {
+    if idx_1based == 0 {
+        return None;
+    }
+    LEGACY_EM_ALPHABET.get(idx_1based - 1).map(|&b| b as char)
 }
 
 #[cfg(test)]
@@ -261,14 +314,13 @@ SETDIPS=0
     }
 
     #[test]
-    fn ignores_legacy_hiscore_and_hsa_keys() {
-        // Older VBS pattern: `hiscore=10000` + `hsa1`/`hsa2`/`hsa3` for
-        // encoded initials. We intentionally do not parse these here;
-        // a section that has only legacy keys is reported as having no
-        // scores so the dispatcher can move on.
+    fn parses_legacy_em_abra_ca_dabra_shape() {
+        // Real Abra Ca Dabra VPReg.ini after a real game: hiscore=10000,
+        // hsa1=4/hsa2=15/hsa3=7 -> 'D','O','G' in the canonical alphabet.
         let ini = parse(
             r"
 [Abra_Ca_Dabra]
+credit=0
 hiscore=10000
 hsa1=4
 hsa2=15
@@ -276,7 +328,80 @@ hsa3=7
 score1=1910
 ",
         );
-        let err = extract_sections(&ini, "Abra_Ca_Dabra").expect_err("legacy ignored");
+        let sections = extract_sections(&ini, "Abra_Ca_Dabra").expect("section");
+        assert_eq!(sections.len(), 1);
+        assert!(!sections[0].ranked);
+        assert_eq!(sections[0].header, "ABRA_CA_DABRA");
+        assert_eq!(sections[0].rows[0], vec!["HIGH SCORE", "DOG", "10000", ""]);
+    }
+
+    #[test]
+    fn legacy_em_missing_hsa_yields_empty_initials() {
+        // Some early EM tables don't write hsa keys at all; the single
+        // hiscore value should still surface with an empty initials slot.
+        let ini = parse(
+            r"
+[some_em_table]
+credit=0
+hiscore=5000
+score1=
+",
+        );
+        let sections = extract_sections(&ini, "some_em_table").expect("section");
+        assert_eq!(sections[0].rows[0], vec!["HIGH SCORE", "", "5000", ""]);
+    }
+
+    #[test]
+    fn legacy_em_zero_hiscore_falls_through() {
+        // Default-zero `hiscore=0` (never reached) must not be surfaced as
+        // a real high score; the parser returns SectionHasNoScores so the
+        // dispatcher can keep probing.
+        let ini = parse(
+            r"
+[some_em_table]
+credit=0
+hiscore=0
+hsa1=0
+hsa2=0
+hsa3=0
+",
+        );
+        let err = extract_sections(&ini, "some_em_table").expect_err("no real score");
         assert_eq!(err, LookupError::SectionHasNoScores);
+    }
+
+    #[test]
+    fn legacy_em_decodes_extended_alphabet_chars() {
+        // Positions 27-38 in the alphabet are 0-9 / _ / <; verify decode.
+        // hsa1=27 = '0', hsa2=37 = '_' (space), hsa3=38 = '<' (backspace).
+        let ini = parse(
+            r"
+[em_extended]
+hiscore=42
+hsa1=27
+hsa2=37
+hsa3=38
+",
+        );
+        let sections = extract_sections(&ini, "em_extended").expect("section");
+        assert_eq!(sections[0].rows[0][1], "0_<");
+    }
+
+    #[test]
+    fn legacy_em_drops_out_of_range_hsa_index() {
+        // Out-of-range index (or 0) decodes to no character so the
+        // remaining initials still render.
+        let ini = parse(
+            r"
+[em_oor]
+hiscore=42
+hsa1=4
+hsa2=99
+hsa3=7
+",
+        );
+        let sections = extract_sections(&ini, "em_oor").expect("section");
+        // Position 99 dropped, leaves 'D' + 'G'.
+        assert_eq!(sections[0].rows[0][1], "DG");
     }
 }

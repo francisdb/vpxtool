@@ -41,12 +41,14 @@ static CONST_DECL_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r#"(?im)^\s*Const\s+([A-Za-z_]\w*)\s*=\s*"([^"]*)""#).unwrap()
 });
 
-// Matches `(Load|Save)Value(<arg>, "HighScore<N>")` or `...Name"`. Captures
-// the section-key argument (an identifier or a quoted literal) so the
-// dispatcher can try every distinct section name a script writes under.
+// Matches `(Load|Save)Value(<arg>, "<score-key>")` for either the modern
+// `HighScoreN` / `HighScoreNName` shape or the legacy EM `hiscore` / `hsa<N>`
+// shape. Captures the section-key argument (an identifier or a quoted
+// literal) so the dispatcher can try every distinct section name a script
+// writes under, regardless of which storage variant it uses.
 static VPREG_HIGHSCORE_CALL_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(
-        r#"(?i)(?:Load|Save)Value\s*\(?\s*([A-Za-z_]\w*|"[^"\r\n]+")\s*,\s*"HighScore\d+(?:Name)?""#,
+        r#"(?i)(?:Load|Save)Value\s*\(?\s*([A-Za-z_]\w*|"[^"\r\n]+")\s*,\s*"(?:HighScore\d+(?:Name)?|hiscore|hsa\d+)""#,
     )
     .unwrap()
 });
@@ -1349,6 +1351,19 @@ x = LoadValue(MyTable, "HighScore1")
 x = LoadValue(SomeUndefinedVar, "HighScore1")
 "#;
         assert!(extract_vpreg_section_keys(code).is_empty());
+    }
+
+    #[test]
+    fn extract_vpreg_keys_picks_up_legacy_em_score_keys() {
+        // Older EM tables (Abra Ca Dabra etc.) use `LoadValue(<arg>,
+        // "hiscore")` and `LoadValue(<arg>, "hsa1")` rather than modern
+        // HighScoreN. The section name surfaces just the same.
+        let code = r#"
+temp = LoadValue("Abra_Ca_Dabra", "credit")
+temp = LoadValue("Abra_Ca_Dabra", "hiscore")
+temp = LoadValue("Abra_Ca_Dabra", "hsa1")
+"#;
+        assert_eq!(extract_vpreg_section_keys(code), vec!["Abra_Ca_Dabra"]);
     }
 
     #[test]
