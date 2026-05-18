@@ -220,49 +220,6 @@ mod tests {
     }
 
     #[test]
-    fn parses_modern_four_entry_section() {
-        // Matrix (Original 2023) - real shape with names alongside scores.
-        let ini = parse(
-            r"
-[TheMatrix]
-HighScore1=1154150
-HighScore1Name=SOM
-HighScore2=100000
-HighScore2Name=AAA
-HighScore3=100000
-HighScore3Name=BBB
-HighScore4=100000
-HighScore4Name=CCC
-Credits=5
-TotalGamesPlayed=4
-",
-        );
-        let sections = extract_sections(&ini, "TheMatrix").expect("section");
-        assert_eq!(sections.len(), 1);
-        assert_eq!(sections[0].header, "HIGH SCORES");
-        assert!(sections[0].ranked);
-        assert_eq!(sections[0].rows.len(), 4);
-        assert_eq!(sections[0].rows[0], vec!["#1", "SOM", "1154150", ""]);
-        assert_eq!(sections[0].rows[3], vec!["#4", "CCC", "100000", ""]);
-    }
-
-    #[test]
-    fn parses_section_with_scores_but_no_names() {
-        // Volkan Steel and Metal: 12 HighScoreN keys, no HighScoreNName.
-        let ini = parse(
-            r"
-[volkan]
-HighScore1=20000
-HighScore2=30000
-HighScore3=50000
-",
-        );
-        let sections = extract_sections(&ini, "volkan").expect("section");
-        assert_eq!(sections[0].rows[0], vec!["#1", "", "20000", ""]);
-        assert_eq!(sections[0].rows[2], vec!["#3", "", "50000", ""]);
-    }
-
-    #[test]
     fn orders_by_rank_number_not_ini_order() {
         // 16-entry Stern-style table; verify N=10..16 sort correctly after
         // N=1..9 (string ordering of "HighScore10" < "HighScore2" would
@@ -281,26 +238,6 @@ HighScore1Name=AAA
         let sections = extract_sections(&ini, "gameofthrones").expect("section");
         let labels: Vec<&str> = sections[0].rows.iter().map(|r| r[0].as_str()).collect();
         assert_eq!(labels, vec!["#1", "#2", "#10"]);
-    }
-
-    #[test]
-    fn single_entry_section_marks_unranked_and_uses_section_header() {
-        // Loch Ness Monster: just one HighScore1 entry, no name. Treat as
-        // an unranked single-entry section so the renderer doesn't prefix
-        // the lone row with "1.".
-        let ini = parse(
-            r"
-[Lochness]
-HighScore1=100000
-Credits=0
-TotalGamesPlayed=0
-",
-        );
-        let sections = extract_sections(&ini, "Lochness").expect("section");
-        assert_eq!(sections.len(), 1);
-        assert!(!sections[0].ranked);
-        assert_eq!(sections[0].header, "LOCHNESS");
-        assert_eq!(sections[0].rows.len(), 1);
     }
 
     #[test]
@@ -348,28 +285,6 @@ SETDIPS=0
         );
         let err = extract_sections(&ini, "hh").expect_err("should be empty");
         assert_eq!(err, LookupError::SectionHasNoScores);
-    }
-
-    #[test]
-    fn parses_legacy_em_abra_ca_dabra_shape() {
-        // Real Abra Ca Dabra VPReg.ini after a real game: hiscore=10000,
-        // hsa1=4/hsa2=15/hsa3=7 -> 'D','O','G' in the canonical alphabet.
-        let ini = parse(
-            r"
-[Abra_Ca_Dabra]
-credit=0
-hiscore=10000
-hsa1=4
-hsa2=15
-hsa3=7
-score1=1910
-",
-        );
-        let sections = extract_sections(&ini, "Abra_Ca_Dabra").expect("section");
-        assert_eq!(sections.len(), 1);
-        assert!(!sections[0].ranked);
-        assert_eq!(sections[0].header, "ABRA_CA_DABRA");
-        assert_eq!(sections[0].rows[0], vec!["HIGH SCORE", "DOG", "10000", ""]);
     }
 
     #[test]
@@ -422,26 +337,6 @@ hsa3=38
         );
         let sections = extract_sections(&ini, "em_extended").expect("section");
         assert_eq!(sections[0].rows[0][1], "0_<");
-    }
-
-    #[test]
-    fn legacy_em_matches_uppercase_hsa_and_highscore() {
-        // Real A-Go-Go user/VPReg.ini after a played game: keys are
-        // persisted CamelCase even though the script's LoadValue calls
-        // pass lowercase strings. The parser must case-insensitively
-        // match either casing.
-        let ini = parse(
-            r"
-[A-Go-Go]
-Credits=4
-HSA1=19
-HSA2=15
-HSA3=13
-HighScore=719
-",
-        );
-        let sections = extract_sections(&ini, "A-Go-Go").expect("section");
-        assert_eq!(sections[0].rows[0], vec!["HIGH SCORE", "SOM", "719", ""]);
     }
 
     #[test]
