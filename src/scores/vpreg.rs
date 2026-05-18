@@ -79,17 +79,31 @@ fn extract_sections(ini: &Ini, game_name: &str) -> Result<Vec<Section>, LookupEr
     // Collect `HighScoreN` / `HighScoreNName` pairs keyed by N so we render
     // them in rank order regardless of the .ini's physical key ordering.
     // BTreeMap gives us a stable ascending iteration which is what we want.
+    //
+    // Two naming conventions for the initials key are both common in the
+    // wild: `HighScoreNName` (Name *after* the number - The Matrix, the
+    // majority of modern tables) and `HighScoreNameN` (Name *before* the
+    // number - Van Halen, some Stern-tribute mods). Accept either.
     let mut scores: BTreeMap<u32, &str> = BTreeMap::new();
     let mut names: BTreeMap<u32, &str> = BTreeMap::new();
     for (key, value) in section.iter() {
-        if let Some(rest) = key.strip_prefix("HighScore") {
-            if let Some(n_str) = rest.strip_suffix("Name") {
-                if let Ok(n) = n_str.parse::<u32>() {
-                    names.insert(n, value);
-                }
-            } else if let Ok(n) = rest.parse::<u32>() {
-                scores.insert(n, value);
+        let Some(rest) = key.strip_prefix("HighScore") else {
+            continue;
+        };
+        // Name-before-number form (HighScoreName<N>).
+        if let Some(n_str) = rest.strip_prefix("Name") {
+            if let Ok(n) = n_str.parse::<u32>() {
+                names.insert(n, value);
             }
+            continue;
+        }
+        // Name-after-number form (HighScore<N>Name) or bare score (HighScore<N>).
+        if let Some(n_str) = rest.strip_suffix("Name") {
+            if let Ok(n) = n_str.parse::<u32>() {
+                names.insert(n, value);
+            }
+        } else if let Ok(n) = rest.parse::<u32>() {
+            scores.insert(n, value);
         }
     }
 
