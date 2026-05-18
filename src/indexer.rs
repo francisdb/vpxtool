@@ -41,6 +41,15 @@ static CONST_DECL_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r#"(?im)^\s*Const\s+([A-Za-z_]\w*)\s*=\s*"([^"]*)""#).unwrap()
 });
 
+// Also catch plain `<id> = "..."` assignments (no `Const`), which scripts
+// use after a `Dim <id>` declaration: John Wick, for instance, writes
+// `Dim MyTable` then `MyTable = "JPsIT"` and reads
+// `LoadValue(MyTable, "HighScore1")`. The line-anchored regex skips
+// keyword-prefixed lines (`Const`, `Dim`, `Sub`, `If`, ...) because they
+// either declare or call rather than bind a string literal.
+static VAR_ASSIGN_REGEX: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r#"(?im)^\s*([A-Za-z_]\w*)\s*=\s*"([^"]*)"\s*$"#).unwrap());
+
 // Matches `(Load|Save)Value(<arg>, "<score-key>")` for either the modern
 // `HighScoreN` / `HighScoreNName` shape or the legacy EM `hiscore` / `hsa<N>`
 // shape. Captures the section-key argument (an identifier or a quoted
@@ -739,6 +748,14 @@ fn extract_vpreg_section_keys<S: AsRef<str>>(code: S) -> Vec<String> {
         // compile error, but tolerate it just in case.
         consts.entry(id).or_insert(value);
     }
+    // Then fold in plain `<id> = "..."` assignments. Const wins where
+    // there's a conflict (more reliable signal); the assignment path
+    // exists to cover `Dim X` + `X = "..."` scripts like John Wick.
+    for caps in VAR_ASSIGN_REGEX.captures_iter(&stripped) {
+        let id = caps.get(1).unwrap().as_str().to_ascii_lowercase();
+        let value = caps.get(2).unwrap().as_str().to_string();
+        consts.entry(id).or_insert(value);
+    }
 
     let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut out: Vec<String> = Vec::new();
@@ -1389,6 +1406,33 @@ Const cGameName = "Real"
 y = LoadValue(cGameName, "HighScore1")
 "#;
         assert_eq!(extract_vpreg_section_keys(code), vec!["Real"]);
+    }
+
+    #[test]
+    fn extract_vpreg_keys_picks_up_dim_plus_assignment() {
+        // John Wick-style: `Dim MyTable` declares the var, separate line
+        // assigns the literal. Used by tables that need to set the section
+        // key dynamically before the Const block (rare but real).
+        let code = r#"
+Dim MyTable
+MyTable = "JPsIT"
+x = LoadValue(MyTable, "HighScore1")
+"#;
+        assert_eq!(extract_vpreg_section_keys(code), vec!["JPsIT"]);
+    }
+
+    #[test]
+    fn extract_vpreg_keys_const_wins_over_plain_assignment() {
+        // If a script binds the same identifier both as Const and as a
+        // standalone assignment, the Const value is the authoritative one
+        // (VBS would actually reject reassignment of a Const at compile
+        // time, but the regex would otherwise see both).
+        let code = r#"
+Const cGameName = "FromConst"
+cGameName = "FromAssign"
+x = LoadValue(cGameName, "HighScore1")
+"#;
+        assert_eq!(extract_vpreg_section_keys(code), vec!["FromConst"]);
     }
 
     #[test]

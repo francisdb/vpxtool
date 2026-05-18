@@ -140,14 +140,26 @@ fn extract_sections(ini: &Ini, game_name: &str) -> Result<Vec<Section>, LookupEr
 /// Initials decode from `hsa1`/`hsa2`/`hsa3` as 1-indexed positions into
 /// [`LEGACY_EM_ALPHABET`]; missing or out-of-range indices yield an empty
 /// initial slot for that position.
+///
+/// Key lookups are case-insensitive: vpinball persists what the script
+/// writes case-as-typed, so the same script that reads `LoadValue(cGame,
+/// "hsa1")` may end up with `[Section] HSA1=...` on disk (seen on
+/// Star-Jet, A-Go-Go, Time Tunnel). Matching either case lets both
+/// resolve.
 fn try_legacy_em(section: &ini::Properties, game_name: &str) -> Option<Section> {
-    let hiscore: u64 = section.get("hiscore")?.trim().parse().ok()?;
+    // Both spellings are common: `hiscore` (lowercase, contracted - Abra Ca
+    // Dabra, 4 Aces era) and `HighScore` (CamelCase, full word - Star-Jet,
+    // A-Go-Go, Time Tunnel). Try each before giving up.
+    let hiscore: u64 = ["hiscore", "HighScore"]
+        .iter()
+        .find_map(|k| get_ci(section, k))
+        .and_then(|v| v.trim().parse::<u64>().ok())?;
     if hiscore == 0 {
         return None;
     }
     let initials: String = ["hsa1", "hsa2", "hsa3"]
         .iter()
-        .filter_map(|k| section.get(k))
+        .filter_map(|k| get_ci(section, k))
         .filter_map(|v| v.trim().parse::<usize>().ok())
         .filter_map(decode_legacy_em_initial)
         .collect();
@@ -161,6 +173,17 @@ fn try_legacy_em(section: &ini::Properties, game_name: &str) -> Option<Section> 
         ]],
         ranked: false,
     })
+}
+
+/// Case-insensitive lookup against an `ini::Properties` section. The crate
+/// itself only offers case-sensitive access, so we scan keys ourselves.
+/// First match wins (sections with both `HighScore` and `highscore` in the
+/// same section are theoretical only; first-seen is fine).
+fn get_ci<'a>(section: &'a ini::Properties, key: &str) -> Option<&'a str> {
+    section
+        .iter()
+        .find(|(k, _)| k.eq_ignore_ascii_case(key))
+        .map(|(_, v)| v)
 }
 
 /// Map a 1-indexed `hsa<N>` value to its alphabet character. Returns `None`
@@ -385,6 +408,26 @@ hsa3=38
         );
         let sections = extract_sections(&ini, "em_extended").expect("section");
         assert_eq!(sections[0].rows[0][1], "0_<");
+    }
+
+    #[test]
+    fn legacy_em_matches_uppercase_hsa_and_highscore() {
+        // Real A-Go-Go user/VPReg.ini after a played game: keys are
+        // persisted CamelCase even though the script's LoadValue calls
+        // pass lowercase strings. The parser must case-insensitively
+        // match either casing.
+        let ini = parse(
+            r"
+[A-Go-Go]
+Credits=4
+HSA1=19
+HSA2=15
+HSA3=13
+HighScore=719
+",
+        );
+        let sections = extract_sections(&ini, "A-Go-Go").expect("section");
+        assert_eq!(sections[0].rows[0], vec!["HIGH SCORE", "SOM", "719", ""]);
     }
 
     #[test]
