@@ -2,3 +2,8 @@
 *               text=auto
 
 *.vbs		text eol=crlf
+
+# Score-file fixtures are verbatim copies of real on-disk files. Treat
+# them as binary so the original bytes (CRLF, embedded non-UTF8, trailing
+# junk) survive into the test runs.
+tests/fixtures/* -text
