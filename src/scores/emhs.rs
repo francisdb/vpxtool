@@ -55,7 +55,12 @@ use std::path::Path;
 use super::Section;
 
 const SCORE_BLOCK_SIZE: usize = 5;
-const MAX_INITIALS_LEN: usize = 4;
+/// Upper bound on the "initials" half of a 5+5 block. Pinball tables
+/// historically use 1-3 char initials, but original tables (Cuphead,
+/// some Stern-tribute mods) sometimes record full character names like
+/// `CUPHEAD` / `MUGMAN` / `KINGDICE` (longest seen: 8 chars). Cap at 12
+/// for headroom while still rejecting prose / sentence lines.
+const MAX_INITIALS_LEN: usize = 12;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum LookupError {
@@ -325,9 +330,15 @@ mod tests {
 
     #[test]
     fn rejects_window_where_names_look_too_long() {
-        // 5 ints followed by 5 long strings (not initials). We require
-        // the name-half to look like real initials (<=4 chars).
-        let text = "100\n90\n80\n70\n60\nSentenceOne\nSentenceTwo\nSentenceThree\nSentenceFour\nSentenceFive\n";
+        // 5 ints followed by 5 long strings (prose, not character names).
+        // The name-half cap (MAX_INITIALS_LEN) rejects anything past the
+        // longest real character name we've seen in the wild.
+        let text = "100\n90\n80\n70\n60\n\
+                    OneSentenceLongerThanInitials\n\
+                    TwoSentenceLongerThanInitials\n\
+                    ThreeSentenceLongerThanInitials\n\
+                    FourSentenceLongerThanInitials\n\
+                    FiveSentenceLongerThanInitials\n";
         let err = extract_sections_from_text(text).expect_err("should not match");
         assert_eq!(err, LookupError::PatternNotFound);
     }
