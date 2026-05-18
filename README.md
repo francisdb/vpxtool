@@ -108,6 +108,16 @@ You can also set the log level using the RUST_LOG environment variable. For exam
 RUST_LOG=debug vpxtool extract test.vpx
 ```
 
+### High scores
+
+Show the high-score entries stored for a table:
+
+```shell
+vpxtool scores show /path/to/table.vpx
+```
+
+Works with PinMAME tables (resolved through pinmame-nvram maps) as well as rom-less tables backed by `VPReg.ini`, GLF `<cGameName>_glf.ini` sidecars, or Black's-style `user/*.txt` EM hiscore files. Use `--format tsv` for scripting or `--format pinemhi` for a PINemHi-like layout.
+
 ### Text UI Frontend
 
 Vpxtool can act as a frontend for launching vpx files. It will index a directory of vpx files and then present a menu to
