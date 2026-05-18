@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.32.0](https://github.com/francisdb/vpxtool/compare/v0.31.1...v0.32.0) - 2026-05-18
+
+### Added
+
+- *(scores)* [**breaking**] document scores command in README
+- *(scores)* VPReg HighScoreName<N> + longer EMHS character names ([#792](https://github.com/francisdb/vpxtool/pull/792))
+- *(scores)* support legacy EM hiscore/hsa1/2/3 in VPReg.ini ([#789](https://github.com/francisdb/vpxtool/pull/789))
+- *(scores)* multi-section-key VPReg lookup ([#788](https://github.com/francisdb/vpxtool/pull/788))
+- *(scores)* support single-hisc EM tables (no initials) ([#787](https://github.com/francisdb/vpxtool/pull/787))
+- *(cli)* scores show falls back to EM-style .txt high score files ([#785](https://github.com/francisdb/vpxtool/pull/785))
+- *(cli)* scores show falls back to VPReg then GLF for rom-less .vpx tables ([#784](https://github.com/francisdb/vpxtool/pull/784))
+- *(cli)* scores show falls back to VPReg.ini for rom-less .vpx tables ([#783](https://github.com/francisdb/vpxtool/pull/783))
+- *(cli)* locale-aware thousands separator and aligned columns in scores show ([#782](https://github.com/francisdb/vpxtool/pull/782))
+- *(cli)* add --format pinemhi section layout to scores show ([#781](https://github.com/francisdb/vpxtool/pull/781))
+- *(cli)* add `scores show` for PinMAME tables ([#779](https://github.com/francisdb/vpxtool/pull/779))
+
+### Fixed
+
+- *(scores)* case-insensitive VPReg keys + Dim-style variable assignments ([#791](https://github.com/francisdb/vpxtool/pull/791))
+- *(scores)* tolerate non-UTF-8 .txt files in the EMHS glob ([#786](https://github.com/francisdb/vpxtool/pull/786))
+
+### Other
+
+- -text for tests/fixtures so CRLF survives in cached blobs
+- *(scores)* real-file regression fixtures in tests/fixtures
+- *(deps)* bump vpin from 0.26.1 to 0.26.3 ([#790](https://github.com/francisdb/vpxtool/pull/790))
+
 ## [0.31.1](https://github.com/francisdb/vpxtool/compare/v0.31.0...v0.31.1) - 2026-05-15
 
 ### Fixed
