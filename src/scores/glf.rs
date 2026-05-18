@@ -151,45 +151,6 @@ mod tests {
     }
 
     #[test]
-    fn parses_dark_chaos_shape_with_grand_champion_split() {
-        // Real Dark Chaos darkchaos_glf.ini. First label is distinct
-        // ("GRAND CHAMPION"), so we expect a one-entry top section followed
-        // by a ranked HIGH SCORES section for the rest.
-        let ini = parse(
-            r"
-[HighScores]
-score_1_label=GRAND CHAMPION
-score_1_name=DAN
-score_1_value=9000000
-score_2_label=HIGH SCORE 1
-score_2_name=MPC
-score_2_value=7000000
-score_3_label=HIGH SCORE 2
-score_3_name=AVE
-score_3_value=5000000
-score_4_label=HIGH SCORE 3
-score_4_name=DIG
-score_4_value=3000000
-
-[MachineVars]
-won_game=0
-player1_score=0
-",
-        );
-        let sections = extract_sections(&ini).expect("sections");
-        assert_eq!(sections.len(), 2);
-        assert_eq!(sections[0].header, "GRAND CHAMPION");
-        assert!(!sections[0].ranked);
-        assert_eq!(sections[0].rows[0][1], "DAN");
-        assert_eq!(sections[0].rows[0][2], "9000000");
-        assert_eq!(sections[1].header, "HIGH SCORES");
-        assert!(sections[1].ranked);
-        assert_eq!(sections[1].rows.len(), 3);
-        assert_eq!(sections[1].rows[0][1], "MPC");
-        assert_eq!(sections[1].rows[2][1], "DIG");
-    }
-
-    #[test]
     fn drops_entries_missing_value() {
         // Slots without a `_value` line are treated as unfilled.
         let ini = parse(

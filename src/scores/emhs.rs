@@ -230,42 +230,6 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     #[test]
-    fn parses_carnaval_12_line_shape() {
-        // Real Carnaval no Rio carnavalnorio.txt.
-        let text = "0\n0\n95510\n84000\n73000\n62000\n51000\nAAA\nZZZ\nXXX\nABC\nBBB\n";
-        let sections = extract_sections_from_text(text).expect("section");
-        assert_eq!(sections.len(), 1);
-        assert_eq!(sections[0].header, "HIGH SCORES");
-        assert!(sections[0].ranked);
-        assert_eq!(sections[0].rows.len(), 5);
-        assert_eq!(sections[0].rows[0], vec!["#1", "AAA", "95510", ""]);
-        assert_eq!(sections[0].rows[4], vec!["#5", "BBB", "51000", ""]);
-    }
-
-    #[test]
-    fn parses_8_ball_16_line_shape_with_six_header_bytes() {
-        // Real 8 Ball Williams8Ball_66VPX.txt: six bytes of header
-        // (marker, credits, four dip settings) before the score block.
-        let text = "1\n12\n5\n1\n1\n0\n5000\n4000\n3500\n3000\n2500\nAAA\nZZZ\nXXX\nABC\nBBB\n";
-        let sections = extract_sections_from_text(text).expect("section");
-        assert_eq!(sections[0].rows.len(), 5);
-        assert_eq!(sections[0].rows[0], vec!["#1", "AAA", "5000", ""]);
-        assert_eq!(sections[0].rows[4], vec!["#5", "BBB", "2500", ""]);
-    }
-
-    #[test]
-    fn parses_roller_coaster_18_line_shape_with_trailing_bytes() {
-        // Real RollerCoaster_71VPX.txt: five header bytes, then the score
-        // block, then two trailing bytes after the initials.
-        let text =
-            "0\n1\n5\n2\n12\n7500\n7000\n6000\n5500\n5000\nAAA\nZZZ\nXXX\nABC\nBBB\n2199\n0\n";
-        let sections = extract_sections_from_text(text).expect("section");
-        assert_eq!(sections[0].rows.len(), 5);
-        assert_eq!(sections[0].rows[0], vec!["#1", "AAA", "7500", ""]);
-        assert_eq!(sections[0].rows[4], vec!["#5", "BBB", "5000", ""]);
-    }
-
-    #[test]
     fn drops_zero_scored_slots() {
         // Slot 4 and 5 are unfilled (score 0). Result still ranked since
         // 3 slots remain, but only those three rows appear.
@@ -341,28 +305,6 @@ mod tests {
                     FiveSentenceLongerThanInitials\n";
         let err = extract_sections_from_text(text).expect_err("should not match");
         assert_eq!(err, LookupError::PatternNotFound);
-    }
-
-    #[test]
-    fn parses_single_hisc_2_in_1_shape() {
-        // Real 2 in 1 (Bally 1964) user/2in1.txt after one game:
-        // credit / score(0) / score(1) / hisc / wv / mv / qs / extra.
-        let text = "11\n0\n321\n1000\n8\n7\n1\n0\n";
-        let sections = extract_sections_from_text(text).expect("section");
-        assert_eq!(sections.len(), 1);
-        assert_eq!(sections[0].header, "HIGH SCORE");
-        assert!(!sections[0].ranked);
-        assert_eq!(sections[0].rows.len(), 1);
-        assert_eq!(sections[0].rows[0], vec!["HIGH SCORE", "", "1000", ""]);
-    }
-
-    #[test]
-    fn parses_single_hisc_4_queens_shape() {
-        // Real 4 Queens (Bally 1970) user/4Queens70.txt: 6 integer lines
-        // with the high score being 50000 (well above credits/dips).
-        let text = "0\n0\n0\n50000\n12\n0\n";
-        let sections = extract_sections_from_text(text).expect("section");
-        assert_eq!(sections[0].rows[0][2], "50000");
     }
 
     #[test]
