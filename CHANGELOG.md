@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.33.0](https://github.com/francisdb/vpxtool/compare/v0.32.0...v0.33.0) - 2026-05-20
+
+### Added
+
+- *(cli)* [**breaking**] extract -o/--output-dir, single path only
+
+### Other
+
+- *(cli)* reword top-level help/README header
+
 ## [0.32.0](https://github.com/francisdb/vpxtool/compare/v0.31.1...v0.32.0) - 2026-05-18
 
 ### Added
