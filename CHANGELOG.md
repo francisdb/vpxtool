@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.33.1](https://github.com/francisdb/vpxtool/compare/v0.33.0...v0.33.1) - 2026-05-20
+
+### Other
+
+- *(deps)* disable image default features to drop AV1/AVIF encoder ([#795](https://github.com/francisdb/vpxtool/pull/795))
+
 ## [0.33.0](https://github.com/francisdb/vpxtool/compare/v0.32.0...v0.33.0) - 2026-05-20
 
 ### Added
