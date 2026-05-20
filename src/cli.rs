@@ -444,32 +444,30 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
         }
         Some((CMD_EXTRACT, sub_matches)) => {
             let force = sub_matches.get_flag("FORCE");
-            let paths: Vec<&str> = sub_matches
-                .get_many::<String>("VPXPATH")
-                .unwrap_or_default()
-                .map(|v| v.as_str())
-                .collect();
-            paths.iter().try_for_each(|path| {
-                let expanded_path = path_exists(path)?;
-                let ext = expanded_path.extension().map(|e| e.to_ascii_lowercase());
-                match ext {
-                    Some(ext) if ext == "directb2s" => {
-                        crate::println!("extracting from {}", expanded_path.display())?;
-                        extract_directb2s(&expanded_path)?;
-                        Ok(())
-                    }
-                    Some(ext) if ext == "vpx" => {
-                        crate::println!("extracting from {}", expanded_path.display())?;
-                        extract(expanded_path.as_ref(), force)?;
-                        Ok(())
-                    }
-                    _ => Err(io::Error::new(
-                        io::ErrorKind::InvalidInput,
-                        format!("Unknown file type: {}", expanded_path.display()),
-                    )),
+            let output_dir = sub_matches
+                .get_one::<String>("OUTPUT_DIR")
+                .map(PathBuf::from);
+            let path = sub_matches
+                .get_one::<String>("VPXPATH")
+                .map(|s| s.as_str())
+                .unwrap_or_default();
+            let expanded_path = path_exists(path)?;
+            let ext = expanded_path.extension().map(|e| e.to_ascii_lowercase());
+            match ext {
+                Some(ext) if ext == "directb2s" => {
+                    crate::println!("extracting from {}", expanded_path.display())?;
+                    extract_directb2s(&expanded_path, output_dir.as_deref())?;
+                    Ok(ExitCode::SUCCESS)
                 }
-            })?;
-            Ok(ExitCode::SUCCESS)
+                Some(ext) if ext == "vpx" => {
+                    crate::println!("extracting from {}", expanded_path.display())?;
+                    extract(expanded_path.as_ref(), force, output_dir.as_deref())
+                }
+                _ => Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!("Unknown file type: {}", expanded_path.display()),
+                )),
+            }
         }
         Some((CMD_ASSEMBLE, sub_matches)) => {
             let force = sub_matches.get_flag("FORCE");
@@ -1066,10 +1064,13 @@ fn build_command() -> Command {
                         .help("Do not ask for confirmation before overwriting existing files"),
                 )
                 .arg(
-                    arg!(<VPXPATH> "The path(s) to the vpx file(s)")
-                        .required(true)
-                        .num_args(1..),
-                ),
+                    Arg::new("OUTPUT_DIR")
+                        .short('o')
+                        .long("output-dir")
+                        .num_args(1)
+                        .help("Directory to extract into. Defaults to a folder named after the vpx, next to it."),
+                )
+                .arg(arg!(<VPXPATH> "The path to the vpx file").required(true)),
         )
         .subcommand(
             extract_script_command(CMD_EXTRACT_VBS),
@@ -2519,20 +2520,21 @@ fn handle_extractvbs(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
     Ok(ExitCode::SUCCESS)
 }
 
-fn extract_directb2s(expanded_path: &PathBuf) -> io::Result<()> {
+fn extract_directb2s(expanded_path: &PathBuf, output_dir: Option<&Path>) -> io::Result<()> {
     let file = File::open(expanded_path)?;
     let reader = BufReader::new(file);
     match read(reader) {
         Ok(b2s) => {
             crate::println!("DirectB2S file version {}", b2s.version)?;
-            let root_dir_path = expanded_path.with_extension("directb2s.extracted");
+            let default_dir = expanded_path.with_extension("directb2s.extracted");
+            let root_dir_path = output_dir.unwrap_or(default_dir.as_path());
 
             let mut root_dir = std::fs::DirBuilder::new();
             root_dir.recursive(true);
-            root_dir.create(&root_dir_path)?;
+            root_dir.create(root_dir_path)?;
 
             crate::println!("Writing to {}", root_dir_path.display())?;
-            wite_images(b2s, root_dir_path.as_path());
+            wite_images(b2s, root_dir_path);
         }
         Err(msg) => {
             crate::println!("Failed to load {}: {}", expanded_path.display(), msg)?;
@@ -2845,9 +2847,9 @@ pub fn confirm(msg: String, yes_no_question: String) -> io::Result<bool> {
     Ok(input.trim() == "y")
 }
 
-pub fn extract(vpx_file_path: &Path, yes: bool) -> io::Result<ExitCode> {
-    let root_dir_path_str = vpx_file_path.with_extension("");
-    let root_dir_path = Path::new(&root_dir_path_str);
+pub fn extract(vpx_file_path: &Path, yes: bool, output_dir: Option<&Path>) -> io::Result<ExitCode> {
+    let default_dir = vpx_file_path.with_extension("");
+    let root_dir_path = output_dir.unwrap_or(default_dir.as_path());
 
     // ask for confirmation if the directory exists
     if root_dir_path.exists() && !yes {
