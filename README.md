@@ -46,7 +46,7 @@ Show help
 ```
 Vpxtool v0.16.0
 
-Extracts and assembles vpx files
+Terminal based frontend and utilities for Visual Pinball
 
 Usage: vpxtool [COMMAND]
 

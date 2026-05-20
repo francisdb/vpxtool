@@ -880,7 +880,7 @@ fn build_command() -> Command {
     Command::new("vpxtool")
         .version(GIT_VERSION)
         .author("Francis DB")
-        .about("Extracts and assembles vpx files")
+        .about("Terminal based frontend and utilities for Visual Pinball")
         .arg_required_else_help(true)
         .before_help(format!("Vpxtool {GIT_VERSION}"))
         .arg(
