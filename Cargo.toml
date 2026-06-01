@@ -37,7 +37,7 @@ vpin = { version = "0.26.4" }
 directb2s = "0.1.1"
 
 edit = "0.1.5"
-pinmame-nvram = "0.4.10"
+pinmame-nvram = "0.4.11"
 image = { version = "0.25.10", default-features = false, features = [
     "bmp",
     "exr",
