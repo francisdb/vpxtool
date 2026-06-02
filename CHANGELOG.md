@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.33.2](https://github.com/francisdb/vpxtool/compare/v0.33.1...v0.33.2) - 2026-06-02
+
+### Other
+
+- *(deps)* bump toml_edit ([#802](https://github.com/francisdb/vpxtool/pull/802))
+- *(deps)* bump log from 0.4.29 to 0.4.30 ([#800](https://github.com/francisdb/vpxtool/pull/800))
+- *(deps)* bump pinmame-nvram from 0.4.10 to 0.4.11 ([#801](https://github.com/francisdb/vpxtool/pull/801))
+- *(deps)* bump vpin from 0.26.3 to 0.26.4 ([#799](https://github.com/francisdb/vpxtool/pull/799))
+- *(deps)* bump serde_json from 1.0.149 to 1.0.150 ([#797](https://github.com/francisdb/vpxtool/pull/797))
+
 ## [0.33.1](https://github.com/francisdb/vpxtool/compare/v0.33.0...v0.33.1) - 2026-05-20
 
 ### Other
