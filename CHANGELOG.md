@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.33.3](https://github.com/francisdb/vpxtool/compare/v0.33.2...v0.33.3) - 2026-06-08
+
+### Other
+
+- *(deps)* bump log from 0.4.30 to 0.4.32 ([#803](https://github.com/francisdb/vpxtool/pull/803))
+- *(deps)* bump chrono from 0.4.44 to 0.4.45 ([#804](https://github.com/francisdb/vpxtool/pull/804))
+- *(deps)* bump pinmame-nvram from 0.4.11 to 0.4.12 ([#805](https://github.com/francisdb/vpxtool/pull/805))
+
 ## [0.33.2](https://github.com/francisdb/vpxtool/compare/v0.33.1...v0.33.2) - 2026-06-02
 
 ### Other
