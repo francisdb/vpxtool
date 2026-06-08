@@ -52,7 +52,7 @@ image = { version = "0.25.10", default-features = false, features = [
 num-format = "0.4.4"
 
 #see https://github.com/chronotope/chrono/issues/602#issuecomment-1242149249
-chrono = { version = "0.4.44", default-features = false, features = ["clock"] }
+chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 rust-ini = "0.21.3"
 dirs = "6.0.0"
 toml = "1.1.2"
