@@ -1,3 +1,4 @@
+use crate::capture::{CaptureFormat, CaptureOptions, CaptureOutcome, capture_table};
 use crate::config::{ResolvedConfig, SetupConfigResult};
 use crate::indexer::{DEFAULT_INDEX_FILE_NAME, IndexError, Progress};
 use crate::patcher::patch_vbs_file;
@@ -22,7 +23,7 @@ use std::io;
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{ExitCode, exit};
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 use vpin::filesystem::RealFileSystem;
 use vpin::vpx;
 use vpin::vpx::expanded::ExpandOptions;
@@ -41,6 +42,7 @@ const GIT_VERSION: &str = git_version!(
 
 const OK: Emoji = Emoji("✅", "[launch]");
 const NOK: Emoji = Emoji("❌", "[crash]");
+const WARN: Emoji = Emoji("⚠️", "[warn]");
 
 const CMD_FRONTEND: &str = "frontend";
 const CMD_DIFF: &str = "diff";
@@ -121,8 +123,15 @@ const CMD_EXPORT_GLTF: &str = "gltf";
 const CMD_EXPORT_VPXZ: &str = "vpxz";
 
 const CMD_INDEX: &str = "index";
+
+const CMD_CAPTURE: &str = "capture";
+
 const ARG_VERBOSE: &str = "VERBOSE";
 const ARG_MAX_DEPTH: &str = "MAX_DEPTH";
+const ARG_FORCE: &str = "FORCE";
+const ARG_FORMAT: &str = "FORMAT";
+const ARG_MAX_WIDTH: &str = "MAX_WIDTH_PX";
+const ARG_TIMEOUT: &str = "TIMEOUT_SECS";
 
 pub(crate) struct ProgressBarProgress {
     pb: ProgressBar,
@@ -331,6 +340,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             }
         }
         Some((CMD_INDEX, sub_matches)) => handle_index(sub_matches),
+        Some((CMD_CAPTURE, sub_matches)) => handle_capture(sub_matches),
         Some((CMD_SCRIPT, sub_matches)) => match sub_matches.subcommand() {
             Some((CMD_SCRIPT_SHOW, sub_matches)) => {
                 let path = sub_matches
@@ -873,6 +883,137 @@ fn handle_index(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
     Ok(ExitCode::SUCCESS)
 }
 
+fn handle_capture(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
+    let force = sub_matches.get_flag(ARG_FORCE);
+    let format = sub_matches
+        .get_one::<String>(ARG_FORMAT)
+        .map(|s| s.parse::<CaptureFormat>())
+        .transpose()
+        .map_err(io::Error::other)?
+        .unwrap_or_default();
+    let max_width = sub_matches.get_one::<u32>(ARG_MAX_WIDTH).copied();
+    let timeout = sub_matches
+        .get_one::<u64>(ARG_TIMEOUT)
+        .copied()
+        .filter(|&s| s > 0)
+        .map(Duration::from_secs);
+    let options = CaptureOptions {
+        format,
+        force,
+        max_width,
+        timeout,
+        ..CaptureOptions::default()
+    };
+
+    let (config_path, config) = config::load_or_setup_config()?;
+    crate::println!("Using vpxtool config file {}", config_path.display())?;
+
+    if !config.vpx_executable.is_file() {
+        crate::eprintln!(
+            "{}",
+            format!(
+                "vpinball executable not found at {}",
+                config.vpx_executable.display()
+            )
+            .red()
+        )?;
+        return Ok(ExitCode::FAILURE);
+    }
+
+    // Single table.
+    if let Some(vpx_path_arg) = sub_matches.get_one::<String>("VPXPATH") {
+        let vpx_path = path_exists(vpx_path_arg)?;
+        return match capture_table(&config, &vpx_path, &options) {
+            Ok(CaptureOutcome::Captured(_)) => Ok(ExitCode::SUCCESS),
+            Ok(CaptureOutcome::CapturedAfterHang(path)) => {
+                crate::eprintln!(
+                    "{}",
+                    format!(
+                        "{WARN} vpinball hung and was killed; salvaged frame for {}",
+                        path.display()
+                    )
+                    .yellow()
+                )?;
+                Ok(ExitCode::SUCCESS)
+            }
+            Ok(CaptureOutcome::Skipped(path)) => {
+                crate::println!(
+                    "Skipping, {} already exists (use --force to regenerate)",
+                    path.display()
+                )?;
+                Ok(ExitCode::SUCCESS)
+            }
+            Err(e) => {
+                crate::eprintln!("{}", format!("{NOK} Capture failed: {e}").red())?;
+                Ok(ExitCode::FAILURE)
+            }
+        };
+    }
+
+    // Batch over all tables in the configured tables folder.
+    let configured_pinmame_folder = config.configured_pinmame_folder();
+    let tables = match frontend::frontend_index(
+        &config,
+        true,
+        config.tables_scan_max_depth,
+        configured_pinmame_folder.as_deref(),
+        vec![],
+    ) {
+        Ok(tables) => tables,
+        Err(e) => {
+            crate::eprintln!("{}", format!("Unable to index tables: {e:?}").red())?;
+            return Ok(ExitCode::FAILURE);
+        }
+    };
+
+    crate::println!(
+        "Capturing {} screenshots for {} tables in {}",
+        format,
+        tables.len(),
+        config.tables_folder.display()
+    )?;
+
+    let mut captured = 0;
+    let mut hung = 0;
+    let mut skipped = 0;
+    let mut failed = 0;
+    for table in &tables {
+        match capture_table(&config, &table.path, &options) {
+            Ok(CaptureOutcome::Captured(_)) => {
+                captured += 1;
+            }
+            Ok(CaptureOutcome::CapturedAfterHang(path)) => {
+                hung += 1;
+                captured += 1;
+                crate::eprintln!(
+                    "{}",
+                    format!(
+                        "{WARN} vpinball hung and was killed; salvaged frame for {}",
+                        path.display()
+                    )
+                    .yellow()
+                )?;
+            }
+            Ok(CaptureOutcome::Skipped(_)) => {
+                skipped += 1;
+            }
+            Err(e) => {
+                failed += 1;
+                crate::eprintln!("{}", format!("{NOK} {}: {e}", table.path.display()).red())?;
+            }
+        }
+    }
+
+    crate::println!(
+        "Done. {captured} captured ({hung} after a hang), {skipped} skipped, {failed} failed."
+    )?;
+    if failed > 0 {
+        Ok(ExitCode::FAILURE)
+    } else {
+        Ok(ExitCode::SUCCESS)
+    }
+}
+
 fn build_command() -> Command {
     // to allow for non-static strings in clap
     // I had to enable the "string" module
@@ -991,6 +1132,47 @@ fn build_command() -> Command {
                 .arg(
                     arg!(<INDEX_FILE> "Where the index will be written. Defaults to VPXROOTPATH/vpxtool_index.json.")
                         .required(false)
+                ),
+        )
+        .subcommand(
+            Command::new(CMD_CAPTURE)
+                .about("Capture a playfield screenshot using vpinball")
+                .long_about(
+                    "Capture a playfield screenshot next to the table using vpinball's \
+                     attract capture mode. With a VPXPATH a single table is captured, \
+                     otherwise every table in the configured tables folder is captured, \
+                     skipping tables that already have an image unless --force is given.",
+                )
+                .arg(
+                    arg!([VPXPATH] "The path to a single vpx file. Defaults to capturing all tables in the configured tables folder.")
+                        .required(false),
+                )
+                .arg(
+                    Arg::new(ARG_FORCE)
+                        .short('f')
+                        .long("force")
+                        .num_args(0)
+                        .help("Regenerate the image even if it already exists"),
+                )
+                .arg(
+                    Arg::new(ARG_FORMAT)
+                        .long("format")
+                        .value_parser(["jpg", "png", "webp", "qoi"])
+                        .default_value("jpg")
+                        .help("Output image format. jpg (quality 80) is the small, fast default; png/webp are lossless but ~15x larger and slower to encode; qoi keeps vpinball's raw frame (lossless, instant, but ~10MB and barely supported)."),
+                )
+                .arg(
+                    Arg::new(ARG_MAX_WIDTH)
+                        .long("max-width")
+                        .value_parser(clap::value_parser!(u32))
+                        .help("Downscale the image so its width does not exceed this many pixels (keeps aspect ratio). Defaults to the native vpinball playfield window resolution."),
+                )
+                .arg(
+                    Arg::new(ARG_TIMEOUT)
+                        .long("timeout")
+                        .value_parser(clap::value_parser!(u64))
+                        .default_value("60")
+                        .help("Kill vpinball and skip the table if a capture takes longer than this many seconds (0 disables the timeout). Prevents a hanging table from stalling a batch."),
                 ),
         )
         .subcommand(
