@@ -1,4 +1,5 @@
 use crate::backglass::find_hole;
+use crate::capture::{CaptureOptions, CaptureOutcome, capture_table};
 use crate::cli::{
     DiffColor, ProgressBarProgress, confirm, info_diff, info_edit, info_gather, open_editor,
     run_diff, script_diff,
@@ -9,7 +10,7 @@ use crate::indexer::{IndexError, IndexedTable, Progress};
 use crate::patcher::LineEndingsResult::{NoChanges, Unified};
 use crate::patcher::{patch_vbs_file, unify_line_endings_vbs_file};
 use crate::vpinball_config::{VPinballConfig, WindowInfo, WindowType};
-use crate::{indexer, strip_cr_lf};
+use crate::{describe_exit, indexer, strip_cr_lf, was_killed_by_signal};
 use base64::Engine;
 use colored::Colorize;
 use console::{Emoji, Term};
@@ -58,6 +59,7 @@ enum TableOption {
     EditTableINI,
     EditMainIni,
     ExportVpxz,
+    CaptureScreenshot,
 }
 
 impl TableOption {
@@ -88,6 +90,7 @@ impl TableOption {
             TableOption::EditTableINI,
             TableOption::EditMainIni,
             TableOption::ExportVpxz,
+            TableOption::CaptureScreenshot,
         ]);
         options
     }
@@ -114,6 +117,7 @@ impl TableOption {
             TableOption::EditTableINI => "INI > Edit table ini".to_string(),
             TableOption::EditMainIni => "INI > Edit main ini".to_string(),
             TableOption::ExportVpxz => "Export > vpxz (mobile)".to_string(),
+            TableOption::CaptureScreenshot => "Capture > Playfield screenshot".to_string(),
         }
     }
 }
@@ -495,6 +499,26 @@ fn table_menu(
                 Ok(msg) => prompt(&msg),
                 Err(err) => prompt_error(&format!("Unable to export vpxz: {err}")),
             },
+            Some(TableOption::CaptureScreenshot) => {
+                // Explicit user action, so always regenerate.
+                let options = CaptureOptions {
+                    force: true,
+                    ..CaptureOptions::default()
+                };
+                match capture_table(config, selected_path, &options) {
+                    Ok(CaptureOutcome::Captured(path)) => {
+                        prompt(&format!("Captured screenshot to {}", path.display()))
+                    }
+                    Ok(CaptureOutcome::CapturedAfterHang(path)) => prompt(&format!(
+                        "vpinball hung and was killed, but the screenshot was salvaged to {}",
+                        path.display()
+                    )),
+                    Ok(CaptureOutcome::Skipped(path)) => {
+                        prompt(&format!("Screenshot already exists at {}", path.display()))
+                    }
+                    Err(err) => prompt_error(&format!("Unable to capture screenshot: {err}")),
+                }
+            }
             None => exit = true,
         }
     }
@@ -902,27 +926,21 @@ fn launch(selected_path: &PathBuf, launch_template: &LaunchTemplate) {
     }
 
     match launch_table(selected_path, launch_template) {
-        Ok(status) => match status.code() {
-            Some(0) => {
-                Term::stderr().clear_screen().ok();
-            }
-            Some(11) => {
+        Ok(status) if status.success() => {
+            Term::stderr().clear_screen().ok();
+        }
+        Ok(status) => {
+            // A crash kills the process with a signal (SIGSEGV/SIGABRT/...), which
+            // has no exit code; describe_exit names the signal in that case.
+            if was_killed_by_signal(status) {
                 prompt(&format!(
-                    "{CRASH} Visual Pinball exited with segfault, you might want to report this to the vpinball team."
+                    "{CRASH} Visual Pinball {}, you might want to report this to the vpinball team.",
+                    describe_exit(status)
                 ));
+            } else {
+                prompt(&format!("{CRASH} Visual Pinball {}", describe_exit(status)));
             }
-            Some(139) => {
-                prompt(&format!(
-                    "{CRASH} Visual Pinball exited with segfault, you might want to report this to the vpinball team."
-                ));
-            }
-            Some(code) => {
-                prompt(&format!("{CRASH} Visual Pinball exited with code {code}"));
-            }
-            None => {
-                prompt("Visual Pinball exited with unknown code");
-            }
-        },
+        }
         Err(e) => {
             if e.kind() == io::ErrorKind::NotFound {
                 report_and_exit(format!(

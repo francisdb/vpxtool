@@ -56,6 +56,7 @@ Commands:
   frontend        Text based frontend for launching vpx files
   simplefrontend  Simple text based frontend for launching vpx files
   index           Indexes a directory of vpx files
+  capture         Capture a playfield screenshot using vpinball
   script          Vpx script code related commands
   ls              Show a vpx file content
   extract         Extracts a vpx file

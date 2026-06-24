@@ -1,9 +1,11 @@
 use std::fs::metadata;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::process::ExitStatus;
 
 mod atomicwrite;
 mod backglass;
+pub mod capture;
 pub mod fixprint;
 mod frontend;
 pub mod patcher;
@@ -17,6 +19,49 @@ mod colorful_theme_patched;
 pub mod scores;
 pub mod vpinball_config;
 pub mod vpxz;
+
+/// Human-readable description of how a child process ended, naming the signal
+/// when it was killed (e.g. a segfault) rather than exiting with a code. On Unix
+/// a signal death has no exit code (`ExitStatus::code()` is `None`), which is why
+/// an unhandled crash otherwise shows up as an "unknown" exit.
+pub(crate) fn describe_exit(status: ExitStatus) -> String {
+    if let Some(code) = status.code() {
+        return format!("exited with code {code}");
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::ExitStatusExt;
+        if let Some(signal) = status.signal() {
+            let name = match signal {
+                2 => " (SIGINT)",
+                4 => " (SIGILL)",
+                6 => " (SIGABRT)",
+                8 => " (SIGFPE)",
+                9 => " (SIGKILL)",
+                11 => " (SIGSEGV, crash)",
+                15 => " (SIGTERM)",
+                _ => "",
+            };
+            return format!("was killed by signal {signal}{name}");
+        }
+    }
+    "exited with an unknown status".to_string()
+}
+
+/// Whether the process was terminated by a signal (e.g. crashed) rather than
+/// exiting on its own. Always `false` on non-Unix platforms.
+pub(crate) fn was_killed_by_signal(status: ExitStatus) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::ExitStatusExt;
+        status.signal().is_some()
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = status;
+        false
+    }
+}
 
 pub fn strip_cr_lf(s: &str) -> String {
     s.chars().filter(|c| !c.is_ascii_whitespace()).collect()
@@ -77,6 +122,22 @@ impl Drop for RemoveOnDrop {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn test_describe_exit_reports_signal() {
+        use std::os::unix::process::ExitStatusExt;
+        // Killed by SIGSEGV (a crash) -> no exit code, report the signal.
+        let crashed = ExitStatus::from_raw(11);
+        let desc = describe_exit(crashed);
+        assert!(desc.contains("signal 11"), "{desc}");
+        assert!(desc.contains("SIGSEGV"), "{desc}");
+        assert!(was_killed_by_signal(crashed));
+        // Normal exit with a code.
+        let exited = ExitStatus::from_raw(2 << 8);
+        assert_eq!(describe_exit(exited), "exited with code 2");
+        assert!(!was_killed_by_signal(exited));
+    }
 
     #[test]
     fn test_os_independent_file_name_windows() {
