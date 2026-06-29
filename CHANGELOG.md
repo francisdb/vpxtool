@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.33.4](https://github.com/francisdb/vpxtool/compare/v0.33.3...v0.33.4) - 2026-06-29
+
+### Added
+
+- *(cli)* add capture command for playfield screenshots ([#815](https://github.com/francisdb/vpxtool/pull/815))
+
+### Other
+
+- *(deps)* bump env_logger from 0.11.10 to 0.11.11 ([#816](https://github.com/francisdb/vpxtool/pull/816))
+- *(deps)* bump actions/checkout from 6 to 7 ([#812](https://github.com/francisdb/vpxtool/pull/812))
+
 ## [0.33.3](https://github.com/francisdb/vpxtool/compare/v0.33.2...v0.33.3) - 2026-06-08
 
 ### Other
