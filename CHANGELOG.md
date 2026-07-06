@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.33.4](https://github.com/francisdb/vpxtool/compare/v0.33.3...v0.33.4) - 2026-07-06
+
+### Added
+
+- *(cli)* add capture command for playfield screenshots ([#815](https://github.com/francisdb/vpxtool/pull/815))
+
+### Other
+
+- *(deps)* bump indicatif from 0.18.4 to 0.18.5 ([#820](https://github.com/francisdb/vpxtool/pull/820))
+- *(deps)* bump rand from 0.10.1 to 0.10.2 ([#818](https://github.com/francisdb/vpxtool/pull/818))
+- *(deps)* bump console from 0.16.3 to 0.16.4 ([#817](https://github.com/francisdb/vpxtool/pull/817))
+- *(deps)* bump pinmame-nvram from 0.4.12 to 0.4.13 ([#819](https://github.com/francisdb/vpxtool/pull/819))
+- *(deps)* bump directb2s from 0.1.1 to 0.1.2 ([#821](https://github.com/francisdb/vpxtool/pull/821))
+- *(deps)* bump env_logger from 0.11.10 to 0.11.11 ([#816](https://github.com/francisdb/vpxtool/pull/816))
+- *(deps)* bump actions/checkout from 6 to 7 ([#812](https://github.com/francisdb/vpxtool/pull/812))
+
 ## [0.33.3](https://github.com/francisdb/vpxtool/compare/v0.33.2...v0.33.3) - 2026-06-08
 
 ### Other
