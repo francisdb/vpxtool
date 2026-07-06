@@ -703,9 +703,9 @@ dependencies = [
 
 [[package]]
 name = "directb2s"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d78082666249c3b0fd53438e11c3bbb4ec2a87295477c75ee438252823408467"
+checksum = "97b728a791810e1e8fb9a6e04f8ccf996887986b499e18b59172279c714e88a2"
 dependencies = [
  "dirs",
  "quick-xml",
@@ -1757,9 +1757,9 @@ checksum = "a993555f31e5a609f617c12db6250dedcac1b0a85076912c436e6fc9b2c8e6a3"
 
 [[package]]
 name = "quick-xml"
-version = "0.39.0"
+version = "0.41.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2e3bf4aa9d243beeb01a7b3bc30b77cfe2c44e24ec02d751a7104a53c2c49a1"
+checksum = "e660451e55124f798a69a5af3f49ccfbefbd41910eefd25caf2393e1f3473ec1"
 dependencies = [
  "memchr",
  "serde",
