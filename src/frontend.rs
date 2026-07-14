@@ -1014,7 +1014,7 @@ fn display_table_line_full(table: &IndexedTable) -> String {
             if rom_found {
                 format!(" - [{}]", name.dimmed())
             } else if table.requires_pinmame {
-                format!(" - {} [{}]", Emoji("⚠️", "!"), &name)
+                format!(" - {} [{}]", Emoji("⚠️", "!"), name)
                     .yellow()
                     .to_string()
             } else {
