@@ -165,7 +165,7 @@ impl Theme for ColorfulThemePatched {
         }
         // see https://github.com/console-rs/dialoguer/pull/336
         // we do not support highlight_matches=true here as it's broken anyway
-        write!(f, "{} ", &self.inner.active_item_prefix)?;
+        write!(f, "{} ", self.inner.active_item_prefix)?;
         write!(f, "{}", self.inner.active_item_style.apply_to(text))
     }
 

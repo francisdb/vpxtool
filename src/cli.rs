@@ -2979,7 +2979,7 @@ fn open_configured_editor(file_to_edit: &Path, editor: &String) -> io::Result<()
             }
         }
         Err(e) => {
-            let warning = format!("Failed to open editor {}: {}", &editor, e);
+            let warning = format!("Failed to open editor {}: {}", editor, e);
             Err(io::Error::other(warning))
         }
     }
@@ -3164,7 +3164,7 @@ pub fn run_diff(
         .arg(original_vbs_filename)
         .arg(format!("--label={}", vbs_filename.to_string_lossy()))
         .arg(vbs_filename);
-    info!("Running command: {:?}", &command);
+    info!("Running command: {:?}", command);
     let result = command.output().map(|o| o.stdout);
     result.map_err(|e| {
         let msg = format!("Failed to run diff '{diff}'. Is it installed on your system? {e}");
