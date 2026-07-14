@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.33.5](https://github.com/francisdb/vpxtool/compare/v0.33.4...v0.33.5) - 2026-07-14
+
+### Other
+
+- *(deps)* bump indicatif from 0.18.5 to 0.18.6 ([#822](https://github.com/francisdb/vpxtool/pull/822))
+- *(deps)* bump crossbeam-epoch to 0.9.20 (RUSTSEC-2026-0204)
+- fix clippy useless_borrows_in_formatting warnings
+
 ## [0.33.4](https://github.com/francisdb/vpxtool/compare/v0.33.3...v0.33.4) - 2026-07-06
 
 ### Added
