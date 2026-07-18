@@ -17,8 +17,10 @@ updates:
     # "increase" for cargo since June 2026
     # (https://github.com/dependabot/dependabot-core/pull/14306), but the
     # hosted config validation still rejects anything except "auto" and
-    # "lockfile-only" for cargo, so we cannot set it yet; retry once GitHub
-    # catches up. Until then, or until release-plz can consider lockfile
+    # "lockfile-only" for cargo
+    # (https://github.com/dependabot/dependabot-core/issues/12392), so we
+    # cannot set it yet; retry once that issue is resolved. Until then, or
+    # until release-plz can consider lockfile
     # changes (https://github.com/release-plz/release-plz/issues/2852),
     # add important lockfile-only bumps to the changelog manually.
 
