@@ -512,7 +512,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     )?;
                     if !confirmed {
                         crate::println!("Aborted")?;
-                        return Ok(ExitCode::SUCCESS);
+                        return Ok(ExitCode::FAILURE);
                     }
                     std::fs::remove_file(&vpx_path)?;
                 }
@@ -1788,7 +1788,7 @@ fn handle_export_vpxz(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
             )?;
             if !confirmed {
                 crate::println!("Aborted")?;
-                return Ok(ExitCode::SUCCESS);
+                return Ok(ExitCode::FAILURE);
             }
         }
     }
@@ -2927,7 +2927,7 @@ fn info_extract(vpx_file_path: &Path) -> io::Result<ExitCode> {
         )?;
         if !confirmed {
             crate::println!("Aborted")?;
-            return Ok(ExitCode::SUCCESS);
+            return Ok(ExitCode::FAILURE);
         }
     }
     write_info_json(vpx_file_path, &info_file_path)?;
@@ -3041,7 +3041,7 @@ pub fn extract(vpx_file_path: &Path, yes: bool, output_dir: Option<&Path>) -> io
         )?;
         if !confirmed {
             crate::println!("Aborted")?;
-            return Ok(ExitCode::SUCCESS);
+            return Ok(ExitCode::FAILURE);
         }
     }
     if root_dir_path.exists() {
