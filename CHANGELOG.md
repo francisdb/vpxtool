@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.33.6](https://github.com/francisdb/vpxtool/compare/v0.33.5...v0.33.6) - 2026-07-18
+
+### Fixed
+
+- remove unsupported dependabot versioning-strategy ([#837](https://github.com/francisdb/vpxtool/pull/837))
+- exit non-zero when aborting at an overwrite prompt ([#828](https://github.com/francisdb/vpxtool/pull/828))
+
+### Other
+
+- link dependabot issue tracking the rejected increase value ([#839](https://github.com/francisdb/vpxtool/pull/839))
+- *(deps)* bump clap from 4.6.1 to 4.6.2 ([#838](https://github.com/francisdb/vpxtool/pull/838))
+- set dependabot cargo versioning-strategy to increase ([#835](https://github.com/francisdb/vpxtool/pull/835))
+- require vpin 0.26.10 ([#836](https://github.com/francisdb/vpxtool/pull/836))
+- *(deps)* bump toml_edit ([#833](https://github.com/francisdb/vpxtool/pull/833))
+- *(deps)* bump toml from 1.1.2+spec-1.1.0 to 1.1.3+spec-1.1.0 ([#831](https://github.com/francisdb/vpxtool/pull/831))
+- *(deps)* bump globset from 0.4.18 to 0.4.19 ([#829](https://github.com/francisdb/vpxtool/pull/829))
+
 ## [0.33.5](https://github.com/francisdb/vpxtool/compare/v0.33.4...v0.33.5) - 2026-07-14
 
 ### Other
