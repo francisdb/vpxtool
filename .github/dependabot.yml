@@ -9,13 +9,18 @@ updates:
     directory: "/" # Location of package manifests
     schedule:
       interval: "weekly"
-    # Always bump the version in Cargo.toml instead of doing lockfile-only
-    # updates for in-range versions. Lockfile-only bumps are invisible to
-    # release-plz, which decides the changelog range by comparing packaged
-    # files (Cargo.lock is not one of them), so those bumps were missing
-    # from release changelogs even when they mattered for the shipped
-    # binaries (e.g. the vpin 0.26.10 panic fixes).
-    versioning-strategy: "increase"
+    # We would like dependabot to always bump the version in Cargo.toml
+    # instead of doing lockfile-only updates for in-range versions, because
+    # lockfile-only bumps are invisible to release-plz and go missing from
+    # release changelogs even when they matter for the shipped binaries
+    # (e.g. the vpin 0.26.10 panic fixes). dependabot-core supports
+    # "increase" for cargo since June 2026
+    # (https://github.com/dependabot/dependabot-core/pull/14306), but the
+    # hosted config validation still rejects anything except "auto" and
+    # "lockfile-only" for cargo, so we cannot set it yet; retry once GitHub
+    # catches up. Until then, or until release-plz can consider lockfile
+    # changes (https://github.com/release-plz/release-plz/issues/2852),
+    # add important lockfile-only bumps to the changelog manually.
 
   - package-ecosystem: "github-actions"
     directory: "/"
