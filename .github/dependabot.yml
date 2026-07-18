@@ -9,6 +9,13 @@ updates:
     directory: "/" # Location of package manifests
     schedule:
       interval: "weekly"
+    # Always bump the version in Cargo.toml instead of doing lockfile-only
+    # updates for in-range versions. Lockfile-only bumps are invisible to
+    # release-plz, which decides the changelog range by comparing packaged
+    # files (Cargo.lock is not one of them), so those bumps were missing
+    # from release changelogs even when they mattered for the shipped
+    # binaries (e.g. the vpin 0.26.10 panic fixes).
+    versioning-strategy: "increase"
 
   - package-ecosystem: "github-actions"
     directory: "/"
