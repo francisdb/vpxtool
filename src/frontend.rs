@@ -534,8 +534,12 @@ fn nvram_dip_switches(info: &IndexedTable) {
                     // ok
                 }
                 Err(err) => {
-                    let msg = format!("Unable to edit DIP switches: {err}");
-                    prompt_error(&msg);
+                    if err.kind() == io::ErrorKind::Unsupported {
+                        prompt(&err.to_string());
+                    } else {
+                        let msg = format!("Unable to edit DIP switches: {err}");
+                        prompt_error(&msg);
+                    }
                 }
             }
         } else {
@@ -690,7 +694,12 @@ fn auto_position_dmd(config: &ResolvedConfig, info: &&IndexedTable) -> Result<St
 }
 
 fn edit_dip_switches(nvram: PathBuf) -> io::Result<()> {
-    let nvram_map = Nvram::open(Path::new(&nvram))?.unwrap();
+    let nvram_map = Nvram::open(Path::new(&nvram))?.ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::Unsupported,
+            format!("{} currently not supported", nvram.display()),
+        )
+    })?;
     let disp_info = nvram_map.dip_switches_info()?;
     let mut nvram_file = OpenOptions::new().read(true).write(true).open(nvram)?;
     let mut switches = get_all_dip_switches(&mut nvram_file)?;
