@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.33.7](https://github.com/francisdb/vpxtool/compare/v0.33.6...v0.33.7) - 2026-07-27
+
+### Fixed
+
+- *(frontend)* handle unsupported NVRAM DIP switch maps ([#844](https://github.com/francisdb/vpxtool/pull/844))
+
 ## [0.33.6](https://github.com/francisdb/vpxtool/compare/v0.33.5...v0.33.6) - 2026-07-18
 
 ### Fixed
