@@ -1,7 +1,7 @@
 use crate::capture::{CaptureFormat, CaptureOptions, CaptureOutcome, capture_table};
 use crate::config::{ResolvedConfig, SetupConfigResult};
 use crate::indexer::{DEFAULT_INDEX_FILE_NAME, IndexError, Progress};
-use crate::patcher::patch_vbs_file;
+use crate::patcher::{patch_vbs_file, unify_line_endings};
 use crate::{
     RemoveOnDrop, config, frontend, indexer, os_independent_file_name, path_exists, strip_cr_lf,
 };
@@ -3079,6 +3079,7 @@ pub fn info_diff(vpx_file_path: &Path, config: Option<&ResolvedConfig>) -> io::R
         let output = run_diff(
             original_info_path.path(),
             &info_file_path,
+            &info_file_path,
             diff_color,
             config,
         )?;
@@ -3099,13 +3100,30 @@ pub fn script_diff(vpx_file_path: &Path, config: Option<&ResolvedConfig>) -> io:
                 let script = gamedata.code;
                 let original_vbs_path =
                     RemoveOnDrop::new(vpx_file_path.with_extension("vbs.original.tmp"));
-                std::fs::write(original_vbs_path.path(), script.string)?;
+                // Unify line endings to CRLF so that diff doesn't show
+                // spurious changes when the VPX-embedded script uses different
+                // line terminators than the sidecar .vbs file on disk.
+                let normalized_original = unify_line_endings(&script.string);
+                std::fs::write(original_vbs_path.path(), normalized_original)?;
+
+                let modified_vbs_path =
+                    RemoveOnDrop::new(vpx_file_path.with_extension("vbs.modified.tmp"));
+                let sidecar_content = std::fs::read_to_string(&vbs_path)?;
+                let normalized_modified = unify_line_endings(&sidecar_content);
+                std::fs::write(modified_vbs_path.path(), normalized_modified)?;
+
                 let diff_color = if colored::control::SHOULD_COLORIZE.should_colorize() {
                     DiffColor::Always
                 } else {
                     DiffColor::Never
                 };
-                let output = run_diff(original_vbs_path.path(), &vbs_path, diff_color, config)?;
+                let output = run_diff(
+                    original_vbs_path.path(),
+                    modified_vbs_path.path(),
+                    &vbs_path,
+                    diff_color,
+                    config,
+                )?;
                 Ok(String::from_utf8_lossy(&output).to_string())
             }
             Err(e) => {
@@ -3138,6 +3156,7 @@ impl DiffColor {
 pub fn run_diff(
     original_vbs_path: &Path,
     vbs_path: &Path,
+    vbs_label_path: &Path,
     color: DiffColor,
     config: Option<&ResolvedConfig>,
 ) -> Result<Vec<u8>, io::Error> {
@@ -3145,6 +3164,9 @@ pub fn run_diff(
         .file_name()
         .unwrap_or(original_vbs_path.as_os_str());
     let original_vbs_file_name_no_tmp = original_vbs_filename.to_string_lossy().replace(".tmp", "");
+    let vbs_label_filename = vbs_label_path
+        .file_name()
+        .unwrap_or(vbs_label_path.as_os_str());
     let vbs_filename = vbs_path.file_name().unwrap_or(vbs_path.as_os_str());
     let diff = config
         .and_then(|resolved| resolved.diff.as_deref())
@@ -3162,7 +3184,7 @@ pub fn run_diff(
         .arg(format!("--color={}", color.to_diff_arg()))
         .arg(format!("--label={original_vbs_file_name_no_tmp}"))
         .arg(original_vbs_filename)
-        .arg(format!("--label={}", vbs_filename.to_string_lossy()))
+        .arg(format!("--label={}", vbs_label_filename.to_string_lossy()))
         .arg(vbs_filename);
     info!("Running command: {:?}", command);
     let result = command.output().map(|o| o.stdout);
