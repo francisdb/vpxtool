@@ -77,7 +77,7 @@ ignore = "0.4.33"
 num-format = { version = "0.4.4", features = ["with-system-locale"] }
 
 [dev-dependencies]
-testdir = "0.9.3"
+testdir = "0.10.0"
 pretty_assertions = "1.4.1"
 rand = "0.10.1"
 
