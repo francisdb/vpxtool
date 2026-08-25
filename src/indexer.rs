@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use jwalk::WalkDir;
+use ignore::{WalkBuilder, WalkState};
 use log::info;
 use rayon::prelude::*;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -348,41 +348,43 @@ pub fn find_vpx_files(
     tables_path: &Path,
 ) -> io::Result<Vec<PathWithMetadata>> {
     let vpx_paths: Vec<PathBuf> = if recursive {
-        // jwalk parallelises readdir calls across directories using rayon, so
-        // all subdirectory reads (e.g. one per manufacturer folder) happen
-        // concurrently rather than serially.
-        let mut walk = WalkDir::new(tables_path).skip_hidden(false);
-        if let Some(depth) = max_depth {
-            walk = walk.max_depth(depth);
-        }
-        walk.process_read_dir(|_, _, _, entries| {
-            // Drop .git and __MACOSX subdirectory entries before they are
-            // enqueued for parallel reads, avoiding wasted network RPCs.
-            entries.retain(|entry| match entry {
-                Ok(e) if e.file_type().is_dir() => {
-                    !matches!(e.file_name().to_str(), Some(".git" | "__MACOSX"))
+        // The parallel walker reads subdirectories (e.g. one per manufacturer
+        // folder) concurrently rather than serially, which matters when each
+        // readdir is a network RPC.
+        let mut builder = WalkBuilder::new(tables_path);
+        // Plain filesystem walk: no gitignore handling, include hidden files.
+        builder.standard_filters(false);
+        builder.max_depth(max_depth);
+        builder.filter_entry(|entry| {
+            // Prune .git and __MACOSX subtrees before they are enqueued for
+            // parallel reads, avoiding wasted network RPCs.
+            !(entry.file_type().is_some_and(|t| t.is_dir())
+                && matches!(entry.file_name().to_str(), Some(".git" | "__MACOSX")))
+        });
+        let (tx, rx) = std::sync::mpsc::channel::<io::Result<PathBuf>>();
+        builder.build_parallel().run(|| {
+            let tx = tx.clone();
+            Box::new(move |entry| {
+                let entry = match entry {
+                    Ok(e) => e,
+                    Err(e) => {
+                        let _ = tx.send(Err(io::Error::other(e)));
+                        return WalkState::Quit;
+                    }
+                };
+                if entry.file_type().is_some_and(|t| t.is_file())
+                    && matches!(
+                        entry.path().extension().and_then(OsStr::to_str),
+                        Some("vpx")
+                    )
+                {
+                    let _ = tx.send(Ok(entry.into_path()));
                 }
-                _ => true,
-            });
-        })
-        .into_iter()
-        .filter_map(|entry| {
-            let entry = match entry {
-                Ok(e) => e,
-                Err(e) => return Some(Err(io::Error::from(e))),
-            };
-            if !entry.file_type().is_file() {
-                return None;
-            }
-            if !matches!(
-                entry.path().extension().and_then(OsStr::to_str),
-                Some("vpx")
-            ) {
-                return None;
-            }
-            Some(Ok(entry.path()))
-        })
-        .collect::<io::Result<Vec<_>>>()?
+                WalkState::Continue
+            })
+        });
+        drop(tx);
+        rx.into_iter().collect::<io::Result<Vec<_>>>()?
     } else {
         let mut paths = Vec::new();
         for entry in fs::read_dir(tables_path)? {
@@ -1683,6 +1685,31 @@ x = LoadValue(tablename, "HighScore1")
 
         // Depth 0 yields only the root dir entry, which is not a .vpx file.
         assert!(find_vpx_files(true, Some(0), &tables_dir)?.is_empty());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_find_vpx_files_includes_hidden_and_gitignored() -> io::Result<()> {
+        // find_vpx_files must do a plain filesystem walk: hidden files and
+        // directories are included, and a stray .gitignore inside a tables
+        // folder must not hide any tables.
+        let tables_dir = testdir!().join("tables");
+        fs::create_dir(&tables_dir)?;
+        let hidden_dir = tables_dir.join(".hidden");
+        fs::create_dir(&hidden_dir)?;
+
+        vpx::new_minimal_vpx(tables_dir.join("visible.vpx"))?;
+        vpx::new_minimal_vpx(tables_dir.join(".hidden.vpx"))?;
+        vpx::new_minimal_vpx(hidden_dir.join("nested.vpx"))?;
+        fs::write(tables_dir.join(".gitignore"), "*.vpx\n")?;
+
+        let mut found: Vec<String> = find_vpx_files(true, None, &tables_dir)?
+            .iter()
+            .map(|f| f.path.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        found.sort();
+        assert_eq!(found, vec![".hidden.vpx", "nested.vpx", "visible.vpx"]);
 
         Ok(())
     }
