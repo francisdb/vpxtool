@@ -103,3 +103,41 @@ fn script_diff_reports_real_changes_despite_mixed_endings() {
         "expected diff to contain the real change, got:\n{stdout}"
     );
 }
+
+/// A latin1 sidecar (as produced by VPinballX -ExtractVBS on legacy tables)
+/// must not make `script diff` fail with a utf8 error; the real change must
+/// still be reported.
+#[test]
+fn script_diff_handles_latin1_sidecar() {
+    let dir = testdir!();
+
+    let out = vpxtool(&dir, &["new", "table.vpx"]);
+    assert!(out.status.success(), "vpxtool new failed: {:?}", out);
+
+    let out = vpxtool(&dir, &["script", "extract", "table.vpx"]);
+    assert!(
+        out.status.success(),
+        "vpxtool script extract failed: {:?}",
+        out
+    );
+
+    // Append a comment containing a latin1 e-acute (0xE9), making the file
+    // invalid utf8.
+    let vbs_path = dir.join("table.vbs");
+    let mut bytes = std::fs::read(&vbs_path).expect("read vbs");
+    bytes.extend_from_slice(b"' caf\xE9 comment\r\n");
+    std::fs::write(&vbs_path, &bytes).expect("write vbs");
+
+    let out = vpxtool(&dir, &["script", "diff", "table.vpx"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        out.status.success(),
+        "script diff exited with failure: {:?}\nstderr: {stderr}",
+        out.status,
+    );
+    assert!(
+        stdout.contains("comment"),
+        "expected diff to contain the added latin1 line, got:\n{stdout}"
+    );
+}

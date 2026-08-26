@@ -3,10 +3,9 @@
 use regex::Regex;
 use std::collections::HashSet;
 use std::fmt::Display;
-use std::fs::File;
 use std::io;
-use std::io::{Read, Write};
 use std::path::Path;
+use vpin::vpx::model::StringWithEncoding;
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub enum LineEndingsResult {
@@ -28,16 +27,37 @@ impl Display for PatchType {
     }
 }
 
+// TODO replace read_vbs_file/write_vbs_file with the identical
+//   vpin::vpx::read_script_file/write_script_file once a vpin release
+//   including them lands.
+
+/// Reads a vbs file the way Visual Pinball does: utf8 if valid, latin1
+/// otherwise. VPinballX -ExtractVBS writes the raw script bytes, so legacy
+/// tables can produce latin1 sidecar scripts.
+pub fn read_vbs_file(vbs_path: &Path) -> io::Result<StringWithEncoding> {
+    let bytes = std::fs::read(vbs_path)?;
+    Ok(bytes.into())
+}
+
+/// Writes a vbs file back in the encoding it was read with, so a latin1
+/// sidecar script stays latin1.
+pub fn write_vbs_file(vbs_path: &Path, script: &StringWithEncoding) -> io::Result<()> {
+    let bytes: Vec<u8> = script.clone().into();
+    std::fs::write(vbs_path, bytes)
+}
+
 pub fn patch_vbs_file(vbs_path: &Path) -> io::Result<HashSet<PatchType>> {
-    // TODO we probably need to ensure proper encoding here in stead of going for utf8
-    let mut file = File::open(vbs_path)?;
-    let mut text = String::new();
-    file.read_to_string(&mut text)?;
+    let script = read_vbs_file(vbs_path)?;
 
-    let (patched_text, applied) = patch_script(text);
+    let (patched_text, applied) = patch_script(script.string);
 
-    let mut file = File::create(vbs_path)?;
-    file.write_all(patched_text.as_bytes())?;
+    write_vbs_file(
+        vbs_path,
+        &StringWithEncoding {
+            encoding: script.encoding,
+            string: patched_text,
+        },
+    )?;
     Ok(applied)
 }
 
@@ -48,17 +68,21 @@ pub fn patch_vbs_file(vbs_path: &Path) -> io::Result<HashSet<PatchType>> {
  * One example is [Aztec (Williams 1976) 1.3 by jipeji16](https://www.vpforums.org/index.php?app=downloads&showfile=15768)
  */
 pub fn unify_line_endings_vbs_file(vbs_path: &Path) -> io::Result<LineEndingsResult> {
-    // TODO we probably need to ensure proper encoding here in stead of going for utf8
-    let mut file = File::open(vbs_path)?;
-    let mut text = String::new();
-    file.read_to_string(&mut text)?;
+    let script = read_vbs_file(vbs_path)?;
+    let text = script.string;
 
     let patched_text = unify_line_endings(&text);
+    let changed = text != patched_text;
 
-    let mut file = File::create(vbs_path)?;
-    file.write_all(patched_text.as_bytes())?;
+    write_vbs_file(
+        vbs_path,
+        &StringWithEncoding {
+            encoding: script.encoding,
+            string: patched_text,
+        },
+    )?;
 
-    if text != patched_text {
+    if changed {
         Ok(LineEndingsResult::Unified)
     } else {
         Ok(LineEndingsResult::NoChanges)
@@ -187,6 +211,37 @@ fn introduce_class(script: String, marker: &str, fallback_marker: &str, class_de
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_unify_line_endings_vbs_file_latin1_keeps_encoding() -> io::Result<()> {
+        let dir = testdir::testdir!();
+        let vbs_path = dir.join("table.vbs");
+        // "cafe" with a latin1 e-acute (0xE9), not valid utf8, mixed endings
+        let latin1_script = vec![b'c', b'a', b'f', 0xE9, b'\r', b'x', b'\n'];
+        std::fs::write(&vbs_path, &latin1_script)?;
+
+        let result = unify_line_endings_vbs_file(&vbs_path)?;
+
+        assert_eq!(result, LineEndingsResult::Unified);
+        // line endings unified to \r\n, e-acute still a single latin1 byte
+        let expected = vec![b'c', b'a', b'f', 0xE9, b'\r', b'\n', b'x', b'\r', b'\n'];
+        assert_eq!(std::fs::read(&vbs_path)?, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn test_patch_vbs_file_latin1_keeps_encoding() -> io::Result<()> {
+        let dir = testdir::testdir!();
+        let vbs_path = dir.join("table.vbs");
+        let latin1_script = vec![b'r', b'e', b'm', b' ', 0xE9, b'\r', b'\n'];
+        std::fs::write(&vbs_path, &latin1_script)?;
+
+        let applied = patch_vbs_file(&vbs_path)?;
+
+        assert!(applied.is_empty());
+        assert_eq!(std::fs::read(&vbs_path)?, latin1_script);
+        Ok(())
+    }
 
     #[test]
     fn test_unify_line_endings() {
