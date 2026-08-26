@@ -410,7 +410,13 @@ fn table_menu(
                 let vbs_path = vbs_path_for(selected_path);
                 let patch_path = vbs_path.with_extension("vbs.patch");
 
-                match run_diff(&original_path, &vbs_path, DiffColor::Never, Some(config)) {
+                match run_diff(
+                    &original_path,
+                    &vbs_path,
+                    &vbs_path,
+                    DiffColor::Never,
+                    Some(config),
+                ) {
                     Ok(diff) => {
                         let mut file = File::create(patch_path).unwrap();
                         file.write_all(&diff).unwrap();

@@ -85,7 +85,7 @@ pub fn patch_script(script: String) -> (String, HashSet<PatchType>) {
     (patched_script, applied_patches)
 }
 
-fn unify_line_endings(script: &str) -> String {
+pub fn unify_line_endings(script: &str) -> String {
     // first replace all \r\n with \n
     // then replace all \r with \n (this is the main issue, as some files have mixed \r\n and \r)
     // then go back to standard vbs line endings \r\n
