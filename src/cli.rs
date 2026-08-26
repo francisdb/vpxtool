@@ -3108,8 +3108,8 @@ pub fn script_diff(vpx_file_path: &Path, config: Option<&ResolvedConfig>) -> io:
 
                 let modified_vbs_path =
                     RemoveOnDrop::new(vpx_file_path.with_extension("vbs.modified.tmp"));
-                let sidecar_content = std::fs::read_to_string(&vbs_path)?;
-                let normalized_modified = unify_line_endings(&sidecar_content);
+                let sidecar_content = crate::patcher::read_vbs_file(&vbs_path)?;
+                let normalized_modified = unify_line_endings(&sidecar_content.string);
                 std::fs::write(modified_vbs_path.path(), normalized_modified)?;
 
                 let diff_color = if colored::control::SHOULD_COLORIZE.should_colorize() {
