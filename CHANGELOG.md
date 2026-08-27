@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.33.9](https://github.com/francisdb/vpxtool/compare/v0.33.8...v0.33.9) - 2026-08-27
+
+### Added
+
+- *(frontend)* unify line endings before diffing VBScript ([#857](https://github.com/francisdb/vpxtool/pull/857))
+
+### Fixed
+
+- read vbs sidecar scripts with latin1 fallback
+
+### Other
+
+- *(deps)* bump pinmame-nvram from 0.4.14 to 0.4.16 ([#862](https://github.com/francisdb/vpxtool/pull/862))
+- *(deps)* bump vpin to 0.28.1, use its script file helpers
+- *(deps)* bump log from 0.4.33 to 0.4.34 ([#859](https://github.com/francisdb/vpxtool/pull/859))
+- *(deps)* bump testdir from 0.9.3 to 0.10.0 ([#860](https://github.com/francisdb/vpxtool/pull/860))
+- *(deps)* bump pinmame-nvram from 0.4.13 to 0.4.14 ([#854](https://github.com/francisdb/vpxtool/pull/854))
+- *(deps)* bump base64 from 0.23.0 to 0.23.1 ([#855](https://github.com/francisdb/vpxtool/pull/855))
+- *(deps)* bump globset from 0.4.19 to 0.4.20 ([#853](https://github.com/francisdb/vpxtool/pull/853))
+- replace unmaintained jwalk with ignore ([#858](https://github.com/francisdb/vpxtool/pull/858))
+- *(deps)* bump clap from 4.6.5 to 4.6.6 ([#856](https://github.com/francisdb/vpxtool/pull/856))
+- *(deps)* bump Swatinem/rust-cache from 2.9.1 to 2.9.2 ([#851](https://github.com/francisdb/vpxtool/pull/851))
+
 ## [0.33.8](https://github.com/francisdb/vpxtool/compare/v0.33.7...v0.33.8) - 2026-07-30
 
 ### Other
