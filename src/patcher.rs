@@ -6,6 +6,7 @@ use std::fmt::Display;
 use std::io;
 use std::path::Path;
 use vpin::vpx::model::StringWithEncoding;
+use vpin::vpx::{read_script_file, write_script_file};
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub enum LineEndingsResult {
@@ -27,31 +28,12 @@ impl Display for PatchType {
     }
 }
 
-// TODO replace read_vbs_file/write_vbs_file with the identical
-//   vpin::vpx::read_script_file/write_script_file once a vpin release
-//   including them lands.
-
-/// Reads a vbs file the way Visual Pinball does: utf8 if valid, latin1
-/// otherwise. VPinballX -ExtractVBS writes the raw script bytes, so legacy
-/// tables can produce latin1 sidecar scripts.
-pub fn read_vbs_file(vbs_path: &Path) -> io::Result<StringWithEncoding> {
-    let bytes = std::fs::read(vbs_path)?;
-    Ok(bytes.into())
-}
-
-/// Writes a vbs file back in the encoding it was read with, so a latin1
-/// sidecar script stays latin1.
-pub fn write_vbs_file(vbs_path: &Path, script: &StringWithEncoding) -> io::Result<()> {
-    let bytes: Vec<u8> = script.clone().into();
-    std::fs::write(vbs_path, bytes)
-}
-
 pub fn patch_vbs_file(vbs_path: &Path) -> io::Result<HashSet<PatchType>> {
-    let script = read_vbs_file(vbs_path)?;
+    let script = read_script_file(vbs_path)?;
 
     let (patched_text, applied) = patch_script(script.string);
 
-    write_vbs_file(
+    write_script_file(
         vbs_path,
         &StringWithEncoding {
             encoding: script.encoding,
@@ -68,13 +50,13 @@ pub fn patch_vbs_file(vbs_path: &Path) -> io::Result<HashSet<PatchType>> {
  * One example is [Aztec (Williams 1976) 1.3 by jipeji16](https://www.vpforums.org/index.php?app=downloads&showfile=15768)
  */
 pub fn unify_line_endings_vbs_file(vbs_path: &Path) -> io::Result<LineEndingsResult> {
-    let script = read_vbs_file(vbs_path)?;
+    let script = read_script_file(vbs_path)?;
     let text = script.string;
 
     let patched_text = unify_line_endings(&text);
     let changed = text != patched_text;
 
-    write_vbs_file(
+    write_script_file(
         vbs_path,
         &StringWithEncoding {
             encoding: script.encoding,
