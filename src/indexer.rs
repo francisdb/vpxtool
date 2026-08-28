@@ -850,8 +850,6 @@ fn find_local_rom_path(
     configured_roms_path: Option<&Path>,
 ) -> io::Result<Option<PathBuf>> {
     if let Some(game_name) = game_name {
-        let rom_file_name = format!("{}.zip", game_name.to_lowercase());
-
         let pinmame_roms_path = if let Some(configured_roms_path) = configured_roms_path {
             let configured_roms_path = if configured_roms_path.is_relative() {
                 vpx_file_path.parent().unwrap().join(configured_roms_path)
@@ -867,7 +865,18 @@ fn find_local_rom_path(
             vpx_file_path.parent().unwrap().join("pinmame").join("roms")
         };
 
-        let rom_path = pinmame_roms_path.join(rom_file_name);
+        // VPinMAME resolves the script game name through the alias file
+        // (<pinmame>/alias.txt, sibling of roms/) before looking anything up:
+        // GetGameNumFromString calls CheckGameAlias unconditionally. So an
+        // alias entry (e.g. "afm_113b_me,afm_113b") wins even when
+        // <game_name>.zip is also present. Fall back to the literal name when
+        // no alias matches.
+        let rom_name = pinmame_roms_path
+            .parent()
+            .and_then(|alias_dir| resolve_rom_alias(alias_dir, game_name))
+            .unwrap_or_else(|| game_name.to_lowercase());
+
+        let rom_path = pinmame_roms_path.join(format!("{rom_name}.zip"));
         return if rom_path.exists() {
             Ok(Some(rom_path.canonicalize()?))
         } else {
@@ -875,6 +884,36 @@ fn find_local_rom_path(
         };
     };
     Ok(None)
+}
+
+/// Resolve a script game name to the real rom name via VPinMAME's alias file
+/// at `<pinmame_dir>/alias.txt`, as read by pinmame's `CheckGameAlias`.
+///
+/// Each entry is `<alias>,<real>`; the tokens split on a comma or space, so
+/// `a,b`, `a, b`, and `a b` are equivalent. A line starting with `#` is a
+/// comment. The real name ends at the first space, comma, `#`, `;`, or `'`,
+/// which drops any trailing inline comment. The match is case-insensitive.
+/// Returns the mapped real rom name, or `None` when the file is absent or has
+/// no matching alias.
+fn resolve_rom_alias(pinmame_dir: &Path, game_name: &str) -> Option<String> {
+    let contents = fs::read_to_string(pinmame_dir.join("alias.txt")).ok()?;
+    contents.lines().find_map(|line| {
+        if line.starts_with('#') {
+            return None;
+        }
+        // pinmame splits the alias on its `", "` delimiter set (comma or
+        // space); `.lines()` already stripped the `\n`/`\r\n` line ending.
+        let mut tokens = line.split([',', ' ']).filter(|t| !t.is_empty());
+        let alias = tokens.next()?;
+        if !alias.eq_ignore_ascii_case(game_name) {
+            return None;
+        }
+        let real = tokens.next()?;
+        // pinmame terminates the real name at any of these; a token split on
+        // comma/space can still carry a trailing `#`/`;`/`'` inline comment.
+        let real = real.split(['#', ';', '\'']).next()?;
+        (!real.is_empty()).then(|| real.to_string())
+    })
 }
 
 fn find_b2s_path(vpx_file_path: &Path) -> Option<PathBuf> {
@@ -2289,6 +2328,42 @@ LoadVPM "01210000","sys80.vbs",3.10
 
         let found = find_local_rom_path(&vpx_path, &Some("gamename".to_string()), None).unwrap();
         assert_eq!(found, Some(aliased_rom_path.canonicalize().unwrap()));
+    }
+
+    #[test]
+    fn test_resolve_rom_alias_tokenizes_like_pinmame() {
+        // pinmame's CheckGameAlias splits on comma or space, treats a leading
+        // `#` as a comment, and terminates the real name at ` ,#;'`. Match is
+        // case-insensitive. Pin each of those against one alias file.
+        let dir = testdir!();
+        fs::write(
+            dir.join("alias.txt"),
+            "# comment line\r\n\
+             comma,realcomma\r\n\
+             spaced realspaced\r\n\
+             padded , realpadded \r\n\
+             trailing,realtrailing # inline note\r\n",
+        )
+        .unwrap();
+
+        assert_eq!(resolve_rom_alias(&dir, "comma"), Some("realcomma".into()));
+        assert_eq!(resolve_rom_alias(&dir, "spaced"), Some("realspaced".into()));
+        assert_eq!(resolve_rom_alias(&dir, "padded"), Some("realpadded".into()));
+        assert_eq!(
+            resolve_rom_alias(&dir, "trailing"),
+            Some("realtrailing".into())
+        );
+        // Case-insensitive alias match.
+        assert_eq!(resolve_rom_alias(&dir, "COMMA"), Some("realcomma".into()));
+        // Unknown alias and the commented line both miss.
+        assert_eq!(resolve_rom_alias(&dir, "comment"), None);
+        assert_eq!(resolve_rom_alias(&dir, "missing"), None);
+    }
+
+    #[test]
+    fn test_resolve_rom_alias_absent_file() {
+        let dir = testdir!();
+        assert_eq!(resolve_rom_alias(&dir, "anything"), None);
     }
 
     #[test]
