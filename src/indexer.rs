@@ -2249,6 +2249,49 @@ LoadVPM "01210000","sys80.vbs",3.10
     }
 
     #[test]
+    fn test_find_local_rom_path_follows_alias() {
+        // VPinBall/VPinMAME resolves the script game name through
+        // <pinmame>/alias.txt before looking for the rom zip. Real case:
+        // Mass Effect's script uses "afm_113b_me" but the rom on disk is
+        // "afm_113b.zip", mapped by an "afm_113b_me,afm_113b" alias line.
+        let test_table_dir = testdir!();
+        let vpx_path = test_table_dir.join("test.vpx");
+        let pinmame_dir = test_table_dir.join("pinmame");
+        let roms_dir = pinmame_dir.join("roms");
+        fs::create_dir_all(&roms_dir).unwrap();
+        let real_rom_path = roms_dir.join("afm_113b.zip");
+        File::create(&real_rom_path).unwrap();
+        // CRLF endings and a `#` comment line, matching the on-disk format.
+        fs::write(
+            pinmame_dir.join("alias.txt"),
+            "# mods\r\nafm_113b_me,afm_113b\r\n",
+        )
+        .unwrap();
+
+        let found = find_local_rom_path(&vpx_path, &Some("afm_113b_me".to_string()), None).unwrap();
+        assert_eq!(found, Some(real_rom_path.canonicalize().unwrap()));
+    }
+
+    #[test]
+    fn test_find_local_rom_path_alias_wins_over_direct() {
+        // VPinMAME applies the alias unconditionally (GetGameNumFromString
+        // always calls CheckGameAlias), so an alias entry wins even when a
+        // <game_name>.zip is also present.
+        let test_table_dir = testdir!();
+        let vpx_path = test_table_dir.join("test.vpx");
+        let pinmame_dir = test_table_dir.join("pinmame");
+        let roms_dir = pinmame_dir.join("roms");
+        fs::create_dir_all(&roms_dir).unwrap();
+        File::create(roms_dir.join("gamename.zip")).unwrap();
+        let aliased_rom_path = roms_dir.join("other.zip");
+        File::create(&aliased_rom_path).unwrap();
+        fs::write(pinmame_dir.join("alias.txt"), "gamename,other\r\n").unwrap();
+
+        let found = find_local_rom_path(&vpx_path, &Some("gamename".to_string()), None).unwrap();
+        assert_eq!(found, Some(aliased_rom_path.canonicalize().unwrap()));
+    }
+
+    #[test]
     fn test_find_altsound_path_per_table_priority() {
         let dir = testdir!();
         // Both per-table layouts present. Priority 1 (altsound/) wins.
