@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.33.10](https://github.com/francisdb/vpxtool/compare/v0.33.9...v0.33.10) - 2026-08-31
+
+### Fixed
+
+- *(indexer)* follow pinmame rom alias when locating roms
+
+### Other
+
+- *(indexer)* cover pinmame rom alias resolution
+
 ## [0.33.9](https://github.com/francisdb/vpxtool/compare/v0.33.8...v0.33.9) - 2026-08-27
 
 ### Added
