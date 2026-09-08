@@ -342,6 +342,20 @@ pub fn find_roms(rom_path: &Path) -> io::Result<HashMap<String, PathBuf>> {
     Ok(roms)
 }
 
+/// True for regular table files: a `.vpx` extension and no leading dot.
+///
+/// Dotfiles are never real tables. Editors keep hidden working copies such
+/// as `.source.vpx` next to a table, and unpacked archives can leave macOS
+/// `._Foo.vpx` resource forks behind; both would otherwise be indexed as
+/// tables of their own.
+fn is_table_file(path: &Path) -> bool {
+    matches!(path.extension().and_then(OsStr::to_str), Some("vpx"))
+        && !path
+            .file_name()
+            .and_then(OsStr::to_str)
+            .is_some_and(|name| name.starts_with('.'))
+}
+
 pub fn find_vpx_files(
     recursive: bool,
     max_depth: Option<usize>,
@@ -352,7 +366,8 @@ pub fn find_vpx_files(
         // folder) concurrently rather than serially, which matters when each
         // readdir is a network RPC.
         let mut builder = WalkBuilder::new(tables_path);
-        // Plain filesystem walk: no gitignore handling, include hidden files.
+        // Plain filesystem walk: no gitignore handling, hidden directories
+        // are still descended into (only dotfiles are skipped below).
         builder.standard_filters(false);
         builder.max_depth(max_depth);
         builder.filter_entry(|entry| {
@@ -372,12 +387,7 @@ pub fn find_vpx_files(
                         return WalkState::Quit;
                     }
                 };
-                if entry.file_type().is_some_and(|t| t.is_file())
-                    && matches!(
-                        entry.path().extension().and_then(OsStr::to_str),
-                        Some("vpx")
-                    )
-                {
+                if entry.file_type().is_some_and(|t| t.is_file()) && is_table_file(entry.path()) {
                     let _ = tx.send(Ok(entry.into_path()));
                 }
                 WalkState::Continue
@@ -391,7 +401,7 @@ pub fn find_vpx_files(
             let dir_entry = entry?;
             if dir_entry.file_type()?.is_file() {
                 let path = dir_entry.path();
-                if matches!(path.extension().and_then(OsStr::to_str), Some("vpx")) {
+                if is_table_file(&path) {
                     paths.push(path);
                 }
             }
@@ -1729,17 +1739,16 @@ x = LoadValue(tablename, "HighScore1")
     }
 
     #[test]
-    fn test_find_vpx_files_includes_hidden_and_gitignored() -> io::Result<()> {
-        // find_vpx_files must do a plain filesystem walk: hidden files and
-        // directories are included, and a stray .gitignore inside a tables
-        // folder must not hide any tables.
+    fn test_find_vpx_files_descends_hidden_dirs_and_ignores_gitignore() -> io::Result<()> {
+        // find_vpx_files must do a plain filesystem walk: hidden directories
+        // are descended into, and a stray .gitignore inside a tables folder
+        // must not hide any tables.
         let tables_dir = testdir!().join("tables");
         fs::create_dir(&tables_dir)?;
         let hidden_dir = tables_dir.join(".hidden");
         fs::create_dir(&hidden_dir)?;
 
         vpx::new_minimal_vpx(tables_dir.join("visible.vpx"))?;
-        vpx::new_minimal_vpx(tables_dir.join(".hidden.vpx"))?;
         vpx::new_minimal_vpx(hidden_dir.join("nested.vpx"))?;
         fs::write(tables_dir.join(".gitignore"), "*.vpx\n")?;
 
@@ -1748,7 +1757,32 @@ x = LoadValue(tablename, "HighScore1")
             .map(|f| f.path.file_name().unwrap().to_string_lossy().into_owned())
             .collect();
         found.sort();
-        assert_eq!(found, vec![".hidden.vpx", "nested.vpx", "visible.vpx"]);
+        assert_eq!(found, vec!["nested.vpx", "visible.vpx"]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_find_vpx_files_skips_dotfiles() -> io::Result<()> {
+        // Editors keep a hidden copy of the table next to it (vpx-editor
+        // writes "<table>_work/.source.vpx") and unpacked archives can leave
+        // macOS "._Foo.vpx" resource forks behind. Neither is a table.
+        let tables_dir = testdir!().join("tables");
+        fs::create_dir(&tables_dir)?;
+        let work_dir = tables_dir.join("Genie_work");
+        fs::create_dir(&work_dir)?;
+
+        vpx::new_minimal_vpx(tables_dir.join("Genie.vpx"))?;
+        vpx::new_minimal_vpx(tables_dir.join("._Genie.vpx"))?;
+        vpx::new_minimal_vpx(work_dir.join(".source.vpx"))?;
+
+        for recursive in [true, false] {
+            let found: Vec<String> = find_vpx_files(recursive, None, &tables_dir)?
+                .iter()
+                .map(|f| f.path.file_name().unwrap().to_string_lossy().into_owned())
+                .collect();
+            assert_eq!(found, vec!["Genie.vpx"], "recursive={recursive}");
+        }
 
         Ok(())
     }
