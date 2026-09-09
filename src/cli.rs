@@ -27,6 +27,7 @@ use std::time::{Duration, SystemTime};
 use vpin::filesystem::RealFileSystem;
 use vpin::vpx;
 use vpin::vpx::audit::{Finding, Severity};
+use vpin::vpx::diff::semantic::{self, Change};
 use vpin::vpx::expanded::ExpandOptions;
 use vpin::vpx::export::gltf_export::{GltfExportOptions, GltfFormat, export_gltf};
 use vpin::vpx::export::obj_export::{ExportUnits, ObjExportOptions, export_obj};
@@ -81,6 +82,9 @@ const CMD_SCRIPT_IMPORT: &str = "import";
 const CMD_SCRIPT_PATCH: &str = "patch";
 const CMD_SCRIPT_EDIT: &str = "edit";
 const CMD_SCRIPT_DIFF: &str = "diff";
+
+const CMD_TABLE: &str = "table";
+const CMD_TABLE_DIFF: &str = "diff";
 
 const CMD_INFO: &str = "info";
 const CMD_INFO_SHOW: &str = "show";
@@ -246,6 +250,34 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 let diff = info_diff(&expanded_path, config)?;
                 crate::println!("{}", diff)?;
                 Ok(ExitCode::SUCCESS)
+            }
+            _ => unreachable!(),
+        },
+        Some((CMD_TABLE, sub_matches)) => match sub_matches.subcommand() {
+            Some((CMD_TABLE_DIFF, sub_matches)) => {
+                let original = sub_matches
+                    .get_one::<String>("ORIGINAL")
+                    .map(|s| s.as_str())
+                    .unwrap_or("");
+                let modified = sub_matches
+                    .get_one::<String>("MODIFIED")
+                    .map(|s| s.as_str())
+                    .unwrap_or("");
+                let original_path = path_exists(original)?;
+                let modified_path = path_exists(modified)?;
+                let with_script = sub_matches.get_flag("SCRIPT");
+                let loaded_config = config::load_config()?;
+                let config = loaded_config.as_ref().map(|c| &c.1);
+                let diff = table_diff(&original_path, &modified_path, with_script, config)?;
+                crate::println!("{}", format_changes(&diff.changes))?;
+                if let Some(script_diff) = &diff.script_diff {
+                    crate::println!("{}", script_diff)?;
+                }
+                if diff.changes.is_empty() {
+                    Ok(ExitCode::SUCCESS)
+                } else {
+                    Ok(ExitCode::from(1))
+                }
             }
             _ => unreachable!(),
         },
@@ -1108,6 +1140,31 @@ fn build_command() -> Command {
                         .arg(
                             arg!(<VPXPATH> "The path to the vpx file")
                                 .required(true),
+                        ),
+                ),
+        )
+        .subcommand(
+            Command::new(CMD_TABLE)
+                .subcommand_required(true)
+                .about("Vpx table level commands")
+                .subcommand(
+                    Command::new(CMD_TABLE_DIFF)
+                        .about("Compares two vpx tables and lists what changed")
+                        .long_about(
+                            "Compares two tables in the terms a table author uses. Game \
+                            items, images, sounds, fonts, materials, render probes and \
+                            collections are paired by name and reported as added, removed \
+                            or changed, with the properties that differ. Table info, table \
+                            settings and the script are compared as well.\n\n\
+                            Exits with status 1 when the tables differ.",
+                        )
+                        .arg(arg!(<ORIGINAL> "The path to the original vpx file").required(true))
+                        .arg(arg!(<MODIFIED> "The path to the modified vpx file").required(true))
+                        .arg(
+                            Arg::new("SCRIPT")
+                                .long("script")
+                                .action(ArgAction::SetTrue)
+                                .help("Also show a text diff of the script when it changed"),
                         ),
                 ),
         )
@@ -3184,6 +3241,122 @@ pub fn format_audit(vpx_file_path: &Path, findings: &[Finding]) -> String {
         format!("{errors} errors, {warnings} warnings, {suggestions} suggestions, {infos} info")
     };
     report.push_str(&format!("  {summary}"));
+    report
+}
+
+/// The outcome of comparing two tables, see [`table_diff`]
+pub struct TableDiff {
+    /// What changed, empty when the tables hold the same content
+    pub changes: Vec<Change>,
+    /// A text diff of the script, only when asked for and the script changed
+    pub script_diff: Option<String>,
+}
+
+/// Compares two tables in author terms, see [`vpin::vpx::diff::semantic`].
+///
+/// With `with_script` the script text is diffed with the configured diff
+/// tool when the semantic diff reports it changed.
+pub fn table_diff(
+    original_path: &Path,
+    modified_path: &Path,
+    with_script: bool,
+    config: Option<&ResolvedConfig>,
+) -> io::Result<TableDiff> {
+    let original = vpx::read(original_path)?;
+    let modified = vpx::read(modified_path)?;
+    let changes = semantic::diff(&original, &modified);
+    let script_changed = changes
+        .iter()
+        .any(|change| matches!(change, Change::Script { .. }));
+    let script_diff = if with_script && script_changed {
+        Some(script_text_diff(
+            original_path,
+            &original.gamedata.code.string,
+            modified_path,
+            &modified.gamedata.code.string,
+            config,
+        )?)
+    } else {
+        None
+    };
+    Ok(TableDiff {
+        changes,
+        script_diff,
+    })
+}
+
+/// Runs the configured diff tool over the two scripts, labeled with the
+/// sidecar vbs names of the tables they come from
+fn script_text_diff(
+    original_path: &Path,
+    original_script: &str,
+    modified_path: &Path,
+    modified_script: &str,
+    config: Option<&ResolvedConfig>,
+) -> io::Result<String> {
+    let temp_dir = std::env::temp_dir();
+    let vbs_name = |path: &Path| path.with_extension("vbs");
+    // both temp files sit in one directory since the diff runs from there
+    let original_tmp =
+        RemoveOnDrop::new(temp_dir.join(vbs_name(original_path).file_name().unwrap_or_default()));
+    let modified_tmp =
+        RemoveOnDrop::new(temp_dir.join(vbs_name(modified_path).file_name().unwrap_or_default()));
+    std::fs::write(original_tmp.path(), unify_line_endings(original_script))?;
+    std::fs::write(modified_tmp.path(), unify_line_endings(modified_script))?;
+    let diff_color = if colored::control::SHOULD_COLORIZE.should_colorize() {
+        DiffColor::Always
+    } else {
+        DiffColor::Never
+    };
+    let output = run_diff(
+        original_tmp.path(),
+        modified_tmp.path(),
+        &vbs_name(modified_path),
+        diff_color,
+        config,
+    )?;
+    Ok(String::from_utf8_lossy(&output).to_string())
+}
+
+/// Formats semantic changes as a colored report with a summary line
+pub fn format_changes(changes: &[Change]) -> String {
+    let mut report = String::new();
+    let mut added = 0;
+    let mut removed = 0;
+    let mut changed = 0;
+    for change in changes {
+        let line = match change {
+            Change::Added(_) => {
+                added += 1;
+                change.to_string().green().to_string()
+            }
+            Change::Removed(_) => {
+                removed += 1;
+                change.to_string().red().to_string()
+            }
+            Change::Changed { entity, fields } => {
+                changed += 1;
+                let mut line = format!("{entity}:").yellow().to_string();
+                for field in fields {
+                    line.push_str(&format!("\n    {field}"));
+                }
+                line
+            }
+            _ => {
+                changed += 1;
+                change.to_string().cyan().to_string()
+            }
+        };
+        report.push_str(&line);
+        report.push('\n');
+    }
+    if changes.is_empty() {
+        report.push_str("no differences");
+    } else {
+        report.push_str(&format!(
+            "{added} added, {removed} removed, {changed} changed"
+        ));
+    }
     report
 }
 
