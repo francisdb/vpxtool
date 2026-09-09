@@ -8,7 +8,7 @@ use crate::{
 use base64::Engine;
 use clap::builder::Str;
 use clap::{Arg, ArgAction, ArgMatches, Command, arg};
-use colored::Colorize;
+use colored::{ColoredString, Colorize};
 use console::Emoji;
 use directb2s::read;
 use git_version::git_version;
@@ -26,6 +26,7 @@ use std::process::{ExitCode, exit};
 use std::time::{Duration, SystemTime};
 use vpin::filesystem::RealFileSystem;
 use vpin::vpx;
+use vpin::vpx::diff::Difference;
 use vpin::vpx::expanded::ExpandOptions;
 use vpin::vpx::export::gltf_export::{GltfExportOptions, GltfFormat, export_gltf};
 use vpin::vpx::export::obj_export::{ExportUnits, ObjExportOptions, export_obj};
@@ -248,13 +249,34 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             _ => unreachable!(),
         },
         Some((CMD_DIFF, sub_matches)) => {
-            // TODO this should diff more than only the script
-            let path = sub_matches.get_one::<String>("VPXPATH").map(|s| s.as_str());
-            let path = path.unwrap_or("");
-            let expanded_path = path_exists(path)?;
+            let original = sub_matches
+                .get_one::<String>("ORIGINAL")
+                .map(|s| s.as_str())
+                .unwrap_or("");
+            let original_path = path_exists(original)?;
+            if let Some(modified) = sub_matches.get_one::<String>("MODIFIED") {
+                let modified_path = path_exists(modified)?;
+                let differences = vpx_diff(&original_path, &modified_path)?;
+                for difference in &differences {
+                    crate::println!("{}", colorize_difference(difference))?;
+                }
+                return if differences.is_empty() {
+                    Ok(ExitCode::SUCCESS)
+                } else {
+                    Ok(ExitCode::from(1))
+                };
+            }
+            // Legacy single path form, kept for scripts that predate `script diff`
+            crate::eprintln!(
+                "{}",
+                format!(
+                    "{WARN} `diff` with a single path is deprecated, use `script diff` instead"
+                )
+                .yellow()
+            )?;
             let loaded_config = config::load_config()?;
             let config = loaded_config.as_ref().map(|c| &c.1);
-            match script_diff(&expanded_path, config) {
+            match script_diff(&original_path, config) {
                 Ok(output) => {
                     crate::println!("{}", output)?;
                     Ok(ExitCode::SUCCESS)
@@ -1080,8 +1102,18 @@ fn build_command() -> Command {
         )
         .subcommand(
             Command::new(CMD_DIFF)
-                .about("Prints out a diff between the vbs in the vpx and the sidecar vbs")
-                .arg(arg!(<VPXPATH> "The path to the vpx file").required(true))
+                .about("Compares two vpx files and lists what differs")
+                .long_about(
+                    "Compares two vpx files at the file level: streams that were added or \
+                    removed, and for changed streams the record that differs, labeled with \
+                    the game item, image or script it belongs to. Harmless differences such \
+                    as the integrity signature and the compression encoding are ignored.\n\n\
+                    Exits with status 1 when the files differ.\n\n\
+                    With a single path this falls back to the deprecated behaviour of \
+                    diffing the script against the sidecar vbs, use `script diff` for that.",
+                )
+                .arg(arg!(<ORIGINAL> "The path to the original vpx file").required(true))
+                .arg(arg!([MODIFIED] "The path to the modified vpx file")),
         )
         .subcommand(
             Command::new(CMD_FRONTEND)
@@ -3088,6 +3120,22 @@ pub fn info_diff(vpx_file_path: &Path, config: Option<&ResolvedConfig>) -> io::R
     } else {
         let msg = format!("No sidecar info file found: {}", info_file_path.display());
         Err(io::Error::new(io::ErrorKind::NotFound, msg))
+    }
+}
+
+/// Compares two vpx files at the file level, see [`vpin::vpx::diff`]
+pub fn vpx_diff(original: &Path, modified: &Path) -> io::Result<Vec<Difference>> {
+    let original_bytes = std::fs::read(original)?;
+    let modified_bytes = std::fs::read(modified)?;
+    vpin::vpx::diff::diff(&original_bytes, &modified_bytes)
+}
+
+fn colorize_difference(difference: &Difference) -> ColoredString {
+    let text = difference.to_string();
+    match difference {
+        Difference::StreamAdded { .. } | Difference::RecordAdded { .. } => text.green(),
+        Difference::StreamRemoved { .. } | Difference::RecordRemoved { .. } => text.red(),
+        _ => text.yellow(),
     }
 }
 
