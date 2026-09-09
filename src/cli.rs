@@ -2372,6 +2372,7 @@ fn handle_sounds_list(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
             let output = match sound.output_target {
                 vpin::vpx::sound::OutputTarget::Table => "table",
                 vpin::vpx::sound::OutputTarget::Backglass => "backglass",
+                vpin::vpx::sound::OutputTarget::Other(_) => "unknown",
             };
             // For WAV (PCM) we can derive the playback duration from the raw
             // sample bytes; for non-WAV containers the data is compressed and
@@ -3013,7 +3014,7 @@ fn info_import(_vpx_file_path: &Path) -> io::Result<ExitCode> {
 }
 
 pub fn ls(vpx_file_path: &Path) -> io::Result<()> {
-    expanded::extract_directory_list(vpx_file_path)
+    expanded::extract_directory_list(vpx_file_path)?
         .iter()
         .try_for_each(|file_path| crate::println!("{}", file_path))
 }
@@ -3224,7 +3225,7 @@ fn apply_lock_action(path: &Path, action: &LockAction) -> io::Result<()> {
     match action {
         LockAction::Status => {
             let mut vpx = vpx::open(path)?;
-            let state = if vpx.is_locked()? {
+            let state = if vpx.is_table_locked()? {
                 "locked"
             } else {
                 "unlocked"
@@ -3233,7 +3234,7 @@ fn apply_lock_action(path: &Path, action: &LockAction) -> io::Result<()> {
         }
         LockAction::Lock => {
             let mut vpx = vpx::open_rw(path)?;
-            if vpx.lock()? {
+            if vpx.lock_table()? {
                 crate::println!("Locked {}", path.display())?;
             } else {
                 crate::println!("Already locked: {}", path.display())?;
@@ -3241,7 +3242,7 @@ fn apply_lock_action(path: &Path, action: &LockAction) -> io::Result<()> {
         }
         LockAction::Unlock => {
             let mut vpx = vpx::open_rw(path)?;
-            if vpx.unlock()? {
+            if vpx.unlock_table()? {
                 crate::println!("Unlocked {}", path.display())?;
             } else {
                 crate::println!("Already unlocked: {}", path.display())?;
