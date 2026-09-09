@@ -63,6 +63,7 @@ Commands:
   extractvbs      Extracts the vbs from a vpx file next to it
   importvbs       Imports the vbs next to it into a vpx file
   verify          Verify the structure of a vpx file
+  audit           Reports consistency problems in a vpx file
   assemble        Assembles a vpx file
   patch           Applies a VPURemix System patch to a table
   new             Creates a minimal empty new vpx file

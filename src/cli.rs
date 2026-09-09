@@ -26,6 +26,7 @@ use std::process::{ExitCode, exit};
 use std::time::{Duration, SystemTime};
 use vpin::filesystem::RealFileSystem;
 use vpin::vpx;
+use vpin::vpx::audit::{Finding, Severity};
 use vpin::vpx::expanded::ExpandOptions;
 use vpin::vpx::export::gltf_export::{GltfExportOptions, GltfFormat, export_gltf};
 use vpin::vpx::export::obj_export::{ExportUnits, ObjExportOptions, export_obj};
@@ -52,6 +53,7 @@ const CMD_EXTRACT_VBS: &str = "extractvbs";
 const CMD_IMPORT_VBS: &str = "importvbs";
 const CMD_PATCH: &str = "patch";
 const CMD_VERIFY: &str = "verify";
+const CMD_AUDIT: &str = "audit";
 const CMD_NEW: &str = "new";
 const CMD_LOCK: &str = "lock";
 const CMD_UNLOCK: &str = "unlock";
@@ -615,6 +617,27 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 }
             }
             Ok(ExitCode::SUCCESS)
+        }
+        Some((CMD_AUDIT, sub_matches)) => {
+            let paths: Vec<&str> = sub_matches
+                .get_many::<String>("VPXPATH")
+                .unwrap_or_default()
+                .map(|v| v.as_str())
+                .collect::<Vec<_>>();
+            let mut has_errors = false;
+            for path in paths {
+                let expanded_path = path_exists(path)?;
+                let findings = audit_table(&expanded_path)?;
+                crate::println!("{}", format_audit(&expanded_path, &findings))?;
+                has_errors |= findings
+                    .iter()
+                    .any(|finding| finding.severity() == Severity::Error);
+            }
+            if has_errors {
+                Ok(ExitCode::from(1))
+            } else {
+                Ok(ExitCode::SUCCESS)
+            }
         }
 
         Some((CMD_LOCK, sub_matches)) => run_lock(sub_matches, LockAction::Lock),
@@ -1269,6 +1292,23 @@ fn build_command() -> Command {
         .subcommand(
             Command::new(CMD_VERIFY)
                 .about("Verify the structure of a vpx file")
+                .arg(
+                    arg!(<VPXPATH> "The path(s) to the vpx file(s)")
+                        .required(true)
+                        .num_args(1..),
+                ),
+        )
+        .subcommand(
+            Command::new(CMD_AUDIT)
+                .about("Reports consistency problems in a vpx file")
+                .long_about(
+                    "Reports problems vpinball tolerates at runtime but that usually mean \
+                    something went wrong while producing the table: references to images, \
+                    materials, surfaces, part groups or collection items that do not exist, \
+                    duplicate or over-long names, script issues and a few storage level \
+                    suggestions.\n\n\
+                    Exits with status 1 when a finding of error severity is reported.",
+                )
                 .arg(
                     arg!(<VPXPATH> "The path(s) to the vpx file(s)")
                         .required(true)
@@ -3089,6 +3129,47 @@ pub fn info_diff(vpx_file_path: &Path, config: Option<&ResolvedConfig>) -> io::R
         let msg = format!("No sidecar info file found: {}", info_file_path.display());
         Err(io::Error::new(io::ErrorKind::NotFound, msg))
     }
+}
+
+/// Runs the vpin consistency audit on a vpx file, see [`vpin::vpx::audit`]
+pub fn audit_table(vpx_file_path: &Path) -> io::Result<Vec<Finding>> {
+    let vpx = vpx::read(vpx_file_path)?;
+    let mut findings = vpin::vpx::audit::audit(&vpx);
+    // most serious first, keeping the audit order within a severity
+    findings.sort_by_key(|finding| std::cmp::Reverse(finding.severity()));
+    Ok(findings)
+}
+
+/// Formats audit findings as a colored report with a summary line
+pub fn format_audit(vpx_file_path: &Path, findings: &[Finding]) -> String {
+    let mut report = format!("{}\n", vpx_file_path.display().to_string().bold());
+    let mut errors = 0;
+    let mut warnings = 0;
+    let mut suggestions = 0;
+    for finding in findings {
+        let marker = match finding.severity() {
+            Severity::Error => {
+                errors += 1;
+                "error".red()
+            }
+            Severity::Warning => {
+                warnings += 1;
+                "warning".yellow()
+            }
+            _ => {
+                suggestions += 1;
+                "suggestion".cyan()
+            }
+        };
+        report.push_str(&format!("  {marker}: {finding}\n"));
+    }
+    let summary = if findings.is_empty() {
+        format!("{OK} no problems found").to_string()
+    } else {
+        format!("{errors} errors, {warnings} warnings, {suggestions} suggestions")
+    };
+    report.push_str(&format!("  {summary}"));
+    report
 }
 
 pub fn script_diff(vpx_file_path: &Path, config: Option<&ResolvedConfig>) -> io::Result<String> {

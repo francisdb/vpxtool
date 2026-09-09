@@ -1,8 +1,8 @@
 use crate::backglass::find_hole;
 use crate::capture::{CaptureOptions, CaptureOutcome, capture_table};
 use crate::cli::{
-    DiffColor, ProgressBarProgress, confirm, info_diff, info_edit, info_gather, open_editor,
-    run_diff, script_diff,
+    DiffColor, ProgressBarProgress, audit_table, confirm, format_audit, info_diff, info_edit,
+    info_gather, open_editor, run_diff, script_diff,
 };
 use crate::colorful_theme_patched::ColorfulThemePatched;
 use crate::config::{LaunchTemplate, ResolvedConfig};
@@ -46,6 +46,7 @@ enum TableOption {
     InfoShow,
     InfoEdit,
     InfoDiff,
+    Audit,
     ExtractVBS,
     EditVBS,
     PatchVBS,
@@ -77,6 +78,7 @@ impl TableOption {
             TableOption::InfoShow,
             TableOption::InfoEdit,
             TableOption::InfoDiff,
+            TableOption::Audit,
             TableOption::ExtractVBS,
             TableOption::EditVBS,
             TableOption::PatchVBS,
@@ -104,6 +106,7 @@ impl TableOption {
             TableOption::InfoShow => "Info > Show".to_string(),
             TableOption::InfoEdit => "Info > Edit".to_string(),
             TableOption::InfoDiff => "Info > Diff".to_string(),
+            TableOption::Audit => "Audit".to_string(),
             TableOption::ExtractVBS => "VBScript > Extract".to_string(),
             TableOption::EditVBS => "VBScript > Edit".to_string(),
             TableOption::PatchVBS => "VBScript > Patch typical standalone issues".to_string(),
@@ -451,6 +454,15 @@ fn table_menu(
                 }
                 Err(err) => {
                     let msg = format!("Unable to diff info: {err}");
+                    prompt_error(&msg);
+                }
+            },
+            Some(TableOption::Audit) => match audit_table(selected_path) {
+                Ok(findings) => {
+                    prompt(&format_audit(selected_path, &findings));
+                }
+                Err(err) => {
+                    let msg = format!("Unable to audit table: {err}");
                     prompt_error(&msg);
                 }
             },
