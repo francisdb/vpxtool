@@ -626,12 +626,22 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 .collect::<Vec<_>>();
             let mut has_errors = false;
             for path in paths {
-                let expanded_path = path_exists(path)?;
-                let findings = audit_table(&expanded_path)?;
-                crate::println!("{}", format_audit(&expanded_path, &findings))?;
-                has_errors |= findings
-                    .iter()
-                    .any(|finding| finding.severity() == Severity::Error);
+                // keep going when one table fails to load, the others are still worth a report
+                let audited = path_exists(path)
+                    .and_then(|expanded_path| Ok((audit_table(&expanded_path)?, expanded_path)));
+                match audited {
+                    Ok((findings, expanded_path)) => {
+                        crate::println!("{}", format_audit(&expanded_path, &findings))?;
+                        has_errors |= findings
+                            .iter()
+                            .any(|finding| finding.severity() == Severity::Error);
+                    }
+                    Err(e) => {
+                        let warning = format!("{NOK} {path}: {e}").red();
+                        crate::eprintln!("{}", warning)?;
+                        has_errors = true;
+                    }
+                }
             }
             if has_errors {
                 Ok(ExitCode::from(1))
@@ -3146,6 +3156,7 @@ pub fn format_audit(vpx_file_path: &Path, findings: &[Finding]) -> String {
     let mut errors = 0;
     let mut warnings = 0;
     let mut suggestions = 0;
+    let mut infos = 0;
     for finding in findings {
         let marker = match finding.severity() {
             Severity::Error => {
@@ -3156,6 +3167,10 @@ pub fn format_audit(vpx_file_path: &Path, findings: &[Finding]) -> String {
                 warnings += 1;
                 "warning".yellow()
             }
+            Severity::Info => {
+                infos += 1;
+                "info".dimmed()
+            }
             _ => {
                 suggestions += 1;
                 "suggestion".cyan()
@@ -3164,9 +3179,9 @@ pub fn format_audit(vpx_file_path: &Path, findings: &[Finding]) -> String {
         report.push_str(&format!("  {marker}: {finding}\n"));
     }
     let summary = if findings.is_empty() {
-        format!("{OK} no problems found").to_string()
+        format!("{OK} no problems found")
     } else {
-        format!("{errors} errors, {warnings} warnings, {suggestions} suggestions")
+        format!("{errors} errors, {warnings} warnings, {suggestions} suggestions, {infos} info")
     };
     report.push_str(&format!("  {summary}"));
     report
