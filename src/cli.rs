@@ -1,7 +1,7 @@
 use crate::capture::{CaptureFormat, CaptureOptions, CaptureOutcome, capture_table};
 use crate::config::{ResolvedConfig, SetupConfigResult};
 use crate::indexer::{DEFAULT_INDEX_FILE_NAME, IndexError, Progress};
-use crate::patcher::{patch_vbs_file, unify_line_endings};
+use crate::patcher::unify_line_endings;
 use crate::{
     RemoveOnDrop, config, frontend, indexer, os_independent_file_name, path_exists, strip_cr_lf,
 };
@@ -79,7 +79,6 @@ const CMD_SCRIPT: &str = "script";
 const CMD_SCRIPT_SHOW: &str = "show";
 const CMD_SCRIPT_EXTRACT: &str = "extract";
 const CMD_SCRIPT_IMPORT: &str = "import";
-const CMD_SCRIPT_PATCH: &str = "patch";
 const CMD_SCRIPT_EDIT: &str = "edit";
 const CMD_SCRIPT_DIFF: &str = "diff";
 
@@ -441,37 +440,6 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 let config = loaded_config.as_ref().map(|c| &c.1);
                 let diff = script_diff(&expanded_path, config)?;
                 crate::println!("{}", diff)?;
-                Ok(ExitCode::SUCCESS)
-            }
-            Some((CMD_SCRIPT_PATCH, sub_matches)) => {
-                let path = sub_matches
-                    .get_one::<String>("VPXPATH")
-                    .map(|s| s.as_str())
-                    .unwrap_or_default();
-
-                let expanded_path = path_exists(path)?;
-                let vbs_path = match extractvbs(&expanded_path, None, false) {
-                    Ok(ExtractResult::Existed(vbs_path)) => {
-                        let warning =
-                            format!("EXISTED {}", vbs_path.display()).truecolor(255, 125, 0);
-                        crate::println!("{}", warning)?;
-                        vbs_path
-                    }
-                    Ok(ExtractResult::Extracted(vbs_path)) => {
-                        crate::println!("CREATED {}", vbs_path.display())?;
-                        vbs_path
-                    }
-                    Err(e) => return fail_with_error("Error extracting vbs", e),
-                };
-
-                let applied = patch_vbs_file(&vbs_path)?;
-                if applied.is_empty() {
-                    crate::println!("No patches applied")?;
-                } else {
-                    applied
-                        .iter()
-                        .try_for_each(|patch| crate::println!("Applied patch: {}", patch))?;
-                }
                 Ok(ExitCode::SUCCESS)
             }
             _ => unreachable!(),
@@ -1308,14 +1276,6 @@ fn build_command() -> Command {
                                 .required(true),
                         ),
                 )
-                .subcommand(
-                    Command::new(CMD_SCRIPT_PATCH)
-                        .about("Patch the table vpx script for typical standalone issues")
-                        .arg(
-                            arg!(<VPXPATH> "The path to the vpx file")
-                                .required(true),
-                        ),
-                ),
         )
         .subcommand(
             Command::new(CMD_LS)

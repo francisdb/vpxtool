@@ -8,7 +8,7 @@ use crate::colorful_theme_patched::ColorfulThemePatched;
 use crate::config::{LaunchTemplate, ResolvedConfig};
 use crate::indexer::{IndexError, IndexedTable, Progress};
 use crate::patcher::LineEndingsResult::{NoChanges, Unified};
-use crate::patcher::{patch_vbs_file, unify_line_endings_vbs_file};
+use crate::patcher::unify_line_endings_vbs_file;
 use crate::vpinball_config::{VPinballConfig, WindowInfo, WindowType};
 use crate::{describe_exit, indexer, strip_cr_lf, was_killed_by_signal};
 use base64::Engine;
@@ -49,7 +49,6 @@ enum TableOption {
     Audit,
     ExtractVBS,
     EditVBS,
-    PatchVBS,
     UnifyLineEndings,
     ShowVBSDiff,
     CreateVBSPatch,
@@ -81,7 +80,6 @@ impl TableOption {
             TableOption::Audit,
             TableOption::ExtractVBS,
             TableOption::EditVBS,
-            TableOption::PatchVBS,
             TableOption::UnifyLineEndings,
             TableOption::ShowVBSDiff,
             TableOption::CreateVBSPatch,
@@ -109,7 +107,6 @@ impl TableOption {
             TableOption::Audit => "Audit".to_string(),
             TableOption::ExtractVBS => "VBScript > Extract".to_string(),
             TableOption::EditVBS => "VBScript > Edit".to_string(),
-            TableOption::PatchVBS => "VBScript > Patch typical standalone issues".to_string(),
             TableOption::UnifyLineEndings => "VBScript > Unify line endings".to_string(),
             TableOption::ShowVBSDiff => "VBScript > Diff".to_string(),
             TableOption::CreateVBSPatch => "VBScript > Create patch file".to_string(),
@@ -342,36 +339,6 @@ fn table_menu(
                     prompt(&msg.truecolor(255, 125, 0).to_string());
                 }
             },
-            Some(TableOption::PatchVBS) => {
-                let vbs_path = match extractvbs(selected_path, None, false) {
-                    Ok(ExtractResult::Existed(path)) => path,
-                    Ok(ExtractResult::Extracted(path)) => path,
-                    Err(err) => {
-                        let msg = format!("Unable to extract VBS: {err}");
-                        prompt(&msg.truecolor(255, 125, 0).to_string());
-                        return;
-                    }
-                };
-                match patch_vbs_file(&vbs_path) {
-                    Ok(applied) => {
-                        if applied.is_empty() {
-                            prompt("No patches applied.");
-                        } else {
-                            applied.iter().for_each(|patch| {
-                                println!("Applied patch: {patch}");
-                            });
-                            prompt(&format!(
-                                "Patched VBS file at {}",
-                                vbs_path.to_string_lossy()
-                            ));
-                        }
-                    }
-                    Err(err) => {
-                        let msg = format!("Unable to patch VBS: {err}");
-                        prompt(&msg.truecolor(255, 125, 0).to_string());
-                    }
-                }
-            }
             Some(TableOption::UnifyLineEndings) => {
                 let vbs_path = vbs_path_for(selected_path);
                 let vbs_path = match extractvbs(selected_path, Some(vbs_path), false) {
