@@ -9,6 +9,7 @@ use crate::config::{LaunchTemplate, ResolvedConfig};
 use crate::indexer::{IndexError, IndexedTable, Progress};
 use crate::patcher::LineEndingsResult::{NoChanges, Unified};
 use crate::patcher::unify_line_endings_vbs_file;
+use crate::playlog::{self, PlayRecord, TableStats};
 use crate::vpinball_config::{VPinballConfig, WindowInfo, WindowType};
 use crate::{describe_exit, indexer, strip_cr_lf, was_killed_by_signal};
 use base64::Engine;
@@ -20,8 +21,10 @@ use indicatif::{ProgressBar, ProgressStyle};
 use is_executable::IsExecutable;
 use pinmame_nvram::dips::{DipSwitchState, get_all_dip_switches, set_dip_switches};
 use pinmame_nvram::{DipSwitchInfo, Nvram};
+use std::collections::HashMap;
 use std::fs::OpenOptions;
 use std::io::BufReader;
+use std::time::{Duration, Instant};
 use std::{
     fs::File,
     io,
@@ -35,9 +38,17 @@ const LAUNCH: Emoji = Emoji("🚀", "[launch]");
 const CRASH: Emoji = Emoji("💥", "[crash]");
 
 const SEARCH: &str = "> Search";
-const RECENT: &str = "> Recent";
+const RECENTLY_ADDED: &str = "> Recently added";
+const RECENTLY_PLAYED: &str = "> Recently played";
+const MOST_PLAYED: &str = "> Most played";
 const SEARCH_INDEX: usize = 0;
-const RECENT_INDEX: usize = 1;
+const RECENTLY_ADDED_INDEX: usize = 1;
+const RECENTLY_PLAYED_INDEX: usize = 2;
+const MOST_PLAYED_INDEX: usize = 3;
+/// Entries before the table list in the main menu
+const FIXED_ENTRIES: usize = 4;
+/// How many tables the recent and most played lists show
+const LIST_SIZE: usize = 50;
 
 #[derive(PartialEq, Eq, Clone)]
 enum TableOption {
@@ -168,7 +179,12 @@ pub fn frontend(
             .map(display_table_line_full)
             .collect();
 
-        let mut selections = vec![SEARCH.bold().to_string(), RECENT.bold().to_string()];
+        let mut selections = vec![
+            SEARCH.bold().to_string(),
+            RECENTLY_ADDED.bold().to_string(),
+            RECENTLY_PLAYED.bold().to_string(),
+            MOST_PLAYED.bold().to_string(),
+        ];
         selections.extend(tables.clone());
 
         if let Err(e) = Term::stderr().clear_screen() {
@@ -198,7 +214,7 @@ pub fn frontend(
 
                         if let Some(selected_index) = selected {
                             // return to the main list with the table selected
-                            main_selection_opt = Some(selected_index + 2);
+                            main_selection_opt = Some(selected_index + FIXED_ENTRIES);
                             let info = vpx_files_with_tableinfo
                                 .get(selected_index)
                                 .unwrap()
@@ -213,43 +229,93 @@ pub fn frontend(
                             );
                         }
                     }
-                    RECENT_INDEX => {
-                        // take the last 50 most recently modified tables
+                    RECENTLY_ADDED_INDEX => {
+                        // the most recently modified table files
                         let mut recent: Vec<IndexedTable> = vpx_files_with_tableinfo.clone();
-                        recent.sort_by_key(|indexed| indexed.last_modified);
-                        let last_modified = recent.iter().rev().take(50).collect::<Vec<_>>();
-                        let last_modified_str: Vec<String> = last_modified
-                            .iter()
-                            .map(|indexed| display_table_line_full(indexed))
+                        recent.sort_by_key(|indexed| std::cmp::Reverse(indexed.last_modified));
+                        recent.truncate(LIST_SIZE);
+                        let entries: Vec<(IndexedTable, String)> = recent
+                            .into_iter()
+                            .map(|indexed| {
+                                let line = display_table_line_full(&indexed);
+                                (indexed, line)
+                            })
                             .collect();
-
-                        let mut recent_selection: Option<usize> = None;
-                        loop {
-                            let selected = Select::with_theme(&ColorfulTheme::default())
-                                .with_prompt("Select a table")
-                                .items(&last_modified_str)
-                                .default(recent_selection.unwrap_or(0))
-                                .interact_opt()
-                                .unwrap();
-
-                            if let Some(selected_index) = selected {
-                                recent_selection = Some(selected_index);
-                                let info = last_modified.get(selected_index).unwrap();
-                                let info_str = display_table_line_full(info);
-                                table_menu(
-                                    config,
-                                    configured_pinmame_folder,
-                                    &mut vpx_files_with_tableinfo,
-                                    info,
-                                    &info_str,
+                        pick_from_list(
+                            config,
+                            configured_pinmame_folder,
+                            &mut vpx_files_with_tableinfo,
+                            &entries,
+                        );
+                    }
+                    RECENTLY_PLAYED_INDEX => {
+                        let stats = playlog::load_stats();
+                        let mut played = played_tables(&vpx_files_with_tableinfo, &stats);
+                        played.sort_by(|(_, a), (_, b)| b.last_played.cmp(&a.last_played));
+                        played.truncate(LIST_SIZE);
+                        let entries: Vec<(IndexedTable, String)> = played
+                            .into_iter()
+                            .map(|(indexed, stats)| {
+                                let line = format!(
+                                    "{} {}",
+                                    display_table_line_full(&indexed),
+                                    format!(
+                                        "(last {}, {} plays)",
+                                        stats.last_played_date().unwrap_or("?"),
+                                        stats.plays
+                                    )
+                                    .dimmed()
                                 );
-                            } else {
-                                break;
-                            }
+                                (indexed, line)
+                            })
+                            .collect();
+                        if entries.is_empty() {
+                            prompt("No plays recorded yet, launch a table from here first.");
+                        } else {
+                            pick_from_list(
+                                config,
+                                configured_pinmame_folder,
+                                &mut vpx_files_with_tableinfo,
+                                &entries,
+                            );
+                        }
+                    }
+                    MOST_PLAYED_INDEX => {
+                        let stats = playlog::load_stats();
+                        let mut played = played_tables(&vpx_files_with_tableinfo, &stats);
+                        played.sort_by(|(_, a), (_, b)| {
+                            (b.plays, b.total_seconds).cmp(&(a.plays, a.total_seconds))
+                        });
+                        played.truncate(LIST_SIZE);
+                        let entries: Vec<(IndexedTable, String)> = played
+                            .into_iter()
+                            .map(|(indexed, stats)| {
+                                let line = format!(
+                                    "{} {}",
+                                    display_table_line_full(&indexed),
+                                    format!(
+                                        "({} plays, {})",
+                                        stats.plays,
+                                        playlog::format_duration(stats.total_seconds)
+                                    )
+                                    .dimmed()
+                                );
+                                (indexed, line)
+                            })
+                            .collect();
+                        if entries.is_empty() {
+                            prompt("No plays recorded yet, launch a table from here first.");
+                        } else {
+                            pick_from_list(
+                                config,
+                                configured_pinmame_folder,
+                                &mut vpx_files_with_tableinfo,
+                                &entries,
+                            );
                         }
                     }
                     _ => {
-                        let index = selection - 2;
+                        let index = selection - FIXED_ENTRIES;
 
                         let info = vpx_files_with_tableinfo.get(index).unwrap().clone();
                         let info_str = display_table_line_full(&info);
@@ -265,6 +331,56 @@ pub fn frontend(
             }
             None => break,
         };
+    }
+}
+
+/// The indexed tables that have plays in the log, with their statistics
+fn played_tables(
+    tables: &[IndexedTable],
+    stats: &HashMap<PathBuf, TableStats>,
+) -> Vec<(IndexedTable, TableStats)> {
+    tables
+        .iter()
+        .filter_map(|indexed| {
+            stats
+                .get(&indexed.path)
+                .map(|table_stats| (indexed.clone(), table_stats.clone()))
+        })
+        .collect()
+}
+
+/// Shows a list of tables and opens the table menu for the chosen one,
+/// until the user backs out of the list
+fn pick_from_list(
+    config: &ResolvedConfig,
+    configured_pinmame_folder: Option<&Path>,
+    vpx_files_with_tableinfo: &mut Vec<IndexedTable>,
+    entries: &[(IndexedTable, String)],
+) {
+    let lines: Vec<&String> = entries.iter().map(|(_, line)| line).collect();
+    let mut selection: Option<usize> = None;
+    loop {
+        let selected = Select::with_theme(&ColorfulTheme::default())
+            .with_prompt("Select a table")
+            .items(&lines)
+            .default(selection.unwrap_or(0))
+            .interact_opt()
+            .unwrap();
+
+        match selected {
+            Some(selected_index) => {
+                selection = Some(selected_index);
+                let (info, info_str) = &entries[selected_index];
+                table_menu(
+                    config,
+                    configured_pinmame_folder,
+                    vpx_files_with_tableinfo,
+                    info,
+                    info_str,
+                );
+            }
+            None => break,
+        }
     }
 }
 
@@ -919,7 +1035,13 @@ fn launch(selected_path: &PathBuf, launch_template: &LaunchTemplate) {
         ));
     }
 
-    match launch_table(selected_path, launch_template) {
+    let started = chrono::Utc::now();
+    let clock = Instant::now();
+    let result = launch_table(selected_path, launch_template);
+    if let Ok(status) = &result {
+        record_play(selected_path, started, clock.elapsed(), *status);
+    }
+    match result {
         Ok(status) if status.success() => {
             Term::stderr().clear_screen().ok();
         }
@@ -945,6 +1067,35 @@ fn launch(selected_path: &PathBuf, launch_template: &LaunchTemplate) {
                 report_and_exit(format!("Unable to launch table: {e:?}"));
             }
         }
+    }
+}
+
+/// Appends the run to the play log; a failure to write only warns, the
+/// launch itself already happened
+fn record_play(
+    selected_path: &Path,
+    started: chrono::DateTime<chrono::Utc>,
+    duration: Duration,
+    status: ExitStatus,
+) {
+    let Some(log_path) = playlog::play_log_path() else {
+        return;
+    };
+    let path = selected_path
+        .canonicalize()
+        .unwrap_or_else(|_| selected_path.to_path_buf());
+    let record = PlayRecord {
+        path,
+        started: started.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+        seconds: duration.as_secs(),
+        exit: if status.success() {
+            "ok".to_string()
+        } else {
+            describe_exit(status)
+        },
+    };
+    if let Err(e) = playlog::append(&log_path, &record) {
+        eprintln!("Unable to write play log {}: {e}", log_path.display());
     }
 }
 

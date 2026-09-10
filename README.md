@@ -132,6 +132,11 @@ launch them.
 
 ![Frontend](docs/frontend.png)
 
+Every launch from the frontend is appended to a play log in the platform data directory
+(`~/.local/share/vpxtool/play_log.jsonl` on Linux). The "Recently played" and "Most played" entries
+in the main menu are built from it; runs shorter than 30 seconds are kept in the log but do not count
+as a play.
+
 ## Configuration
 
 A configuration file will be written to store among others the Visual Pinball executable location. The config file is
