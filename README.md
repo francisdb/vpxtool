@@ -52,6 +52,7 @@ Usage: vpxtool [COMMAND]
 
 Commands:
   info            Vpx table info related commands
+  table           Vpx table level commands
   diff            Prints out a diff between the vbs in the vpx and the sidecar vbs
   frontend        Text based frontend for launching vpx files
   simplefrontend  Simple text based frontend for launching vpx files
