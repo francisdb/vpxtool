@@ -9,6 +9,7 @@ pub mod capture;
 pub mod fixprint;
 mod frontend;
 pub mod patcher;
+pub mod playlog;
 
 pub mod config;
 
