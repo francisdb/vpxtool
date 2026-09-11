@@ -657,7 +657,6 @@ fn index_vpx_file(
             .and_then(|game_name| global_roms.get(&game_name.to_lowercase()).cloned())
     });
     let b2s_path = find_b2s_path(path);
-    let wheel_path = find_wheel_path(path);
     // Read the vpx_parent directory once and share it across all asset
     // detectors. Critical on NAS where each read_dir is a network round-trip.
     let parent_index = path
@@ -666,6 +665,7 @@ fn index_vpx_file(
         .unwrap_or_else(|| CaseInsensitiveDir {
             entries: HashMap::new(),
         });
+    let wheel_path = find_wheel_path(path, &parent_index);
     let altsound_path = find_altsound_path(&parent_index, &game_name);
     let altcolor_path = find_altcolor_path(&parent_index, &game_name);
     let pup_pack_path = find_pup_pack_path(&parent_index, &game_name);
@@ -1158,24 +1158,106 @@ fn find_case_insensitive_child(parent: &Path, name: &str) -> Option<PathBuf> {
     None
 }
 
-/// Tries to find a wheel image for the given vpx file.
-/// 2 locations are tried:
-/// * ../wheels/<vpx_file_name>.png
-/// * <vpx_file_name>.wheel.png
-fn find_wheel_path(vpx_file_path: &Path) -> Option<PathBuf> {
-    let wheel_file_name = format!(
-        "wheels/{}.png",
-        vpx_file_path.file_stem().unwrap().to_string_lossy()
-    );
-    let wheel_path = vpx_file_path.parent().unwrap().join(wheel_file_name);
-    if wheel_path.exists() {
-        return Some(wheel_path);
+/// Image formats a wheel can come in, in order of preference
+const WHEEL_EXTENSIONS: &[&str] = &["png", "apng", "webp", "jpg", "jpeg"];
+
+/// Tries to find a wheel image for the table, strict to loose:
+///
+/// 1. `<stem>-wheel.<ext>`, also with `.`, `_` or a space before `wheel`,
+///    and `wheels/<stem>.<ext>`
+/// 2. `wheel.<ext>` next to the table
+/// 3. an image next to the table whose name starts with the stem and
+///    contains `wheel`
+/// 4. any image next to the table with `wheel` in its name
+/// 5. the same, one directory down, in directories with `wheel` or `media`
+///    in their name
+///
+/// Names compare case insensitively. Within a step the shortest name wins,
+/// so a set like `Wheel - 1.png`, `Wheel - 2.png` gives a stable pick.
+fn find_wheel_path(vpx_file_path: &Path, parent_index: &CaseInsensitiveDir) -> Option<PathBuf> {
+    let stem = vpx_file_path
+        .file_stem()?
+        .to_string_lossy()
+        .to_ascii_lowercase();
+
+    // 1. exact names
+    for separator in ["-", ".", "_", " "] {
+        for extension in WHEEL_EXTENSIONS {
+            if let Some(path) = parent_index.get(&format!("{stem}{separator}wheel.{extension}")) {
+                return Some(path.to_path_buf());
+            }
+        }
     }
-    let wheel_path = vpx_file_path.with_extension("wheel.png");
-    if wheel_path.exists() {
-        return Some(wheel_path);
+    if let Some(wheels_dir) = parent_index.get("wheels") {
+        let wheels = CaseInsensitiveDir::read(wheels_dir);
+        for extension in WHEEL_EXTENSIONS {
+            if let Some(path) = wheels.get(&format!("{stem}.{extension}")) {
+                return Some(path.to_path_buf());
+            }
+        }
+    }
+
+    // 2. a plain wheel image
+    for extension in WHEEL_EXTENSIONS {
+        if let Some(path) = parent_index.get(&format!("wheel.{extension}")) {
+            return Some(path.to_path_buf());
+        }
+    }
+
+    // 3. and 4. named after the table, then anything with wheel in the name
+    let siblings: Vec<(&String, &PathBuf)> = parent_index
+        .entries
+        .iter()
+        .filter(|(name, _)| is_wheel_image_name(name))
+        .collect();
+    let named_after_table = siblings
+        .iter()
+        .filter(|(name, _)| name.starts_with(&stem))
+        .copied();
+    if let Some(path) = shortest_name(named_after_table) {
+        return Some(path);
+    }
+    if let Some(path) = shortest_name(siblings.iter().copied()) {
+        return Some(path);
+    }
+
+    // 5. one directory down, only in directories that look like media
+    let mut media_dirs: Vec<(&String, &PathBuf)> = parent_index
+        .entries
+        .iter()
+        .filter(|(name, path)| (name.contains("wheel") || name.contains("media")) && path.is_dir())
+        .collect();
+    media_dirs.sort();
+    for (_, dir) in media_dirs {
+        let index = CaseInsensitiveDir::read(dir);
+        let candidates: Vec<(&String, &PathBuf)> = index
+            .entries
+            .iter()
+            .filter(|(name, _)| is_wheel_image_name(name))
+            .collect();
+        if let Some(path) = shortest_name(candidates.into_iter()) {
+            return Some(path);
+        }
     }
     None
+}
+
+/// Whether a lowercased file name is an image with `wheel` in its name
+fn is_wheel_image_name(name: &str) -> bool {
+    name.contains("wheel")
+        && name
+            .rsplit_once('.')
+            .is_some_and(|(_, extension)| WHEEL_EXTENSIONS.contains(&extension))
+}
+
+/// The candidate with the shortest name, ties broken alphabetically, so the
+/// pick is stable across runs and file systems
+fn shortest_name<'a>(
+    candidates: impl Iterator<Item = (&'a String, &'a PathBuf)>,
+) -> Option<PathBuf> {
+    candidates
+        .min_by_key(|(name, _)| (name.len(), name.as_str()))
+        .map(|(_, path)| path.to_path_buf())
 }
 
 /// If there is a file with the same name and extension .vbs we pick that code
@@ -2570,5 +2652,98 @@ LoadVPM "01210000","sys80.vbs",3.10
         let paths: Vec<_> = sorted.iter().map(|t| t.path.to_str().unwrap()).collect();
         // a_dir sorts before z_dir even though apple < zebra doesn't matter
         assert_eq!(paths, vec!["a_dir/zebra.vpx", "z_dir/apple.vpx"]);
+    }
+
+    fn touch(path: &Path) {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, b"").unwrap();
+    }
+
+    fn wheel_for(dir: &Path, table: &str) -> Option<String> {
+        let vpx = dir.join(table);
+        let index = CaseInsensitiveDir::read(dir);
+        find_wheel_path(&vpx, &index).map(|p| {
+            p.strip_prefix(dir)
+                .unwrap()
+                .to_string_lossy()
+                .replace('\\', "/")
+        })
+    }
+
+    #[test]
+    fn test_find_wheel_path_exact_names_win() {
+        let dir = testdir!();
+        touch(&dir.join("Table (Maker 2020).vpx"));
+        touch(&dir.join("Wheel.png"));
+        touch(&dir.join("Table (Maker 2020) wheel.png"));
+        touch(&dir.join("Table (Maker 2020)-Wheel.PNG"));
+        assert_eq!(
+            wheel_for(&dir, "Table (Maker 2020).vpx").as_deref(),
+            Some("Table (Maker 2020)-Wheel.PNG")
+        );
+    }
+
+    #[test]
+    fn test_find_wheel_path_stem_with_version_suffix() {
+        // https://github.com/francisdb/vpxtool/issues/477
+        let dir = testdir!();
+        touch(&dir.join("JPs Space Cadet (GE)V1-1.vpx"));
+        touch(&dir.join("JPs Space Cadet (GE)V1-1-wheel.png"));
+        assert_eq!(
+            wheel_for(&dir, "JPs Space Cadet (GE)V1-1.vpx").as_deref(),
+            Some("JPs Space Cadet (GE)V1-1-wheel.png")
+        );
+    }
+
+    #[test]
+    fn test_find_wheel_path_wheels_dir_and_plain_wheel() {
+        let dir = testdir!();
+        touch(&dir.join("a.vpx"));
+        touch(&dir.join("b.vpx"));
+        touch(&dir.join("Wheels").join("A.webp"));
+        touch(&dir.join("wheel.png"));
+        assert_eq!(wheel_for(&dir, "a.vpx").as_deref(), Some("Wheels/A.webp"));
+        assert_eq!(wheel_for(&dir, "b.vpx").as_deref(), Some("wheel.png"));
+    }
+
+    #[test]
+    fn test_find_wheel_path_loose_matches_pick_the_shortest_name() {
+        let dir = testdir!();
+        touch(&dir.join("Playboy (Bally 1978).vpx"));
+        touch(&dir.join("Playboy (Bally 1978) Wheel - 3.png"));
+        touch(&dir.join("Playboy (Bally 1978) Wheel - 1.png"));
+        touch(&dir.join("other wheel.png"));
+        touch(&dir.join("wheel.txt"));
+        // named after the table beats a shorter unrelated wheel
+        assert_eq!(
+            wheel_for(&dir, "Playboy (Bally 1978).vpx").as_deref(),
+            Some("Playboy (Bally 1978) Wheel - 1.png")
+        );
+        touch(&dir.join("Zork.vpx"));
+        assert_eq!(
+            wheel_for(&dir, "Zork.vpx").as_deref(),
+            Some("other wheel.png")
+        );
+    }
+
+    #[test]
+    fn test_find_wheel_path_looks_into_media_dirs_only() {
+        let dir = testdir!();
+        touch(&dir.join("t.vpx"));
+        touch(&dir.join("downloads").join("t wheel.png"));
+        assert_eq!(wheel_for(&dir, "t.vpx"), None);
+        touch(&dir.join("MEDIA PACK").join("Wheel Big.png"));
+        assert_eq!(
+            wheel_for(&dir, "t.vpx").as_deref(),
+            Some("MEDIA PACK/Wheel Big.png")
+        );
+    }
+
+    #[test]
+    fn test_find_wheel_path_none_without_candidates() {
+        let dir = testdir!();
+        touch(&dir.join("t.vpx"));
+        touch(&dir.join("t.png"));
+        assert_eq!(wheel_for(&dir, "t.vpx"), None);
     }
 }
