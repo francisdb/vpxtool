@@ -63,7 +63,7 @@ static VPREG_HIGHSCORE_CALL_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
 });
 
 /// Introduced because we want full control over serialization
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Default)]
 pub struct IndexedTableInfo {
     pub table_name: Option<String>,
     pub author_name: Option<String>,
@@ -142,6 +142,17 @@ impl<'de> Deserialize<'de> for IsoSystemTime {
 pub struct IndexedTable {
     pub path: PathBuf,
     pub table_info: IndexedTableInfo,
+    /// The table name, from the `Name (Manufacturer Year)` convention of the
+    /// folder or file name, or else from the table info
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// The manufacturer from the folder or file name convention
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub manufacturer: Option<String>,
+    /// The year from the folder or file name convention, or else from the
+    /// release date in the table info
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub year: Option<u16>,
     pub game_name: Option<String>,
     pub b2s_path: Option<PathBuf>,
     /// The rom path, in the table folder or in the global pinmame roms folder
@@ -671,10 +682,14 @@ fn index_vpx_file(
     let pup_pack_path = find_pup_pack_path(&parent_index, &game_name);
     let last_modified = last_modified(path)?;
     let indexed_table_info = IndexedTableInfo::from(table_info);
+    let name_parts = table_name_parts(path, &indexed_table_info);
 
     let indexed = IndexedTable {
         path: path.clone(),
         table_info: indexed_table_info,
+        name: name_parts.name,
+        manufacturer: name_parts.manufacturer,
+        year: name_parts.year,
         game_name,
         b2s_path,
         rom_path,
@@ -924,6 +939,88 @@ fn resolve_rom_alias(pinmame_dir: &Path, game_name: &str) -> Option<String> {
         let real = real.split(['#', ';', '\'']).next()?;
         (!real.is_empty()).then(|| real.to_string())
     })
+}
+
+/// What a folder or file name says about a table, see [`parse_table_name`]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct TableNameParts {
+    name: Option<String>,
+    manufacturer: Option<String>,
+    year: Option<u16>,
+}
+
+/// The `Name (Manufacturer Year)` convention, leniently: the space before
+/// the year may be missing, the manufacturer or the year may be absent, and
+/// anything may follow the closing bracket (versions, mod names)
+static TABLE_NAME_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
+        r"^(?P<name>.*?)\s*\(\s*(?P<maker>[^()\d][^()]*?)?\s*(?P<year>(?:19|20)\d{2})?\s*\)",
+    )
+    .unwrap()
+});
+
+/// Four digit year anywhere in a release date such as `1978` or `10/1978`
+static YEAR_REGEX: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"\b(?:19|20)\d{2}\b").unwrap());
+
+/// Parses `Name (Manufacturer Year)` out of a folder or file name, `None`
+/// when the name carries neither a manufacturer nor a year
+fn parse_table_name(name: &str) -> Option<TableNameParts> {
+    let captures = TABLE_NAME_REGEX.captures(name)?;
+    let manufacturer = captures
+        .name("maker")
+        .map(|m| m.as_str().trim().to_string())
+        .filter(|m| !m.is_empty());
+    let year = captures
+        .name("year")
+        .and_then(|m| m.as_str().parse::<u16>().ok());
+    if manufacturer.is_none() && year.is_none() {
+        return None;
+    }
+    let name = captures
+        .name("name")
+        .map(|m| m.as_str().trim().to_string())
+        .filter(|n| !n.is_empty());
+    Some(TableNameParts {
+        name,
+        manufacturer,
+        year,
+    })
+}
+
+/// Name, manufacturer and year for the index: the folder name first, unless
+/// the folder is the tables root, then the file name, then the table info for
+/// what is still missing
+fn table_name_parts(vpx_file_path: &Path, table_info: &IndexedTableInfo) -> TableNameParts {
+    let folder = vpx_file_path
+        .parent()
+        .and_then(Path::file_name)
+        .map(|n| n.to_string_lossy().to_string())
+        .filter(|n| !n.eq_ignore_ascii_case("tables"));
+    let file = vpx_file_path
+        .file_stem()
+        .map(|n| n.to_string_lossy().to_string());
+    let mut parts = folder
+        .as_deref()
+        .and_then(parse_table_name)
+        .or_else(|| file.as_deref().and_then(parse_table_name))
+        .unwrap_or_default();
+    if parts.name.is_none() {
+        parts.name = table_info
+            .table_name
+            .as_deref()
+            .map(str::trim)
+            .filter(|n| !n.is_empty())
+            .map(str::to_string);
+    }
+    if parts.year.is_none() {
+        parts.year = table_info
+            .release_date
+            .as_deref()
+            .and_then(|date| YEAR_REGEX.find(date))
+            .and_then(|m| m.as_str().parse().ok());
+    }
+    parts
 }
 
 fn find_b2s_path(vpx_file_path: &Path) -> Option<PathBuf> {
@@ -1292,6 +1389,9 @@ fn normalize_table_for_json(
     IndexedTable {
         path: norm(&table.path),
         table_info: table.table_info.clone(),
+        name: table.name.clone(),
+        manufacturer: table.manufacturer.clone(),
+        year: table.year,
         game_name: table.game_name.clone(),
         b2s_path: table.b2s_path.as_ref().map(|p| norm(p)),
         rom_path: table.rom_path.as_ref().map(|p| norm(p)),
@@ -1313,6 +1413,9 @@ fn denormalize_table_from_json(table: IndexedTable, tables_root: Option<&Path>) 
     IndexedTable {
         path: resolve(table.path),
         table_info: table.table_info,
+        name: table.name,
+        manufacturer: table.manufacturer,
+        year: table.year,
         game_name: table.game_name,
         b2s_path: table.b2s_path.map(resolve),
         rom_path: table.rom_path.map(resolve),
@@ -1947,6 +2050,9 @@ x = LoadValue(tablename, "HighScore1")
             rom_path: Some(PathBuf::from("testrom.zip")),
             local_rom_path: None,
             wheel_path: Some(PathBuf::from("test.png")),
+            name: None,
+            manufacturer: None,
+            year: None,
             altsound_path: None,
             altcolor_path: None,
             pup_pack_path: None,
@@ -1991,6 +2097,9 @@ x = LoadValue(tablename, "HighScore1")
             rom_path: None,
             local_rom_path: None,
             wheel_path: None,
+            name: None,
+            manufacturer: None,
+            year: None,
             altsound_path: None,
             altcolor_path: None,
             pup_pack_path: None,
@@ -2066,6 +2175,9 @@ x = LoadValue(tablename, "HighScore1")
             rom_path: None,
             local_rom_path: None,
             wheel_path: None,
+            name: None,
+            manufacturer: None,
+            year: None,
             altsound_path: None,
             altcolor_path: None,
             pup_pack_path: None,
@@ -2619,6 +2731,9 @@ LoadVPM "01210000","sys80.vbs",3.10
             rom_path: None,
             local_rom_path: None,
             wheel_path: None,
+            name: None,
+            manufacturer: None,
+            year: None,
             altsound_path: None,
             altcolor_path: None,
             pup_pack_path: None,
@@ -2745,5 +2860,97 @@ LoadVPM "01210000","sys80.vbs",3.10
         touch(&dir.join("t.vpx"));
         touch(&dir.join("t.png"));
         assert_eq!(wheel_for(&dir, "t.vpx"), None);
+    }
+
+    fn parts(name: Option<&str>, manufacturer: Option<&str>, year: Option<u16>) -> TableNameParts {
+        TableNameParts {
+            name: name.map(str::to_string),
+            manufacturer: manufacturer.map(str::to_string),
+            year,
+        }
+    }
+
+    #[test]
+    fn test_parse_table_name_variants() {
+        // add real world variants here as they turn up
+        let cases = [
+            (
+                "Playboy (Bally 1978)",
+                Some(parts(Some("Playboy"), Some("Bally"), Some(1978))),
+            ),
+            (
+                "Red and Ted's Road Show (Williams 1994) VPW 1.5.4",
+                Some(parts(
+                    Some("Red and Ted's Road Show"),
+                    Some("Williams"),
+                    Some(1994),
+                )),
+            ),
+            (
+                "2 in 1 (Bally 1964)",
+                Some(parts(Some("2 in 1"), Some("Bally"), Some(1964))),
+            ),
+            (
+                "Canada Dry (Gottlieb1976)_Teisen_MOD_1.1",
+                Some(parts(Some("Canada Dry"), Some("Gottlieb"), Some(1976))),
+            ),
+            (
+                "Baywatch (Sega) 1.0.5",
+                Some(parts(Some("Baywatch"), Some("Sega"), None)),
+            ),
+            (
+                "JPs Space Cadet (GE)V1-1",
+                Some(parts(Some("JPs Space Cadet"), Some("GE"), None)),
+            ),
+            (
+                "CARtoons RC (2017)",
+                Some(parts(Some("CARtoons RC"), None, Some(2017))),
+            ),
+            (
+                "Aztec Quest (Original 2024)",
+                Some(parts(Some("Aztec Quest"), Some("Original"), Some(2024))),
+            ),
+            ("(Bally 1978)", Some(parts(None, Some("Bally"), Some(1978)))),
+            ("blank_with_font", None),
+            ("Foo ()", None),
+        ];
+        for (input, expected) in cases {
+            assert_eq!(parse_table_name(input), expected, "{input}");
+        }
+    }
+
+    #[test]
+    fn test_table_name_parts_precedence() {
+        let info = IndexedTableInfo {
+            table_name: Some("Playboy from info".to_string()),
+            release_date: Some("10/1978".to_string()),
+            ..Default::default()
+        };
+        // the folder wins over the file name
+        assert_eq!(
+            table_name_parts(
+                Path::new("/t/Playboy (Bally 1978)/Playboy (Bally 1978) VPW 2.0.vpx"),
+                &info
+            ),
+            parts(Some("Playboy"), Some("Bally"), Some(1978))
+        );
+        // a folder called tables is the root, so the file name is used
+        assert_eq!(
+            table_name_parts(Path::new("/x/Tables/Baywatch (Sega) 1.0.5.vpx"), &info),
+            parts(Some("Baywatch"), Some("Sega"), Some(1978))
+        );
+        // nothing in the names, so the table info fills in name and year
+        assert_eq!(
+            table_name_parts(Path::new("/t/misc/blank_with_font.vpx"), &info),
+            parts(Some("Playboy from info"), None, Some(1978))
+        );
+        // a name without a year falls back to the release date year only
+        assert_eq!(
+            table_name_parts(
+                Path::new("/t/misc/(Bally)/x.vpx"),
+                &IndexedTableInfo::default()
+            ),
+            parts(None, Some("Bally"), None)
+        );
     }
 }
