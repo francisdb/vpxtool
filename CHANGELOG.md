@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.34.0](https://github.com/francisdb/vpxtool/compare/v0.33.10...v0.34.0) - 2026-09-11
+
+### Added
+
+- extract only part of a table with --only and --no-media ([#878](https://github.com/francisdb/vpxtool/pull/878))
+- *(indexer)* record name, manufacturer and year per table ([#880](https://github.com/francisdb/vpxtool/pull/880))
+- *(indexer)* find wheel images by a strict to loose ladder ([#879](https://github.com/francisdb/vpxtool/pull/879))
+- *(frontend)* keep a play log with recently and most played lists ([#877](https://github.com/francisdb/vpxtool/pull/877))
+- add a table diff command ([#872](https://github.com/francisdb/vpxtool/pull/872))
+- *(audit)* count info findings and keep going after a failed table
+- add a table audit command and frontend entry
+
+### Fixed
+
+- *(indexer)* skip dotfiles when looking for tables ([#867](https://github.com/francisdb/vpxtool/pull/867))
+
+### Other
+
+- *(deps)* bump vpin from 0.33.0 to 0.33.1 ([#884](https://github.com/francisdb/vpxtool/pull/884))
+- *(deps)* bump vpin from 0.32.1 to 0.33.0 ([#883](https://github.com/francisdb/vpxtool/pull/883))
+- [**breaking**] remove the typical standalone issues script patch ([#876](https://github.com/francisdb/vpxtool/pull/876))
+- *(deps)* bump vpin from 0.32.0 to 0.32.1 ([#875](https://github.com/francisdb/vpxtool/pull/875))
+- *(deps)* bump toml from 1.1.4+spec-1.1.0 to 1.1.5+spec-1.1.0 ([#874](https://github.com/francisdb/vpxtool/pull/874))
+- *(deps)* bump dirs from 6.0.0 to 7.0.0 ([#873](https://github.com/francisdb/vpxtool/pull/873))
+- *(deps)* bump vpin from 0.31.1 to 0.32.0 ([#871](https://github.com/francisdb/vpxtool/pull/871))
+- *(deps)* bump vpin from 0.28.2 to 0.31.1 ([#870](https://github.com/francisdb/vpxtool/pull/870))
+- *(deps)* bump vpin from 0.28.1 to 0.28.2 ([#865](https://github.com/francisdb/vpxtool/pull/865))
+
 ## [0.33.10](https://github.com/francisdb/vpxtool/compare/v0.33.9...v0.33.10) - 2026-08-31
 
 ### Fixed
