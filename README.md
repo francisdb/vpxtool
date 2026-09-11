@@ -97,6 +97,24 @@ Options:
   -h, --help       Print help
 ```
 
+### Extracting part of a table
+
+`extract` writes the whole table as a directory of JSON, script, image, sound and mesh files. To get only some
+of them, filter on the paths that `ls` prints, relative to the output directory. A `*` does not cross a
+directory separator, so `gameitems/*.json` is the game item files and `*.json` the top level index files.
+
+```shell
+# only the game data
+vpxtool extract --only gamedata.json table.vpx
+# the script and every game item, but no meshes
+vpxtool extract --only script.vbs --only 'gameitems/*.json' table.vpx
+# everything except the image and sound files; their index files are still written
+vpxtool extract --no-media table.vpx
+```
+
+Files that are filtered out are not produced at all, so extracting only the JSON of a large table takes
+milliseconds. A partial directory cannot be assembled back into a table.
+
 ### Logging
 
 To get more information about what vpxtool is doing, you can set the `-v` flag to increase verbosity.

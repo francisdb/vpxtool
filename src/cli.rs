@@ -12,6 +12,7 @@ use colored::Colorize;
 use console::Emoji;
 use directb2s::read;
 use git_version::git_version;
+use globset::{GlobBuilder, GlobSetBuilder};
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use log::{LevelFilter, info};
 use pinmame_nvram::dips::get_all_dip_switches;
@@ -463,6 +464,14 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 .get_one::<String>("VPXPATH")
                 .map(|s| s.as_str())
                 .unwrap_or_default();
+            let filter = ExtractFilter {
+                only: sub_matches
+                    .get_many::<String>("ONLY")
+                    .unwrap_or_default()
+                    .cloned()
+                    .collect(),
+                no_media: sub_matches.get_flag("NO_MEDIA"),
+            };
             let expanded_path = path_exists(path)?;
             let ext = expanded_path.extension().map(|e| e.to_ascii_lowercase());
             match ext {
@@ -473,7 +482,12 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 }
                 Some(ext) if ext == "vpx" => {
                     crate::println!("extracting from {}", expanded_path.display())?;
-                    extract(expanded_path.as_ref(), force, output_dir.as_deref())
+                    extract(
+                        expanded_path.as_ref(),
+                        force,
+                        output_dir.as_deref(),
+                        &filter,
+                    )
                 }
                 _ => Err(io::Error::new(
                     io::ErrorKind::InvalidInput,
@@ -1301,6 +1315,19 @@ fn build_command() -> Command {
                         .long("output-dir")
                         .num_args(1)
                         .help("Directory to extract into. Defaults to a folder named after the vpx, next to it."),
+                )
+                .arg(
+                    Arg::new("ONLY")
+                        .long("only")
+                        .value_name("GLOB")
+                        .action(ArgAction::Append)
+                        .help("Only write the files matching this glob, on the path relative to the output directory as `ls` prints it, for example gamedata.json or 'gameitems/*.json'. A * does not cross a directory separator. Repeatable"),
+                )
+                .arg(
+                    Arg::new("NO_MEDIA")
+                        .long("no-media")
+                        .action(ArgAction::SetTrue)
+                        .help("Skip the image and sound files, their index files are still written"),
                 )
                 .arg(arg!(<VPXPATH> "The path to the vpx file").required(true)),
         )
@@ -3097,7 +3124,54 @@ pub fn confirm(msg: String, yes_no_question: String) -> io::Result<bool> {
     Ok(input.trim() == "y")
 }
 
-pub fn extract(vpx_file_path: &Path, yes: bool, output_dir: Option<&Path>) -> io::Result<ExitCode> {
+/// Which files `extract` writes; everything when nothing is set
+#[derive(Debug, Default, Clone)]
+pub struct ExtractFilter {
+    /// Globs on the path relative to the output directory, as `ls` prints it
+    pub only: Vec<String>,
+    /// Skip the image and sound files, keeping their index files
+    pub no_media: bool,
+}
+
+impl ExtractFilter {
+    /// The expand options, carrying a path filter when anything is set
+    fn expand_options(&self) -> io::Result<ExpandOptions> {
+        if self.only.is_empty() && !self.no_media {
+            return Ok(ExpandOptions::default());
+        }
+        let mut builder = GlobSetBuilder::new();
+        for pattern in &self.only {
+            let glob = GlobBuilder::new(pattern)
+                .literal_separator(true)
+                .build()
+                .map_err(|e| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        format!("invalid --only glob '{pattern}': {e}"),
+                    )
+                })?;
+            builder.add(glob);
+        }
+        let only = builder
+            .build()
+            .map_err(|e| io::Error::other(e.to_string()))?;
+        let has_only = !self.only.is_empty();
+        let no_media = self.no_media;
+        Ok(ExpandOptions::default().filter(move |path: &Path| {
+            let media = path.starts_with("images") || path.starts_with("sounds");
+            (!has_only || only.is_match(path)) && !(no_media && media)
+        }))
+    }
+}
+
+pub fn extract(
+    vpx_file_path: &Path,
+    yes: bool,
+    output_dir: Option<&Path>,
+    filter: &ExtractFilter,
+) -> io::Result<ExitCode> {
+    // a bad glob should fail before anything is touched
+    let options = filter.expand_options()?;
     let default_dir = vpx_file_path.with_extension("");
     let root_dir_path = output_dir.unwrap_or(default_dir.as_path());
 
@@ -3120,7 +3194,6 @@ pub fn extract(vpx_file_path: &Path, yes: bool, output_dir: Option<&Path>) -> io
     root_dir.create(root_dir_path)?;
     let result = {
         let vpx = vpx::read(vpx_file_path)?;
-        let options = ExpandOptions::default();
         expanded::write(&vpx, &root_dir_path, &options)
     };
     match result {
