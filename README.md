@@ -132,6 +132,10 @@ launch them.
 
 ![Frontend](docs/frontend.png)
 
+The table list is refreshed every time you return to the main menu, so tables added, removed or replaced
+while the frontend is running show up without a restart. Unchanged tables come from the index cache, so the
+refresh is a directory walk rather than a re-read.
+
 Every launch from the frontend is appended to a play log in the platform data directory
 (`~/.local/share/vpxtool/play_log.jsonl` on Linux). The "Recently played" and "Most played" entries
 in the main menu are built from it; runs shorter than 30 seconds are kept in the log but do not count

@@ -19,6 +19,7 @@ use dialoguer::theme::ColorfulTheme;
 use dialoguer::{Confirm, FuzzySelect, Input, MultiSelect, Select};
 use indicatif::{ProgressBar, ProgressStyle};
 use is_executable::IsExecutable;
+use log::warn;
 use pinmame_nvram::dips::{DipSwitchState, get_all_dip_switches, set_dip_switches};
 use pinmame_nvram::{DipSwitchInfo, Nvram};
 use std::collections::HashMap;
@@ -167,13 +168,55 @@ pub fn frontend_index(
     Ok(tables)
 }
 
+/// Picks up tables added, removed or changed on disk since the list was
+/// built, keeping the current selection on its table. Unchanged tables come
+/// from the index cache, so this is a directory walk rather than a re-read.
+fn refresh_tables(
+    config: &ResolvedConfig,
+    configured_pinmame_folder: Option<&Path>,
+    tables: &mut Vec<IndexedTable>,
+    selection: &mut Option<usize>,
+) {
+    let selected_path = selection
+        .and_then(|index| index.checked_sub(FIXED_ENTRIES))
+        .and_then(|index| tables.get(index))
+        .map(|table| table.path.clone());
+    match frontend_index(
+        config,
+        true,
+        config.tables_scan_max_depth,
+        configured_pinmame_folder,
+        vec![],
+    ) {
+        Ok(refreshed) => {
+            *tables = refreshed;
+            if let Some(path) = selected_path
+                && let Some(position) = tables.iter().position(|table| table.path == path)
+            {
+                *selection = Some(position + FIXED_ENTRIES);
+            }
+        }
+        Err(err) => warn!("Unable to refresh the table list: {err:?}"),
+    }
+}
+
 pub fn frontend(
     config: &ResolvedConfig,
     configured_pinmame_folder: Option<&Path>,
     mut vpx_files_with_tableinfo: Vec<IndexedTable>,
 ) {
     let mut main_selection_opt = None;
+    let mut first_visit = true;
     loop {
+        if !first_visit {
+            refresh_tables(
+                config,
+                configured_pinmame_folder,
+                &mut vpx_files_with_tableinfo,
+                &mut main_selection_opt,
+            );
+        }
+        first_visit = false;
         let tables: Vec<String> = vpx_files_with_tableinfo
             .iter()
             .map(display_table_line_full)
