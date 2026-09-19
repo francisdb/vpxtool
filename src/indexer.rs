@@ -16,6 +16,8 @@ use std::{
     path::{Path, PathBuf},
 };
 use vpin::vpx;
+// vpin 0.34 deprecated this without a public replacement
+#[allow(deprecated)]
 use vpin::vpx::jsonmodel::json_to_info;
 use vpin::vpx::tableinfo::TableInfo;
 
@@ -813,6 +815,7 @@ fn read_table_info_json(info_file_path: &Path) -> io::Result<TableInfo> {
             e
         ))
     })?;
+    #[allow(deprecated)]
     let (table_info, _custom_info_tags) = json_to_info(json, None)?;
     Ok(table_info)
 }
