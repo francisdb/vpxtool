@@ -2559,9 +2559,9 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "vpin"
-version = "0.34.1"
+version = "0.35.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef4ced0adcdca1cd224fbe5c0253d18c540afe6ebbf7448be2af724f2da12e41"
+checksum = "b6b4bae551facd9c50bf8ff48bd31498a4367defe40e18da61b360f8cca77cbe"
 dependencies = [
  "bytes",
  "cfb",
@@ -2580,6 +2580,7 @@ dependencies = [
  "vbscript",
  "wavefront-obj-io",
  "weezl 0.2.1",
+ "zmij",
 ]
 
 [[package]]
@@ -2756,9 +2757,12 @@ dependencies = [
 
 [[package]]
 name = "wavefront-obj-io"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c8303f48c4cd4d0e4cc8b376b83dee11ce93c95d7d28f829fd213a76fcb3b538"
+checksum = "01cf40b6eb09a24cc90e3d9ab03eca80b96b2d248a0c09a6fdc4e72558ce6cc1"
+dependencies = [
+ "zmij",
+]
 
 [[package]]
 name = "web-sys"
@@ -3239,9 +3243,9 @@ checksum = "40990edd51aae2c2b6907af74ffb635029d5788228222c4bb811e9351c0caad3"
 
 [[package]]
 name = "zmij"
-version = "1.0.2"
+version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f4a4e8e9dc5c62d159f04fcdbe07f4c3fb710415aab4754bf11505501e3251d"
+checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
 
 [[package]]
 name = "zopfli"
