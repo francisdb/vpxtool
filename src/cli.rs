@@ -31,7 +31,10 @@ use vpin::vpx::audit::{Finding, Severity};
 use vpin::vpx::diff::semantic::{self, Change};
 use vpin::vpx::expanded::ExpandOptions;
 use vpin::vpx::export::gltf_export::{GltfExportOptions, GltfFormat, export_gltf};
+use vpin::vpx::export::item_filter::ItemFilter;
 use vpin::vpx::export::obj_export::{ExportUnits, ObjExportOptions, export_obj};
+// vpin 0.34 deprecated these without a public replacement
+#[allow(deprecated)]
 use vpin::vpx::jsonmodel::{game_data_to_json, info_to_json};
 use vpin::vpx::{ExtractResult, VerifyResult, expanded, extractvbs, importvbs, verify};
 
@@ -803,6 +806,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 let expanded_path = path_exists(path)?;
                 let mut vpx_file = vpx::open(expanded_path)?;
                 let game_data = vpx_file.read_gamedata()?;
+                #[allow(deprecated)]
                 let json = game_data_to_json(&game_data);
                 let pretty = serde_json::to_string_pretty(&json)?;
                 crate::println!("{}", pretty)?;
@@ -1828,8 +1832,8 @@ fn handle_export_gltf(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
 
     let options = GltfExportOptions {
         format,
-        export_invisible_items: export_invisible,
         units,
+        filter: ItemFilter::everything().include_invisible(export_invisible),
     };
 
     crate::println!("Reading {}", expanded_path.display())?;
@@ -3034,6 +3038,7 @@ fn write_info_json(vpx_file_path: &Path, info_file_path: &Path) -> io::Result<()
     let mut vpx_file = vpx::open(vpx_file_path)?;
     let table_info = vpx_file.read_tableinfo()?;
     let custom_info_tags = vpx_file.read_custominfotags()?;
+    #[allow(deprecated)]
     let table_info_json = info_to_json(&table_info, &custom_info_tags);
     let info_file = File::create(info_file_path)?;
     serde_json::to_writer_pretty(info_file, &table_info_json)?;
