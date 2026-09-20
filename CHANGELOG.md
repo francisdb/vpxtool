@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.34.4](https://github.com/francisdb/vpxtool/compare/v0.34.3...v0.34.4) - 2026-09-20
+
+### Fixed
+
+- tolerate keyless lines in VPinballX.ini ([#896](https://github.com/francisdb/vpxtool/pull/896))
+
 ## [0.34.3](https://github.com/francisdb/vpxtool/compare/v0.34.2...v0.34.3) - 2026-09-19
 
 ### Other
