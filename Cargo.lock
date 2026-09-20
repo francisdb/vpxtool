@@ -2544,9 +2544,9 @@ dependencies = [
 
 [[package]]
 name = "vbscript"
-version = "0.3.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9a55e59a0ecd1e1963af43a06e70fbc6fd94d040bda7cc7f5b5befc83abc8f4"
+checksum = "5f85ace96395b779625b0ffbd88ba9bca14fb53dafff903d672e6fc7d60d9b0f"
 dependencies = [
  "logos",
 ]
@@ -2559,9 +2559,9 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "vpin"
-version = "0.35.0"
+version = "0.36.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b6b4bae551facd9c50bf8ff48bd31498a4367defe40e18da61b360f8cca77cbe"
+checksum = "64d623f27c4a1af997ac69f9e8278286071b7c6c9f2bbc0abe0ca2aa400adcb5"
 dependencies = [
  "bytes",
  "cfb",
