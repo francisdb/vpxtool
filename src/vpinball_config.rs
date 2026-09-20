@@ -101,22 +101,47 @@ impl VPinballConfig {
 
     pub fn read(ini_path: &Path) -> io::Result<Self> {
         info!("Reading vpinball ini file: {ini_path:?}");
-        let ini = ini::Ini::load_from_file(ini_path).map_err(|e| {
+        let content = std::fs::read_to_string(ini_path)?;
+        Self::parse(&content).map_err(|e| {
             io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!("Failed to read ini file {}: {e:?}", ini_path.display()),
             )
-        })?;
-        Ok(VPinballConfig { ini })
+        })
     }
 
     pub fn read_from<R: Read>(reader: &mut R) -> io::Result<Self> {
-        let ini = ini::Ini::read_from(reader).map_err(|e| {
+        let mut content = String::new();
+        reader.read_to_string(&mut content)?;
+        Self::parse(&content).map_err(|e| {
             io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!("Failed to read ini file: {e:?}"),
             )
-        })?;
+        })
+    }
+
+    fn parse(content: &str) -> Result<Self, ini::ParseError> {
+        // vpinball writes a " = " line to the [Version] section for tables
+        // with an empty name, rust-ini rejects those with "missing key"
+        let mut skipped = 0;
+        let filtered: String = content
+            .lines()
+            .map(|line| {
+                if line.trim_start().starts_with(['=', ':']) {
+                    skipped += 1;
+                    // keep the line count intact for parse error positions
+                    ""
+                } else {
+                    line
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        if skipped > 0 {
+            info!("Ignored {skipped} line(s) without a key in vpinball ini");
+        }
+        let ini = ini::Ini::load_from_str(&filtered)?;
         Ok(VPinballConfig { ini })
     }
 
@@ -372,6 +397,26 @@ PlayfieldHeight=1080
                 .unwrap()
                 .height,
             Some(1080)
+        );
+    }
+
+    #[test]
+    fn test_read_vpinball_config_empty_key() {
+        let mut cursor = io::Cursor::new(
+            r#"
+[Version]
+2_in_1 = VPX 10.1
+ = 
+TNA = 2.3
+
+[Player]
+PlayfieldWndX=12
+"#,
+        );
+        let config = VPinballConfig::read_from(&mut cursor).unwrap();
+        assert_eq!(
+            config.get_window_info(WindowType::Playfield).unwrap().x,
+            Some(12)
         );
     }
 

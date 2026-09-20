@@ -80,9 +80,9 @@ impl ResolvedConfig {
         }
         // Tolerate a broken VPinballX.ini: the file is owned by vpinball
         // (vpxtool only reads it for `PinMAMEPath`) and vpinball has been
-        // known to emit malformed lines, e.g. an empty key in the [Version]
-        // section that strict INI parsers reject (vpinball#776). If we can't
-        // parse it, fall back to None - the caller treats that as "no
+        // known to emit malformed lines. The empty key in the [Version]
+        // section (vpinball#776) is skipped by VPinballConfig, for anything
+        // else we can't parse, fall back to None - the caller treats that as "no
         // configured PinMAMEPath" and still searches the global and
         // per-table pinmame folders.
         let vpinball_config = match VPinballConfig::read(&self.vpx_config) {
@@ -780,18 +780,15 @@ tables_scan_max_depth = 2
 
     #[test]
     fn test_configured_pinmame_folder_tolerates_broken_ini() -> io::Result<()> {
-        // Real-world reproducer for vpinball#776: vpinball writes an empty-key
-        // line in the [Version] section, which strict INI parsers reject.
-        // configured_pinmame_folder must not panic; it returns None so
-        // downstream lookups fall back to the global / per-table folders.
+        // configured_pinmame_folder must not panic on an ini that can't be
+        // parsed; it returns None so downstream lookups fall back to the
+        // global / per-table folders.
         let temp_dir = testdir!();
         let ini_path = temp_dir.join("VPinballX.ini");
         std::fs::write(
             &ini_path,
-            "[Version]\n\
+            "[Version\n\
              VPinball = 10819999\n\
-             SomeTable = 1.0\n\
-              = \n\
              \n\
              [Standalone]\n\
              PinMAMEPath = /tmp/should-not-be-read\n",
@@ -810,6 +807,41 @@ tables_scan_max_depth = 2
 
         // Must not panic; the broken ini is treated as unparseable.
         assert_eq!(config.configured_pinmame_folder(), None);
+        Ok(())
+    }
+
+    #[test]
+    fn test_configured_pinmame_folder_skips_empty_key() -> io::Result<()> {
+        // Real-world reproducer for vpinball#776: vpinball writes an empty-key
+        // line in the [Version] section, which strict INI parsers reject.
+        let temp_dir = testdir!();
+        let ini_path = temp_dir.join("VPinballX.ini");
+        std::fs::write(
+            &ini_path,
+            "[Version]\n\
+             VPinball = 10819999\n\
+             SomeTable = 1.0\n\
+              = \n\
+             \n\
+             [Standalone]\n\
+             PinMAMEPath = /tmp/pinmame\n",
+        )?;
+        let config = ResolvedConfig {
+            vpx_executable: PathBuf::from("/tmp/vpinball"),
+            vpx_config: ini_path,
+            tables_folder: PathBuf::from("/tmp/tables"),
+            tables_index_path: PathBuf::from("/tmp/tables/vpxtool_index.json"),
+            tables_scan_max_depth: None,
+            launch_templates: vec![],
+            diff: None,
+            editor: None,
+            vpxz_excludes: default_vpxz_excludes(),
+        };
+
+        assert_eq!(
+            config.configured_pinmame_folder(),
+            Some(PathBuf::from("/tmp/pinmame"))
+        );
         Ok(())
     }
 }
