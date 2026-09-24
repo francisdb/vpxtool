@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.34.7](https://github.com/francisdb/vpxtool/compare/v0.34.6...v0.34.7) - 2026-09-24
+
+### Other
+
+- *(deps)* bump rand from 0.10.2 to 0.10.3 ([#903](https://github.com/francisdb/vpxtool/pull/903))
+
 ## [0.34.6](https://github.com/francisdb/vpxtool/compare/v0.34.5...v0.34.6) - 2026-09-21
 
 ### Other
