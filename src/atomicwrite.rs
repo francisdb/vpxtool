@@ -38,6 +38,28 @@ where
     result
 }
 
+/// Like [`atomic_write`] for a writer that wants a path rather than an open
+/// file: `write` gets the sibling `.tmp` path to create, and the same
+/// rename and fsync steps follow.
+pub(crate) fn atomic_write_path<F>(path: &Path, write: F) -> io::Result<()>
+where
+    F: FnOnce(&Path) -> io::Result<()>,
+{
+    let mut tmp_os = path.as_os_str().to_owned();
+    tmp_os.push(".tmp");
+    let tmp_path = PathBuf::from(tmp_os);
+    let result = (|| -> io::Result<()> {
+        write(&tmp_path)?;
+        File::open(&tmp_path)?.sync_all()?;
+        fs::rename(&tmp_path, path)?;
+        fsync_parent_best_effort(path)
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&tmp_path);
+    }
+    result
+}
+
 #[cfg(unix)]
 fn fsync_parent_best_effort(path: &Path) -> io::Result<()> {
     let parent = path

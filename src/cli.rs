@@ -58,6 +58,7 @@ const CMD_IMPORT_VBS: &str = "importvbs";
 const CMD_PATCH: &str = "patch";
 const CMD_VERIFY: &str = "verify";
 const CMD_AUDIT: &str = "audit";
+const CMD_OPTIMIZE: &str = "optimize";
 const CMD_NEW: &str = "new";
 const CMD_LOCK: &str = "lock";
 const CMD_UNLOCK: &str = "unlock";
@@ -666,6 +667,19 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             }
         }
 
+        Some((CMD_OPTIMIZE, sub_matches)) => {
+            let path = sub_matches
+                .get_one::<String>("VPXPATH")
+                .expect("VPXPATH is required");
+            let dry_run = sub_matches.get_flag("DRY_RUN");
+            let expanded_path = path_exists(path)?;
+            let outcome = crate::optimize::optimize_file(&expanded_path, dry_run)?;
+            crate::println!(
+                "{}",
+                crate::optimize::format_outcome(&expanded_path, &outcome, dry_run)
+            )?;
+            Ok(ExitCode::SUCCESS)
+        }
         Some((CMD_LOCK, sub_matches)) => run_lock(sub_matches, LockAction::Lock),
         Some((CMD_UNLOCK, sub_matches)) => run_lock(sub_matches, LockAction::Unlock),
         Some((CMD_LOCK_STATUS, sub_matches)) => run_lock(sub_matches, LockAction::Status),
@@ -754,6 +768,11 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
         },
         Some((CMD_IMAGES, sub_matches)) => match sub_matches.subcommand() {
             Some((CMD_IMAGES_WEBP, sub_matches)) => {
+                crate::eprintln!(
+                    "{}",
+                    "images webp is deprecated, use optimize: it converts the same images, drops unused fonts and compacts the file in one write"
+                        .yellow()
+                )?;
                 let path = sub_matches
                     .get_one::<String>("VPXPATH")
                     .map(|s| s.as_str())
@@ -1372,6 +1391,23 @@ fn build_command() -> Command {
                 ),
         )
         .subcommand(
+            Command::new(CMD_OPTIMIZE)
+                .about("Shrinks a vpx file without changing how it renders or plays")
+                .long_about(
+                    "Applies the lossless fixes to a vpx file: drops the embedded fonts                     nothing uses, and re-encodes bitmap, png and tga images as lossless                     webp where that is smaller. Images the script hands to FlexDMD are                     left alone, since FlexDMD cannot read webp. The table is rewritten                     in one go through a temporary sibling file, which also compacts it;                     an interrupted run leaves the original intact.
+
+                    Prints what changed with the bytes saved, and what was left alone                     and why. See vpxtool audit for the findings behind the fixes.",
+                )
+                .arg(arg!(<VPXPATH> "The path to the vpx file").required(true))
+                .arg(
+                    Arg::new("DRY_RUN")
+                        .short('n')
+                        .long("dry-run")
+                        .action(ArgAction::SetTrue)
+                        .help("Report what would change without writing the file"),
+                ),
+        )
+        .subcommand(
             Command::new(CMD_LOCK)
                 .about("Lock a vpx file, preventing edits in vpinball")
                 .arg(arg!(<VPXPATH> "The path to the vpx file").required(true)),
@@ -1442,7 +1478,8 @@ fn build_command() -> Command {
                 .about("Vpx image related commands")
                 .subcommand(
                     Command::new(CMD_IMAGES_WEBP)
-                        .about("Converts lossless (bmp/png) images in a vpx file to webp")
+                        .hide(true)
+                        .about("Deprecated, use optimize: converts lossless (bmp/png) images in a vpx file to webp")
                         .arg(
                             arg!(<VPXPATH> "The path to the vpx file")
                                 .required(true),
