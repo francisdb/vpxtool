@@ -1395,9 +1395,14 @@ fn build_command() -> Command {
                 .alias("optimise")
                 .about("Shrinks a vpx file without changing how it renders or plays")
                 .long_about(
-                    "Applies the lossless fixes to a vpx file: drops the embedded fonts                     nothing uses, and re-encodes bitmap, png and tga images as lossless                     webp where that is smaller. Images the script hands to FlexDMD are                     left alone, since FlexDMD cannot read webp. The table is rewritten                     in one go through a temporary sibling file, which also compacts it;                     an interrupted run leaves the original intact.
-
-                    Prints what changed with the bytes saved, and what was left alone                     and why. See vpxtool audit for the findings behind the fixes.",
+                    "Applies the lossless fixes to a vpx file: drops the embedded fonts \
+                    nothing uses, and re-encodes bitmap, png and tga images as lossless \
+                    webp where that is smaller. Images the script hands to FlexDMD are \
+                    left alone, since FlexDMD cannot read webp. The table is rewritten \
+                    in one go through a temporary sibling file, which also compacts it; \
+                    an interrupted run leaves the original intact.\n\n\
+                    Prints what changed with the bytes saved, and what was left alone \
+                    and why. See vpxtool audit for the findings behind the fixes.",
                 )
                 .arg(arg!(<VPXPATH> "The path to the vpx file").required(true))
                 .arg(
