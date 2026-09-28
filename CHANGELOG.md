@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.34.8](https://github.com/francisdb/vpxtool/compare/v0.34.7...v0.34.8) - 2026-09-28
+
+### Added
+
+- accept optimise as a hidden alias of optimize
+
+### Fixed
+
+- reflow the optimize help text
+
+### Other
+
+- *(deps)* bump vpin to 0.37.3
+
 ## [0.34.7](https://github.com/francisdb/vpxtool/compare/v0.34.6...v0.34.7) - 2026-09-28
 
 ### Added
