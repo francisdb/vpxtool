@@ -14,6 +14,7 @@ pub mod playlog;
 pub mod config;
 
 pub mod indexer;
+pub mod optimize;
 
 pub mod cli;
 mod colorful_theme_patched;

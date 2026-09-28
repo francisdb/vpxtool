@@ -115,6 +115,17 @@ vpxtool extract --no-media table.vpx
 Files that are filtered out are not produced at all, so extracting only the JSON of a large table takes
 milliseconds. A partial directory cannot be assembled back into a table.
 
+### Shrinking a table
+
+`optimize` applies the lossless fixes from the `vpin` library and rewrites the table in one go, which also compacts the file: unused embedded fonts are dropped, and bitmap, png and tga images are re-encoded as lossless webp where that is smaller. Images the script hands to FlexDMD are left alone. It prints what changed with the bytes saved and what was left alone and why; `--dry-run` reports without writing.
+
+```shell
+vpxtool optimize table.vpx
+vpxtool optimize --dry-run table.vpx
+```
+
+`audit` reports the findings these fixes act on, next to everything else it checks.
+
 ### Logging
 
 To get more information about what vpxtool is doing, you can set the `-v` flag to increase verbosity.
