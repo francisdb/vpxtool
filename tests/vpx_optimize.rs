@@ -42,3 +42,23 @@ fn a_missing_table_fails() {
     let out = vpxtool(&dir, &["optimize", "missing.vpx"]);
     assert!(!out.status.success());
 }
+
+#[test]
+fn the_british_spelling_is_accepted_but_not_advertised() {
+    let dir = testdir!();
+    let out = vpxtool(&dir, &["new", "table.vpx"]);
+    assert!(out.status.success(), "vpxtool new failed: {:?}", out);
+
+    let out = vpxtool(&dir, &["optimise", "--dry-run", "table.vpx"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(out.status.success(), "optimise failed: {:?}", out);
+    assert!(
+        stdout.contains("nothing to optimize"),
+        "unexpected output: {stdout}"
+    );
+
+    let out = vpxtool(&dir, &["--help"]);
+    let help = String::from_utf8_lossy(&out.stdout);
+    assert!(help.contains("optimize"), "unexpected help: {help}");
+    assert!(!help.contains("optimise"), "unexpected help: {help}");
+}
