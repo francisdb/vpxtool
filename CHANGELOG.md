@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.35.0](https://github.com/francisdb/vpxtool/compare/v0.34.8...v0.35.0) - 2026-10-04
+
+### Added
+
+- *(optimize)* add opt-in --flac to re-encode wav sounds ([#910](https://github.com/francisdb/vpxtool/pull/910))
+
 ## [0.34.8](https://github.com/francisdb/vpxtool/compare/v0.34.7...v0.34.8) - 2026-09-28
 
 ### Added
