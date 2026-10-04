@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.35.1](https://github.com/francisdb/vpxtool/compare/v0.35.0...v0.35.1) - 2026-10-04
+
+### Other
+
+- *(deps)* update Cargo.lock ([#913](https://github.com/francisdb/vpxtool/pull/913))
+- stop rebuilding cargo-audit on every run ([#912](https://github.com/francisdb/vpxtool/pull/912))
+
 ## [0.35.0](https://github.com/francisdb/vpxtool/compare/v0.34.8...v0.35.0) - 2026-10-04
 
 ### Added
