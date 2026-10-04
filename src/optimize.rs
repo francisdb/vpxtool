@@ -8,7 +8,19 @@ use std::io;
 use std::path::Path;
 use vpin::vpx;
 use vpin::vpx::VPX;
-use vpin::vpx::fix::{self, ConvertedImage, ImageConversion, RemovedFont, SkippedImage};
+use vpin::vpx::fix::{
+    self, ConvertedImage, ConvertedSound, ImageConversion, RemovedFont, SkippedImage, SkippedSound,
+    SoundConversion,
+};
+
+/// Which fixes [`apply`] runs. The lossless image and font fixes always
+/// run; the FLAC conversion is opt-in because it changes which vpinball
+/// builds play the table (only miniaudio, 10.8.1 and later, decodes FLAC).
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct Options {
+    /// Re-encode PCM WAV sounds as FLAC
+    pub flac: bool,
+}
 
 /// What [`apply`] did to a table
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -23,6 +35,10 @@ pub struct Report {
     pub tgas: Vec<ConvertedImage>,
     /// The candidate images left alone, with the reason
     pub skipped: Vec<SkippedImage>,
+    /// The PCM WAV sounds re-encoded as FLAC, when `--flac` is set
+    pub flacs: Vec<ConvertedSound>,
+    /// The candidate WAV sounds left alone, with the reason
+    pub skipped_sounds: Vec<SkippedSound>,
 }
 
 impl Report {
@@ -32,6 +48,7 @@ impl Report {
             && self.bitmaps.is_empty()
             && self.pngs.is_empty()
             && self.tgas.is_empty()
+            && self.flacs.is_empty()
     }
 
     /// Bytes of stored data the changes save
@@ -43,7 +60,13 @@ impl Report {
             .chain(&self.tgas)
             .map(|image| image.bytes_before().saturating_sub(image.bytes_after()))
             .sum::<usize>();
+        let sounds = self
+            .flacs
+            .iter()
+            .map(|sound| sound.bytes_before().saturating_sub(sound.bytes_after()))
+            .sum::<usize>();
         images
+            + sounds
             + self
                 .removed_fonts
                 .iter()
@@ -55,13 +78,20 @@ impl Report {
         self.skipped.extend(conversion.skipped().iter().cloned());
         conversion.converted().to_vec()
     }
+
+    fn take_sounds(&mut self, conversion: SoundConversion) -> Vec<ConvertedSound> {
+        self.skipped_sounds
+            .extend(conversion.skipped().iter().cloned());
+        conversion.converted().to_vec()
+    }
 }
 
-/// Applies every lossless fix to the table in memory: drops the fonts
-/// nothing uses and re-encodes bitmap, png and tga images as lossless webp
-/// where that is smaller. Images the script hands to FlexDMD are left
-/// alone.
-pub fn apply(vpx: &mut VPX) -> Report {
+/// Applies the fixes to the table in memory: drops the fonts nothing uses
+/// and re-encodes bitmap, png and tga images as lossless webp where that
+/// is smaller, always; and, when [`Options::flac`] is set, re-encodes PCM
+/// WAV sounds as lossless FLAC. Images the script hands to FlexDMD are
+/// left alone.
+pub fn apply(vpx: &mut VPX, options: Options) -> Report {
     let mut report = Report {
         removed_fonts: fix::drop_unused_fonts(vpx),
         ..Report::default()
@@ -69,6 +99,9 @@ pub fn apply(vpx: &mut VPX) -> Report {
     report.bitmaps = report.take(fix::bitmaps_to_webp(vpx));
     report.pngs = report.take(fix::pngs_to_webp(vpx));
     report.tgas = report.take(fix::tgas_to_webp(vpx));
+    if options.flac {
+        report.flacs = report.take_sounds(fix::wavs_to_flac(vpx));
+    }
     report
 }
 
@@ -88,10 +121,10 @@ pub struct Outcome {
 /// changed, writes it back in place through a temporary sibling file, so
 /// an interrupted run leaves the original intact. The rewrite compacts
 /// the file.
-pub fn optimize_file(path: &Path, dry_run: bool) -> io::Result<Outcome> {
+pub fn optimize_file(path: &Path, options: Options, dry_run: bool) -> io::Result<Outcome> {
     let file_bytes_before = std::fs::metadata(path)?.len();
     let mut vpx = vpx::read(path)?;
-    let report = apply(&mut vpx);
+    let report = apply(&mut vpx, options);
     let file_bytes_after = if dry_run || report.is_empty() {
         None
     } else {
@@ -134,6 +167,21 @@ pub fn format_outcome(path: &Path, outcome: &Outcome, dry_run: bool) -> String {
     for skipped in &report.skipped {
         out.push_str(&format!(
             "  image {:?} left alone: {}\n",
+            skipped.name(),
+            skipped.reason()
+        ));
+    }
+    for sound in &report.flacs {
+        out.push_str(&format!(
+            "  sound {:?} wav -> flac, {} -> {}\n",
+            sound.name(),
+            human_bytes(sound.bytes_before() as u64),
+            human_bytes(sound.bytes_after() as u64)
+        ));
+    }
+    for skipped in &report.skipped_sounds {
+        out.push_str(&format!(
+            "  sound {:?} left alone: {}\n",
             skipped.name(),
             skipped.reason()
         ));
@@ -226,7 +274,7 @@ mod tests {
             "Option Explicit\r\nSet img = FlexDMD.NewImage(\"logo\", \"VPX.Logo\")\r\n".to_string(),
         );
 
-        let report = apply(&mut vpx);
+        let report = apply(&mut vpx, Options::default());
 
         assert_eq!(report.pngs.len(), 1);
         assert_eq!(report.pngs[0].name(), "apron");
@@ -253,6 +301,66 @@ mod tests {
             plain.ends_with("saved 7.7 KB, file 20.0 KB -> 12.3 KB"),
             "{plain}"
         );
+    }
+
+    /// A PCM WAV sound: raw interleaved 16-bit samples, a slowly varying
+    /// ramp flac compresses well
+    fn pcm_wav(name: &str) -> vpin::vpx::sound::SoundData {
+        let frames = 4096;
+        let mut data = Vec::with_capacity(frames * 2 * 2);
+        for frame in 0..frames {
+            for ch in 0..2i32 {
+                let v = (((frame as i32 + ch * 7) % 97) - 48) as i16;
+                data.extend_from_slice(&v.to_le_bytes());
+            }
+        }
+        vpin::vpx::sound::SoundData {
+            name: name.to_string(),
+            path: format!("C:\\sounds\\{name}.wav"),
+            wave_form: vpin::vpx::sound::WaveForm {
+                format_tag: 1,
+                channels: 2,
+                samples_per_sec: 44100,
+                avg_bytes_per_sec: 44100 * 4,
+                block_align: 4,
+                bits_per_sample: 16,
+                cb_size: 0,
+            },
+            data,
+            internal_name: String::new(),
+            fade: 0,
+            volume: 0,
+            balance: 0,
+            output_target: vpin::vpx::sound::OutputTarget::Table,
+        }
+    }
+
+    #[test]
+    fn flac_is_opt_in_and_reported() {
+        let mut vpx = VPX::default();
+        vpx.sounds.push(pcm_wav("fx"));
+
+        // off by default: the wav is untouched
+        let report = apply(&mut vpx, Options::default());
+        assert!(report.flacs.is_empty());
+        assert!(vpx.sounds[0].path.ends_with(".wav"));
+
+        // opt in: the wav becomes flac and is reported
+        let report = apply(&mut vpx, Options { flac: true });
+        assert_eq!(report.flacs.len(), 1);
+        assert_eq!(report.flacs[0].name(), "fx");
+        assert!(report.bytes_saved() > 0);
+        assert!(vpx.sounds[0].path.ends_with(".flac"));
+        assert!(vpx.sounds[0].data.starts_with(b"fLaC"));
+
+        let outcome = Outcome {
+            report,
+            file_bytes_before: 20_000,
+            file_bytes_after: Some(12_345),
+        };
+        colored::control::set_override(false);
+        let plain = format_outcome(Path::new("t.vpx"), &outcome, false);
+        assert!(plain.contains("sound \"fx\" wav -> flac, "), "{plain}");
     }
 
     #[test]

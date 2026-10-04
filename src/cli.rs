@@ -672,8 +672,11 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 .get_one::<String>("VPXPATH")
                 .expect("VPXPATH is required");
             let dry_run = sub_matches.get_flag("DRY_RUN");
+            let options = crate::optimize::Options {
+                flac: sub_matches.get_flag("FLAC"),
+            };
             let expanded_path = path_exists(path)?;
-            let outcome = crate::optimize::optimize_file(&expanded_path, dry_run)?;
+            let outcome = crate::optimize::optimize_file(&expanded_path, options, dry_run)?;
             crate::println!(
                 "{}",
                 crate::optimize::format_outcome(&expanded_path, &outcome, dry_run)
@@ -1402,7 +1405,11 @@ fn build_command() -> Command {
                     in one go through a temporary sibling file, which also compacts it; \
                     an interrupted run leaves the original intact.\n\n\
                     Prints what changed with the bytes saved, and what was left alone \
-                    and why. See vpxtool audit for the findings behind the fixes.",
+                    and why. See vpxtool audit for the findings behind the fixes.\n\n\
+                    --flac additionally re-encodes PCM WAV sounds as lossless FLAC. \
+                    This is opt-in because only vpinball with the miniaudio sound \
+                    engine (10.8.1 and later) decodes FLAC, so an older build would \
+                    play the table without those sounds.",
                 )
                 .arg(arg!(<VPXPATH> "The path to the vpx file").required(true))
                 .arg(
@@ -1411,6 +1418,15 @@ fn build_command() -> Command {
                         .long("dry-run")
                         .action(ArgAction::SetTrue)
                         .help("Report what would change without writing the file"),
+                )
+                .arg(
+                    Arg::new("FLAC")
+                        .long("flac")
+                        .action(ArgAction::SetTrue)
+                        .help(
+                            "Also re-encode PCM WAV sounds as lossless FLAC (needs \
+                            vpinball 10.8.1 or later to play)",
+                        ),
                 ),
         )
         .subcommand(
