@@ -35,7 +35,7 @@ use vpin::vpx::export::item_filter::ItemFilter;
 use vpin::vpx::export::obj_export::{ExportUnits, ObjExportOptions, export_obj};
 use vpin::vpx::gamedata::game_data_to_json;
 use vpin::vpx::tableinfo::info_to_json;
-use vpin::vpx::{ExtractResult, VerifyResult, expanded, extractvbs, importvbs, verify};
+use vpin::vpx::{ExtractResult, expanded, extractvbs, importvbs};
 
 // see https://github.com/fusion-engineering/rust-git-version/issues/21
 const GIT_VERSION: &str = git_version!(
@@ -620,18 +620,26 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 .unwrap_or_default()
                 .map(|v| v.as_str())
                 .collect::<Vec<_>>();
-            for path in paths {
-                let expanded_path = path_exists(path)?;
-                match verify(&expanded_path) {
-                    VerifyResult::Ok(vbs_path) => {
-                        crate::println!("{OK} {}", vbs_path.display())?;
-                    }
-                    VerifyResult::Failed(vbs_path, msg) => {
-                        let warning =
-                            format!("{NOK} {} {}", vbs_path.display(), msg).truecolor(255, 125, 0);
-                        crate::eprintln!("{}", warning)?;
-                    }
+            let results: Vec<MacCheck> = paths.iter().map(|path| check_mac(path)).collect();
+            if sub_matches.get_flag("JSON") {
+                let json = serde_json::to_string_pretty(&results).map_err(io::Error::other)?;
+                crate::println!("{json}")?;
+                return Ok(ExitCode::SUCCESS);
+            }
+            for check in results {
+                if check.valid {
+                    crate::println!("{OK} {}", check.path)?;
+                    continue;
                 }
+                let reason = match (&check.error, &check.mac, &check.computed_mac) {
+                    (Some(error), _, _) => error.clone(),
+                    (None, Some(mac), Some(computed_mac)) => {
+                        format!("MAC mismatch: {mac} != {computed_mac}")
+                    }
+                    _ => "MAC stream not found".to_string(),
+                };
+                let warning = format!("{NOK} {} {}", check.path, reason).truecolor(255, 125, 0);
+                crate::eprintln!("{}", warning)?;
             }
             Ok(ExitCode::SUCCESS)
         }
@@ -1370,6 +1378,13 @@ fn build_command() -> Command {
         .subcommand(
             Command::new(CMD_VERIFY)
                 .about("Verify the structure of a vpx file")
+                .arg(
+                    Arg::new("JSON")
+                        .long("json")
+                        .num_args(0)
+                        .action(ArgAction::SetTrue)
+                        .help("Print the stored and the computed MAC of each file as JSON"),
+                )
                 .arg(
                     arg!(<VPXPATH> "The path(s) to the vpx file(s)")
                         .required(true)
@@ -3613,4 +3628,47 @@ fn apply_lock_action(path: &Path, action: &LockAction) -> io::Result<()> {
         }
     }
     Ok(())
+}
+
+/// One file of `verify --json`: the MAC stored in the table and the one its
+/// content signs to, as lowercase hex. `mac` is null when the table has none,
+/// `error` tells why a file could not be checked
+#[derive(serde::Serialize)]
+struct MacCheck {
+    path: String,
+    mac: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    computed_mac: Option<String>,
+    valid: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+}
+
+fn check_mac(path: &str) -> MacCheck {
+    let hex = |bytes: Vec<u8>| bytes.iter().map(|b| format!("{b:02x}")).collect::<String>();
+    let result = || -> io::Result<(Option<Vec<u8>>, Vec<u8>)> {
+        let mut vpx_file = vpx::open(path_exists(path)?)?;
+        let mac = match vpx_file.read_mac() {
+            Ok(mac) => Some(mac),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => None,
+            Err(e) => return Err(e),
+        };
+        Ok((mac, vpx_file.compute_mac()?))
+    }();
+    match result {
+        Ok((mac, computed_mac)) => MacCheck {
+            path: path.to_string(),
+            valid: mac.as_ref() == Some(&computed_mac),
+            mac: mac.map(hex),
+            computed_mac: Some(hex(computed_mac)),
+            error: None,
+        },
+        Err(e) => MacCheck {
+            path: path.to_string(),
+            mac: None,
+            computed_mac: None,
+            valid: false,
+            error: Some(e.to_string()),
+        },
+    }
 }
