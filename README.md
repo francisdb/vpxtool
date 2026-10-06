@@ -66,6 +66,7 @@ Commands:
   verify          Verify the structure of a vpx file
   audit           Reports consistency problems in a vpx file
   assemble        Assembles a vpx file
+  convert         Converts a vpx file to a table pack, or a table pack to a vpx file
   patch           Applies a VPURemix System patch to a table
   new             Creates a minimal empty new vpx file
   config          Vpxtool related config file
