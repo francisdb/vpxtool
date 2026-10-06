@@ -958,7 +958,7 @@ fn handle_index(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
         force,
     )?;
     progress.finish_and_clear();
-    crate::println!("Indexed {} vpx files", index.len(),)?;
+    crate::println!("Indexed {} tables", index.len(),)?;
     Ok(ExitCode::SUCCESS)
 }
 

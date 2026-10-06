@@ -6,7 +6,7 @@ use crate::cli::{
 };
 use crate::colorful_theme_patched::ColorfulThemePatched;
 use crate::config::{LaunchTemplate, ResolvedConfig};
-use crate::indexer::{IndexError, IndexedTable, Progress};
+use crate::indexer::{IndexError, IndexedTable, Progress, is_pack};
 use crate::patcher::LineEndingsResult::{NoChanges, Unified};
 use crate::patcher::unify_line_endings_vbs_file;
 use crate::playlog::{self, PlayRecord, TableStats};
@@ -104,6 +104,24 @@ impl TableOption {
             TableOption::CaptureScreenshot,
         ]);
         options
+    }
+
+    /// Whether the option works for a table pack; the others read or write
+    /// the vpx file itself
+    fn applies_to_pack(&self) -> bool {
+        !matches!(
+            self,
+            TableOption::InfoShow
+                | TableOption::InfoEdit
+                | TableOption::InfoDiff
+                | TableOption::Audit
+                | TableOption::ExtractVBS
+                | TableOption::EditVBS
+                | TableOption::UnifyLineEndings
+                | TableOption::ShowVBSDiff
+                | TableOption::CreateVBSPatch
+                | TableOption::ExportVpxz
+        )
     }
 
     fn display(&self) -> String {
@@ -395,7 +413,7 @@ fn table_menu(
     let mut exit = false;
     let mut option = None;
     while !exit {
-        option = choose_table_option(config, info_str, option);
+        option = choose_table_option(config, info_str, option, is_pack(selected_path));
         match option {
             Some(TableOption::Launch { ref template }) => {
                 launch(selected_path, template);
@@ -996,10 +1014,14 @@ fn choose_table_option(
     config: &ResolvedConfig,
     table_name: &str,
     selected: Option<TableOption>,
+    pack: bool,
 ) -> Option<TableOption> {
     let mut default = 0;
     // iterate over table options
-    let all_options = TableOption::all(config);
+    let all_options: Vec<TableOption> = TableOption::all(config)
+        .into_iter()
+        .filter(|option| !pack || option.applies_to_pack())
+        .collect();
     let selections = all_options
         .iter()
         .enumerate()
