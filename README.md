@@ -60,11 +60,11 @@ Commands:
   script       Vpx script code related commands
   ls           Show the vpx file contents
   extract      Extracts a vpx file
-  extractvbs   Extracts the script from a vpx file.
+  extractvbs   Extracts the script from a vpx file
   importvbs    Imports the vbs next to it into a vpx file
   verify       Verify the structure of a vpx file
   audit        Reports consistency problems in a vpx file
-  optimize     Shrinks a vpx file without changing how it renders or plays
+  optimize     Shrinks and repairs a vpx file
   lock         Lock a vpx file, preventing edits in vpinball
   unlock       Unlock a vpx file
   lock-status  Show the lock state of a vpx file
@@ -83,7 +83,7 @@ Commands:
   nvram        PinMAME NVRAM related commands
   scores       Table high-score related commands
   romname      Prints the PinMAME ROM name from a vpx file
-  export       Export a vpx table to a 3D model format
+  export       Export a vpx table to obj, gltf or glb, or to a vpxz mobile archive
   help         Print this message or the help of the given subcommand(s)
 
 Options:
