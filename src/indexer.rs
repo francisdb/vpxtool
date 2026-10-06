@@ -368,10 +368,13 @@ fn is_table_file(path: &Path) -> bool {
         .is_some_and(|name| name.starts_with('.'))
 }
 
-/// True for a vpinball table pack: a `.vpz` file or a folder. The index only
-/// holds `.vpx` files and packs, so anything else is a pack.
+/// True for a vpinball table pack: a `.vpz` file or a folder
 pub fn is_pack(path: &Path) -> bool {
-    !matches!(path.extension().and_then(OsStr::to_str), Some("vpx"))
+    match path.extension().and_then(OsStr::to_str) {
+        Some(extension) if extension.eq_ignore_ascii_case("vpx") => false,
+        Some(extension) if extension.eq_ignore_ascii_case("vpz") => true,
+        _ => path.is_dir(),
+    }
 }
 
 /// The pack manifest of a folder, which makes it a vpinball table pack
