@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.36.0](https://github.com/francisdb/vpxtool/compare/v0.35.1...v0.36.0) - 2026-10-06
+
+### Added
+
+- optimize renames backglass marker sounds and downmixes with --mono ([#922](https://github.com/francisdb/vpxtool/pull/922))
+- convert between vpx files and table packs ([#920](https://github.com/francisdb/vpxtool/pull/920))
+- audit and show the info of table packs ([#919](https://github.com/francisdb/vpxtool/pull/919))
+- index and launch vpinball table packs ([#918](https://github.com/francisdb/vpxtool/pull/918))
+- verify --json prints the stored and computed MAC ([#916](https://github.com/francisdb/vpxtool/pull/916))
+
+### Fixed
+
+- show colors on Windows consoles instead of escape codes ([#924](https://github.com/francisdb/vpxtool/pull/924))
+- optimize writes the table on Windows again ([#925](https://github.com/francisdb/vpxtool/pull/925))
+- no panic on a closed pipe from any output ([#926](https://github.com/francisdb/vpxtool/pull/926))
+
+### Other
+
+- bump vpin to 0.38.3 ([#927](https://github.com/francisdb/vpxtool/pull/927))
+- update the optimize, export and extractvbs descriptions
+- bring the readme up to date
+- convert writes packs through vpz::write ([#921](https://github.com/francisdb/vpxtool/pull/921))
+
 ## [0.35.1](https://github.com/francisdb/vpxtool/compare/v0.35.0...v0.35.1) - 2026-10-04
 
 ### Other
