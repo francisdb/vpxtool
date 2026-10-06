@@ -705,6 +705,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 .expect("VPXPATH is required");
             let dry_run = sub_matches.get_flag("DRY_RUN");
             let options = crate::optimize::Options {
+                mono: sub_matches.get_flag("MONO"),
                 flac: sub_matches.get_flag("FLAC"),
             };
             let expanded_path = path_exists(path)?;
@@ -1445,10 +1446,15 @@ fn build_command() -> Command {
                     an interrupted run leaves the original intact.\n\n\
                     Prints what changed with the bytes saved, and what was left alone \
                     and why. See vpxtool audit for the findings behind the fixes.\n\n\
-                    --flac additionally re-encodes PCM WAV sounds as lossless FLAC. \
-                    This is opt-in because only vpinball with the miniaudio sound \
-                    engine (10.8.1 and later) decodes FLAC, so an older build would \
-                    play the table without those sounds.",
+                    Sounds with the \"* Backglass Output *\" path, which vpinball \
+                    10.8.1 fails to load, get the sound name with .wav as path.\n\n\
+                    --mono additionally downmixes stereo playfield sounds to mono, \
+                    exactly as vpinball 10.8.1 and later decode them; 10.8.0 played \
+                    them in stereo in its two speaker mode. --flac additionally \
+                    re-encodes PCM WAV sounds as lossless FLAC. Both are opt-in \
+                    because only vpinball with the miniaudio sound engine (10.8.1 and \
+                    later) plays the result the same; an older build would play the \
+                    table without the FLAC sounds.",
                 )
                 .arg(arg!(<VPXPATH> "The path to the vpx file").required(true))
                 .arg(
@@ -1457,6 +1463,15 @@ fn build_command() -> Command {
                         .long("dry-run")
                         .action(ArgAction::SetTrue)
                         .help("Report what would change without writing the file"),
+                )
+                .arg(
+                    Arg::new("MONO")
+                        .long("mono")
+                        .action(ArgAction::SetTrue)
+                        .help(
+                            "Also downmix stereo playfield sounds to the mono vpinball \
+                            10.8.1 and later play them as",
+                        ),
                 )
                 .arg(
                     Arg::new("FLAC")

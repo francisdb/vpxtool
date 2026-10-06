@@ -1,6 +1,7 @@
 //! The `optimize` command: the fixes from [`vpin::vpx::fix`] that keep a
-//! table rendering and playing the same, applied in memory and written
-//! back in one go, which also compacts the file.
+//! table rendering and playing the same, and the repairs that make it play
+//! in current vpinball, applied in memory and written back in one go, which
+//! also compacts the file.
 
 use crate::atomicwrite::atomic_write_path;
 use colored::Colorize;
@@ -9,15 +10,19 @@ use std::path::Path;
 use vpin::vpx;
 use vpin::vpx::VPX;
 use vpin::vpx::fix::{
-    self, ConvertedImage, ConvertedSound, ImageConversion, RemovedFont, SkippedImage, SkippedSound,
-    SoundConversion,
+    self, ConvertedImage, ConvertedSound, ImageConversion, RemovedFont, RenamedSound, SkippedImage,
+    SkippedSound, SoundConversion,
 };
 
-/// Which fixes [`apply`] runs. The lossless image and font fixes always
-/// run; the FLAC conversion is opt-in because it changes which vpinball
-/// builds play the table (only miniaudio, 10.8.1 and later, decodes FLAC).
+/// Which fixes [`apply`] runs. The lossless image and font fixes and the
+/// backglass marker repair always run; the mono downmix and the FLAC
+/// conversion are opt-in because they change how vpinball 10.8.0 plays the
+/// table: it plays stereo playfield sounds in stereo in its two speaker
+/// mode, and only miniaudio (10.8.1 and later) decodes FLAC.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct Options {
+    /// Downmix stereo playfield sounds to the mono vpinball plays them as
+    pub mono: bool,
     /// Re-encode PCM WAV sounds as FLAC
     pub flac: bool,
 }
@@ -27,6 +32,8 @@ pub struct Options {
 pub struct Report {
     /// The embedded fonts nothing used
     pub removed_fonts: Vec<RemovedFont>,
+    /// The sounds with the `* Backglass Output *` path, given a `.wav` one
+    pub renamed_sounds: Vec<RenamedSound>,
     /// The bitmaps re-encoded as webp
     pub bitmaps: Vec<ConvertedImage>,
     /// The pngs re-encoded as webp
@@ -35,6 +42,8 @@ pub struct Report {
     pub tgas: Vec<ConvertedImage>,
     /// The candidate images left alone, with the reason
     pub skipped: Vec<SkippedImage>,
+    /// The stereo playfield sounds downmixed to mono, when `--mono` is set
+    pub monos: Vec<ConvertedSound>,
     /// The PCM WAV sounds re-encoded as FLAC, when `--flac` is set
     pub flacs: Vec<ConvertedSound>,
     /// The candidate WAV sounds left alone, with the reason
@@ -45,9 +54,11 @@ impl Report {
     /// Whether the table was left as it was
     pub fn is_empty(&self) -> bool {
         self.removed_fonts.is_empty()
+            && self.renamed_sounds.is_empty()
             && self.bitmaps.is_empty()
             && self.pngs.is_empty()
             && self.tgas.is_empty()
+            && self.monos.is_empty()
             && self.flacs.is_empty()
     }
 
@@ -61,8 +72,9 @@ impl Report {
             .map(|image| image.bytes_before().saturating_sub(image.bytes_after()))
             .sum::<usize>();
         let sounds = self
-            .flacs
+            .monos
             .iter()
+            .chain(&self.flacs)
             .map(|sound| sound.bytes_before().saturating_sub(sound.bytes_after()))
             .sum::<usize>();
         images
@@ -86,19 +98,26 @@ impl Report {
     }
 }
 
-/// Applies the fixes to the table in memory: drops the fonts nothing uses
-/// and re-encodes bitmap, png and tga images as lossless webp where that
-/// is smaller, always; and, when [`Options::flac`] is set, re-encodes PCM
-/// WAV sounds as lossless FLAC. Images the script hands to FlexDMD are
-/// left alone.
+/// Applies the fixes to the table in memory: drops the fonts nothing uses,
+/// gives the sounds with the `* Backglass Output *` path a `.wav` one and
+/// re-encodes bitmap, png and tga images as lossless webp where that is
+/// smaller, always; when [`Options::mono`] is set, downmixes stereo
+/// playfield sounds to mono; and when [`Options::flac`] is set, re-encodes
+/// PCM WAV sounds as lossless FLAC. Images the script hands to FlexDMD are
+/// left alone. The sound fixes run in that order, so the FLAC only encodes
+/// the downmixed, renamed sounds.
 pub fn apply(vpx: &mut VPX, options: Options) -> Report {
     let mut report = Report {
         removed_fonts: fix::drop_unused_fonts(vpx),
+        renamed_sounds: fix::rename_backglass_marker_sounds(vpx),
         ..Report::default()
     };
     report.bitmaps = report.take(fix::bitmaps_to_webp(vpx));
     report.pngs = report.take(fix::pngs_to_webp(vpx));
     report.tgas = report.take(fix::tgas_to_webp(vpx));
+    if options.mono {
+        report.monos = report.take_sounds(fix::playfield_sounds_to_mono(vpx));
+    }
     if options.flac {
         report.flacs = report.take_sounds(fix::wavs_to_flac(vpx));
     }
@@ -169,6 +188,22 @@ pub fn format_outcome(path: &Path, outcome: &Outcome, dry_run: bool) -> String {
             "  image {:?} left alone: {}\n",
             skipped.name(),
             skipped.reason()
+        ));
+    }
+    for sound in &report.renamed_sounds {
+        out.push_str(&format!(
+            "  sound {:?} path {:?} -> {:?}\n",
+            sound.name(),
+            sound.path_before(),
+            sound.path_after()
+        ));
+    }
+    for sound in &report.monos {
+        out.push_str(&format!(
+            "  sound {:?} stereo -> mono, {} -> {}\n",
+            sound.name(),
+            human_bytes(sound.bytes_before() as u64),
+            human_bytes(sound.bytes_after() as u64)
         ));
     }
     for sound in &report.flacs {
@@ -336,6 +371,39 @@ mod tests {
     }
 
     #[test]
+    fn a_backglass_marker_stereo_sound_is_renamed_downmixed_then_flac() {
+        let mut vpx = VPX::default();
+        let mut sound = pcm_wav("bell");
+        sound.path = "* Backglass Output *".to_string();
+        vpx.sounds.push(sound);
+
+        // the rename is a repair and always runs
+        let report = apply(&mut vpx, Options::default());
+        assert_eq!(report.renamed_sounds.len(), 1);
+        assert_eq!(vpx.sounds[0].path, "bell.wav");
+        assert_eq!(vpx.sounds[0].wave_form.channels, 2);
+
+        let report = apply(
+            &mut vpx,
+            Options {
+                mono: true,
+                flac: true,
+            },
+        );
+        assert_eq!(report.monos.len(), 1);
+        assert_eq!(
+            report.monos[0].bytes_after(),
+            report.monos[0].bytes_before() / 2
+        );
+        assert_eq!(report.flacs.len(), 1);
+        let sound = &vpx.sounds[0];
+        assert_eq!(sound.path, "bell.flac");
+        // the FLAC encodes the downmix: one channel in its STREAMINFO
+        assert!(sound.data.starts_with(b"fLaC"));
+        assert_eq!((sound.data[20] >> 1) & 0x07, 0);
+    }
+
+    #[test]
     fn flac_is_opt_in_and_reported() {
         let mut vpx = VPX::default();
         vpx.sounds.push(pcm_wav("fx"));
@@ -346,7 +414,13 @@ mod tests {
         assert!(vpx.sounds[0].path.ends_with(".wav"));
 
         // opt in: the wav becomes flac and is reported
-        let report = apply(&mut vpx, Options { flac: true });
+        let report = apply(
+            &mut vpx,
+            Options {
+                flac: true,
+                ..Options::default()
+            },
+        );
         assert_eq!(report.flacs.len(), 1);
         assert_eq!(report.flacs[0].name(), "fx");
         assert!(report.bytes_saved() > 0);
