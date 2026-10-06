@@ -2781,9 +2781,9 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "vpin"
-version = "0.37.4"
+version = "0.38.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "03209871c87a642c1f4f0bc6b3421705b7b398a5c7be9c55059a85f8f825041d"
+checksum = "4444bca3f66fe09f1e2818467c34750ece88d0a93593b582bcf541b855071682"
 dependencies = [
  "bytes",
  "cfb",
@@ -2803,6 +2803,7 @@ dependencies = [
  "vbscript",
  "wavefront-obj-io",
  "weezl 0.2.1",
+ "zip",
  "zmij",
 ]
 
