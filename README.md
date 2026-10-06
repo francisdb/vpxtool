@@ -153,7 +153,9 @@ Works with PinMAME tables (resolved through pinmame-nvram maps) as well as rom-l
 ### Text UI Frontend
 
 Vpxtool can act as a frontend for launching vpx files. It will index a directory of vpx files and then present a menu to
-launch them.
+launch them. Table packs, a `.vpz` file or a folder with a vpinball pack `manifest.json`, are indexed and launched too;
+they need a vpinball version that loads packs, and the menu only offers the actions that do not read the vpx file
+itself.
 
 ```
 > vpxtool frontend

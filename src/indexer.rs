@@ -17,8 +17,7 @@ use std::{
 };
 use vpin::vpx;
 use vpin::vpx::tableinfo::{TableInfo, json_to_info};
-
-use vpx::gamedata::GameData;
+use vpin::vpz;
 
 use crate::atomicwrite::atomic_write;
 
@@ -352,18 +351,42 @@ pub fn find_roms(rom_path: &Path) -> io::Result<HashMap<String, PathBuf>> {
     Ok(roms)
 }
 
-/// True for regular table files: a `.vpx` extension and no leading dot.
+/// True for regular table files: a `.vpx` or `.vpz` extension and no
+/// leading dot.
 ///
 /// Dotfiles are never real tables. Editors keep hidden working copies such
 /// as `.source.vpx` next to a table, and unpacked archives can leave macOS
 /// `._Foo.vpx` resource forks behind; both would otherwise be indexed as
 /// tables of their own.
 fn is_table_file(path: &Path) -> bool {
-    matches!(path.extension().and_then(OsStr::to_str), Some("vpx"))
-        && !path
-            .file_name()
-            .and_then(OsStr::to_str)
-            .is_some_and(|name| name.starts_with('.'))
+    matches!(
+        path.extension().and_then(OsStr::to_str),
+        Some("vpx" | "vpz")
+    ) && !path
+        .file_name()
+        .and_then(OsStr::to_str)
+        .is_some_and(|name| name.starts_with('.'))
+}
+
+/// True for a vpinball table pack: a `.vpz` file or a folder. The index only
+/// holds `.vpx` files and packs, so anything else is a pack.
+pub fn is_pack(path: &Path) -> bool {
+    !matches!(path.extension().and_then(OsStr::to_str), Some("vpx"))
+}
+
+/// The pack manifest of a folder, which makes it a vpinball table pack
+const PACK_MANIFEST: &str = "manifest.json";
+
+/// True when `manifest` is the manifest of a vpinball table pack
+fn is_pack_manifest(manifest: &Path) -> bool {
+    #[derive(Deserialize)]
+    struct Manifest {
+        file_format: Option<String>,
+    }
+    fs::read(manifest)
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<Manifest>(&bytes).ok())
+        .is_some_and(|manifest| manifest.file_format.as_deref() == Some("vpinball-pack"))
 }
 
 pub fn find_vpx_files(
@@ -397,23 +420,48 @@ pub fn find_vpx_files(
                         return WalkState::Quit;
                     }
                 };
-                if entry.file_type().is_some_and(|t| t.is_file()) && is_table_file(entry.path()) {
-                    let _ = tx.send(Ok(entry.into_path()));
+                if entry.file_type().is_some_and(|t| t.is_file()) {
+                    if is_table_file(entry.path()) {
+                        let _ = tx.send(Ok(entry.into_path()));
+                    } else if entry.file_name() == PACK_MANIFEST && is_pack_manifest(entry.path()) {
+                        // the pack folder is the table
+                        if let Some(pack) = entry.path().parent() {
+                            let _ = tx.send(Ok(pack.to_path_buf()));
+                        }
+                    }
                 }
                 WalkState::Continue
             })
         });
         drop(tx);
-        rx.into_iter().collect::<io::Result<Vec<_>>>()?
+        let found = rx.into_iter().collect::<io::Result<Vec<_>>>()?;
+        // a pack folder holds the whole table, anything found inside it is
+        // part of it
+        let packs: HashSet<&Path> = found
+            .iter()
+            .filter(|path| path.is_dir())
+            .map(PathBuf::as_path)
+            .collect();
+        found
+            .iter()
+            .filter(|path| {
+                !path
+                    .ancestors()
+                    .skip(1)
+                    .any(|ancestor| packs.contains(ancestor))
+            })
+            .cloned()
+            .collect()
     } else {
         let mut paths = Vec::new();
         for entry in fs::read_dir(tables_path)? {
             let dir_entry = entry?;
-            if dir_entry.file_type()?.is_file() {
-                let path = dir_entry.path();
-                if is_table_file(&path) {
-                    paths.push(path);
-                }
+            let file_type = dir_entry.file_type()?;
+            let path = dir_entry.path();
+            if (file_type.is_file() && is_table_file(&path))
+                || (file_type.is_dir() && is_pack_manifest(&path.join(PACK_MANIFEST)))
+            {
+                paths.push(path);
             }
         }
         paths
@@ -648,16 +696,30 @@ fn index_vpx_file(
     global_roms: &HashMap<String, PathBuf>,
 ) -> io::Result<(PathBuf, IndexedTable)> {
     let path = &vpx_file_path.path;
-    let mut vpx_file = vpx::open(path)?;
-    // if there's an .info.json file, we should use that instead of the info in the vpx file
+    // if there's an .info.json file, we should use that instead of the info in the table
     let info_file_path = path.with_extension("info.json");
-    let table_info = if info_file_path.exists() {
-        read_table_info_json(&info_file_path)
+    let info_override = info_file_path.exists();
+    let (table_info, embedded_code) = if is_pack(path) {
+        let pack = vpz::read_info(path)?;
+        (
+            pack.table_info.unwrap_or_default(),
+            pack.script.unwrap_or_default(),
+        )
     } else {
-        vpx_file.read_tableinfo()
-    }?;
-    let game_data = vpx_file.read_gamedata()?;
-    let code = consider_sidecar_vbs(path, game_data)?;
+        let mut vpx_file = vpx::open(path)?;
+        let table_info = if info_override {
+            TableInfo::default()
+        } else {
+            vpx_file.read_tableinfo()?
+        };
+        (table_info, vpx_file.read_gamedata()?.code.string)
+    };
+    let table_info = if info_override {
+        read_table_info_json(&info_file_path)?
+    } else {
+        table_info
+    };
+    let code = consider_sidecar_vbs(path, embedded_code)?;
     //  also this sidecar should be part of the cache key
     let game_name = extract_game_name(&code);
     let requires_pinmame = requires_pinmame(&code);
@@ -704,9 +766,7 @@ fn index_vpx_file(
 }
 
 pub fn get_romname_from_vpx(vpx_path: &Path) -> io::Result<Option<String>> {
-    let mut vpx_file = vpx::open(vpx_path)?;
-    let game_data = vpx_file.read_gamedata()?;
-    let code = consider_sidecar_vbs(vpx_path, game_data)?;
+    let code = read_script(vpx_path)?;
     let game_name = extract_game_name(&code);
     let requires_pinmame = requires_pinmame(&code);
     if requires_pinmame {
@@ -721,9 +781,7 @@ pub fn get_romname_from_vpx(vpx_path: &Path) -> io::Result<Option<String>> {
 /// for callers that need the in-script identifier as a section/file key (e.g.
 /// `[<cGameName>]` in VPReg.ini, `<cGameName>_glf.ini` for GLF tables).
 pub fn get_gamename_from_vpx(vpx_path: &Path) -> io::Result<Option<String>> {
-    let mut vpx_file = vpx::open(vpx_path)?;
-    let game_data = vpx_file.read_gamedata()?;
-    let code = consider_sidecar_vbs(vpx_path, game_data)?;
+    let code = read_script(vpx_path)?;
     Ok(extract_game_name(&code))
 }
 
@@ -735,9 +793,7 @@ pub fn get_gamename_from_vpx(vpx_path: &Path) -> io::Result<Option<String>> {
 /// matter which convention the script chose - whichever section happens
 /// to be present in the on-disk VPReg.ini will resolve.
 pub fn get_vpreg_section_keys_from_vpx(vpx_path: &Path) -> io::Result<Vec<String>> {
-    let mut vpx_file = vpx::open(vpx_path)?;
-    let game_data = vpx_file.read_gamedata()?;
-    let code = consider_sidecar_vbs(vpx_path, game_data)?;
+    let code = read_script(vpx_path)?;
     Ok(extract_vpreg_section_keys(&code))
 }
 
@@ -1360,7 +1416,18 @@ fn shortest_name<'a>(
 /// instead of the code in the vpx file.
 ///
 /// TODO if this file changes the index entry is currently not invalidated
-fn consider_sidecar_vbs(path: &Path, game_data: GameData) -> io::Result<String> {
+/// The script of a vpx file or a pack, from the sidecar `.vbs` next to it
+/// when there is one
+fn read_script(path: &Path) -> io::Result<String> {
+    let embedded_code = if is_pack(path) {
+        vpz::read_info(path)?.script.unwrap_or_default()
+    } else {
+        vpx::open(path)?.read_gamedata()?.code.string
+    };
+    consider_sidecar_vbs(path, embedded_code)
+}
+
+fn consider_sidecar_vbs(path: &Path, embedded_code: String) -> io::Result<String> {
     let vbs_path = path.with_extension("vbs");
     let code = if vbs_path.exists() {
         let vbs_file = File::open(vbs_path)?;
@@ -1369,7 +1436,7 @@ fn consider_sidecar_vbs(path: &Path, game_data: GameData) -> io::Result<String> 
         reader.read_to_string(&mut code)?;
         code
     } else {
-        game_data.code.string
+        embedded_code
     };
     Ok(code)
 }
@@ -1428,9 +1495,21 @@ fn denormalize_table_from_json(table: IndexedTable, tables_root: Option<&Path>) 
     }
 }
 
+/// When the table last changed. A pack folder's own time does not change
+/// with the files in it, so for one this is the newest of the files that
+/// describe the table.
 fn last_modified(path: &Path) -> io::Result<SystemTime> {
     let metadata: Metadata = path.metadata()?;
-    metadata.modified()
+    if !metadata.is_dir() {
+        return metadata.modified();
+    }
+    let mut newest = metadata.modified()?;
+    for file in [PACK_MANIFEST, "table.json", "script.vbs"] {
+        if let Ok(modified) = path.join(file).metadata().and_then(|m| m.modified()) {
+            newest = newest.max(modified);
+        }
+    }
+    Ok(newest)
 }
 
 pub fn write_index_json(
@@ -1968,6 +2047,85 @@ x = LoadValue(tablename, "HighScore1")
             assert_eq!(found, vec!["Genie.vpx"], "recursive={recursive}");
         }
 
+        Ok(())
+    }
+
+    /// Writes a pack of a minimal table with the given name and script, as a
+    /// folder or, for a `.vpz` path, a zip archive
+    fn test_pack(path: &Path, table_name: &str, script: &str) -> io::Result<()> {
+        let minimal = path.with_extension("minimal.vpx");
+        vpx::new_minimal_vpx(&minimal)?;
+        let mut table = vpx::read(&minimal)?;
+        fs::remove_file(&minimal)?;
+        table.info.table_name = Some(table_name.to_string());
+        table.set_script(script.to_string());
+        vpz::write(&vpz::from_vpx(&table, "Tue Oct  6 10:00:00 2026")?, path)
+    }
+
+    #[test]
+    fn test_find_vpx_files_finds_packs() -> io::Result<()> {
+        // tables/
+        // ├── Genie.vpx
+        // ├── Zipped.vpz
+        // ├── Folder Pack (Bally 1990)/   a pack, with a stray table inside
+        // └── Not a pack/                 a manifest of another format
+        let tables_dir = testdir!().join("tables");
+        fs::create_dir(&tables_dir)?;
+        vpx::new_minimal_vpx(tables_dir.join("Genie.vpx"))?;
+        test_pack(&tables_dir.join("Zipped.vpz"), "Zipped", "")?;
+        let folder_pack = tables_dir.join("Folder Pack (Bally 1990)");
+        test_pack(&folder_pack, "Folder", "")?;
+        vpx::new_minimal_vpx(folder_pack.join("stray.vpx"))?;
+        let not_a_pack = tables_dir.join("Not a pack");
+        fs::create_dir(&not_a_pack)?;
+        fs::write(
+            not_a_pack.join("manifest.json"),
+            r#"{"file_format": "other"}"#,
+        )?;
+
+        for recursive in [true, false] {
+            let mut found: Vec<String> = find_vpx_files(recursive, None, &tables_dir)?
+                .iter()
+                .map(|f| f.path.file_name().unwrap().to_string_lossy().into_owned())
+                .collect();
+            found.sort();
+            assert_eq!(
+                found,
+                vec!["Folder Pack (Bally 1990)", "Genie.vpx", "Zipped.vpz"],
+                "recursive={recursive}"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_index_packs() -> io::Result<()> {
+        let tables_dir = testdir!().join("tables");
+        fs::create_dir(&tables_dir)?;
+        let script = "Const cGameName = \"packgame\"\nSub LoadVPM\n";
+        test_pack(&tables_dir.join("Zipped.vpz"), "Zipped Table", script)?;
+        test_pack(&tables_dir.join("Folder"), "Folder Table", script)?;
+
+        let files = find_vpx_files(true, None, &tables_dir)?;
+        let index = index_vpx_files(files, None, None, &VoidProgress)?;
+        let mut tables: Vec<(String, Option<String>)> = index
+            .tables()
+            .iter()
+            .map(|table| {
+                (
+                    table.table_info.table_name.clone().unwrap_or_default(),
+                    table.game_name.clone(),
+                )
+            })
+            .collect();
+        tables.sort();
+        assert_eq!(
+            tables,
+            vec![
+                ("Folder Table".to_string(), Some("packgame".to_string())),
+                ("Zipped Table".to_string(), Some("packgame".to_string())),
+            ]
+        );
         Ok(())
     }
 
