@@ -111,10 +111,8 @@ impl TableOption {
     fn applies_to_pack(&self) -> bool {
         !matches!(
             self,
-            TableOption::InfoShow
-                | TableOption::InfoEdit
+            TableOption::InfoEdit
                 | TableOption::InfoDiff
-                | TableOption::Audit
                 | TableOption::ExtractVBS
                 | TableOption::EditVBS
                 | TableOption::UnifyLineEndings

@@ -1,6 +1,6 @@
 use crate::capture::{CaptureFormat, CaptureOptions, CaptureOutcome, capture_table};
 use crate::config::{ResolvedConfig, SetupConfigResult};
-use crate::indexer::{DEFAULT_INDEX_FILE_NAME, IndexError, Progress};
+use crate::indexer::{DEFAULT_INDEX_FILE_NAME, IndexError, Progress, is_pack};
 use crate::patcher::unify_line_endings;
 use crate::{
     RemoveOnDrop, config, frontend, indexer, os_independent_file_name, path_exists, strip_cr_lf,
@@ -36,6 +36,7 @@ use vpin::vpx::export::obj_export::{ExportUnits, ObjExportOptions, export_obj};
 use vpin::vpx::gamedata::game_data_to_json;
 use vpin::vpx::tableinfo::info_to_json;
 use vpin::vpx::{ExtractResult, expanded, extractvbs, importvbs};
+use vpin::vpz;
 
 // see https://github.com/fusion-engineering/rust-git-version/issues/21
 const GIT_VERSION: &str = git_version!(
@@ -3009,15 +3010,28 @@ fn write_base64_to_file(
 }
 
 pub(crate) fn info_gather(vpx_file_path: &PathBuf) -> io::Result<String> {
-    let mut vpx_file = vpx::open(vpx_file_path)?;
-    let version = vpx_file.read_version()?;
-    // GameData also has a name field that we might want to display here
-    // where is this shown in the UI?
-    let table_info = vpx_file.read_tableinfo()?;
+    let (version_label, version, table_info) = if is_pack(vpx_file_path) {
+        let pack = vpz::read_info(vpx_file_path)?;
+        (
+            "Pack Version:",
+            pack.manifest.file_version.to_string(),
+            pack.table_info.unwrap_or_default(),
+        )
+    } else {
+        let mut vpx_file = vpx::open(vpx_file_path)?;
+        let version = vpx_file.read_version()?;
+        // GameData also has a name field that we might want to display here
+        // where is this shown in the UI?
+        (
+            "VPX Version:",
+            version.to_string(),
+            vpx_file.read_tableinfo()?,
+        )
+    };
 
     let mut buffer = String::new();
 
-    buffer.push_str(&format!("{:>18} {}\n", "VPX Version:".green(), version));
+    buffer.push_str(&format!("{:>18} {}\n", version_label.green(), version));
     buffer.push_str(&format!(
         "{:>18} {}\n",
         "Table Name:".green(),
@@ -3309,11 +3323,22 @@ pub fn info_diff(vpx_file_path: &Path, config: Option<&ResolvedConfig>) -> io::R
 
 /// Runs the vpin consistency audit on a vpx file, see [`vpin::vpx::audit`]
 pub fn audit_table(vpx_file_path: &Path) -> io::Result<Vec<Finding>> {
-    let vpx = vpx::read(vpx_file_path)?;
+    let vpx = read_table(vpx_file_path)?;
     let mut findings = vpin::vpx::audit::audit(&vpx);
     // most serious first, keeping the audit order within a severity
     findings.sort_by_key(|finding| std::cmp::Reverse(finding.severity()));
     Ok(findings)
+}
+
+/// A vpx file, or for a pack the vpx table vpinball loads from it
+fn read_table(path: &Path) -> io::Result<vpx::VPX> {
+    if is_pack(path) {
+        let pack = vpz::read(path)?;
+        let save_date = pack.manifest.save_date.clone().unwrap_or_default();
+        vpz::to_vpx(&pack, &save_date)
+    } else {
+        vpx::read(path)
+    }
 }
 
 /// Formats audit findings as a colored report with a summary line
