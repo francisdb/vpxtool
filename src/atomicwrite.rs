@@ -50,7 +50,12 @@ where
     let tmp_path = PathBuf::from(tmp_os);
     let result = (|| -> io::Result<()> {
         write(&tmp_path)?;
-        File::open(&tmp_path)?.sync_all()?;
+        // flushing needs a handle with write access on Windows, where
+        // FlushFileBuffers on a read-only one fails with access denied
+        fs::OpenOptions::new()
+            .write(true)
+            .open(&tmp_path)?
+            .sync_all()?;
         fs::rename(&tmp_path, path)?;
         fsync_parent_best_effort(path)
     })();
