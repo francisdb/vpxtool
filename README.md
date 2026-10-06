@@ -20,7 +20,7 @@ xattr -d com.apple.quarantine vpxtool
 
 ### Homebrew
 
-@gitfool set up a homebrew tap for vpxtool. Installation instructions on his repo:
+@gitfool set up a homebrew tap for vpxtool, with installation instructions in its repository:
 
 https://github.com/gitfool/homebrew-vpinball
 
@@ -44,40 +44,50 @@ Show help
 ```
 
 ```
-Vpxtool v0.16.0
+Vpxtool v0.35.1
 
 Terminal based frontend and utilities for Visual Pinball
 
-Usage: vpxtool [COMMAND]
+Usage: vpxtool [OPTIONS] [COMMAND]
 
 Commands:
-  info            Vpx table info related commands
-  table           Vpx table level commands
-  diff            Prints out a diff between the vbs in the vpx and the sidecar vbs
-  frontend        Text based frontend for launching vpx files
-  simplefrontend  Simple text based frontend for launching vpx files
-  index           Indexes a directory of vpx files
-  capture         Capture a playfield screenshot using vpinball
-  script          Vpx script code related commands
-  ls              Show a vpx file content
-  extract         Extracts a vpx file
-  extractvbs      Extracts the vbs from a vpx file next to it
-  importvbs       Imports the vbs next to it into a vpx file
-  verify          Verify the structure of a vpx file
-  audit           Reports consistency problems in a vpx file
-  assemble        Assembles a vpx file
-  convert         Converts a vpx file to a table pack, or a table pack to a vpx file
-  patch           Applies a VPURemix System patch to a table
-  new             Creates a minimal empty new vpx file
-  config          Vpxtool related config file
-  images          Vpx image related commands
-  gamedata        Vpx gamedata related commands
-  nvram           PinMAME NVRAM related commands
-  romname         Prints the PinMAME ROM name from a vpx file
-  export          Export a vpx table to obj/gltf/glb or to a vpxz mobile archive
-  help            Print this message or the help of the given subcommand(s)
+  info         Vpx table info related commands
+  table        Vpx table level commands
+  diff         Prints out a diff between the vbs in the vpx and the sidecar vbs
+  frontend     Text based frontend for launching vpx files
+  index        Indexes a directory of vpx files
+  capture      Capture a playfield screenshot using vpinball
+  script       Vpx script code related commands
+  ls           Show the vpx file contents
+  extract      Extracts a vpx file
+  extractvbs   Extracts the script from a vpx file.
+  importvbs    Imports the vbs next to it into a vpx file
+  verify       Verify the structure of a vpx file
+  audit        Reports consistency problems in a vpx file
+  optimize     Shrinks a vpx file without changing how it renders or plays
+  lock         Lock a vpx file, preventing edits in vpinball
+  unlock       Unlock a vpx file
+  lock-status  Show the lock state of a vpx file
+  convert      Converts a vpx file to a table pack, or a table pack to a vpx file
+  assemble     Assembles a vpx file
+  patch        Applies a VPURemix System patch to a table
+  new          Creates a minimal empty new vpx file
+  config       Vpxtool related config file
+  images       Vpx image related commands
+  sounds       Vpx sound related commands
+  collections  Vpx collection related commands
+  materials    Vpx material related commands
+  gameitems    Vpx gameitem (table element) related commands
+  gamedata     Vpx gamedata related commands
+  dipswitches  NVRAM file DIP switch related commands
+  nvram        PinMAME NVRAM related commands
+  scores       Table high-score related commands
+  romname      Prints the PinMAME ROM name from a vpx file
+  export       Export a vpx table to a 3D model format
+  help         Print this message or the help of the given subcommand(s)
 
 Options:
+  -v, --verbose  Enable verbose logging
   -h, --help     Print help
   -V, --version  Print version
 ```
@@ -85,17 +95,16 @@ Options:
 Show help for a specific command
 
 ```shell
-> vpxtool frontend --help`
-Acts as a frontend for launching vpx files
+> vpxtool frontend --help
+Text based frontend for launching vpx files
 
-Usage: vpxtool frontend [OPTIONS] [VPXROOTPATH]
-
-Arguments:
-  [VPXROOTPATH]  The path to the root directory of vpx files [default: /Users/myuser/vpinball/tables]
+Usage: vpxtool frontend [OPTIONS]
 
 Options:
-  -r, --recursive  Recursively index subdirectories
-  -h, --help       Print help
+  -r, --recursive              Recursively index subdirectories
+  -v, --verbose                Enable verbose logging
+      --max-depth <MAX_DEPTH>  Maximum directory depth to scan when indexing tables
+  -h, --help                   Print help
 ```
 
 ### Extracting part of a table
@@ -115,6 +124,29 @@ vpxtool extract --no-media table.vpx
 
 Files that are filtered out are not produced at all, so extracting only the JSON of a large table takes
 milliseconds. A partial directory cannot be assembled back into a table.
+
+### Table packs
+
+vpinball can also store a table as a pack: JSON documents and the assets in their own formats, as a `.vpz` zip
+archive or as a folder. `convert` turns a vpx file into a pack and back, the way vpinball saves them; the output is a
+vpx file for a `.vpx` name, a zip archive for a `.vpz` name and a folder otherwise.
+
+```shell
+vpxtool convert table.vpx              # -> table.vpz
+vpxtool convert table.vpz "Table 1.5"  # -> a pack folder
+vpxtool convert "Table 1.5"            # -> Table 1.5.vpx
+```
+
+`audit` and `info show` also take a pack, and the frontend indexes and launches packs, see below.
+
+### Verifying a table
+
+`verify` checks the signature (MAC) vpinball stores in a table against its content. `--json` prints the stored and the
+computed MAC of each file, for scripting:
+
+```shell
+vpxtool verify --json table.vpx
+```
 
 ### Shrinking a table
 
@@ -205,6 +237,8 @@ vpx_executable = "/home/myuser/vpinball/VPinballX_BGFX"
 # Optional settings below, only needed if the defaults don't work
 tables_folder = "/home/myuser/vpinball/tables"
 vpx_config = "/home/myuser/.local/share/VPinballX/10.8/VPinballX.ini"
+# how deep the frontend looks for tables below the tables folder
+tables_scan_max_depth = 3
 ```
 
 Further settings will be picked up from the Visual Pinball config.
