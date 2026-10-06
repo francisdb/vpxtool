@@ -51,7 +51,13 @@ fn info_show_reads_a_pack() {
         let out = vpxtool(&dir, &["info", "show", pack]);
         let stdout = String::from_utf8_lossy(&out.stdout);
         assert!(out.status.success(), "info show {pack} failed: {:?}", out);
-        assert!(stdout.contains("Pack Version:"), "unexpected output: {stdout}");
-        assert!(stdout.contains("Table Name:"), "unexpected output: {stdout}");
+        assert!(
+            stdout.contains("Pack Version:"),
+            "unexpected output: {stdout}"
+        );
+        assert!(
+            stdout.contains("Table Name:"),
+            "unexpected output: {stdout}"
+        );
     }
 }
