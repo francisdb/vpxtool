@@ -3422,7 +3422,7 @@ fn prepare_output(output: &Path, force: bool) -> io::Result<bool> {
 /// Converts a vpx file to a pack, a pack to a vpx file, or a pack to the other
 /// pack form, saved with the current local time as vpinball does. The output
 /// is a vpx file for a `.vpx` name, a zip archive for a `.vpz` name and a pack
-/// folder otherwise, so a dotted folder name stays a folder.
+/// folder otherwise ([`vpz::write`]).
 fn convert(input: &Path, output: &Path) -> io::Result<()> {
     let extension = output
         .extension()
@@ -3445,12 +3445,7 @@ fn convert(input: &Path, output: &Path) -> io::Result<()> {
     } else {
         vpz::from_vpx(&vpx::read(input)?, &save_date)?
     };
-    if extension.as_deref() == Some("vpz") {
-        let file = vpz::write_zip(&pack, io::BufWriter::new(File::create(output)?))?;
-        file.into_inner().map_err(|e| e.into_error())?.sync_all()
-    } else {
-        vpz::write_dir(&pack, output)
-    }
+    vpz::write(&pack, output)
 }
 
 /// A vpx file, or for a pack the vpx table vpinball loads from it
