@@ -54,6 +54,7 @@ const CMD_FRONTEND: &str = "frontend";
 const CMD_DIFF: &str = "diff";
 const CMD_EXTRACT: &str = "extract";
 const CMD_ASSEMBLE: &str = "assemble";
+const CMD_CONVERT: &str = "convert";
 const CMD_EXTRACT_VBS: &str = "extractvbs";
 const CMD_IMPORT_VBS: &str = "importvbs";
 const CMD_PATCH: &str = "patch";
@@ -497,6 +498,28 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     io::ErrorKind::InvalidInput,
                     format!("Unknown file type: {}", expanded_path.display()),
                 )),
+            }
+        }
+        Some((CMD_CONVERT, sub_matches)) => {
+            let force = sub_matches.get_flag("FORCE");
+            let input = path_exists(sub_matches.get_one::<String>("INPUT").unwrap())?;
+            let output = match sub_matches.get_one::<String>("OUTPUT") {
+                Some(path) => PathBuf::from(path),
+                None => default_convert_output(&input)?,
+            };
+            if !prepare_output(&output, force)? {
+                crate::println!("Aborted")?;
+                return Ok(ExitCode::FAILURE);
+            }
+            match convert(&input, &output) {
+                Ok(()) => {
+                    crate::println!("Converted {} to {}", input.display(), output.display())?;
+                    Ok(ExitCode::SUCCESS)
+                }
+                Err(e) => {
+                    crate::eprintln!("Failed to convert {}: {}", input.display(), e)?;
+                    Ok(ExitCode::FAILURE)
+                }
             }
         }
         Some((CMD_ASSEMBLE, sub_matches)) => {
@@ -1459,6 +1482,25 @@ fn build_command() -> Command {
             Command::new(CMD_LOCK_STATUS)
                 .about("Show the lock state of a vpx file")
                 .arg(arg!(<VPXPATH> "The path to the vpx file").required(true)),
+        )
+        .subcommand(
+            Command::new(CMD_CONVERT)
+                .about("Converts a vpx file to a table pack, or a table pack to a vpx file")
+                .long_about(
+                    "Converts a vpx file to a table pack, or a table pack (a .vpz file or a pack \
+                    folder) to a vpx file, the way vpinball saves them. The output is a vpx file \
+                    when its name ends in .vpx, a .vpz zip archive when it ends in .vpz, and a \
+                    pack folder otherwise. A pack can also be converted to the other pack form.",
+                )
+                .arg(
+                    Arg::new("FORCE")
+                        .short('f')
+                        .long("force")
+                        .num_args(0)
+                        .help("Do not ask for confirmation before overwriting an existing file"),
+                )
+                .arg(arg!(<INPUT> "The vpx file or table pack to convert").required(true))
+                .arg(arg!([OUTPUT] "The path to write to. Defaults to the input with a .vpz extension for a vpx file, a .vpx extension for a pack.")),
         )
         .subcommand(
             Command::new(CMD_ASSEMBLE)
@@ -3328,6 +3370,87 @@ pub fn audit_table(vpx_file_path: &Path) -> io::Result<Vec<Finding>> {
     // most serious first, keeping the audit order within a severity
     findings.sort_by_key(|finding| std::cmp::Reverse(finding.severity()));
     Ok(findings)
+}
+
+/// The default `convert` output: a `.vpz` pack next to a vpx file, a `.vpx`
+/// file next to a pack
+fn default_convert_output(input: &Path) -> io::Result<PathBuf> {
+    if !is_pack(input) {
+        return Ok(input.with_extension("vpz"));
+    }
+    if input.is_dir() {
+        // a folder name may hold dots, keep it whole
+        let name = input.file_name().ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidInput, "Invalid pack folder path")
+        })?;
+        let mut file_name = name.to_os_string();
+        file_name.push(".vpx");
+        Ok(input.with_file_name(file_name))
+    } else {
+        Ok(input.with_extension("vpx"))
+    }
+}
+
+/// Makes room for a `convert` output: an existing file is replaced after
+/// confirmation (or with `force`), a folder that is not empty is refused.
+/// False when the user declines.
+fn prepare_output(output: &Path, force: bool) -> io::Result<bool> {
+    if output.is_dir() {
+        if std::fs::read_dir(output)?.next().is_some() {
+            return Err(io::Error::new(
+                io::ErrorKind::AlreadyExists,
+                format!("Folder {} is not empty", output.display()),
+            ));
+        }
+        return Ok(true);
+    }
+    if !output.exists() {
+        return Ok(true);
+    }
+    if !force
+        && !confirm(
+            format!("\"{}\" already exists.", output.display()),
+            "Do you want to overwrite it?".to_string(),
+        )?
+    {
+        return Ok(false);
+    }
+    std::fs::remove_file(output)?;
+    Ok(true)
+}
+
+/// Converts a vpx file to a pack, a pack to a vpx file, or a pack to the other
+/// pack form, saved with the current local time as vpinball does. The output
+/// is a vpx file for a `.vpx` name, a zip archive for a `.vpz` name and a pack
+/// folder otherwise, so a dotted folder name stays a folder.
+fn convert(input: &Path, output: &Path) -> io::Result<()> {
+    let extension = output
+        .extension()
+        .and_then(OsStr::to_str)
+        .map(str::to_ascii_lowercase);
+    let save_date = chrono::Local::now()
+        .format("%a %b %e %H:%M:%S %Y")
+        .to_string();
+    if extension.as_deref() == Some("vpx") {
+        if !is_pack(input) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "both are vpx files, there is nothing to convert",
+            ));
+        }
+        return vpx::write(output, &vpz::to_vpx(&vpz::read(input)?, &save_date)?);
+    }
+    let pack = if is_pack(input) {
+        vpz::read(input)?
+    } else {
+        vpz::from_vpx(&vpx::read(input)?, &save_date)?
+    };
+    if extension.as_deref() == Some("vpz") {
+        let file = vpz::write_zip(&pack, io::BufWriter::new(File::create(output)?))?;
+        file.into_inner().map_err(|e| e.into_error())?.sync_all()
+    } else {
+        vpz::write_dir(&pack, output)
+    }
 }
 
 /// A vpx file, or for a pack the vpx table vpinball loads from it
