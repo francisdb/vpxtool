@@ -1436,7 +1436,7 @@ fn build_command() -> Command {
         .subcommand(
             Command::new(CMD_OPTIMIZE)
                 .alias("optimise")
-                .about("Shrinks a vpx file without changing how it renders or plays")
+                .about("Shrinks and repairs a vpx file")
                 .long_about(
                     "Applies the lossless fixes to a vpx file: drops the embedded fonts \
                     nothing uses, and re-encodes bitmap, png and tga images as lossless \
@@ -1757,7 +1757,7 @@ fn build_command() -> Command {
         .subcommand(
             Command::new(CMD_EXPORT)
                 .subcommand_required(true)
-                .about("Export a vpx table to a 3D model format")
+                .about("Export a vpx table to obj, gltf or glb, or to a vpxz mobile archive")
                 .subcommand(
                     Command::new(CMD_EXPORT_OBJ)
                         .about("Export the table as a Wavefront OBJ + MTL (with images/)")
@@ -2836,7 +2836,7 @@ fn handle_gameitems_list(sub_matches: &ArgMatches) -> io::Result<ExitCode> {
 
 fn extract_script_command(name: impl Into<Str>) -> Command {
     Command::new(name)
-        .about("Extracts the script from a vpx file.")
+        .about("Extracts the script from a vpx file")
         .long_about("Extracts the script from a vpx file by default into a vbs file next to it. Scripts placed next to the vpx file with the same name are considered sidecar scripts and will be picked up by Visual Pinball instead of the script inside the vpx file.")
         .arg(
             Arg::new("FORCE")
