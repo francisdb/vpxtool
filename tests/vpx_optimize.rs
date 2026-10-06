@@ -65,8 +65,6 @@ fn table_with_stereo_sound(path: &Path) {
         balance: 0,
         output_target: vpin::vpx::sound::OutputTarget::Table,
     });
-    // the writer stores as many sounds as the game data counts
-    vpx.gamedata.sounds_size = vpx.sounds.len() as u32;
     std::fs::remove_file(path).expect("remove table");
     vpin::vpx::write(path, &vpx).expect("write table");
 }
