@@ -204,7 +204,7 @@ pub fn frontend(
         selections.extend(tables.clone());
 
         if let Err(e) = Term::stderr().clear_screen() {
-            eprintln!("Failed to clear screen: {e}");
+            crate::eprintln!("Failed to clear screen: {e}").ok();
         }
         main_selection_opt = Select::with_theme(&ColorfulTheme::default())
             .with_prompt("Select a table")
@@ -540,7 +540,7 @@ fn table_menu(
             },
             Some(TableOption::InfoEdit) => match info_edit(selected_path, Some(config)) {
                 Ok(path) => {
-                    println!("Launched editor for {}", path.display());
+                    crate::println!("Launched editor for {}", path.display()).ok();
                 }
                 Err(err) => {
                     let msg = format!("Unable to edit table info: {err}");
@@ -672,7 +672,7 @@ fn nvram_show(info: &IndexedTable) {
         if let Some(nvram_path) = nvram_for_rom(info) {
             match pinmame_nvram::resolve::resolve(&nvram_path) {
                 Ok(Some(resolved)) => {
-                    print!("{} NVRAM file: ", nvram_path.display());
+                    crate::print!("{} NVRAM file: ", nvram_path.display()).ok();
                     // print as json
                     let json = serde_json::to_string_pretty(&resolved).unwrap();
                     prompt(&json);
@@ -696,7 +696,7 @@ fn nvram_show(info: &IndexedTable) {
 fn report_launch_result(path: &Path, result: io::Result<()>) {
     match result {
         Ok(_) => {
-            println!("Launched editor for {}", path.display());
+            crate::println!("Launched editor for {}", path.display()).ok();
         }
         Err(err) => {
             let msg = format!("Unable to launch editor for {err}");
@@ -1000,7 +1000,7 @@ pub fn warn_stale_vpx_config(config_path: &Path, current: &Path, suggested: &Pat
         current.display(),
         suggested.display(),
     );
-    eprintln!("{}", msg.truecolor(255, 125, 0));
+    crate::eprintln!("{}", msg.truecolor(255, 125, 0)).ok();
     Confirm::with_theme(&ColorfulTheme::default())
         .with_prompt("Do you want me to correct the config for you?")
         .default(true)
@@ -1031,7 +1031,7 @@ fn choose_table_option(
         })
         .collect::<Vec<String>>();
     if let Err(e) = Term::stderr().clear_screen() {
-        eprintln!("Failed to clear screen: {e:?}");
+        crate::eprintln!("Failed to clear screen: {e:?}").ok();
     }
     let selection_opt = Select::with_theme(&ColorfulTheme::default())
         .with_prompt(table_name)
@@ -1044,7 +1044,7 @@ fn choose_table_option(
 }
 
 fn launch(selected_path: &PathBuf, launch_template: &LaunchTemplate) {
-    println!("{} {}", LAUNCH, selected_path.display());
+    crate::println!("{} {}", LAUNCH, selected_path.display()).ok();
 
     let vpinball_executable = &launch_template.executable;
 
@@ -1115,12 +1115,12 @@ fn record_play(
         },
     };
     if let Err(e) = playlog::append(&log_path, &record) {
-        eprintln!("Unable to write play log {}: {e}", log_path.display());
+        crate::eprintln!("Unable to write play log {}: {e}", log_path.display()).ok();
     }
 }
 
 fn report_and_exit(msg: String) -> ! {
-    eprintln!("{CRASH} {msg}");
+    crate::eprintln!("{CRASH} {msg}").ok();
     exit(1);
 }
 
@@ -1144,7 +1144,7 @@ fn launch_table(
     cmd.arg("-play");
     cmd.arg(selected_path);
 
-    println!("Spawning command: {cmd:?}");
+    crate::println!("Spawning command: {cmd:?}")?;
 
     let mut child = cmd.spawn()?;
     let result = child.wait()?;

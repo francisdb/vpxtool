@@ -6,7 +6,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::Debug;
 use std::fs::Metadata;
-use std::io::{BufReader, BufWriter, Read};
+use std::io::{BufReader, BufWriter, Read, Write};
 use std::sync::LazyLock;
 use std::time::SystemTime;
 use std::{
@@ -665,7 +665,7 @@ pub fn index_vpx_files(
                         // TODO we want to return any failures instead of printing here
                         let warning =
                             format!("Not a valid vpx file {}: {}", vpx_file.path.display(), e);
-                        println!("{warning}");
+                        crate::println!("{warning}").ok();
                         None
                     }
                 };
@@ -1565,7 +1565,7 @@ pub fn read_index_json(
             Ok(Some(TablesIndex { tables }))
         }
         Err(e) => {
-            println!("Failed to parse index file, ignoring existing index. ({e})");
+            crate::println!("Failed to parse index file, ignoring existing index. ({e})")?;
             Ok(None)
         }
     }
