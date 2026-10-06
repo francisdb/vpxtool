@@ -1,0 +1,7 @@
+# the std print macros panic on a broken pipe, see src/fixprint.rs
+disallowed-macros = [
+    { path = "std::println", reason = "panics on a broken pipe, use crate::println!" },
+    { path = "std::print", reason = "panics on a broken pipe, use crate::print!" },
+    { path = "std::eprintln", reason = "panics on a broken pipe, use crate::eprintln!" },
+    { path = "std::eprint", reason = "panics on a broken pipe, use crate::eprint!" },
+]

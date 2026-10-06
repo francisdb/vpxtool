@@ -116,9 +116,9 @@ pub fn config_path() -> Option<PathBuf> {
     // migrate old config file if it exists
     let old_config_path = old_home_config_path();
     if old_config_path.exists() {
-        println!(
+        crate::println!(
             "Migrating config file from {old_config_path:?} to {home_directory_configuration_path:?}"
-        );
+        ).ok();
         std::fs::create_dir_all(home_directory_configuration_path.parent().unwrap()).ok()?;
         std::fs::rename(&old_config_path, &home_directory_configuration_path).ok()?;
         return Some(home_directory_configuration_path);
@@ -145,7 +145,7 @@ pub fn setup_config() -> io::Result<SetupConfigResult> {
         Some(path) => Ok(SetupConfigResult::Existing(path)),
         None => {
             // TODO avoid stdout interaction here
-            println!("Warning: Failed find a config file.");
+            crate::println!("Warning: Failed find a config file.")?;
             let new_config = create_default_config()?;
             Ok(SetupConfigResult::Configured(new_config.0))
         }
@@ -160,7 +160,7 @@ pub fn load_or_setup_config() -> io::Result<(PathBuf, ResolvedConfig)> {
         Some(loaded) => Ok(loaded),
         None => {
             // TODO avoid stdout interaction here
-            println!("Warning: Failed find a config file.");
+            crate::println!("Warning: Failed find a config file.")?;
             create_default_config()
         }
     }
@@ -390,8 +390,8 @@ fn create_default_config() -> io::Result<(PathBuf, ResolvedConfig)> {
     let mut vpx_executable = default_vpinball_executable();
 
     if !vpx_executable.exists() {
-        println!("Warning: Failed to detect the vpinball executable.");
-        print!("vpinball executable path: ");
+        crate::println!("Warning: Failed to detect the vpinball executable.")?;
+        crate::print!("vpinball executable path: ")?;
         io::stdout().flush().expect("Failed to flush stdout");
 
         let mut new_executable_path = String::new();
@@ -402,8 +402,8 @@ fn create_default_config() -> io::Result<(PathBuf, ResolvedConfig)> {
         vpx_executable = PathBuf::from(new_executable_path.trim().to_string());
 
         if !vpx_executable.exists() {
-            println!("Error: input file path wasn't found.");
-            println!("Executable path is not set. ");
+            crate::println!("Error: input file path wasn't found.")?;
+            crate::println!("Executable path is not set. ")?;
             std::process::exit(1);
         }
     }
@@ -509,7 +509,7 @@ mod tests {
         let mut file = File::open(&config_file)?;
         let mut contents = String::new();
         file.read_to_string(&mut contents)?;
-        println!("Config file contents: {contents}");
+        crate::println!("Config file contents: {contents}")?;
         let config = read_config(&config_file)?;
         assert_eq!(
             config,
