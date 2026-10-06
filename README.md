@@ -118,11 +118,14 @@ milliseconds. A partial directory cannot be assembled back into a table.
 
 ### Shrinking a table
 
-`optimize` applies the lossless fixes from the `vpin` library and rewrites the table in one go, which also compacts the file: unused embedded fonts are dropped, and bitmap, png and tga images are re-encoded as lossless webp where that is smaller. Images the script hands to FlexDMD are left alone. It prints what changed with the bytes saved and what was left alone and why; `--dry-run` reports without writing.
+`optimize` applies the lossless fixes from the `vpin` library and rewrites the table in one go, which also compacts the file: unused embedded fonts are dropped, and bitmap, png and tga images are re-encoded as lossless webp where that is smaller. Images the script hands to FlexDMD are left alone. Sounds with the legacy `* Backglass Output *` path, which vpinball 10.8.1 fails to load, get the sound name with `.wav` as path. It prints what changed with the bytes saved and what was left alone and why; `--dry-run` reports without writing.
+
+`--mono` downmixes stereo playfield sounds to the mono vpinball 10.8.1 and later play them as, exactly as vpinball does it, and `--flac` re-encodes PCM WAV sounds as lossless FLAC. Both are opt-in: vpinball 10.8.0 plays stereo playfield sounds in stereo in its two speaker mode and does not decode FLAC.
 
 ```shell
 vpxtool optimize table.vpx
 vpxtool optimize --dry-run table.vpx
+vpxtool optimize --mono --flac table.vpx
 ```
 
 `audit` reports the findings these fixes act on, next to everything else it checks.
