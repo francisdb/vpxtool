@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.37.0](https://github.com/francisdb/vpxtool/compare/v0.36.0...v0.37.0) - 2026-10-07
+
+### Added
+
+- *(optimize)* --max-image-size scales images down for small devices ([#928](https://github.com/francisdb/vpxtool/pull/928))
+
 ## [0.36.0](https://github.com/francisdb/vpxtool/compare/v0.35.1...v0.36.0) - 2026-10-06
 
 ### Added
