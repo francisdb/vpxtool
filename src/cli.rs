@@ -707,6 +707,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
             let options = crate::optimize::Options {
                 mono: sub_matches.get_flag("MONO"),
                 flac: sub_matches.get_flag("FLAC"),
+                max_image_size: sub_matches.get_one::<u32>("MAX_IMAGE_SIZE").copied(),
             };
             let expanded_path = path_exists(path)?;
             let outcome = crate::optimize::optimize_file(&expanded_path, options, dry_run)?;
@@ -1454,7 +1455,20 @@ fn build_command() -> Command {
                     re-encodes PCM WAV sounds as lossless FLAC. Both are opt-in \
                     because only vpinball with the miniaudio sound engine (10.8.1 and \
                     later) plays the result the same; an older build would play the \
-                    table without the FLAC sounds.",
+                    table without the FLAC sounds.\n\n\
+                    --max-image-size scales every image with a side over that many \
+                    pixels down to fit, keeping the aspect ratio, for phones and \
+                    other devices with a texture size limit; without a value it \
+                    takes 1536, so the path has to come first or the value be \
+                    written as --max-image-size=768. vpinball does the same \
+                    on load for images over its \"Maximum texture dimension\" video \
+                    setting (1536 by default on mobile), so the table stores what \
+                    such a device shows anyway, resampled once with a better filter, \
+                    and no longer carries the pixels it throws away: the file is \
+                    smaller, loads faster and needs less memory. It is lossy, a jpeg \
+                    is re-encoded, so keep the original for other setups. Images \
+                    FlexDMD draws, color grade LUTs and images whose smaller \
+                    encoding would not be smaller are left alone and reported.",
                 )
                 .arg(arg!(<VPXPATH> "The path to the vpx file").required(true))
                 .arg(
@@ -1480,6 +1494,19 @@ fn build_command() -> Command {
                         .help(
                             "Also re-encode PCM WAV sounds as lossless FLAC (needs \
                             vpinball 10.8.1 or later to play)",
+                        ),
+                )
+                .arg(
+                    Arg::new("MAX_IMAGE_SIZE")
+                        .long("max-image-size")
+                        .value_name("PIXELS")
+                        .num_args(0..=1)
+                        .default_missing_value("1536")
+                        .value_parser(clap::value_parser!(u32).range(256..=16384))
+                        .help(
+                            "Also scale images down so no side exceeds this many \
+                            pixels, vpinball's \"Maximum texture dimension\"; without \
+                            a value 1536, the mobile default; lossy",
                         ),
                 ),
         )

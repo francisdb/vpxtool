@@ -88,6 +88,89 @@ fn a_table_with_something_to_fix_is_rewritten_in_place() {
     assert_eq!(vpx.sounds[0].wave_form.channels, 1);
 }
 
+/// A table with a 600x300 png, over a 512 pixel limit
+fn table_with_large_image(path: &Path) {
+    vpin::vpx::new_minimal_vpx(path).expect("new table");
+    let mut vpx = vpin::vpx::read(path).expect("read table");
+    let pixels = image::RgbaImage::from_fn(600, 300, |x, y| {
+        image::Rgba([(x % 256) as u8, (y % 256) as u8, ((x * y) % 256) as u8, 255])
+    });
+    let mut data = Vec::new();
+    pixels
+        .write_to(
+            &mut std::io::Cursor::new(&mut data),
+            image::ImageFormat::Png,
+        )
+        .expect("png encodes");
+    vpx.add_or_replace_image(vpin::vpx::image::ImageData {
+        name: "playfield".to_string(),
+        path: "playfield.png".to_string(),
+        width: 600,
+        height: 300,
+        jpeg: Some(vpin::vpx::pinbinary::PinBinary {
+            path: "playfield.png".to_string(),
+            name: "playfield".to_string(),
+            internal_name: None,
+            data,
+        }),
+        ..Default::default()
+    });
+    std::fs::remove_file(path).expect("remove table");
+    vpin::vpx::write(path, &vpx).expect("write table");
+}
+
+#[test]
+fn images_over_the_max_image_size_are_scaled_down() {
+    let dir = testdir!();
+    table_with_large_image(&dir.join("table.vpx"));
+
+    let out = vpxtool(&dir, &["optimize", "--max-image-size", "512", "table.vpx"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(out.status.success(), "optimize failed: {:?}", out);
+    assert!(
+        stdout.contains("image \"playfield\" 600x300 -> 512x256, "),
+        "unexpected output: {stdout}"
+    );
+    assert!(
+        stdout.contains("1 images: 720.0 KB -> 524.3 KB of texture memory"),
+        "unexpected output: {stdout}"
+    );
+    let vpx = vpin::vpx::read(&dir.join("table.vpx")).expect("read optimized table");
+    assert_eq!((vpx.images[0].width, vpx.images[0].height), (512, 256));
+    // the shrunk png went on to become a webp
+    assert_eq!(vpx.images[0].ext(), "webp");
+
+    // the mobile apps offer nothing below 256
+    let out = vpxtool(&dir, &["optimize", "--max-image-size", "128", "table.vpx"]);
+    assert!(!out.status.success());
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("256..=16384"), "unexpected error: {stderr}");
+}
+
+#[test]
+fn the_bare_flag_means_the_mobile_default() {
+    let dir = testdir!();
+    table_with_large_image(&dir.join("table.vpx"));
+
+    // 600x300 fits in 1536, so the bare flag has nothing to shrink
+    let out = vpxtool(&dir, &["optimize", "table.vpx", "--max-image-size"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(out.status.success(), "optimize failed: {:?}", out);
+    assert!(
+        !stdout.contains("600x300 ->"),
+        "unexpected output: {stdout}"
+    );
+
+    // a value needs the = form when the path follows
+    let out = vpxtool(&dir, &["optimize", "--max-image-size=512", "table.vpx"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(out.status.success(), "optimize failed: {:?}", out);
+    assert!(
+        stdout.contains("600x300 -> 512x256"),
+        "unexpected output: {stdout}"
+    );
+}
+
 #[test]
 fn a_missing_table_fails() {
     let dir = testdir!();

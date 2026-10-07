@@ -154,10 +154,14 @@ vpxtool verify --json table.vpx
 
 `--mono` downmixes stereo playfield sounds to the mono vpinball 10.8.1 and later play them as, exactly as vpinball does it, and `--flac` re-encodes PCM WAV sounds as lossless FLAC. Both are opt-in: vpinball 10.8.0 plays stereo playfield sounds in stereo in its two speaker mode and does not decode FLAC.
 
+`--max-image-size` scales every image with a side over that many pixels down to fit, keeping the aspect ratio, for phones and other devices with a texture size limit; without a value it takes 1536, vpinball's mobile default. vpinball does the same on load for images over its "Maximum texture dimension" video setting (1536 by default on mobile), so the table stores what such a device shows anyway, resampled once with a better filter, and no longer carries the pixels the device throws away: the file is smaller, loads faster and needs less memory. It is lossy, a jpeg is re-encoded, so keep the original for other setups. Images FlexDMD draws, color grade LUTs and images whose smaller encoding would not be smaller are left alone and reported.
+
 ```shell
 vpxtool optimize table.vpx
 vpxtool optimize --dry-run table.vpx
 vpxtool optimize --mono --flac table.vpx
+vpxtool optimize table.vpx --max-image-size
+vpxtool optimize --max-image-size=768 table.vpx
 ```
 
 `audit` reports the findings these fixes act on, next to everything else it checks.

@@ -10,21 +10,25 @@ use std::path::Path;
 use vpin::vpx;
 use vpin::vpx::VPX;
 use vpin::vpx::fix::{
-    self, ConvertedImage, ConvertedSound, ImageConversion, RemovedFont, RenamedSound, SkippedImage,
-    SkippedSound, SoundConversion,
+    self, ConvertedImage, ConvertedSound, ImageConversion, RemovedFont, RenamedSound, ShrunkImage,
+    SkippedImage, SkippedSound, SoundConversion,
 };
 
 /// Which fixes [`apply`] runs. The lossless image and font fixes and the
 /// backglass marker repair always run; the mono downmix and the FLAC
 /// conversion are opt-in because they change how vpinball 10.8.0 plays the
 /// table: it plays stereo playfield sounds in stereo in its two speaker
-/// mode, and only miniaudio (10.8.1 and later) decodes FLAC.
+/// mode, and only miniaudio (10.8.1 and later) decodes FLAC. The image
+/// shrink is opt-in because it is lossy: it stores what a device with that
+/// texture size limit would show anyway.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct Options {
     /// Downmix stereo playfield sounds to the mono vpinball plays them as
     pub mono: bool,
     /// Re-encode PCM WAV sounds as FLAC
     pub flac: bool,
+    /// Scale images down so no side exceeds this many pixels
+    pub max_image_size: Option<u32>,
 }
 
 /// What [`apply`] did to a table
@@ -34,6 +38,8 @@ pub struct Report {
     pub removed_fonts: Vec<RemovedFont>,
     /// The sounds with the `* Backglass Output *` path, given a `.wav` one
     pub renamed_sounds: Vec<RenamedSound>,
+    /// The images scaled down, when `--max-image-size` is set
+    pub shrunk: Vec<ShrunkImage>,
     /// The bitmaps re-encoded as webp
     pub bitmaps: Vec<ConvertedImage>,
     /// The pngs re-encoded as webp
@@ -55,6 +61,7 @@ impl Report {
     pub fn is_empty(&self) -> bool {
         self.removed_fonts.is_empty()
             && self.renamed_sounds.is_empty()
+            && self.shrunk.is_empty()
             && self.bitmaps.is_empty()
             && self.pngs.is_empty()
             && self.tgas.is_empty()
@@ -70,7 +77,12 @@ impl Report {
             .chain(&self.pngs)
             .chain(&self.tgas)
             .map(|image| image.bytes_before().saturating_sub(image.bytes_after()))
-            .sum::<usize>();
+            .sum::<usize>()
+            + self
+                .shrunk
+                .iter()
+                .map(|image| image.bytes_before().saturating_sub(image.bytes_after()))
+                .sum::<usize>();
         let sounds = self
             .monos
             .iter()
@@ -84,6 +96,19 @@ impl Report {
                 .iter()
                 .map(RemovedFont::bytes)
                 .sum::<usize>()
+    }
+
+    /// Bytes of texture memory the shrunk images took decoded, before and
+    /// after: four bytes per pixel, what a device keeps per image once it
+    /// has loaded the table
+    pub fn texture_bytes(&self) -> (u64, u64) {
+        let pixels = |(width, height): (u32, u32)| u64::from(width) * u64::from(height) * 4;
+        self.shrunk.iter().fold((0, 0), |(before, after), image| {
+            (
+                before + pixels(image.size_before()),
+                after + pixels(image.size_after()),
+            )
+        })
     }
 
     fn take(&mut self, conversion: ImageConversion) -> Vec<ConvertedImage> {
@@ -101,17 +126,24 @@ impl Report {
 /// Applies the fixes to the table in memory: drops the fonts nothing uses,
 /// gives the sounds with the `* Backglass Output *` path a `.wav` one and
 /// re-encodes bitmap, png and tga images as lossless webp where that is
-/// smaller, always; when [`Options::mono`] is set, downmixes stereo
-/// playfield sounds to mono; and when [`Options::flac`] is set, re-encodes
-/// PCM WAV sounds as lossless FLAC. Images the script hands to FlexDMD are
-/// left alone. The sound fixes run in that order, so the FLAC only encodes
-/// the downmixed, renamed sounds.
+/// smaller, always; when [`Options::max_image_size`] is set, scales the
+/// images over it down first, so the webp conversions encode the small
+/// pictures; when [`Options::mono`] is set, downmixes stereo playfield
+/// sounds to mono; and when [`Options::flac`] is set, re-encodes PCM WAV
+/// sounds as lossless FLAC. Images the script hands to FlexDMD are left
+/// alone. The sound fixes run in that order, so the FLAC only encodes the
+/// downmixed, renamed sounds.
 pub fn apply(vpx: &mut VPX, options: Options) -> Report {
     let mut report = Report {
         removed_fonts: fix::drop_unused_fonts(vpx),
         renamed_sounds: fix::rename_backglass_marker_sounds(vpx),
         ..Report::default()
     };
+    if let Some(max_image_size) = options.max_image_size {
+        let shrink = fix::shrink_images(vpx, max_image_size);
+        report.skipped.extend(shrink.skipped().iter().cloned());
+        report.shrunk = shrink.shrunk().to_vec();
+    }
     report.bitmaps = report.take(fix::bitmaps_to_webp(vpx));
     report.pngs = report.take(fix::pngs_to_webp(vpx));
     report.tgas = report.take(fix::tgas_to_webp(vpx));
@@ -169,6 +201,16 @@ pub fn format_outcome(path: &Path, outcome: &Outcome, dry_run: bool) -> String {
             human_bytes(font.bytes() as u64)
         ));
     }
+    for image in &report.shrunk {
+        let (width_before, height_before) = image.size_before();
+        let (width_after, height_after) = image.size_after();
+        out.push_str(&format!(
+            "  image {:?} {width_before}x{height_before} -> {width_after}x{height_after}, {} -> {}\n",
+            image.name(),
+            human_bytes(image.bytes_before() as u64),
+            human_bytes(image.bytes_after() as u64)
+        ));
+    }
     for (images, from) in [
         (&report.bitmaps, "bitmap"),
         (&report.pngs, "png"),
@@ -219,6 +261,15 @@ pub fn format_outcome(path: &Path, outcome: &Outcome, dry_run: bool) -> String {
             "  sound {:?} left alone: {}\n",
             skipped.name(),
             skipped.reason()
+        ));
+    }
+    if !report.shrunk.is_empty() {
+        let (before, after) = report.texture_bytes();
+        out.push_str(&format!(
+            "  {} images: {} -> {} of texture memory at four bytes a pixel\n",
+            report.shrunk.len(),
+            human_bytes(before),
+            human_bytes(after)
         ));
     }
     let summary = if report.is_empty() {
@@ -388,6 +439,7 @@ mod tests {
             Options {
                 mono: true,
                 flac: true,
+                ..Options::default()
             },
         );
         assert_eq!(report.monos.len(), 1);
@@ -435,6 +487,55 @@ mod tests {
         colored::control::set_override(false);
         let plain = format_outcome(Path::new("t.vpx"), &outcome, false);
         assert!(plain.contains("sound \"fx\" wav -> flac, "), "{plain}");
+    }
+
+    #[test]
+    fn images_over_the_size_are_shrunk_before_the_webp_conversion() {
+        let mut vpx = VPX::default();
+        vpx.add_or_replace_image(loose_png("playfield"));
+        vpx.add_or_replace_image(loose_png("apron"));
+
+        // off by default: the pngs only become webp
+        let report = apply(&mut vpx, Options::default());
+        assert!(report.shrunk.is_empty());
+        assert_eq!(report.pngs.len(), 2);
+        assert_eq!((vpx.images[0].width, vpx.images[0].height), (64, 64));
+
+        let mut vpx = VPX::default();
+        vpx.add_or_replace_image(loose_png("playfield"));
+        vpx.add_or_replace_image(loose_png("apron"));
+        let report = apply(
+            &mut vpx,
+            Options {
+                max_image_size: Some(32),
+                ..Options::default()
+            },
+        );
+        assert_eq!(report.shrunk.len(), 2);
+        assert_eq!(report.shrunk[0].name(), "playfield");
+        assert_eq!(report.shrunk[0].size_before(), (64, 64));
+        assert_eq!(report.shrunk[0].size_after(), (32, 32));
+        assert_eq!(report.texture_bytes(), (2 * 64 * 64 * 4, 2 * 32 * 32 * 4));
+        // the shrunk pngs are what the webp conversion encodes
+        assert_eq!(report.pngs.len(), 2);
+        assert_eq!(vpx.images[0].ext(), "webp");
+        assert_eq!((vpx.images[0].width, vpx.images[0].height), (32, 32));
+
+        let outcome = Outcome {
+            report,
+            file_bytes_before: 20_000,
+            file_bytes_after: Some(12_345),
+        };
+        colored::control::set_override(false);
+        let plain = format_outcome(Path::new("t.vpx"), &outcome, false);
+        assert!(
+            plain.contains("image \"playfield\" 64x64 -> 32x32, "),
+            "{plain}"
+        );
+        assert!(
+            plain.contains("2 images: 32.8 KB -> 8.2 KB of texture memory at four bytes a pixel"),
+            "{plain}"
+        );
     }
 
     #[test]
