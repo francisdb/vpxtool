@@ -33,10 +33,18 @@ fn verify_json_reports_the_mac_of_each_file() {
     let mac = table["mac"].as_str().expect("a mac");
     assert_eq!(mac.len(), 32);
     assert_eq!(table["computed_mac"], mac);
+    let sha256 = table["sha256"].as_str().expect("a sha256");
+    assert_eq!(sha256.len(), 64);
+    assert!(
+        sha256
+            .chars()
+            .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
+    );
 
     let missing = &json[1];
     assert_eq!(missing["path"], "missing.vpx");
     assert_eq!(missing["mac"], serde_json::Value::Null);
+    assert_eq!(missing["sha256"], serde_json::Value::Null);
     assert_eq!(missing["valid"], false);
     assert!(missing["error"].is_string());
 }
