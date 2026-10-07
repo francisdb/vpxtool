@@ -16,12 +16,13 @@ use globset::{GlobBuilder, GlobSetBuilder};
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use log::{LevelFilter, info};
 use pinmame_nvram::dips::get_all_dip_switches;
+use sha2::{Digest, Sha256};
 use std::error::Error;
 use std::ffi::OsStr;
 use std::fmt::Display;
 use std::fs::{File, OpenOptions};
 use std::io;
-use std::io::{BufReader, BufWriter, Read, Write};
+use std::io::{BufRead, BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{ExitCode, exit};
 use std::time::{Duration, SystemTime};
@@ -644,8 +645,10 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 .unwrap_or_default()
                 .map(|v| v.as_str())
                 .collect::<Vec<_>>();
-            let results: Vec<MacCheck> = paths.iter().map(|path| check_mac(path)).collect();
-            if sub_matches.get_flag("JSON") {
+            let json = sub_matches.get_flag("JSON");
+            let results: Vec<VerifyReport> =
+                paths.iter().map(|path| verify_file(path, json)).collect();
+            if json {
                 let json = serde_json::to_string_pretty(&results).map_err(io::Error::other)?;
                 crate::println!("{json}")?;
                 return Ok(ExitCode::SUCCESS);
@@ -3817,41 +3820,88 @@ fn apply_lock_action(path: &Path, action: &LockAction) -> io::Result<()> {
 
 /// One file of `verify --json`: the MAC stored in the table and the one its
 /// content signs to, as lowercase hex. `mac` is null when the table has none,
-/// `error` tells why a file could not be checked
+/// `computed_mac` is the one the content signs to, `sha256` is the SHA-256 of
+/// the whole file as lowercase hex (null on error), `error` tells why a file
+/// could not be checked
 #[derive(serde::Serialize)]
-struct MacCheck {
+struct VerifyReport {
     path: String,
     mac: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     computed_mac: Option<String>,
+    sha256: Option<String>,
     valid: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     error: Option<String>,
 }
 
-fn check_mac(path: &str) -> MacCheck {
+/// The raw bytes a successful `verify_file` gathers before rendering to hex:
+/// the stored MAC (none when the table has none), the computed MAC, and the
+/// SHA-256 of the whole file (none when it was not requested)
+struct VerifyBytes {
+    mac: Option<Vec<u8>>,
+    computed_mac: Vec<u8>,
+    sha256: Option<Vec<u8>>,
+}
+
+/// Streams a file through SHA-256 and returns the digest. A 1 MB buffer keeps
+/// the read to a handful of large sequential reads rather than many small ones,
+/// which matters for a library served over a NAS, and streaming it means a
+/// large table is never held in memory just to hash it.
+fn sha256_file(path: &Path) -> io::Result<Vec<u8>> {
+    let mut reader = BufReader::with_capacity(1 << 20, std::fs::File::open(path)?);
+    let mut hasher = Sha256::new();
+    loop {
+        let chunk = reader.fill_buf()?;
+        if chunk.is_empty() {
+            break;
+        }
+        hasher.update(chunk);
+        let read = chunk.len();
+        reader.consume(read);
+    }
+    Ok(hasher.finalize().to_vec())
+}
+
+fn verify_file(path: &str, with_sha: bool) -> VerifyReport {
     let hex = |bytes: Vec<u8>| bytes.iter().map(|b| format!("{b:02x}")).collect::<String>();
-    let result = || -> io::Result<(Option<Vec<u8>>, Vec<u8>)> {
-        let mut vpx_file = vpx::open(path_exists(path)?)?;
+    let result = || -> io::Result<VerifyBytes> {
+        let resolved = path_exists(path)?;
+        let sha256 = if with_sha {
+            Some(sha256_file(&resolved)?)
+        } else {
+            None
+        };
+        let mut vpx_file = vpx::open(&resolved)?;
         let mac = match vpx_file.read_mac() {
             Ok(mac) => Some(mac),
             Err(e) if e.kind() == io::ErrorKind::NotFound => None,
             Err(e) => return Err(e),
         };
-        Ok((mac, vpx_file.compute_mac()?))
+        Ok(VerifyBytes {
+            mac,
+            computed_mac: vpx_file.compute_mac()?,
+            sha256,
+        })
     }();
     match result {
-        Ok((mac, computed_mac)) => MacCheck {
+        Ok(VerifyBytes {
+            mac,
+            computed_mac,
+            sha256,
+        }) => VerifyReport {
             path: path.to_string(),
             valid: mac.as_ref() == Some(&computed_mac),
             mac: mac.map(hex),
             computed_mac: Some(hex(computed_mac)),
+            sha256: sha256.map(hex),
             error: None,
         },
-        Err(e) => MacCheck {
+        Err(e) => VerifyReport {
             path: path.to_string(),
             mac: None,
             computed_mac: None,
+            sha256: None,
             valid: false,
             error: Some(e.to_string()),
         },
