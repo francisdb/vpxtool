@@ -1,5 +1,7 @@
+use sha2::{Digest, Sha256};
 use std::fs::{self, File};
 use std::io;
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 
 /// Write `path` atomically: writes through a sibling `.tmp` file, fsyncs the
@@ -63,6 +65,50 @@ where
         let _ = fs::remove_file(&tmp_path);
     }
     result
+}
+
+/// Streams a file through SHA-256 and returns the digest. A 1 MB buffer keeps
+/// the read to a handful of large sequential reads rather than many small ones,
+/// which matters for a library served over a NAS, and streaming it means a
+/// large table is never held in memory just to hash it.
+pub(crate) fn sha256_file(path: &Path) -> io::Result<Vec<u8>> {
+    let mut reader = BufReader::with_capacity(1 << 20, std::fs::File::open(path)?);
+    let mut hasher = Sha256::new();
+    loop {
+        let chunk = reader.fill_buf()?;
+        if chunk.is_empty() {
+            break;
+        }
+        hasher.update(chunk);
+        let read = chunk.len();
+        reader.consume(read);
+    }
+    Ok(hasher.finalize().to_vec())
+}
+
+/// the backup path for `path`: the full original path with `.` and the
+/// lowercase-hex whole-file SHA-256 appended, so `foo.vpx` -> `foo.vpx.<64hex>`
+pub(crate) fn backup_path_for(path: &Path, sha256_hex: &str) -> PathBuf {
+    let mut backup = path.as_os_str().to_owned();
+    backup.push(".");
+    backup.push(sha256_hex);
+    PathBuf::from(backup)
+}
+
+/// copies `original` to its SHA-256-named sibling, unless that backup already
+/// exists. Returns the backup path when it made the copy, `None` when the
+/// backup was already there, so a repeated run neither errors nor overwrites.
+pub(crate) fn backup_if_absent(original: &Path) -> io::Result<Option<PathBuf>> {
+    let sha256_hex = sha256_file(original)?
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect::<String>();
+    let backup = backup_path_for(original, &sha256_hex);
+    if backup.exists() {
+        return Ok(None);
+    }
+    fs::copy(original, &backup)?;
+    Ok(Some(backup))
 }
 
 #[cfg(unix)]
