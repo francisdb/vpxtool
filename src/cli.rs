@@ -713,7 +713,18 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 max_image_size: sub_matches.get_one::<u32>("MAX_IMAGE_SIZE").copied(),
             };
             let expanded_path = path_exists(path)?;
-            let outcome = crate::optimize::optimize_file(&expanded_path, options, dry_run, backup)?;
+            let spinner = ProgressBar::new_spinner();
+            spinner.enable_steady_tick(std::time::Duration::from_millis(100));
+            spinner.set_message(format!(
+                "optimizing {:?} ...",
+                expanded_path
+                    .file_name()
+                    .unwrap_or(expanded_path.as_os_str())
+                    .to_string_lossy()
+            ));
+            let outcome = crate::optimize::optimize_file(&expanded_path, options, dry_run, backup);
+            spinner.finish_and_clear();
+            let outcome = outcome?;
             crate::println!(
                 "{}",
                 crate::optimize::format_outcome(&expanded_path, &outcome, dry_run)
