@@ -211,24 +211,31 @@ fn backup_keeps_the_pristine_original_named_with_its_sha256() {
 }
 
 #[test]
-fn backup_is_idempotent_and_never_overwrites() {
+fn backup_skips_the_copy_when_the_backup_already_exists() {
     let dir = testdir!();
     let table = dir.join("table.vpx");
     table_with_stereo_sound(&table);
-    let before = std::fs::read(&table).unwrap();
     let sha256 = verify_sha256(&dir, "table.vpx");
+
+    // a sentinel at the hash name, with bytes that are not the table, so a
+    // copy over it would show; the skip path must leave it untouched
     let backup = dir.join(format!("table.vpx.{sha256}"));
+    let sentinel = b"not the table".to_vec();
+    std::fs::write(&backup, &sentinel).unwrap();
 
+    // this run does rewrite the table (stereo -> mono), so it reaches the
+    // backup step and finds the hash name already taken
     let out = vpxtool(&dir, &["optimize", "--backup", "--mono", "table.vpx"]);
-    assert!(out.status.success(), "first optimize failed: {:?}", out);
-    assert_eq!(std::fs::read(&backup).unwrap(), before);
+    assert!(out.status.success(), "optimize failed: {:?}", out);
 
-    // a second run finds the backup already there: no error, no overwrite
-    let out = vpxtool(&dir, &["optimize", "--backup", "--mono", "table.vpx"]);
-    assert!(out.status.success(), "second optimize failed: {:?}", out);
-    assert_eq!(std::fs::read(&backup).unwrap(), before);
+    // the existing file at the hash name is left exactly as it was
+    assert_eq!(std::fs::read(&backup).unwrap(), sentinel);
 
-    // only one sha256-named sibling exists
+    // the table itself was still optimized in place
+    let vpx = vpin::vpx::read(&table).expect("read optimized table");
+    assert_eq!(vpx.sounds[0].wave_form.channels, 1);
+
+    // exactly one sha256-named sibling exists, and no temp was left behind
     let backups = std::fs::read_dir(&dir)
         .unwrap()
         .filter_map(|entry| entry.ok())
@@ -243,6 +250,10 @@ fn backup_is_idempotent_and_never_overwrites() {
         })
         .count();
     assert_eq!(backups, 1, "expected exactly one backup sibling");
+    assert!(
+        !dir.join("table.vpx.backup.tmp").exists(),
+        "temp backup file left behind"
+    );
 }
 
 #[test]

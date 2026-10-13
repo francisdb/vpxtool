@@ -23,6 +23,8 @@ use vpin::vpx::fix::{
 /// texture size limit would show anyway.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct Options {
+    /// Copy the original to a SHA-256-named sibling before rewriting it
+    pub backup: bool,
     /// Downmix stereo playfield sounds to the mono vpinball plays them as
     pub mono: bool,
     /// Re-encode PCM WAV sounds as FLAC
@@ -177,20 +179,15 @@ pub struct Outcome {
 /// the file. When `backup` is set, copies the pristine original to its
 /// SHA-256-named sibling before the rewrite, skipping the copy when that
 /// backup already exists.
-pub fn optimize_file(
-    path: &Path,
-    options: Options,
-    dry_run: bool,
-    backup: bool,
-) -> io::Result<Outcome> {
+pub fn optimize_file(path: &Path, options: Options, dry_run: bool) -> io::Result<Outcome> {
     let file_bytes_before = std::fs::metadata(path)?.len();
     let mut vpx = vpx::read(path)?;
     let report = apply(&mut vpx, options);
     let (file_bytes_after, backup) = if dry_run || report.is_empty() {
         (None, None)
     } else {
-        let backup = if backup {
-            crate::atomicwrite::backup_if_absent(path)?
+        let backup = if options.backup {
+            crate::hash::backup_if_absent(path)?
         } else {
             None
         };

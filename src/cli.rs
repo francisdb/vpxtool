@@ -706,8 +706,8 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 .get_one::<String>("VPXPATH")
                 .expect("VPXPATH is required");
             let dry_run = sub_matches.get_flag("DRY_RUN");
-            let backup = sub_matches.get_flag("BACKUP");
             let options = crate::optimize::Options {
+                backup: sub_matches.get_flag("BACKUP"),
                 mono: sub_matches.get_flag("MONO"),
                 flac: sub_matches.get_flag("FLAC"),
                 max_image_size: sub_matches.get_one::<u32>("MAX_IMAGE_SIZE").copied(),
@@ -722,7 +722,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                     .unwrap_or(expanded_path.as_os_str())
                     .to_string_lossy()
             ));
-            let outcome = crate::optimize::optimize_file(&expanded_path, options, dry_run, backup);
+            let outcome = crate::optimize::optimize_file(&expanded_path, options, dry_run);
             spinner.finish_and_clear();
             let outcome = outcome?;
             crate::println!(
@@ -3869,7 +3869,7 @@ struct VerifyReport {
 struct VerifyBytes {
     mac: Option<Vec<u8>>,
     computed_mac: Vec<u8>,
-    sha256: Option<Vec<u8>>,
+    sha256: Option<String>,
 }
 
 fn verify_file(path: &str, with_sha: bool) -> VerifyReport {
@@ -3877,7 +3877,7 @@ fn verify_file(path: &str, with_sha: bool) -> VerifyReport {
     let result = || -> io::Result<VerifyBytes> {
         let resolved = path_exists(path)?;
         let sha256 = if with_sha {
-            Some(crate::atomicwrite::sha256_file(&resolved)?)
+            Some(crate::hash::sha256_file(&resolved)?)
         } else {
             None
         };
@@ -3903,7 +3903,7 @@ fn verify_file(path: &str, with_sha: bool) -> VerifyReport {
             valid: mac.as_ref() == Some(&computed_mac),
             mac: mac.map(hex),
             computed_mac: Some(hex(computed_mac)),
-            sha256: sha256.map(hex),
+            sha256,
             error: None,
         },
         Err(e) => VerifyReport {
