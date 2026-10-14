@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.38.0](https://github.com/francisdb/vpxtool/compare/v0.37.1...v0.38.0) - 2026-10-14
+
+### Added
+
+- *(optimize)* --backup copies the original to <table>.vpx.<sha256> before rewriting ([#932](https://github.com/francisdb/vpxtool/pull/932))
+
+### Other
+
+- bump vpin to 0.39.1 ([#938](https://github.com/francisdb/vpxtool/pull/938))
+- *(deps)* bump zip from 8.6.0 to 9.0.1 ([#937](https://github.com/francisdb/vpxtool/pull/937))
+- *(deps)* bump pinmame-nvram from 0.4.17 to 0.4.18 ([#936](https://github.com/francisdb/vpxtool/pull/936))
+- *(deps)* bump serde_json from 1.0.151 to 1.0.153 ([#935](https://github.com/francisdb/vpxtool/pull/935))
+- *(optimize)* share finalize_temp and describe --backup precisely ([#934](https://github.com/francisdb/vpxtool/pull/934))
+
 ## [0.37.1](https://github.com/francisdb/vpxtool/compare/v0.37.0...v0.37.1) - 2026-10-07
 
 ### Added
