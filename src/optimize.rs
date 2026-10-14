@@ -176,7 +176,7 @@ pub struct Outcome {
 /// Reads the table, applies the fixes and, unless `dry_run` or nothing
 /// changed, writes it back in place through a temporary sibling file, so
 /// an interrupted run leaves the original intact. The rewrite compacts
-/// the file. When `backup` is set, copies the pristine original to its
+/// the file. When `backup` is set, copies the file as it is before this run to its
 /// SHA-256-named sibling before the rewrite, skipping the copy when that
 /// backup already exists.
 pub fn optimize_file(path: &Path, options: Options, dry_run: bool) -> io::Result<Outcome> {

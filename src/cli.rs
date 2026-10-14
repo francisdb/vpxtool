@@ -1483,9 +1483,11 @@ fn build_command() -> Command {
                     is re-encoded, so keep the original for other setups. Images \
                     FlexDMD draws, color grade LUTs and images whose smaller \
                     encoding would not be smaller are left alone and reported.\n\n\
-                    --backup copies the untouched original to a sibling named with \
-                    the file's SHA-256, <table>.vpx.<sha256>, before rewriting it, \
-                    so the pristine file is kept alongside the optimized one. It \
+                    --backup copies the file as it is before this run to a sibling \
+                    named with its SHA-256, <table>.vpx.<sha256>, before rewriting \
+                    it, so the input is kept alongside the optimized output. Each \
+                    run that rewrites adds a backup of its own input, so the first \
+                    one holds the untouched original. It \
                     skips the copy when that backup already exists, so a repeated \
                     run neither errors nor overwrites it, and cannot be combined \
                     with --dry-run.",

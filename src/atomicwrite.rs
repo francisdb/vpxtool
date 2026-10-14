@@ -50,14 +50,7 @@ where
     let tmp_path = PathBuf::from(tmp_os);
     let result = (|| -> io::Result<()> {
         write(&tmp_path)?;
-        // flushing needs a handle with write access on Windows, where
-        // FlushFileBuffers on a read-only one fails with access denied
-        fs::OpenOptions::new()
-            .write(true)
-            .open(&tmp_path)?
-            .sync_all()?;
-        fs::rename(&tmp_path, path)?;
-        fsync_parent_best_effort(path)
+        finalize_temp(&tmp_path, path)
     })();
     if result.is_err() {
         let _ = fs::remove_file(&tmp_path);
@@ -65,11 +58,10 @@ where
     result
 }
 
-/// Durably moves an already-written `tmp` file onto `final_path`: fsyncs the
-/// temp, renames it into place, then fsyncs the parent directory so the rename
-/// survives power loss. The caller owns writing and fsyncing the temp's
-/// contents is not required first; this reopens the temp to fsync it. The temp
-/// is left in place on error so the caller can clean it up.
+/// Durably moves a fully written `tmp` file onto `final_path`: reopens and
+/// fsyncs the temp, renames it into place, then fsyncs the parent directory
+/// so the rename survives power loss. The caller need not fsync the temp
+/// first. The temp is left in place on error so the caller can clean it up.
 pub(crate) fn finalize_temp(tmp: &Path, final_path: &Path) -> io::Result<()> {
     // flushing needs a handle with write access on Windows, where
     // FlushFileBuffers on a read-only one fails with access denied
