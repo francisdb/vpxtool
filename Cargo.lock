@@ -2816,9 +2816,9 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "vpin"
-version = "0.38.4"
+version = "0.39.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7179f18f6d015230d88083b724b0810cc2b40d3497101afd6705dbd5365e9e6"
+checksum = "1125c9eea4cfea4ca8d6c7bb02c9ab666c3a0dfb68ccb52141777adfc607550a"
 dependencies = [
  "bytes",
  "cfb",
@@ -2840,7 +2840,7 @@ dependencies = [
  "vbscript",
  "wavefront-obj-io",
  "weezl 0.2.1",
- "zip 8.6.0",
+ "zip",
  "zmij",
 ]
 
@@ -2883,7 +2883,7 @@ dependencies = [
  "toml_edit 0.25.15+spec-1.1.0",
  "vpin",
  "wild",
- "zip 9.0.1",
+ "zip",
 ]
 
 [[package]]
@@ -3339,19 +3339,6 @@ name = "zeroize"
 version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e13c156562582aa81c60cb29407084cdb54c4164760106ab78e6c5b0858cf64e"
-
-[[package]]
-name = "zip"
-version = "8.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d04a6b5381502aa6087c94c669499eb1602eb9c5e8198e534de571f7154809b"
-dependencies = [
- "crc32fast",
- "flate2",
- "indexmap",
- "memchr",
- "typed-path",
-]
 
 [[package]]
 name = "zip"
