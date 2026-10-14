@@ -40,11 +40,11 @@ pub(crate) fn backup_path_for(path: &Path, sha256_hex: &str) -> PathBuf {
 ///
 /// The copy hashes the bytes as it streams them to a temporary sibling, so the
 /// original is read once, then renames the temp onto the hash name only after
-/// it is fully written and fsynced. An interrupted copy leaves the `.tmp`, not
-/// a truncated file under the final name, so a later run never mistakes a
-/// partial backup for a complete one. When the hash name already exists the
-/// temp is discarded and the existing backup is left untouched, which makes a
-/// repeated run idempotent.
+/// it is fully written and fsynced by [`finalize_temp`]. An interrupted copy
+/// leaves the `.tmp`, not a truncated file under the final name, so a later
+/// run never mistakes a partial backup for a complete one. When the hash name
+/// already exists the temp is discarded and the existing backup is left
+/// untouched, which makes a repeated run idempotent.
 pub(crate) fn backup_if_absent(original: &Path) -> io::Result<Option<PathBuf>> {
     let mut tmp_os = original.as_os_str().to_owned();
     tmp_os.push(".backup.tmp");
@@ -64,7 +64,6 @@ pub(crate) fn backup_if_absent(original: &Path) -> io::Result<Option<PathBuf>> {
                 hasher.update(&buf[..read]);
                 writer.write_all(&buf[..read])?;
             }
-            writer.sync_all()?;
             hex(&hasher.finalize())
         };
         let backup = backup_path_for(original, &sha256_hex);
