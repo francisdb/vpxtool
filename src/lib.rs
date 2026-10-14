@@ -8,6 +8,7 @@ mod backglass;
 pub mod capture;
 pub mod fixprint;
 mod frontend;
+mod hash;
 pub mod patcher;
 pub mod playlog;
 

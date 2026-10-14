@@ -171,6 +171,138 @@ fn the_bare_flag_means_the_mobile_default() {
     );
 }
 
+/// The sha256 verify --json reports for the table at `path`
+fn verify_sha256(dir: &Path, name: &str) -> String {
+    let out = vpxtool(dir, &["verify", "--json", name]);
+    assert!(out.status.success(), "verify failed: {:?}", out);
+    let json: serde_json::Value = serde_json::from_slice(&out.stdout).expect("json output");
+    json[0]["sha256"].as_str().expect("a sha256").to_string()
+}
+
+#[test]
+fn backup_keeps_the_pristine_original_named_with_its_sha256() {
+    let dir = testdir!();
+    let table = dir.join("table.vpx");
+    table_with_stereo_sound(&table);
+    let before = std::fs::read(&table).unwrap();
+    let sha256 = verify_sha256(&dir, "table.vpx");
+    assert_eq!(sha256.len(), 64);
+    assert!(
+        sha256
+            .chars()
+            .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
+    );
+
+    let out = vpxtool(&dir, &["optimize", "--backup", "--mono", "table.vpx"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(out.status.success(), "optimize failed: {:?}", out);
+    assert!(
+        stdout.contains("backed up to"),
+        "unexpected output: {stdout}"
+    );
+
+    let backup = dir.join(format!("table.vpx.{sha256}"));
+    assert!(backup.exists(), "backup not created: {stdout}");
+    // the backup holds the pristine original, not the optimized output
+    assert_eq!(std::fs::read(&backup).unwrap(), before);
+    // the table itself was optimized in place
+    let vpx = vpin::vpx::read(&table).expect("read optimized table");
+    assert_eq!(vpx.sounds[0].wave_form.channels, 1);
+}
+
+#[test]
+fn backup_skips_the_copy_when_the_backup_already_exists() {
+    let dir = testdir!();
+    let table = dir.join("table.vpx");
+    table_with_stereo_sound(&table);
+    let sha256 = verify_sha256(&dir, "table.vpx");
+
+    // a sentinel at the hash name, with bytes that are not the table, so a
+    // copy over it would show; the skip path must leave it untouched
+    let backup = dir.join(format!("table.vpx.{sha256}"));
+    let sentinel = b"not the table".to_vec();
+    std::fs::write(&backup, &sentinel).unwrap();
+
+    // this run does rewrite the table (stereo -> mono), so it reaches the
+    // backup step and finds the hash name already taken
+    let out = vpxtool(&dir, &["optimize", "--backup", "--mono", "table.vpx"]);
+    assert!(out.status.success(), "optimize failed: {:?}", out);
+
+    // the existing file at the hash name is left exactly as it was
+    assert_eq!(std::fs::read(&backup).unwrap(), sentinel);
+
+    // the table itself was still optimized in place
+    let vpx = vpin::vpx::read(&table).expect("read optimized table");
+    assert_eq!(vpx.sounds[0].wave_form.channels, 1);
+
+    // exactly one sha256-named sibling exists, and no temp was left behind
+    let backups = std::fs::read_dir(&dir)
+        .unwrap()
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| {
+            entry
+                .file_name()
+                .to_string_lossy()
+                .rsplit_once('.')
+                .is_some_and(|(_, suffix)| {
+                    suffix.len() == 64 && suffix.chars().all(|c| c.is_ascii_hexdigit())
+                })
+        })
+        .count();
+    assert_eq!(backups, 1, "expected exactly one backup sibling");
+    assert!(
+        !dir.join("table.vpx.backup.tmp").exists(),
+        "temp backup file left behind"
+    );
+}
+
+#[test]
+fn backup_with_nothing_to_optimize_writes_no_backup() {
+    let dir = testdir!();
+    let out = vpxtool(&dir, &["new", "table.vpx"]);
+    assert!(out.status.success(), "vpxtool new failed: {:?}", out);
+
+    let out = vpxtool(&dir, &["optimize", "--backup", "table.vpx"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(out.status.success(), "optimize failed: {:?}", out);
+    assert!(
+        stdout.contains("nothing to optimize"),
+        "unexpected output: {stdout}"
+    );
+    assert!(
+        !stdout.contains("backed up to"),
+        "unexpected output: {stdout}"
+    );
+
+    // no sha256-named sibling and no leftover temporary file
+    let siblings = std::fs::read_dir(&dir)
+        .unwrap()
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| {
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            name.starts_with("table.vpx.")
+        })
+        .count();
+    assert_eq!(siblings, 0, "expected no backup sibling");
+    assert!(!dir.join("table.vpx.tmp").exists());
+}
+
+#[test]
+fn backup_and_dry_run_are_rejected_by_clap() {
+    let dir = testdir!();
+    let out = vpxtool(&dir, &["new", "table.vpx"]);
+    assert!(out.status.success(), "vpxtool new failed: {:?}", out);
+
+    let out = vpxtool(&dir, &["optimize", "--backup", "--dry-run", "table.vpx"]);
+    assert!(!out.status.success());
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("--backup") && stderr.contains("--dry-run"),
+        "unexpected error: {stderr}"
+    );
+}
+
 #[test]
 fn a_missing_table_fails() {
     let dir = testdir!();

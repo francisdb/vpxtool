@@ -16,13 +16,12 @@ use globset::{GlobBuilder, GlobSetBuilder};
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use log::{LevelFilter, info};
 use pinmame_nvram::dips::get_all_dip_switches;
-use sha2::{Digest, Sha256};
 use std::error::Error;
 use std::ffi::OsStr;
 use std::fmt::Display;
 use std::fs::{File, OpenOptions};
 use std::io;
-use std::io::{BufRead, BufReader, BufWriter, Read, Write};
+use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{ExitCode, exit};
 use std::time::{Duration, SystemTime};
@@ -708,12 +707,24 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 .expect("VPXPATH is required");
             let dry_run = sub_matches.get_flag("DRY_RUN");
             let options = crate::optimize::Options {
+                backup: sub_matches.get_flag("BACKUP"),
                 mono: sub_matches.get_flag("MONO"),
                 flac: sub_matches.get_flag("FLAC"),
                 max_image_size: sub_matches.get_one::<u32>("MAX_IMAGE_SIZE").copied(),
             };
             let expanded_path = path_exists(path)?;
-            let outcome = crate::optimize::optimize_file(&expanded_path, options, dry_run)?;
+            let spinner = ProgressBar::new_spinner();
+            spinner.enable_steady_tick(std::time::Duration::from_millis(100));
+            spinner.set_message(format!(
+                "optimizing {:?} ...",
+                expanded_path
+                    .file_name()
+                    .unwrap_or(expanded_path.as_os_str())
+                    .to_string_lossy()
+            ));
+            let outcome = crate::optimize::optimize_file(&expanded_path, options, dry_run);
+            spinner.finish_and_clear();
+            let outcome = outcome?;
             crate::println!(
                 "{}",
                 crate::optimize::format_outcome(&expanded_path, &outcome, dry_run)
@@ -1471,7 +1482,13 @@ fn build_command() -> Command {
                     smaller, loads faster and needs less memory. It is lossy, a jpeg \
                     is re-encoded, so keep the original for other setups. Images \
                     FlexDMD draws, color grade LUTs and images whose smaller \
-                    encoding would not be smaller are left alone and reported.",
+                    encoding would not be smaller are left alone and reported.\n\n\
+                    --backup copies the untouched original to a sibling named with \
+                    the file's SHA-256, <table>.vpx.<sha256>, before rewriting it, \
+                    so the pristine file is kept alongside the optimized one. It \
+                    skips the copy when that backup already exists, so a repeated \
+                    run neither errors nor overwrites it, and cannot be combined \
+                    with --dry-run.",
                 )
                 .arg(arg!(<VPXPATH> "The path to the vpx file").required(true))
                 .arg(
@@ -1480,6 +1497,17 @@ fn build_command() -> Command {
                         .long("dry-run")
                         .action(ArgAction::SetTrue)
                         .help("Report what would change without writing the file"),
+                )
+                .arg(
+                    Arg::new("BACKUP")
+                        .long("backup")
+                        .action(ArgAction::SetTrue)
+                        .conflicts_with("DRY_RUN")
+                        .help(
+                            "Before optimizing, copy the original to \
+                            <table>.vpx.<sha256> (its SHA-256), unless that backup \
+                            already exists. Mutually exclusive with --dry-run",
+                        ),
                 )
                 .arg(
                     Arg::new("MONO")
@@ -3841,26 +3869,7 @@ struct VerifyReport {
 struct VerifyBytes {
     mac: Option<Vec<u8>>,
     computed_mac: Vec<u8>,
-    sha256: Option<Vec<u8>>,
-}
-
-/// Streams a file through SHA-256 and returns the digest. A 1 MB buffer keeps
-/// the read to a handful of large sequential reads rather than many small ones,
-/// which matters for a library served over a NAS, and streaming it means a
-/// large table is never held in memory just to hash it.
-fn sha256_file(path: &Path) -> io::Result<Vec<u8>> {
-    let mut reader = BufReader::with_capacity(1 << 20, std::fs::File::open(path)?);
-    let mut hasher = Sha256::new();
-    loop {
-        let chunk = reader.fill_buf()?;
-        if chunk.is_empty() {
-            break;
-        }
-        hasher.update(chunk);
-        let read = chunk.len();
-        reader.consume(read);
-    }
-    Ok(hasher.finalize().to_vec())
+    sha256: Option<String>,
 }
 
 fn verify_file(path: &str, with_sha: bool) -> VerifyReport {
@@ -3868,7 +3877,7 @@ fn verify_file(path: &str, with_sha: bool) -> VerifyReport {
     let result = || -> io::Result<VerifyBytes> {
         let resolved = path_exists(path)?;
         let sha256 = if with_sha {
-            Some(sha256_file(&resolved)?)
+            Some(crate::hash::sha256_file(&resolved)?)
         } else {
             None
         };
@@ -3894,7 +3903,7 @@ fn verify_file(path: &str, with_sha: bool) -> VerifyReport {
             valid: mac.as_ref() == Some(&computed_mac),
             mac: mac.map(hex),
             computed_mac: Some(hex(computed_mac)),
-            sha256: sha256.map(hex),
+            sha256,
             error: None,
         },
         Err(e) => VerifyReport {

@@ -6,7 +6,7 @@
 use crate::atomicwrite::atomic_write_path;
 use colored::Colorize;
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use vpin::vpx;
 use vpin::vpx::VPX;
 use vpin::vpx::fix::{
@@ -23,6 +23,8 @@ use vpin::vpx::fix::{
 /// texture size limit would show anyway.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct Options {
+    /// Copy the original to a SHA-256-named sibling before rewriting it
+    pub backup: bool,
     /// Downmix stereo playfield sounds to the mono vpinball plays them as
     pub mono: bool,
     /// Re-encode PCM WAV sounds as FLAC
@@ -166,26 +168,37 @@ pub struct Outcome {
     /// Size of the file after the rewrite, `None` for a dry run or when
     /// nothing changed
     pub file_bytes_after: Option<u64>,
+    /// The backup written, `None` when none was: the flag was off, the
+    /// backup already existed, or nothing was optimized
+    pub backup: Option<PathBuf>,
 }
 
 /// Reads the table, applies the fixes and, unless `dry_run` or nothing
 /// changed, writes it back in place through a temporary sibling file, so
 /// an interrupted run leaves the original intact. The rewrite compacts
-/// the file.
+/// the file. When `backup` is set, copies the pristine original to its
+/// SHA-256-named sibling before the rewrite, skipping the copy when that
+/// backup already exists.
 pub fn optimize_file(path: &Path, options: Options, dry_run: bool) -> io::Result<Outcome> {
     let file_bytes_before = std::fs::metadata(path)?.len();
     let mut vpx = vpx::read(path)?;
     let report = apply(&mut vpx, options);
-    let file_bytes_after = if dry_run || report.is_empty() {
-        None
+    let (file_bytes_after, backup) = if dry_run || report.is_empty() {
+        (None, None)
     } else {
+        let backup = if options.backup {
+            crate::hash::backup_if_absent(path)?
+        } else {
+            None
+        };
         atomic_write_path(path, |tmp_path| vpx::write(tmp_path, &vpx))?;
-        Some(std::fs::metadata(path)?.len())
+        (Some(std::fs::metadata(path)?.len()), backup)
     };
     Ok(Outcome {
         report,
         file_bytes_before,
         file_bytes_after,
+        backup,
     })
 }
 
@@ -293,6 +306,10 @@ pub fn format_outcome(path: &Path, outcome: &Outcome, dry_run: bool) -> String {
         )
     };
     out.push_str(&format!("  {summary}"));
+    if let Some(backup) = &outcome.backup {
+        let name = backup.file_name().unwrap_or(backup.as_os_str());
+        out.push_str(&format!("\n  backed up to {name:?}"));
+    }
     out
 }
 
@@ -375,6 +392,7 @@ mod tests {
             report,
             file_bytes_before: 20_000,
             file_bytes_after: Some(12_345),
+            backup: None,
         };
         colored::control::set_override(false);
         let plain = format_outcome(Path::new("t.vpx"), &outcome, false);
@@ -483,6 +501,7 @@ mod tests {
             report,
             file_bytes_before: 20_000,
             file_bytes_after: Some(12_345),
+            backup: None,
         };
         colored::control::set_override(false);
         let plain = format_outcome(Path::new("t.vpx"), &outcome, false);
@@ -525,6 +544,7 @@ mod tests {
             report,
             file_bytes_before: 20_000,
             file_bytes_after: Some(12_345),
+            backup: None,
         };
         colored::control::set_override(false);
         let plain = format_outcome(Path::new("t.vpx"), &outcome, false);
@@ -544,10 +564,39 @@ mod tests {
             report: Report::default(),
             file_bytes_before: 500,
             file_bytes_after: None,
+            backup: None,
         };
         colored::control::set_override(false);
         let text = format_outcome(Path::new("t.vpx"), &outcome, true);
         assert!(text.ends_with("nothing to optimize"), "{text}");
+    }
+
+    #[test]
+    fn a_created_backup_is_reported_and_none_is_not() {
+        let mut vpx = VPX::default();
+        vpx.add_or_replace_image(loose_png("apron"));
+        let report = apply(&mut vpx, Options::default());
+        assert!(!report.is_empty());
+
+        colored::control::set_override(false);
+        let created = Outcome {
+            report,
+            file_bytes_before: 20_000,
+            file_bytes_after: Some(12_345),
+            backup: Some(PathBuf::from("tables/t.vpx.deadbeef")),
+        };
+        let plain = format_outcome(Path::new("tables/t.vpx"), &created, false);
+        assert!(plain.contains("backed up to \"t.vpx.deadbeef\""), "{plain}");
+        assert!(!plain.contains("tables/t.vpx.deadbeef"), "{plain}");
+
+        let none = Outcome {
+            report: Report::default(),
+            file_bytes_before: 500,
+            file_bytes_after: None,
+            backup: None,
+        };
+        let plain = format_outcome(Path::new("t.vpx"), &none, false);
+        assert!(!plain.contains("backed up to"), "{plain}");
     }
 
     #[test]

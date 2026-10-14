@@ -65,6 +65,19 @@ where
     result
 }
 
+/// Durably moves an already-written `tmp` file onto `final_path`: fsyncs the
+/// temp, renames it into place, then fsyncs the parent directory so the rename
+/// survives power loss. The caller owns writing and fsyncing the temp's
+/// contents is not required first; this reopens the temp to fsync it. The temp
+/// is left in place on error so the caller can clean it up.
+pub(crate) fn finalize_temp(tmp: &Path, final_path: &Path) -> io::Result<()> {
+    // flushing needs a handle with write access on Windows, where
+    // FlushFileBuffers on a read-only one fails with access denied
+    fs::OpenOptions::new().write(true).open(tmp)?.sync_all()?;
+    fs::rename(tmp, final_path)?;
+    fsync_parent_best_effort(final_path)
+}
+
 #[cfg(unix)]
 fn fsync_parent_best_effort(path: &Path) -> io::Result<()> {
     let parent = path
