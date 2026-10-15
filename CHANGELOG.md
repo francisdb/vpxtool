@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.38.1](https://github.com/francisdb/vpxtool/compare/v0.38.0...v0.38.1) - 2026-10-15
+
+### Other
+
+- *(deps)* bump zip from 9.0.1 to 9.0.2 ([#939](https://github.com/francisdb/vpxtool/pull/939))
+
 ## [0.38.0](https://github.com/francisdb/vpxtool/compare/v0.37.1...v0.38.0) - 2026-10-14
 
 ### Added
