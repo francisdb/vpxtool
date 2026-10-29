@@ -26,7 +26,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2.9.2
+      - uses: Swatinem/rust-cache@v2.9.3
       # testdir 0.10 can claim and reuse a cache-restored testdir-N dir from a
       # previous run, handing tests stale per-test directories.
       - name: Clean cached testdir state
