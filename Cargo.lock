@@ -1899,9 +1899,9 @@ checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
 
 [[package]]
 name = "pinmame-nvram"
-version = "0.4.18"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ac937bb71610fd34b7ed53f389bc21ceddc847d5a7a804433b7040b66756558"
+checksum = "bf63e721f0ab22175734275043397d804615cceed0e6ac7eee557fd01ddd00f4"
 dependencies = [
  "brotli",
  "include_dir",
