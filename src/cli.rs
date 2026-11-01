@@ -710,6 +710,7 @@ fn handle_command(matches: ArgMatches) -> io::Result<ExitCode> {
                 backup: sub_matches.get_flag("BACKUP"),
                 mono: sub_matches.get_flag("MONO"),
                 flac: sub_matches.get_flag("FLAC"),
+                opus: sub_matches.get_flag("OPUS"),
                 max_image_size: sub_matches.get_one::<u32>("MAX_IMAGE_SIZE").copied(),
             };
             let expanded_path = path_exists(path)?;
@@ -1470,6 +1471,13 @@ fn build_command() -> Command {
                     because only vpinball with the miniaudio sound engine (10.8.1 and \
                     later) plays the result the same; an older build would play the \
                     table without the FLAC sounds.\n\n\
+                    --opus re-encodes PCM WAV sounds as Ogg Opus instead, lossy at up \
+                    to 64 kb/s mono and 96 kb/s stereo, which sounds the same and is \
+                    far smaller than FLAC. Only vpinball builds made after \
+                    vpinball/vpinball#4315 play Opus; every earlier one, released \
+                    versions included, plays the table without these sounds, so keep \
+                    the original for other setups. It cannot be combined with \
+                    --flac.\n\n\
                     --max-image-size scales every image with a side over that many \
                     pixels down to fit, keeping the aspect ratio, for phones and \
                     other devices with a texture size limit; without a value it \
@@ -1527,6 +1535,17 @@ fn build_command() -> Command {
                         .help(
                             "Also re-encode PCM WAV sounds as lossless FLAC (needs \
                             vpinball 10.8.1 or later to play)",
+                        ),
+                )
+                .arg(
+                    Arg::new("OPUS")
+                        .long("opus")
+                        .action(ArgAction::SetTrue)
+                        .conflicts_with("FLAC")
+                        .help(
+                            "Also re-encode PCM WAV sounds as Opus, lossy (needs a \
+                            vpinball build made after vpinball/vpinball#4315 to play). \
+                            Mutually exclusive with --flac",
                         ),
                 )
                 .arg(
