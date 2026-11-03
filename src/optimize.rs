@@ -31,7 +31,7 @@ pub struct Options {
     pub mono: bool,
     /// Re-encode PCM WAV sounds as FLAC
     pub flac: bool,
-    /// Re-encode PCM WAV sounds as Opus, instead of FLAC when both are set
+    /// Re-encode lossless sounds (PCM WAV and FLAC) as Opus, instead of FLAC when both are set
     pub opus: bool,
     /// Scale images down so no side exceeds this many pixels
     pub max_image_size: Option<u32>,
@@ -58,7 +58,7 @@ pub struct Report {
     pub monos: Vec<ConvertedSound>,
     /// The PCM WAV sounds re-encoded as FLAC, when `--flac` is set
     pub flacs: Vec<ConvertedSound>,
-    /// The PCM WAV sounds re-encoded as Opus, when `--opus` is set
+    /// The lossless sounds (PCM WAV and FLAC) re-encoded as Opus, when `--opus` is set
     pub opuses: Vec<ConvertedSound>,
     /// The candidate WAV sounds left alone, with the reason
     pub skipped_sounds: Vec<SkippedSound>,
@@ -161,7 +161,7 @@ pub fn apply(vpx: &mut VPX, options: Options) -> Report {
         report.monos = report.take_sounds(fix::playfield_sounds_to_mono(vpx));
     }
     if options.opus {
-        report.opuses = report.take_sounds(fix::wavs_to_opus(vpx));
+        report.opuses = report.take_sounds(fix::lossless_sounds_to_opus(vpx));
     } else if options.flac {
         report.flacs = report.take_sounds(fix::wavs_to_flac(vpx));
     }
@@ -271,10 +271,13 @@ pub fn format_outcome(path: &Path, outcome: &Outcome, dry_run: bool) -> String {
             human_bytes(sound.bytes_after() as u64)
         ));
     }
-    for (sounds, to) in [(&report.flacs, "flac"), (&report.opuses, "opus")] {
+    for (sounds, from, to) in [
+        (&report.flacs, "wav", "flac"),
+        (&report.opuses, "lossless", "opus"),
+    ] {
         for sound in sounds {
             out.push_str(&format!(
-                "  sound {:?} wav -> {to}, {} -> {}\n",
+                "  sound {:?} {from} -> {to}, {} -> {}\n",
                 sound.name(),
                 human_bytes(sound.bytes_before() as u64),
                 human_bytes(sound.bytes_after() as u64)
@@ -555,7 +558,7 @@ mod tests {
         };
         colored::control::set_override(false);
         let plain = format_outcome(Path::new("t.vpx"), &outcome, false);
-        assert!(plain.contains("sound \"fx\" wav -> opus, "), "{plain}");
+        assert!(plain.contains("sound \"fx\" lossless -> opus, "), "{plain}");
     }
 
     #[test]

@@ -34,7 +34,7 @@ wild = "2.2.1"
 
 is_executable = "1.0.5"
 regex = { version = "1.12.3", features = [] }
-vpin = { version = "0.39.1", features = ["script-audit", "opus"] }
+vpin = { version = "0.39.3", features = ["script-audit", "opus"] }
 directb2s = "0.1.1"
 
 edit = "0.1.5"
@@ -87,8 +87,3 @@ rand = "0.10.1"
 # level 0 is very slow for writing to compound files
 # see https://github.com/mdsteele/rust-cfb/issues/42
 opt-level = 1
-
-# Temporary: vpin's opus feature is not released yet (francisdb/vpin#594).
-# Drop this patch and bump the vpin version above once it is.
-[patch.crates-io]
-vpin = { git = "https://github.com/Le-Syl21/vpin", branch = "opus-sounds" }
