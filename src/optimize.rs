@@ -18,7 +18,9 @@ use vpin::vpx::fix::{
 /// backglass marker repair always run; the mono downmix and the FLAC
 /// conversion are opt-in because they change how vpinball 10.8.0 plays the
 /// table: it plays stereo playfield sounds in stereo in its two speaker
-/// mode, and only miniaudio (10.8.1 and later) decodes FLAC. The image
+/// mode, and only miniaudio (10.8.1 and later) decodes FLAC. The Opus
+/// conversion is opt-in for the same reason, only vpinball builds made
+/// after vpinball/vpinball#4315 decode Opus. The image
 /// shrink is opt-in because it is lossy: it stores what a device with that
 /// texture size limit would show anyway.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -29,6 +31,8 @@ pub struct Options {
     pub mono: bool,
     /// Re-encode PCM WAV sounds as FLAC
     pub flac: bool,
+    /// Re-encode lossless sounds (PCM WAV and FLAC) as Opus, instead of FLAC when both are set
+    pub opus: bool,
     /// Scale images down so no side exceeds this many pixels
     pub max_image_size: Option<u32>,
 }
@@ -54,6 +58,8 @@ pub struct Report {
     pub monos: Vec<ConvertedSound>,
     /// The PCM WAV sounds re-encoded as FLAC, when `--flac` is set
     pub flacs: Vec<ConvertedSound>,
+    /// The lossless sounds (PCM WAV and FLAC) re-encoded as Opus, when `--opus` is set
+    pub opuses: Vec<ConvertedSound>,
     /// The candidate WAV sounds left alone, with the reason
     pub skipped_sounds: Vec<SkippedSound>,
 }
@@ -69,6 +75,7 @@ impl Report {
             && self.tgas.is_empty()
             && self.monos.is_empty()
             && self.flacs.is_empty()
+            && self.opuses.is_empty()
     }
 
     /// Bytes of stored data the changes save
@@ -89,6 +96,7 @@ impl Report {
             .monos
             .iter()
             .chain(&self.flacs)
+            .chain(&self.opuses)
             .map(|sound| sound.bytes_before().saturating_sub(sound.bytes_after()))
             .sum::<usize>();
         images
@@ -132,9 +140,9 @@ impl Report {
 /// images over it down first, so the webp conversions encode the small
 /// pictures; when [`Options::mono`] is set, downmixes stereo playfield
 /// sounds to mono; and when [`Options::flac`] is set, re-encodes PCM WAV
-/// sounds as lossless FLAC. Images the script hands to FlexDMD are left
-/// alone. The sound fixes run in that order, so the FLAC only encodes the
-/// downmixed, renamed sounds.
+/// sounds as lossless FLAC, or as Opus when [`Options::opus`] is. Images the
+/// script hands to FlexDMD are left alone. The sound fixes run in that
+/// order, so the FLAC or Opus only encodes the downmixed, renamed sounds.
 pub fn apply(vpx: &mut VPX, options: Options) -> Report {
     let mut report = Report {
         removed_fonts: fix::drop_unused_fonts(vpx),
@@ -152,7 +160,9 @@ pub fn apply(vpx: &mut VPX, options: Options) -> Report {
     if options.mono {
         report.monos = report.take_sounds(fix::playfield_sounds_to_mono(vpx));
     }
-    if options.flac {
+    if options.opus {
+        report.opuses = report.take_sounds(fix::lossless_sounds_to_opus(vpx));
+    } else if options.flac {
         report.flacs = report.take_sounds(fix::wavs_to_flac(vpx));
     }
     report
@@ -261,13 +271,18 @@ pub fn format_outcome(path: &Path, outcome: &Outcome, dry_run: bool) -> String {
             human_bytes(sound.bytes_after() as u64)
         ));
     }
-    for sound in &report.flacs {
-        out.push_str(&format!(
-            "  sound {:?} wav -> flac, {} -> {}\n",
-            sound.name(),
-            human_bytes(sound.bytes_before() as u64),
-            human_bytes(sound.bytes_after() as u64)
-        ));
+    for (sounds, from, to) in [
+        (&report.flacs, "wav", "flac"),
+        (&report.opuses, "lossless", "opus"),
+    ] {
+        for sound in sounds {
+            out.push_str(&format!(
+                "  sound {:?} {from} -> {to}, {} -> {}\n",
+                sound.name(),
+                human_bytes(sound.bytes_before() as u64),
+                human_bytes(sound.bytes_after() as u64)
+            ));
+        }
     }
     for skipped in &report.skipped_sounds {
         out.push_str(&format!(
@@ -506,6 +521,44 @@ mod tests {
         colored::control::set_override(false);
         let plain = format_outcome(Path::new("t.vpx"), &outcome, false);
         assert!(plain.contains("sound \"fx\" wav -> flac, "), "{plain}");
+    }
+
+    #[test]
+    fn opus_is_opt_in_reported_and_wins_over_flac() {
+        let mut vpx = VPX::default();
+        vpx.sounds.push(pcm_wav("fx"));
+
+        // off by default: the wav is untouched
+        let report = apply(&mut vpx, Options::default());
+        assert!(report.opuses.is_empty());
+        assert!(vpx.sounds[0].path.ends_with(".wav"));
+
+        // opt in: the wav becomes opus and is reported, flac has no wav
+        // left to convert
+        let report = apply(
+            &mut vpx,
+            Options {
+                flac: true,
+                opus: true,
+                ..Options::default()
+            },
+        );
+        assert_eq!(report.opuses.len(), 1);
+        assert_eq!(report.opuses[0].name(), "fx");
+        assert!(report.flacs.is_empty());
+        assert!(report.bytes_saved() > 0);
+        assert_eq!(vpx.sounds[0].path, "C:\\sounds\\fx.opus");
+        assert!(vpx.sounds[0].data.starts_with(b"OggS"));
+
+        let outcome = Outcome {
+            report,
+            file_bytes_before: 20_000,
+            file_bytes_after: Some(12_345),
+            backup: None,
+        };
+        colored::control::set_override(false);
+        let plain = format_outcome(Path::new("t.vpx"), &outcome, false);
+        assert!(plain.contains("sound \"fx\" lossless -> opus, "), "{plain}");
     }
 
     #[test]

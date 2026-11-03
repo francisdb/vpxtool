@@ -88,6 +88,36 @@ fn a_table_with_something_to_fix_is_rewritten_in_place() {
     assert_eq!(vpx.sounds[0].wave_form.channels, 1);
 }
 
+#[test]
+fn opus_re_encodes_the_wav_and_cannot_be_combined_with_flac() {
+    let dir = testdir!();
+    table_with_stereo_sound(&dir.join("table.vpx"));
+
+    let out = vpxtool(&dir, &["optimize", "--opus", "--flac", "table.vpx"]);
+    assert!(!out.status.success());
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("cannot be used with"),
+        "unexpected error: {stderr}"
+    );
+
+    let out = vpxtool(&dir, &["optimize", "--mono", "--opus", "table.vpx"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(out.status.success(), "optimize failed: {:?}", out);
+    assert!(
+        stdout.contains("sound \"hit\" lossless -> opus, "),
+        "unexpected output: {stdout}"
+    );
+    let vpx = vpin::vpx::read(&dir.join("table.vpx")).expect("read optimized table");
+    let sound = &vpx.sounds[0];
+    assert_eq!(sound.path, "hit.opus");
+    // an Ogg Opus file of the downmixed sound: one channel in its header
+    assert!(sound.data.starts_with(b"OggS"));
+    assert_eq!(&sound.data[28..36], b"OpusHead");
+    assert_eq!(sound.data[37], 1);
+    assert!(sound.data.len() < 4096 * 2);
+}
+
 /// A table with a 600x300 png, over a 512 pixel limit
 fn table_with_large_image(path: &Path) {
     vpin::vpx::new_minimal_vpx(path).expect("new table");
