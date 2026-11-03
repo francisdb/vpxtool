@@ -105,7 +105,7 @@ fn opus_re_encodes_the_wav_and_cannot_be_combined_with_flac() {
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(out.status.success(), "optimize failed: {:?}", out);
     assert!(
-        stdout.contains("sound \"hit\" wav -> opus, "),
+        stdout.contains("sound \"hit\" lossless -> opus, "),
         "unexpected output: {stdout}"
     );
     let vpx = vpin::vpx::read(&dir.join("table.vpx")).expect("read optimized table");
