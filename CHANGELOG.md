@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.39.1](https://github.com/francisdb/vpxtool/compare/v0.39.0...v0.39.1) - 2026-11-06
+
+### Fixed
+
+- bump vpin to 0.40.2, --opus keeps short clicks of 22 kHz sounds ([#956](https://github.com/francisdb/vpxtool/pull/956))
+
+### Other
+
+- *(deps)* bump ignore from 0.4.33 to 0.4.34 ([#953](https://github.com/francisdb/vpxtool/pull/953))
+- *(deps)* bump globset from 0.4.20 to 0.4.21 ([#951](https://github.com/francisdb/vpxtool/pull/951))
+- *(deps)* bump log from 0.4.34 to 0.4.35 ([#950](https://github.com/francisdb/vpxtool/pull/950))
+- *(deps)* bump pinmame-nvram from 0.5.0 to 0.5.3 ([#952](https://github.com/francisdb/vpxtool/pull/952))
+- *(deps)* bump zip from 9.1.1 to 9.2.1 ([#954](https://github.com/francisdb/vpxtool/pull/954))
+
 ## [0.39.0](https://github.com/francisdb/vpxtool/compare/v0.38.0...v0.39.0) - 2026-11-03
 
 ### Added
