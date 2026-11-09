@@ -211,6 +211,8 @@ Every launch from the frontend is appended to a play log in the platform data di
 in the main menu are built from it; runs shorter than 30 seconds are kept in the log but do not count
 as a play.
 
+Press `/` in the table lists or a table's menu to jump to a new search. Esc and `q` go back; going back from a table opened in the search, or quitting vpinball after launching it, returns to the search as you left it.
+
 ## Configuration
 
 A configuration file will be written to store among others the Visual Pinball executable location. The config file is
@@ -324,6 +326,29 @@ vpxz_excludes = [
 ```
 
 The list above is the built-in default; if you don't set `vpxz_excludes`, that's what gets applied. Setting it replaces the default in full, so copy the entries you still want.
+
+### Configuring the frontend keys
+
+The keys of the frontend menus can be set in the config file, which helps when a controller is mapped to keys with a tool like AntiMicroX. An action that is left out keeps its default keys, these are the defaults:
+
+```toml
+[frontend.keys]
+up = ["up", "k", "backtab"]
+down = ["down", "j", "tab"]
+page_up = ["left", "h"]
+page_down = ["right", "l"]
+select = ["enter"]
+toggle = ["space"]      # in a list of switches, elsewhere the same as select
+toggle_all = ["a"]      # in a list of switches
+back = ["esc", "q"]
+search = ["/"]
+```
+
+A key is a single character or one of `up`, `down`, `left`, `right`, `enter`, `esc`, `backspace`, `tab`, `backtab`, `home`, `end`, `pageup`, `pagedown`, `del`, `insert` and `space`. A key can only be used for one action, so to use `q` for something else also remove it from `back`. Key names are not case sensitive, single characters are: `q` and `Q` are different keys.
+
+Keys that are not in the defaults can be added, for example `back = ["esc", "q", "backspace"]`. An unknown action or key name, an action without keys, or a key used twice is an error when the config file is loaded.
+
+The search prompt itself does not use these keys: letters and Backspace edit the search there and only Esc leaves it, so a `q` or Backspace bound to `back` does not go back while searching.
 
 ## Projects using vpxtool
 
