@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.40.0](https://github.com/francisdb/vpxtool/compare/v0.39.2...v0.40.0) - 2026-11-09
+
+### Added
+
+- *(frontend)* configurable menu keys, jump back to search ([#959](https://github.com/francisdb/vpxtool/pull/959))
+
 ## [0.39.2](https://github.com/francisdb/vpxtool/compare/v0.39.1...v0.39.2) - 2026-11-09
 
 ### Added
