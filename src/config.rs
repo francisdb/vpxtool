@@ -71,6 +71,20 @@ impl ResolvedConfig {
         }
     }
 
+    /// The ini to pass to vpinball as `-Ini` when launching with this template.
+    ///
+    /// Without a template ini, `vpx_config` is only passed when vpinball would
+    /// not find that file by itself. Forcing a versioned default would pin
+    /// launches to the settings of an older vpinball after an upgrade.
+    pub fn launch_ini<'a>(&'a self, template: &'a LaunchTemplate) -> Option<&'a Path> {
+        if let Some(ini) = &template.vpinball_config {
+            return Some(ini);
+        }
+        let custom = self.vpx_config.exists()
+            && !vpinball_finds_ini_itself(&self.vpx_config, &self.vpx_executable);
+        custom.then_some(self.vpx_config.as_path())
+    }
+
     /// This path can be absolute or relative.
     /// In case it is relative, it will need to be resolved relative to the table vpx file.
     pub fn configured_pinmame_folder(&self) -> Option<PathBuf> {
@@ -314,6 +328,24 @@ fn parse_major_minor(s: &str) -> Option<(u32, u32)> {
     Some((major, minor))
 }
 
+fn vpinball_finds_ini_itself(ini: &Path, vpx_executable: &Path) -> bool {
+    ini == legacy_vpinball_ini(vpx_executable)
+        || dirs::data_dir().is_some_and(|d| is_versioned_pref_ini(ini, &d.join("VPinballX")))
+}
+
+/// Whether `ini` is `<base>/<MAJOR>.<MINOR>/VPinballX.ini`
+fn is_versioned_pref_ini(ini: &Path, base: &Path) -> bool {
+    ini.file_name().is_some_and(|name| name == "VPinballX.ini")
+        && ini.parent().is_some_and(|dir| {
+            dir.parent() == Some(base)
+                && dir
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .and_then(parse_major_minor)
+                    .is_some()
+        })
+}
+
 /// If the saved `vpx_config` is the legacy auto-generated default and the
 /// resolver would now pick something different (typically because the user
 /// upgraded vpinball and it migrated to the SDL pref path), return the
@@ -497,6 +529,74 @@ mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
     use testdir::testdir;
+
+    fn launch_ini_config(vpx_config: PathBuf) -> ResolvedConfig {
+        ResolvedConfig {
+            vpx_executable: PathBuf::from("/opt/vpinball/VPinballX_BGFX"),
+            launch_templates: vec![],
+            vpx_config,
+            tables_folder: PathBuf::from("/tables"),
+            tables_index_path: PathBuf::from("/tables/vpxtool_index.json"),
+            tables_scan_max_depth: None,
+            diff: None,
+            editor: None,
+            vpxz_excludes: vec![],
+        }
+    }
+
+    fn launch_ini_template(vpinball_config: Option<PathBuf>) -> LaunchTemplate {
+        LaunchTemplate {
+            name: "Launch".to_string(),
+            executable: PathBuf::from("/opt/vpinball/VPinballX_BGFX"),
+            arguments: None,
+            env: None,
+            vpinball_config,
+        }
+    }
+
+    #[test]
+    fn test_launch_ini_prefers_template_ini() -> io::Result<()> {
+        let custom = testdir!().join("custom.ini");
+        File::create(&custom)?;
+        let template_ini = PathBuf::from("/does/not/exist/template.ini");
+        let config = launch_ini_config(custom);
+        let template = launch_ini_template(Some(template_ini.clone()));
+        assert_eq!(config.launch_ini(&template), Some(template_ini.as_path()));
+        Ok(())
+    }
+
+    #[test]
+    fn test_launch_ini_falls_back_to_custom_vpx_config() -> io::Result<()> {
+        let custom = testdir!().join("custom.ini");
+        File::create(&custom)?;
+        let config = launch_ini_config(custom.clone());
+        let template = launch_ini_template(None);
+        assert_eq!(config.launch_ini(&template), Some(custom.as_path()));
+        Ok(())
+    }
+
+    #[test]
+    fn test_launch_ini_skips_missing_vpx_config() {
+        let config = launch_ini_config(testdir!().join("missing.ini"));
+        assert_eq!(config.launch_ini(&launch_ini_template(None)), None);
+    }
+
+    #[test]
+    fn test_is_versioned_pref_ini() {
+        let base = Path::new("/data/VPinballX");
+        assert!(is_versioned_pref_ini(
+            Path::new("/data/VPinballX/10.8/VPinballX.ini"),
+            base
+        ));
+        for other in [
+            "/data/VPinballX/VPinballX.ini",
+            "/data/VPinballX/10.8/fullscreen.ini",
+            "/data/VPinballX/custom/VPinballX.ini",
+            "/elsewhere/10.8/VPinballX.ini",
+        ] {
+            assert!(!is_versioned_pref_ini(Path::new(other), base), "{other}");
+        }
+    }
 
     #[cfg(target_os = "linux")]
     #[test]

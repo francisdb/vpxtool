@@ -255,6 +255,9 @@ Further settings will be picked up from the Visual Pinball config.
 Sometimes you want to use a different executables, extra arguments or environment variables. This can be done
 by setting up launch templates. Each entry will show up on top of the frontend table menu.
 
+A template with its own `vpinball_config` also gets an entry to edit that ini in the frontend table menu. A template
+without one uses `vpx_config` when that points at a custom ini, otherwise vpinball picks its default ini.
+
 To force fullscreen or windowed mode, point a template at a separate vpinball ini file (passed to vpinball as
 `-Ini <path>`) with the relevant `FullScreen` / `PlayfieldFullScreen` keys overridden. The previous
 `-EnableTrueFullscreen` / `-DisableTrueFullscreen` CLI flags are deprecated upstream and not present in
