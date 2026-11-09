@@ -21,7 +21,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use is_executable::IsExecutable;
 use pinmame_nvram::dips::{DipSwitchState, get_all_dip_switches, set_dip_switches};
 use pinmame_nvram::{DipSwitchInfo, Nvram};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::OpenOptions;
 use std::io::BufReader;
 use std::time::{Duration, Instant};
@@ -52,7 +52,9 @@ const LIST_SIZE: usize = 50;
 
 #[derive(PartialEq, Eq, Clone)]
 enum TableOption {
-    Launch { template: LaunchTemplate },
+    Launch {
+        template: LaunchTemplate,
+    },
     ForceReload,
     InfoShow,
     InfoEdit,
@@ -69,6 +71,10 @@ enum TableOption {
     B2SAutoPositionDMD,
     EditTableINI,
     EditMainIni,
+    EditTemplateIni {
+        template_name: String,
+        path: PathBuf,
+    },
     ExportVpxz,
     CaptureScreenshot,
 }
@@ -100,10 +106,29 @@ impl TableOption {
             TableOption::B2SAutoPositionDMD,
             TableOption::EditTableINI,
             TableOption::EditMainIni,
+        ]);
+        options.extend(Self::template_ini_options(config));
+        options.extend(vec![
             TableOption::ExportVpxz,
             TableOption::CaptureScreenshot,
         ]);
         options
+    }
+
+    /// One edit entry per distinct template ini that is not the main ini
+    fn template_ini_options(config: &ResolvedConfig) -> Vec<TableOption> {
+        let mut seen = HashSet::from([config.vpx_config.as_path()]);
+        config
+            .launch_templates
+            .iter()
+            .filter_map(|template| {
+                let path = template.vpinball_config.as_deref()?;
+                seen.insert(path).then(|| TableOption::EditTemplateIni {
+                    template_name: template.name.clone(),
+                    path: path.to_path_buf(),
+                })
+            })
+            .collect()
     }
 
     /// Whether the option works for a table pack; the others read or write
@@ -143,6 +168,9 @@ impl TableOption {
             TableOption::B2SAutoPositionDMD => "Backglass > Auto-position DMD".to_string(),
             TableOption::EditTableINI => "INI > Edit table ini".to_string(),
             TableOption::EditMainIni => "INI > Edit main ini".to_string(),
+            TableOption::EditTemplateIni { template_name, .. } => {
+                format!("INI > Edit ini of {template_name}")
+            }
             TableOption::ExportVpxz => "Export > vpxz (mobile)".to_string(),
             TableOption::CaptureScreenshot => "Capture > Playfield screenshot".to_string(),
         }
@@ -414,7 +442,7 @@ fn table_menu(
         option = choose_table_option(config, info_str, option, is_pack(selected_path));
         match option {
             Some(TableOption::Launch { ref template }) => {
-                launch(selected_path, template);
+                launch(selected_path, template, config.launch_ini(template));
                 exit = true;
             }
             Some(TableOption::ForceReload) => {
@@ -600,17 +628,9 @@ fn table_menu(
                     report_launch_result(&path, result);
                 }
             }
-            Some(TableOption::EditMainIni) => {
-                let path = &config.vpx_config;
-                let result = if path.exists() {
-                    open_editor(path, Some(config))
-                } else {
-                    Err(io::Error::new(
-                        io::ErrorKind::NotFound,
-                        format!("Virtual Pinball ini {} does not exist.", path.display()),
-                    ))
-                };
-                report_launch_result(path, result);
+            Some(TableOption::EditMainIni) => edit_vpinball_ini(&config.vpx_config, config),
+            Some(TableOption::EditTemplateIni { ref path, .. }) => {
+                edit_vpinball_ini(path, config);
             }
             Some(TableOption::ExportVpxz) => match export_vpxz(config, selected_path, info) {
                 Ok(msg) => prompt(&msg),
@@ -691,6 +711,18 @@ fn nvram_show(info: &IndexedTable) {
     } else {
         prompt("This table is not using PinMAME");
     }
+}
+
+fn edit_vpinball_ini(path: &Path, config: &ResolvedConfig) {
+    let result = if path.exists() {
+        open_editor(path, Some(config))
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("Virtual Pinball ini {} does not exist.", path.display()),
+        ))
+    };
+    report_launch_result(path, result);
 }
 
 fn report_launch_result(path: &Path, result: io::Result<()>) {
@@ -1043,7 +1075,7 @@ fn choose_table_option(
     selection_opt.and_then(|index| all_options.get(index).cloned())
 }
 
-fn launch(selected_path: &PathBuf, launch_template: &LaunchTemplate) {
+fn launch(selected_path: &PathBuf, launch_template: &LaunchTemplate, ini: Option<&Path>) {
     crate::println!("{} {}", LAUNCH, selected_path.display()).ok();
 
     let vpinball_executable = &launch_template.executable;
@@ -1057,7 +1089,7 @@ fn launch(selected_path: &PathBuf, launch_template: &LaunchTemplate) {
 
     let started = chrono::Utc::now();
     let clock = Instant::now();
-    let result = launch_table(selected_path, launch_template);
+    let result = launch_table(selected_path, launch_template, ini);
     if let Ok(status) = &result {
         record_play(selected_path, started, clock.elapsed(), *status);
     }
@@ -1127,6 +1159,7 @@ fn report_and_exit(msg: String) -> ! {
 fn launch_table(
     selected_path: &PathBuf,
     launch_template: &LaunchTemplate,
+    ini: Option<&Path>,
 ) -> io::Result<ExitStatus> {
     let mut cmd = std::process::Command::new(&launch_template.executable);
     if let Some(env) = &launch_template.env {
@@ -1134,9 +1167,9 @@ fn launch_table(
             cmd.env(key, value);
         }
     }
-    if let Some(vpinball_config) = &launch_template.vpinball_config {
+    if let Some(ini) = ini {
         cmd.arg("-Ini");
-        cmd.arg(vpinball_config);
+        cmd.arg(ini);
     }
     if let Some(args) = &launch_template.arguments {
         cmd.args(args);
@@ -1215,4 +1248,48 @@ fn display_table_line_full(table: &IndexedTable) -> String {
 
 fn capitalize_first_letter(s: &str) -> String {
     s[0..1].to_uppercase() + &s[1..]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn template(name: &str, ini: Option<&str>) -> LaunchTemplate {
+        LaunchTemplate {
+            name: name.to_string(),
+            executable: PathBuf::from("/opt/vpinball/VPinballX_BGFX"),
+            arguments: None,
+            env: None,
+            vpinball_config: ini.map(PathBuf::from),
+        }
+    }
+
+    #[test]
+    fn template_ini_options_lists_each_distinct_non_main_ini_once() {
+        let config = ResolvedConfig {
+            vpx_executable: PathBuf::from("/opt/vpinball/VPinballX_BGFX"),
+            launch_templates: vec![
+                template("No ini", None),
+                template("Same as main", Some("/ini/main.ini")),
+                template("Fullscreen", Some("/ini/fullscreen.ini")),
+                template("Fullscreen GL", Some("/ini/fullscreen.ini")),
+                template("Windowed", Some("/ini/windowed.ini")),
+            ],
+            vpx_config: PathBuf::from("/ini/main.ini"),
+            tables_folder: PathBuf::from("/tables"),
+            tables_index_path: PathBuf::from("/tables/vpxtool_index.json"),
+            tables_scan_max_depth: None,
+            diff: None,
+            editor: None,
+            vpxz_excludes: vec![],
+        };
+        let labels: Vec<String> = TableOption::template_ini_options(&config)
+            .iter()
+            .map(TableOption::display)
+            .collect();
+        assert_eq!(
+            labels,
+            vec!["INI > Edit ini of Fullscreen", "INI > Edit ini of Windowed"]
+        );
+    }
 }
