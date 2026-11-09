@@ -15,10 +15,10 @@ pub mod playlog;
 pub mod config;
 
 pub mod indexer;
+pub mod menu;
 pub mod optimize;
 
 pub mod cli;
-mod colorful_theme_patched;
 pub mod scores;
 pub mod vpinball_config;
 pub mod vpxz;

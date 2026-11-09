@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use crate::menu::{KeyMap, MenuKeys};
 use crate::vpinball_config::VPinballConfig;
 use dialoguer::Select;
 use dialoguer::theme::ColorfulTheme;
@@ -25,6 +26,12 @@ pub struct LaunchTemplate {
     pub vpinball_config: Option<PathBuf>,
 }
 
+#[derive(Deserialize, Serialize, Default)]
+#[serde(deny_unknown_fields)]
+pub struct FrontendConfig {
+    pub keys: Option<MenuKeys>,
+}
+
 #[derive(Deserialize, Serialize)]
 pub struct Config {
     pub vpx_executable: PathBuf,
@@ -35,6 +42,7 @@ pub struct Config {
     pub editor: Option<String>,
     pub launch_templates: Option<Vec<LaunchTemplate>>,
     pub vpxz_excludes: Option<Vec<String>>,
+    pub frontend: Option<FrontendConfig>,
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -48,6 +56,7 @@ pub struct ResolvedConfig {
     pub diff: Option<String>,
     pub editor: Option<String>,
     pub vpxz_excludes: Vec<String>,
+    pub menu_keys: KeyMap,
 }
 
 pub fn default_vpxz_excludes() -> Vec<String> {
@@ -213,6 +222,19 @@ fn read_config(config_path: &Path) -> io::Result<ResolvedConfig> {
         generate_default_launch_templates(&config.vpx_executable)
     });
 
+    let menu_keys = KeyMap::new(
+        &config
+            .frontend
+            .and_then(|frontend| frontend.keys)
+            .unwrap_or_default(),
+    )
+    .map_err(|e| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("Failed to load config file: {e}"),
+        )
+    })?;
+
     let resolved_config = ResolvedConfig {
         vpx_executable: config.vpx_executable,
         launch_templates,
@@ -223,6 +245,7 @@ fn read_config(config_path: &Path) -> io::Result<ResolvedConfig> {
         diff: config.diff,
         editor: config.editor,
         vpxz_excludes: config.vpxz_excludes.unwrap_or_else(default_vpxz_excludes),
+        menu_keys,
     };
     Ok(resolved_config)
 }
@@ -460,6 +483,7 @@ fn write_default_config(config_file: &Path, vpx_executable: &Path) -> io::Result
         diff: None,
         editor: None,
         vpxz_excludes: None,
+        frontend: None,
     };
     write_config(config_file, &config)?;
     Ok(())
@@ -541,6 +565,7 @@ mod tests {
             diff: None,
             editor: None,
             vpxz_excludes: vec![],
+            menu_keys: KeyMap::default(),
         }
     }
 
@@ -633,8 +658,41 @@ mod tests {
                 diff: None,
                 editor: None,
                 vpxz_excludes: default_vpxz_excludes(),
+                menu_keys: KeyMap::default(),
             }
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_read_frontend_keys() -> io::Result<()> {
+        let temp_dir = testdir!();
+        let config_file = temp_dir.join(CONFIGURATION_FILE_NAME);
+        fs::write(
+            &config_file,
+            "vpx_executable = \"/tmp/test/vpinball\"\n\
+             [frontend.keys]\n\
+             search = [\"s\"]\n",
+        )?;
+        let config = read_config(&config_file)?;
+        assert_eq!(config.menu_keys.label(crate::menu::Action::Search), "s");
+        assert_eq!(config.menu_keys.label(crate::menu::Action::Back), "esc/q");
+        Ok(())
+    }
+
+    #[test]
+    fn test_conflicting_frontend_keys_fail_to_load() -> io::Result<()> {
+        let temp_dir = testdir!();
+        let config_file = temp_dir.join(CONFIGURATION_FILE_NAME);
+        fs::write(
+            &config_file,
+            "vpx_executable = \"/tmp/test/vpinball\"\n\
+             [frontend.keys]\n\
+             search = [\"q\"]\n",
+        )?;
+        let error = read_config(&config_file).unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert!(error.to_string().contains("bound to both"), "{error}");
         Ok(())
     }
 
@@ -728,6 +786,7 @@ mod tests {
                 diff: None,
                 editor: None,
                 vpxz_excludes: default_vpxz_excludes(),
+                menu_keys: KeyMap::default(),
             }
         );
         Ok(())
@@ -765,6 +824,7 @@ mod tests {
                 diff: None,
                 editor: None,
                 vpxz_excludes: default_vpxz_excludes(),
+                menu_keys: KeyMap::default(),
             }
         );
         Ok(())
@@ -791,6 +851,7 @@ mod tests {
                 diff: None,
                 editor: None,
                 vpxz_excludes: default_vpxz_excludes(),
+                menu_keys: KeyMap::default(),
                 launch_templates: vec!(LaunchTemplate {
                     name: "Launch".to_string(),
                     executable: PathBuf::from("C:\\test\\vpinball"),
@@ -903,6 +964,7 @@ tables_scan_max_depth = 2
             diff: None,
             editor: None,
             vpxz_excludes: default_vpxz_excludes(),
+            menu_keys: KeyMap::default(),
         };
 
         // Must not panic; the broken ini is treated as unparseable.
@@ -936,6 +998,7 @@ tables_scan_max_depth = 2
             diff: None,
             editor: None,
             vpxz_excludes: default_vpxz_excludes(),
+            menu_keys: KeyMap::default(),
         };
 
         assert_eq!(

@@ -4,9 +4,9 @@ use crate::cli::{
     DiffColor, ProgressBarProgress, audit_table, confirm, format_audit, info_diff, info_edit,
     info_gather, open_editor, run_diff, script_diff,
 };
-use crate::colorful_theme_patched::ColorfulThemePatched;
 use crate::config::{LaunchTemplate, ResolvedConfig};
 use crate::indexer::{IndexError, IndexedTable, Progress, is_pack};
+use crate::menu::{self, Action, KeyMap, Selection};
 use crate::patcher::LineEndingsResult::{NoChanges, Unified};
 use crate::patcher::unify_line_endings_vbs_file;
 use crate::playlog::{self, PlayRecord, TableStats};
@@ -16,7 +16,7 @@ use base64::Engine;
 use colored::Colorize;
 use console::{Emoji, Term};
 use dialoguer::theme::ColorfulTheme;
-use dialoguer::{Confirm, FuzzySelect, Input, MultiSelect, Select};
+use dialoguer::{Confirm, Input};
 use indicatif::{ProgressBar, ProgressStyle};
 use is_executable::IsExecutable;
 use pinmame_nvram::dips::{DipSwitchState, get_all_dip_switches, set_dip_switches};
@@ -49,6 +49,21 @@ const MOST_PLAYED_INDEX: usize = 3;
 const FIXED_ENTRIES: usize = 4;
 /// How many tables the recent and most played lists show
 const LIST_SIZE: usize = 50;
+
+/// How the user left the table menu
+#[derive(PartialEq, Eq)]
+enum TableMenuExit {
+    Back,
+    /// The table list can have changed
+    Reloaded,
+    Search,
+}
+
+enum TableChoice {
+    Picked(TableOption),
+    Back,
+    Search,
+}
 
 #[derive(PartialEq, Eq, Clone)]
 enum TableOption {
@@ -216,7 +231,9 @@ pub fn frontend(
     configured_pinmame_folder: Option<&Path>,
     mut vpx_files_with_tableinfo: Vec<IndexedTable>,
 ) {
-    let mut main_selection_opt = None;
+    let mut cursor = 0;
+    // set when a deeper menu asked for the search
+    let mut open_search = false;
     loop {
         let tables: Vec<String> = vpx_files_with_tableinfo
             .iter()
@@ -234,43 +251,68 @@ pub fn frontend(
         if let Err(e) = Term::stderr().clear_screen() {
             crate::eprintln!("Failed to clear screen: {e}").ok();
         }
-        main_selection_opt = Select::with_theme(&ColorfulTheme::default())
-            .with_prompt("Select a table")
-            .default(main_selection_opt.unwrap_or(0))
-            .items(&selections[..])
-            .interact_opt()
-            .unwrap();
+        let selection = if std::mem::take(&mut open_search) {
+            Some(SEARCH_INDEX)
+        } else {
+            match menu::select(&config.menu_keys, "Select a table", &selections, cursor).unwrap() {
+                Selection::Picked(index) => {
+                    cursor = index;
+                    Some(index)
+                }
+                Selection::Search(at) => {
+                    cursor = at;
+                    Some(SEARCH_INDEX)
+                }
+                Selection::Back => None,
+            }
+        };
 
-        match main_selection_opt {
+        match selection {
             Some(selection) => {
                 // search
 
                 match selection {
                     SEARCH_INDEX => {
                         // show a fuzzy search
-                        let selected = FuzzySelect::with_theme(&ColorfulThemePatched::default())
-                            // highlight breaks existing formatting https://github.com/console-rs/dialoguer/issues/312
-                            .highlight_matches(false)
-                            .with_prompt("Search a table:")
-                            .items(&tables)
-                            .interact_opt()
-                            .unwrap();
-
-                        if let Some(selected_index) = selected {
-                            // return to the main list with the table selected
-                            main_selection_opt = Some(selected_index + FIXED_ENTRIES);
+                        let mut search = menu::SearchState::default();
+                        while let Some(selected_index) =
+                            menu::search("Search a table:", &tables, &mut search).unwrap()
+                        {
+                            // a reload that changed the list or leaving the
+                            // search returns to the main list with the table
+                            // selected
+                            cursor = selected_index + FIXED_ENTRIES;
                             let info = vpx_files_with_tableinfo
                                 .get(selected_index)
                                 .unwrap()
                                 .clone();
                             let info_str = display_table_line_full(&info);
-                            table_menu(
+                            match table_menu(
                                 config,
                                 configured_pinmame_folder,
                                 &mut vpx_files_with_tableinfo,
                                 &info,
                                 &info_str,
-                            );
+                            ) {
+                                TableMenuExit::Back => {}
+                                TableMenuExit::Reloaded => {
+                                    // the search results point into the list
+                                    let reloaded: Vec<String> = vpx_files_with_tableinfo
+                                        .iter()
+                                        .map(display_table_line_full)
+                                        .collect();
+                                    if reloaded != tables {
+                                        break;
+                                    }
+                                }
+                                TableMenuExit::Search => {
+                                    open_search = true;
+                                    break;
+                                }
+                            }
+                            if let Err(e) = Term::stderr().clear_screen() {
+                                crate::eprintln!("Failed to clear screen: {e}").ok();
+                            }
                         }
                     }
                     RECENTLY_ADDED_INDEX => {
@@ -285,7 +327,7 @@ pub fn frontend(
                                 (indexed, line)
                             })
                             .collect();
-                        pick_from_list(
+                        open_search = pick_from_list(
                             config,
                             configured_pinmame_folder,
                             &mut vpx_files_with_tableinfo,
@@ -308,7 +350,7 @@ pub fn frontend(
                                         stats.last_played_date().unwrap_or("?"),
                                         stats.plays
                                     )
-                                    .dimmed()
+                                    .bright_black()
                                 );
                                 (indexed, line)
                             })
@@ -316,7 +358,7 @@ pub fn frontend(
                         if entries.is_empty() {
                             prompt("No plays recorded yet, launch a table from here first.");
                         } else {
-                            pick_from_list(
+                            open_search = pick_from_list(
                                 config,
                                 configured_pinmame_folder,
                                 &mut vpx_files_with_tableinfo,
@@ -342,7 +384,7 @@ pub fn frontend(
                                         stats.plays,
                                         playlog::format_duration(stats.total_seconds)
                                     )
-                                    .dimmed()
+                                    .bright_black()
                                 );
                                 (indexed, line)
                             })
@@ -350,7 +392,7 @@ pub fn frontend(
                         if entries.is_empty() {
                             prompt("No plays recorded yet, launch a table from here first.");
                         } else {
-                            pick_from_list(
+                            open_search = pick_from_list(
                                 config,
                                 configured_pinmame_folder,
                                 &mut vpx_files_with_tableinfo,
@@ -363,13 +405,13 @@ pub fn frontend(
 
                         let info = vpx_files_with_tableinfo.get(index).unwrap().clone();
                         let info_str = display_table_line_full(&info);
-                        table_menu(
+                        open_search = table_menu(
                             config,
                             configured_pinmame_folder,
                             &mut vpx_files_with_tableinfo,
                             &info,
                             &info_str,
-                        );
+                        ) == TableMenuExit::Search;
                     }
                 }
             }
@@ -394,36 +436,34 @@ fn played_tables(
 }
 
 /// Shows a list of tables and opens the table menu for the chosen one,
-/// until the user backs out of the list
+/// until the user backs out of the list.
+/// Returns true when the user asked for the search.
 fn pick_from_list(
     config: &ResolvedConfig,
     configured_pinmame_folder: Option<&Path>,
     vpx_files_with_tableinfo: &mut Vec<IndexedTable>,
     entries: &[(IndexedTable, String)],
-) {
+) -> bool {
     let lines: Vec<&String> = entries.iter().map(|(_, line)| line).collect();
-    let mut selection: Option<usize> = None;
+    let mut cursor = 0;
     loop {
-        let selected = Select::with_theme(&ColorfulTheme::default())
-            .with_prompt("Select a table")
-            .items(&lines)
-            .default(selection.unwrap_or(0))
-            .interact_opt()
-            .unwrap();
-
-        match selected {
-            Some(selected_index) => {
-                selection = Some(selected_index);
+        match menu::select(&config.menu_keys, "Select a table", &lines, cursor).unwrap() {
+            Selection::Picked(selected_index) => {
+                cursor = selected_index;
                 let (info, info_str) = &entries[selected_index];
-                table_menu(
+                let exit = table_menu(
                     config,
                     configured_pinmame_folder,
                     vpx_files_with_tableinfo,
                     info,
                     info_str,
                 );
+                if exit == TableMenuExit::Search {
+                    return true;
+                }
             }
-            None => break,
+            Selection::Search(_) => return true,
+            Selection::Back => return false,
         }
     }
 }
@@ -434,16 +474,19 @@ fn table_menu(
     vpx_files_with_tableinfo: &mut Vec<IndexedTable>,
     info: &IndexedTable,
     info_str: &str,
-) {
+) -> TableMenuExit {
     let selected_path = &info.path;
-    let mut exit = false;
     let mut option = None;
-    while !exit {
-        option = choose_table_option(config, info_str, option, is_pack(selected_path));
+    loop {
+        option = match choose_table_option(config, info_str, option, is_pack(selected_path)) {
+            TableChoice::Picked(option) => Some(option),
+            TableChoice::Back => None,
+            TableChoice::Search => return TableMenuExit::Search,
+        };
         match option {
             Some(TableOption::Launch { ref template }) => {
                 launch(selected_path, template, config.launch_ini(template));
-                exit = true;
+                return TableMenuExit::Back;
             }
             Some(TableOption::ForceReload) => {
                 match frontend_index(
@@ -459,7 +502,7 @@ fn table_menu(
                         // exit to not have to
                         //  * check if the table is still in the list
                         //  * check if the info_str has changed
-                        exit = true;
+                        return TableMenuExit::Reloaded;
                     }
                     Err(err) => {
                         let msg = format!("Unable to reload tables: {err:?}");
@@ -507,7 +550,7 @@ fn table_menu(
                     Err(err) => {
                         let msg = format!("Unable to extract VBS: {err}");
                         prompt(&msg.truecolor(255, 125, 0).to_string());
-                        return;
+                        return TableMenuExit::Back;
                     }
                 };
                 match unify_line_endings_vbs_file(&vbs_path) {
@@ -534,7 +577,7 @@ fn table_menu(
                     Err(err) => {
                         let msg = format!("Unable to extract VBS: {err}");
                         prompt(&msg.truecolor(255, 125, 0).to_string());
-                        return;
+                        return TableMenuExit::Back;
                     }
                 };
                 let vbs_path = vbs_path_for(selected_path);
@@ -594,7 +637,7 @@ fn table_menu(
                 }
             },
             Some(TableOption::NVRAMDipSwitches) => {
-                nvram_dip_switches(info);
+                nvram_dip_switches(&config.menu_keys, info);
             }
             Some(TableOption::NVRAMShow) => {
                 nvram_show(info);
@@ -656,17 +699,17 @@ fn table_menu(
                     Err(err) => prompt_error(&format!("Unable to capture screenshot: {err}")),
                 }
             }
-            None => exit = true,
+            None => return TableMenuExit::Back,
         }
     }
 }
 
-fn nvram_dip_switches(info: &IndexedTable) {
+fn nvram_dip_switches(keys: &KeyMap, info: &IndexedTable) {
     if info.requires_pinmame {
         let nvram = nvram_for_rom(info);
         if let Some(nvram) = nvram {
             // open file in read/write mode
-            match edit_dip_switches(nvram) {
+            match edit_dip_switches(keys, nvram) {
                 Ok(_) => {
                     // ok
                 }
@@ -842,7 +885,7 @@ fn auto_position_dmd(config: &ResolvedConfig, info: &&IndexedTable) -> Result<St
     }
 }
 
-fn edit_dip_switches(nvram: PathBuf) -> io::Result<()> {
+fn edit_dip_switches(keys: &KeyMap, nvram: PathBuf) -> io::Result<()> {
     let nvram_map = Nvram::open(Path::new(&nvram))?.ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::Unsupported,
@@ -857,15 +900,15 @@ fn edit_dip_switches(nvram: PathBuf) -> io::Result<()> {
 
     let defaults = switches.iter().map(|s| s.on).collect::<Vec<bool>>();
 
-    let help = "(<␣> selects, <⏎> saves, <esc/q> exits)"
-        .dimmed()
-        .to_string();
+    let help = format!(
+        "({} selects, {} saves, {} exits)",
+        keys.label(Action::Toggle),
+        keys.label(Action::Select),
+        keys.label(Action::Back)
+    )
+    .dimmed();
     let prompt_string = format!("Toggle switches {help}");
-    let selection = MultiSelect::with_theme(&ColorfulTheme::default())
-        .with_prompt(prompt_string)
-        .items(&items)
-        .defaults(&defaults)
-        .interact_opt()?;
+    let selection = menu::multi_select(keys, &prompt_string, &items, &defaults)?;
 
     if let Some(selection) = selection {
         // update the switches
@@ -1045,7 +1088,7 @@ fn choose_table_option(
     table_name: &str,
     selected: Option<TableOption>,
     pack: bool,
-) -> Option<TableOption> {
+) -> TableChoice {
     let mut default = 0;
     // iterate over table options
     let all_options: Vec<TableOption> = TableOption::all(config)
@@ -1065,14 +1108,11 @@ fn choose_table_option(
     if let Err(e) = Term::stderr().clear_screen() {
         crate::eprintln!("Failed to clear screen: {e:?}").ok();
     }
-    let selection_opt = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt(table_name)
-        .default(default)
-        .items(&selections[..])
-        .interact_opt()
-        .unwrap();
-
-    selection_opt.and_then(|index| all_options.get(index).cloned())
+    match menu::select(&config.menu_keys, table_name, &selections, default).unwrap() {
+        Selection::Picked(index) => TableChoice::Picked(all_options[index].clone()),
+        Selection::Back => TableChoice::Back,
+        Selection::Search(_) => TableChoice::Search,
+    }
 }
 
 fn launch(selected_path: &PathBuf, launch_template: &LaunchTemplate, ini: Option<&Path>) {
@@ -1094,9 +1134,7 @@ fn launch(selected_path: &PathBuf, launch_template: &LaunchTemplate, ini: Option
         record_play(selected_path, started, clock.elapsed(), *status);
     }
     match result {
-        Ok(status) if status.success() => {
-            Term::stderr().clear_screen().ok();
-        }
+        Ok(status) if status.success() => {}
         Ok(status) => {
             // A crash kills the process with a signal (SIGSEGV/SIGABRT/...), which
             // has no exit code; describe_exit names the signal in that case.
@@ -1120,6 +1158,11 @@ fn launch(selected_path: &PathBuf, launch_template: &LaunchTemplate, ini: Option
             }
         }
     }
+    // clearing the screen loses what is on it, so first scroll the end of the
+    // vpinball output into the terminal history
+    let term = Term::stderr();
+    term.write_str(&"\n".repeat(term.size().0 as usize)).ok();
+    term.clear_screen().ok();
 }
 
 /// Appends the run to the play log; a failure to write only warns, the
@@ -1198,7 +1241,7 @@ fn display_table_line(table: &IndexedTable) -> String {
             format!(
                 "{} {}",
                 capitalize_first_letter(s.unwrap_or_default().as_str()),
-                format!("({file_name})").dimmed()
+                format!("({file_name})").bright_black()
             )
         })
         .unwrap_or(file_name)
@@ -1208,15 +1251,12 @@ fn display_table_line_full(table: &IndexedTable) -> String {
     let base = display_table_line(table);
     let gamename_suffix = match &table.game_name {
         Some(name) => {
-            let rom_found = table.rom_path().is_some();
-            if rom_found {
-                format!(" - [{}]", name.dimmed())
-            } else if table.requires_pinmame {
+            if table.requires_pinmame && table.rom_path().is_none() {
                 format!(" - {} [{}]", Emoji("⚠️", "!"), name)
                     .yellow()
                     .to_string()
             } else {
-                format!(" - [{}]", name.dimmed())
+                format!(" - [{name}]").bright_black().to_string()
             }
         }
         None => "".to_string(),
@@ -1241,7 +1281,7 @@ fn display_table_line_full(table: &IndexedTable) -> String {
     let asset_suffix = if badges.is_empty() {
         "".to_string()
     } else {
-        format!(" [{badges}]").dimmed().to_string()
+        format!(" [{badges}]").bright_black().to_string()
     };
     format!("{base}{gamename_suffix}{asset_suffix}")
 }
@@ -1282,6 +1322,7 @@ mod tests {
             diff: None,
             editor: None,
             vpxz_excludes: vec![],
+            menu_keys: KeyMap::default(),
         };
         let labels: Vec<String> = TableOption::template_ini_options(&config)
             .iter()
