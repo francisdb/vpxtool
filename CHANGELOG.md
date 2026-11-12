@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.40.1](https://github.com/francisdb/vpxtool/compare/v0.40.0...v0.40.1) - 2026-11-12
+
+### Other
+
+- *(deps)* bump zip from 9.2.1 to 9.5.0 ([#961](https://github.com/francisdb/vpxtool/pull/961))
+- *(deps)* bump pinmame-nvram from 0.5.3 to 0.5.4 ([#962](https://github.com/francisdb/vpxtool/pull/962))
+
 ## [0.40.0](https://github.com/francisdb/vpxtool/compare/v0.39.2...v0.40.0) - 2026-11-09
 
 ### Added
