@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.40.2](https://github.com/francisdb/vpxtool/compare/v0.40.1...v0.40.2) - 2026-11-17
+
+### Added
+
+- show indexing progress on the terminal tab and taskbar ([#965](https://github.com/francisdb/vpxtool/pull/965))
+
 ## [0.40.1](https://github.com/francisdb/vpxtool/compare/v0.40.0...v0.40.1) - 2026-11-15
 
 ### Fixed
