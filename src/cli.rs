@@ -2,6 +2,7 @@ use crate::capture::{CaptureFormat, CaptureOptions, CaptureOutcome, capture_tabl
 use crate::config::{ResolvedConfig, SetupConfigResult};
 use crate::indexer::{DEFAULT_INDEX_FILE_NAME, IndexError, Progress, is_pack};
 use crate::patcher::unify_line_endings;
+use crate::term_progress::TermProgress;
 use crate::{
     RemoveOnDrop, config, frontend, indexer, os_independent_file_name, path_exists, strip_cr_lf,
 };
@@ -146,11 +147,15 @@ const ARG_TIMEOUT: &str = "TIMEOUT_SECS";
 
 pub(crate) struct ProgressBarProgress {
     pb: ProgressBar,
+    term: TermProgress,
 }
 
 impl ProgressBarProgress {
     pub(crate) fn new(pb: ProgressBar) -> Self {
-        Self { pb }
+        Self {
+            pb,
+            term: TermProgress::detect(),
+        }
     }
 }
 
@@ -161,13 +166,16 @@ impl Progress for ProgressBarProgress {
         } else {
             self.pb.set_draw_target(ProgressDrawTarget::hidden());
         }
-        self.pb.set_length(len)
+        self.pb.set_length(len);
+        self.term.set(self.pb.position(), len);
     }
     fn set_position(&self, pos: u64) {
-        self.pb.set_position(pos)
+        self.pb.set_position(pos);
+        self.term.set(pos, self.pb.length().unwrap_or(0));
     }
     fn finish_and_clear(&self) {
-        self.pb.finish_and_clear()
+        self.pb.finish_and_clear();
+        self.term.clear();
     }
 }
 

@@ -11,6 +11,7 @@ mod frontend;
 mod hash;
 pub mod patcher;
 pub mod playlog;
+mod term_progress;
 
 pub mod config;
 
