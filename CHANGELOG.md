@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.40.4](https://github.com/francisdb/vpxtool/compare/v0.40.3...v0.40.4) - 2026-11-26
+
+### Fixed
+
+- sync Cargo.lock after concurrent dependabot merges ([#977](https://github.com/francisdb/vpxtool/pull/977))
+
+### Other
+
+- *(deps)* bump ignore from 0.4.34 to 0.4.35 ([#975](https://github.com/francisdb/vpxtool/pull/975))
+- *(deps)* bump env_logger from 0.11.11 to 0.11.12 ([#973](https://github.com/francisdb/vpxtool/pull/973))
+- *(deps)* bump pinmame-nvram from 0.5.5 to 0.5.6 ([#974](https://github.com/francisdb/vpxtool/pull/974))
+- *(deps)* bump regex from 1.13.1 to 1.13.2 ([#972](https://github.com/francisdb/vpxtool/pull/972))
+- *(deps)* bump clap from 4.6.7 to 4.6.9 ([#971](https://github.com/francisdb/vpxtool/pull/971))
+
 ## [0.40.3](https://github.com/francisdb/vpxtool/compare/v0.40.2...v0.40.3) - 2026-11-19
 
 ### Other
